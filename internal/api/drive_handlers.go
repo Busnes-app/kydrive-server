@@ -25,6 +25,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /editor-bootstrap.js", s.editorScript)
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/tokens", s.requireAuthenticated(s.driveCreateToken))
 	s.mux.HandleFunc("DELETE /api/drive/tokens/{id}", s.requireAuthenticated(s.driveRevokeToken))
+	s.mux.HandleFunc("POST /api/drive/personal-workspace", s.requireAuthenticated(s.drivePersonalWorkspace))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/documents", s.requireAuthenticated(s.driveNewDocument))
 	s.mux.HandleFunc("GET /api/drive/workspaces", s.requireAuthenticated(s.driveWorkspaces))
 	s.mux.HandleFunc("POST /api/drive/workspaces", s.requireAdmin(s.driveCreateWorkspace))
 	s.mux.HandleFunc("GET /api/drive/directory", s.requireAdmin(s.driveDirectory))
@@ -87,6 +89,14 @@ func decodeDrive(r *http.Request, out any) error {
 		return drive.ErrInvalid
 	}
 	return nil
+}
+func (s *Server) drivePersonalWorkspace(w http.ResponseWriter, r *http.Request) {
+	id, err := s.store.Drive().EnsurePersonalWorkspace(r.Context(), s.driveUser(r).ID)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]string{"id": id})
 }
 func (s *Server) driveWorkspaces(w http.ResponseWriter, r *http.Request) {
 	u := s.driveUser(r)

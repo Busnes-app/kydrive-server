@@ -30,7 +30,7 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
   const nav = page.getByRole('navigation', { name: 'Primary' });
   await expect(nav).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'KyDrive', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
   await fits(page);
   const theme = page.getByLabel('Color theme');
   await theme.selectOption('paper');

@@ -439,7 +439,7 @@ dialog.modal-window::backdrop {
 .drive-heading h1 { font-size: 1.5rem; margin-bottom: 6px; }
 .drive-heading p, .drive-storage, .drive-empty p, .drive-settings > p { color: var(--ink); }
 .drive-heading > a { padding: 9px 12px; border-radius: 6px; text-decoration: none; font-size: .85rem; }
-.drive-layout { display: grid; grid-template-columns: 190px minmax(0,1fr); gap: 24px; align-items: start; }
+.drive-layout { display: grid; grid-template-columns: minmax(0,1fr); gap: 24px; align-items: start; }
 .drive-layout .panel { margin-bottom: 20px; }
 .drive-layout aside { padding: 12px; }
 .drive-layout aside h2 { font-size: .8rem; color: var(--ink); margin: 4px 8px 16px; }
@@ -488,3 +488,19 @@ dialog.modal-window::backdrop {
 .drive-settings label { min-width: 140px; }
 @media (max-width: 1050px) { .drive-layout { grid-template-columns: minmax(0,1fr); } .drive-layout aside { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; } .drive-layout aside h2 { margin: 0 8px; } .drive-layout aside .ky-nav-item { width: auto; margin: 0; } }
 @media (max-width: 720px) { .drive-page { padding: 16px; } .drive-workspace-heading { align-items: start; } .drive-view-switch { flex-wrap: wrap; } .drive-toolbar-actions { gap: 6px; } .drive-file-menu { width: 130px; } }
+
+.app-nav-label { font-size: .75rem; font-weight: 500; color: var(--ink); padding: .4rem .65rem; }
+.app-nav-empty { font-size: .8rem; color: var(--ink); padding: .6rem; }
+.app-nav button span { min-width: 0; overflow-wrap: anywhere; }
+.drive-create-workspace form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding-top: 16px; }
+.drive-create-workspace h3 { display: none; }
+@media (max-width: 720px) { .app-nav-label { align-self: center; flex-shrink: 0; } .app-nav button span { overflow-wrap: normal; } }
+
+.drive-new-file { position: relative; }
+.drive-new-file-options { position: absolute; left: 0; top: 42px; width: 190px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px #0003; z-index: 2; display: flex; flex-direction: column; gap: 6px; }
+.drive-new-file-options button { justify-content: flex-start; }
+.drive-document-dialog { margin: auto; max-width: min(440px, calc(100vw - 32px)); width: 440px; padding: 24px; background: var(--panel); color: var(--ink-strong); border: 1px solid var(--line); border-radius: 10px; }
+.drive-document-dialog::backdrop { background: #0008; }
+.drive-document-dialog h2 { font-size: 1.2rem; margin-bottom: 8px; }
+.drive-document-dialog p { color: var(--ink); margin-bottom: 20px; }
+.drive-dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 24px; }

@@ -36,6 +36,9 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - `/api/editor/download/{session}` uses only a hashed, expiring editor credential and current membership. `/api/editor/callback` trusts the verified JWT payload, restricts output origin/path, publishes via the persisted editor revision pointer and acknowledges exact retries.
 - `/editor.html` scopes its CSP to the configured Euro origin and uses a same-origin bootstrap script. Operational status exposes pending editor revocations without credentials.
 
+- POST `/api/drive/personal-workspace` idempotently ensures the authenticated account’s private workspace; service credentials are refused. GET workspace lists distinguish `kind: personal|shared` and exclude other accounts’ personal workspaces, even from administrative browsing.
+- POST `/api/drive/workspaces/{id}/documents` accepts `{name, kind: document|spreadsheet|presentation, parent}`, adds the Office extension, and publishes a bundled blank OOXML template through the normal authorization/quota/version path. Templates are product-owned assets under `templates/`; DOCX uses minimal OOXML, XLSX/PPTX originate from the selected Euro-Office local blank fixtures with cleared core metadata.
+
 ## Verification
 - `go test -v ./internal/api/...` (`authz_test.go` pins the per-role exposure of every privileged route; `backup_test.go` the backup routes, on SQLite only because a run snapshots the database)
 - `scripts/smoke-test.sh` asserts the same boundaries against a running binary

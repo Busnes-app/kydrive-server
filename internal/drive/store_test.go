@@ -220,3 +220,83 @@ func TestInterruptedAndOversizedBlobsNeverPublish(t *testing.T) {
 		}
 	}
 }
+
+func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
+	st, shared, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	id, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil || again != id {
+		t.Fatal("personal workspace is not idempotent", again, err)
+	}
+	file, err := d.Publish(ctx, "worker", drive.File{Workspace: id, Name: "private.docx"}, blob(t, root, "private"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, other := range []string{"admin", "stranger"} {
+		if _, err := d.File(ctx, other, file.ID, 1); !errors.Is(err, drive.ErrDenied) {
+			t.Fatalf("%s read private content: %v", other, err)
+		}
+		ws, err := d.Workspaces(ctx, other, other == "admin")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, w := range ws {
+			if w.ID == id {
+				t.Fatalf("%s listed another person's workspace", other)
+			}
+		}
+	}
+	if err := d.Grant(ctx, "worker", id, "team", "reader"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatal("personal workspace accepted group access", err)
+	}
+	if err := d.Grant(ctx, "admin", id, "team", "reader"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatal("admin shared personal workspace", err)
+	}
+	ws, err := d.Workspaces(ctx, "worker", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	personal, team := false, false
+	for _, w := range ws {
+		personal = personal || (w.ID == id && w.Kind == "personal" && w.Role == "manager")
+		team = team || (w.ID == shared.ID && w.Kind == "shared")
+	}
+	if !personal || !team {
+		t.Fatal(ws)
+	}
+	session, err := d.EditorSession(ctx, "worker", file.ID, "private-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := d.PendingRevocations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range pending {
+		if e.ID == session.ID {
+			t.Fatal("active personal session revoked")
+		}
+	}
+	if err := st.Users().DeleteUser(ctx, "worker"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.EditorDownload(ctx, session.ID, "private-token"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatal("offboarded personal download", err)
+	}
+	pending, err = d.PendingRevocations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range pending {
+		found = found || e.ID == session.ID
+	}
+	if !found {
+		t.Fatal("offboarding failed to queue editor revocation")
+	}
+}

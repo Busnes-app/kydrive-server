@@ -76,3 +76,60 @@ func TestDriveServiceAPIScopeAndStreamingUpload(t *testing.T) {
 		t.Fatal(out.Code)
 	}
 }
+
+func TestNewDocumentsUseWorkspacePermissions(t *testing.T) {
+	s, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	if err := st.Users().CreateUser(ctx, &store.User{ID: "documents", Username: "documents", Role: "admin", Status: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "document-group", DisplayName: "Documents", Members: []string{"documents"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "documents", "Shared", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Drive().Grant(ctx, "documents", w.ID, "document-group", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	token := strings.Repeat("d", 64)
+	if _, err := st.Drive().CreateServiceToken(ctx, "documents", w.ID, "New docs", "editor", token); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"document", "spreadsheet", "presentation", "invalid"} {
+		body, _ := json.Marshal(map[string]string{"name": "Blank " + kind, "kind": kind, "parent": ""})
+		r := httptest.NewRequest("POST", "/api/drive/workspaces/"+w.ID+"/documents", bytes.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+token)
+		out := httptest.NewRecorder()
+		s.ServeHTTP(out, r)
+		expected := 201
+		if kind == "invalid" {
+			expected = 400
+		}
+		if out.Code != expected {
+			t.Fatalf("%s: %d %s", kind, out.Code, out.Body.String())
+		}
+	}
+	other, err := st.Drive().CreateWorkspace(ctx, "documents", "Other", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/api/drive/workspaces/"+other.ID+"/documents", strings.NewReader(`{"name":"Forbidden","kind":"document"}`))
+	r.Header.Set("Authorization", "Bearer "+token)
+	out := httptest.NewRecorder()
+	s.ServeHTTP(out, r)
+	if out.Code != 403 {
+		t.Fatal("cross-workspace create", out.Code)
+	}
+	r = httptest.NewRequest("POST", "/api/drive/personal-workspace", strings.NewReader(`{}`))
+	r.Header.Set("Authorization", "Bearer "+token)
+	out = httptest.NewRecorder()
+	s.ServeHTTP(out, r)
+	if out.Code != 403 {
+		t.Fatal("service created personal workspace", out.Code)
+	}
+}

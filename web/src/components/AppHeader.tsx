@@ -1,5 +1,6 @@
 import React from 'react';
 import { LogOut, Settings as SettingsIcon, Folder, Archive } from 'lucide-react';
+import type { Workspace } from '../pages/Drive';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface AppHeaderProps {
@@ -8,15 +9,17 @@ interface AppHeaderProps {
   onTabChange: (tab: string) => void;
   user: { display_name: string; username: string; role: string };
   onLogout: () => void;
+  workspaces: Workspace[];
+  selectedWorkspace: string;
+  onWorkspaceSelect: (id: string) => void;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect }) => {
 
   const navItems = [
-    { id: 'drive', label: 'Files', icon: Folder },
     { id: 'backup', label: 'Recovery', icon: Archive },
     { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
-  ].filter(item => item.id === 'drive' || user?.role === 'admin');
+  ].filter(() => user.role === 'admin');
 
   return (
     <>
@@ -26,7 +29,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             <span>{appName || 'Busnes.app'}</span>
           </div>
 
-          <nav className="app-nav" aria-label="Primary">
+          <nav className="app-nav" aria-label="Workspaces">
+            <h2 className="app-nav-label">Personal</h2>
+            {workspaces.filter(w => w.kind === 'personal').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>My files</span></button>)}
+            <h2 className="app-nav-label">Shared workspaces</h2>
+            {workspaces.filter(w => w.kind === 'shared').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>{workspace.name}</span></button>)}
+            {!workspaces.some(w => w.kind === 'shared') && <p className="app-nav-empty">No shared workspaces assigned</p>}
+          </nav>
+          {navItems.length > 0 && <nav className="app-nav" aria-label="Primary">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
@@ -42,7 +52,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
                 </button>
               );
             })}
-          </nav>
+          </nav>}
         <div className="app-header-actions">
           <ThemeSwitcher />
 

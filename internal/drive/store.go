@@ -21,6 +21,7 @@ var (
 
 type Store struct{ db *sql.DB }
 type Workspace struct {
+	Kind  string `json:"kind"`
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Quota int64  `json:"quota"`
@@ -71,6 +72,7 @@ func New(ctx context.Context, db *sql.DB) (*Store, error) {
  CREATE UNIQUE INDEX IF NOT EXISTS drive_group_external ON groups(external_id) WHERE external_id!='';
  CREATE TABLE IF NOT EXISTS drive_service_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires BIGINT NOT NULL,revoked BOOLEAN NOT NULL DEFAULT false);
  CREATE TABLE IF NOT EXISTS drive_workspaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,quota BIGINT NOT NULL CHECK(quota>0));
+ CREATE TABLE IF NOT EXISTS drive_personal_workspaces(workspace TEXT PRIMARY KEY REFERENCES drive_workspaces(id),owner TEXT NOT NULL UNIQUE);
  CREATE TABLE IF NOT EXISTS drive_grants(workspace TEXT NOT NULL REFERENCES drive_workspaces(id),group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,role TEXT NOT NULL CHECK(role IN ('reader','editor','manager')),PRIMARY KEY(workspace,group_id));
  CREATE TABLE IF NOT EXISTS drive_folders(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),parent TEXT NOT NULL,name TEXT NOT NULL,UNIQUE(workspace,parent,name));
  CREATE TABLE IF NOT EXISTS drive_files(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),parent TEXT NOT NULL,name TEXT NOT NULL,revision BIGINT NOT NULL,trashed BOOLEAN NOT NULL DEFAULT false);
@@ -120,7 +122,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 		return ErrDenied
 	}
 	var rank int
-	err := q.QueryRowContext(ctx, `SELECT COALESCE(MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END),0) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id JOIN users u ON u.id=m.user_id WHERE g.workspace=? AND u.id=? AND u.status='active'`, workspace, user).Scan(&rank)
+	err := q.QueryRowContext(ctx, `SELECT CASE WHEN EXISTS(SELECT 1 FROM drive_personal_workspaces p JOIN users u ON u.id=p.owner WHERE p.workspace=? AND p.owner=? AND u.status='active') THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id JOIN users u ON u.id=m.user_id WHERE g.workspace=? AND u.id=? AND u.status='active' AND NOT EXISTS(SELECT 1 FROM drive_personal_workspaces WHERE workspace=g.workspace)),0) END`, workspace, user, workspace, user).Scan(&rank)
 	if err != nil {
 		return err
 	}
@@ -168,7 +170,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=?),0) FROM drive_workspaces w ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +179,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.Used, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.Kind, &w.Used, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]
@@ -190,8 +192,43 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	}
 	return out, rows.Err()
 }
+
+// EnsurePersonalWorkspace creates one private workspace per immutable account ID.
+// Ownership is retained when the directory account is removed; another account cannot inherit it.
+func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (string, error) {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
+		return "", ErrDenied
+	}
+	var id string
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		var active int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active'`, user).Scan(&active); err != nil {
+			return err
+		}
+		if active != 1 {
+			return ErrDenied
+		}
+		err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_personal_workspaces WHERE owner=?`, user).Scan(&id)
+		if err == nil {
+			return nil
+		}
+		if err != sql.ErrNoRows {
+			return err
+		}
+		id = uuid.NewString()
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces VALUES(?,?)`, id, user); err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "workspace.personal_created", id)
+	})
+	return id, err
+}
+
 func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota int64) (Workspace, error) {
-	w := Workspace{ID: uuid.NewString(), Name: name, Quota: quota}
+	w := Workspace{ID: uuid.NewString(), Name: name, Quota: quota, Kind: "shared"}
 	if !ValidName(name) || quota < 1 {
 		return w, ErrInvalid
 	}
@@ -232,6 +269,13 @@ func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) 
 		return ErrInvalid
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
+		var personal int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_personal_workspaces WHERE workspace=?`, workspace).Scan(&personal); err != nil {
+			return err
+		}
+		if personal != 0 {
+			return ErrDenied
+		}
 		if err := admin(ctx, tx, user); err != nil {
 			if err = authorize(ctx, tx, user, workspace, 3); err != nil {
 				return err

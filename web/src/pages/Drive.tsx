@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { secureFetch } from '../api';
 
-type Workspace = { id: string; name: string; role: string; quota: number; used: number };
+export type Workspace = { id: string; name: string; role: string; kind: 'personal' | 'shared'; quota: number; used: number };
 type DriveFile = { id: string; name: string; parent: string; revision: number; size: number; trashed: boolean };
 type Folder = { id: string; name: string; parent: string };
 type Grant = { group_id: string; name: string; role: string };
 type Group = { id: string; display_name: string };
 type Version = { revision: number; size: number; created: string };
 function record(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
-function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && typeof v.quota === 'number' && typeof v.used === 'number'; }
+function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && (v.kind === 'personal' || v.kind === 'shared') && typeof v.quota === 'number' && typeof v.used === 'number'; }
 function file(v: unknown): v is DriveFile { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.trashed === 'boolean'; }
 function folder(v: unknown): v is Folder { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string'; }
 function grant(v: unknown): v is Grant { return record(v) && typeof v.group_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
@@ -19,11 +19,13 @@ async function list<T>(url: string, guard: (v: unknown) => v is T): Promise<T[]>
 async function change(url: string, method: string, body: unknown): Promise<unknown> { return response(await secureFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })); }
 const bytes = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(1)} GiB`;
 
-export function Drive({ admin }: { admin: boolean }) {
+type DocumentKind = 'document' | 'spreadsheet' | 'presentation';
+
+export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void }) {
+  const documentDialog = useRef<HTMLDialogElement>(null);
+  const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<'files' | 'settings'>('files');
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selected, setSelected] = useState('');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [parent, setParent] = useState('');
@@ -43,35 +45,40 @@ export function Drive({ admin }: { admin: boolean }) {
   const [audit, setAudit] = useState<string[]>([]);
   const current = workspaces.find(w => w.id === selected);
   const canEdit = current?.role === 'editor' || current?.role === 'manager';
-  const canManage = admin || current?.role === 'manager';
+  const canManage = current?.kind === 'shared' && (admin || current.role === 'manager');
   const reload = useCallback(async () => {
-    const ws = await list(`/api/drive/workspaces${admin ? '?admin=true' : ''}`, workspace); setWorkspaces(ws);
-    if (!selected) { if (ws[0]) setSelected(ws[0].id); return; }
+    await change('/api/drive/personal-workspace', 'POST', {});
+    const ws = await list(`/api/drive/workspaces${admin ? '?admin=true' : ''}`, workspace); onWorkspacesChange(ws);
+    if (!selected) { const first = ws.find(w => w.kind === 'personal') || ws[0]; if (first) onSelectWorkspace(first.id); return; }
     const currentWS = ws.find(w => w.id === selected);
     if (currentWS?.role) {
       const [fs, ds] = await Promise.all([list(`/api/drive/workspaces/${selected}/files?trash=${trash}`, file), list(`/api/drive/workspaces/${selected}/folders`, folder)]); setFiles(fs); setFolders(ds);
     } else { setFiles([]); setFolders([]); }
-    if (admin || currentWS?.role === 'manager') setGrants(await list(`/api/drive/workspaces/${selected}/grants`, grant)); else setGrants([]);
-  }, [admin, selected, trash]);
+    if (currentWS?.kind === 'shared' && (admin || currentWS.role === 'manager')) setGrants(await list(`/api/drive/workspaces/${selected}/grants`, grant)); else setGrants([]);
+  }, [admin, selected, trash, onWorkspacesChange, onSelectWorkspace]);
+  useEffect(() => { setParent(''); setHistory(null); setView('files'); }, [selected]);
   useEffect(() => { void reload().catch(e => setMessage(e instanceof Error ? e.message : 'Drive unavailable')); }, [reload]);
-  useEffect(() => { if (!admin && current?.role !== 'manager') return; void (async () => { const v = await response(await fetch(admin ? '/api/drive/directory' : `/api/drive/workspaces/${selected}/directory`)); if (!record(v) || !Array.isArray(v.groups) || !v.groups.every(group)) throw new Error('Invalid directory'); setGroups(v.groups); if (typeof v.identity_url === 'string' && v.identity_url.startsWith('https://')) setIdentityURL(v.identity_url); })().catch(e => setMessage(e instanceof Error ? e.message : 'Directory unavailable')); }, [admin, selected, current?.role]);
+  useEffect(() => { if (!canManage) return; void (async () => { const v = await response(await fetch(admin ? '/api/drive/directory' : `/api/drive/workspaces/${selected}/directory`)); if (!record(v) || !Array.isArray(v.groups) || !v.groups.every(group)) throw new Error('Invalid directory'); setGroups(v.groups); if (typeof v.identity_url === 'string' && v.identity_url.startsWith('https://')) setIdentityURL(v.identity_url); })().catch(e => setMessage(e instanceof Error ? e.message : 'Directory unavailable')); }, [admin, selected, canManage]);
   useEffect(() => { if (!admin) return; let active = true; const refresh = async () => { try { const v = await response(await fetch('/api/drive/status')); if (record(v) && record(v.editor_revocations) && typeof v.editor_revocations.pending === 'number' && active) setOperations(`Directory: ${v.scim_enabled ? 'SCIM enabled' : 'SCIM disabled'} · Editor: ${v.editor_configured ? 'configured' : 'not configured'} · Pending editor revocations: ${v.editor_revocations.pending} · Bulk backup: ${v.bulk_repository_configured ? 'configured' : 'not configured'}`); const events = await response(await fetch('/api/drive/audit')); if (Array.isArray(events) && active) setAudit(events.filter(record).filter(e => typeof e.action === 'string' && typeof e.created === 'string').slice(0,10).map(e => `${e.created} · ${e.action}`)); } catch { if (active) setOperations('Operational status unavailable; refresh before assuming access changes have reconciled.'); } }; void refresh(); const timer = setInterval(() => void refresh(),5000); return () => { active = false; clearInterval(timer); }; }, [admin]);
+  useEffect(() => { const dialog = documentDialog.current; if (newDocument && dialog && !dialog.open) dialog.showModal(); return () => { if (dialog?.open) dialog.close(); }; }, [newDocument?.kind]);
   async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(''); try { await action(); await reload(); } catch (e) { setMessage(e instanceof Error ? e.message : 'Operation failed'); } finally { setBusy(false); } }
   return <section className="drive-page">
-    <div className="drive-heading"><div><h1>KyDrive</h1><p>Organization files and shared workspaces</p></div>{identityURL && <a className="btn-secondary" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity</a>}</div>
+    <div className="drive-heading"><div><h1>{current?.name || 'Workspaces'}</h1><p>{current?.kind === 'personal' ? 'Private files for your account' : 'Shared files for your team'}</p></div>{identityURL && <a className="btn-secondary" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity</a>}</div>
+    {newDocument && <dialog className="drive-document-dialog" ref={documentDialog} aria-labelledby="new-document-title" onCancel={() => setNewDocument(null)}><form onSubmit={e => { e.preventDefault(); void run(async () => { const created = await change(`/api/drive/workspaces/${selected}/documents`, 'POST', {name: newDocument.name, kind: newDocument.kind, parent}); if (!file(created)) throw new Error('Invalid document response'); setNewDocument(null); window.location.assign(`/editor.html?file=${created.id}`); }); }}><h2 id="new-document-title">New {newDocument.kind}</h2><p>Create in {current?.name}</p><label>File name<input autoFocus required value={newDocument.name} onChange={e => setNewDocument({...newDocument,name:e.target.value})} /></label>{message && <p role="alert">{message}</p>}<div className="drive-dialog-actions"><button type="button" className="btn-secondary" onClick={() => setNewDocument(null)}>Cancel</button><button disabled={busy || !newDocument.name.trim()}>Create &amp; open</button></div></form></dialog>}
     {message && <p role="alert" className="panel">{message}</p>}
     {admin && <details className="panel"><summary>Operations &amp; audit</summary><p role="status">{operations}</p>{audit.map((e,i) => <p key={i}>{e}</p>)}</details>}
-    <div className="drive-layout"><aside className="panel"><h2>Workspaces</h2>{workspaces.map(w => <button key={w.id} className={`ky-nav-item ${selected === w.id ? 'active' : ''}`} aria-current={selected === w.id ? 'page' : undefined} onClick={() => { setSelected(w.id); setParent(''); setHistory(null); setView('files'); }}>{w.name}<small>{w.role || 'Administration'}</small></button>)}{workspaces.length === 0 && <p>No workspaces assigned.</p>}
-    {admin && <form onSubmit={e => { e.preventDefault(); void run(async () => { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); setNewName(''); }); }}><h3>Create workspace</h3><label>Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label><label>Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label><button disabled={busy}>Create workspace</button></form>}</aside>
+    {admin && <details className="panel drive-create-workspace"><summary>Create shared workspace</summary><form onSubmit={e => { e.preventDefault(); void run(async () => { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); setNewName(''); }); }}><h3>Create shared workspace</h3><label>Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label><label>Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label><button disabled={busy}>Create workspace</button></form></details>}
+    <div className="drive-layout">
     <div className="drive-content">{current ? <><div className="panel drive-files-panel">
-      <div className="drive-workspace-heading"><div><h2>{current.name}</h2><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>
+      <div className="drive-workspace-heading"><div><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>
       {view === 'files' && (current.role ? <>
         <div className="drive-toolbar">
           <label className="drive-folder-filter"><span>Folder</span><select value={parent} onChange={e => setParent(e.target.value)}><option value="">Workspace root</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
           <div className="drive-toolbar-actions">
+            {canEdit && !trash && <details className="drive-new-file"><summary className="btn">New file</summary><div className="drive-new-file-options">{(['document','spreadsheet','presentation'] satisfies DocumentKind[]).map(kind => <button className="btn-secondary" key={kind} onClick={() => setNewDocument({kind, name: `Untitled ${kind}`})}>New {kind}</button>)}</div></details>}
             <button className="btn-secondary" aria-pressed={trash} onClick={() => setTrash(!trash)}>{trash ? 'Back to files' : 'Trash'}</button>
             <button className="btn-secondary" disabled={busy} onClick={() => void run(reload)}>Refresh</button>
-            {canEdit && !trash && <><input ref={uploadInput} type="file" hidden aria-label="Choose file to upload" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void run(() => responseAsyncUpload(selected, parent, f)); e.target.value = ''; }} /><button disabled={busy} onClick={() => uploadInput.current?.click()}>Upload file</button>
+            {canEdit && !trash && <><input ref={uploadInput} type="file" hidden aria-label="Choose file to upload" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void run(() => responseAsyncUpload(selected, parent, f)); e.target.value = ''; }} /><button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}>Upload file</button>
               <details className="drive-new-folder"><summary className="btn-secondary">New folder</summary><form className="drive-folder-form" onSubmit={e => { e.preventDefault(); void run(async () => { await change(`/api/drive/workspaces/${selected}/folders`, 'POST', { parent, name: newFolder }); setNewFolder(''); }); }}><label>Folder name<input required value={newFolder} onChange={e => setNewFolder(e.target.value)} /></label><button disabled={busy}>Create</button></form></details></>}
           </div>
         </div>

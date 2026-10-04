@@ -84,6 +84,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 ## Local Contracts
 - One SQLite writer and immutable filesystem blobs; target linux/amd64. PostgreSQL code inherited from the base is not a supported drive deployment.
 - Read `../DRIVE_IMPLEMENTATION_PLAN.md` and `docs/ACCEPTANCE.md` for scope and gates. A local pass is not production readiness or a suite-wide installer.
+- Personal files belong to one active account’s private workspace; shared files use group grants. The sidebar lists My files and shared workspaces directly. New file creates blank DOCX/XLSX/PPTX and opens Euro-Office.
 - Shared files are workspace-owned and survive user/group deletion. Administration does not bypass content grants.
 - Production integrations use HTTPS, stable OIDC subject/SCIM externalId mapping, durable secrets and authenticated service/editor APIs.
 - Recovery uses `ky-primitives/recoveryclient`; no copied library crypto. Sealed metadata binds the exact Restic snapshot and includes every integration secret needed for restore. The user deferred independent bulk storage for the pilot; NAS-local snapshots are not independent recovery copies.

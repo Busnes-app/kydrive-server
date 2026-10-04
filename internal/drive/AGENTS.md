@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Own organization workspaces, files, folders, immutable versions and group access grants.
+Own personal and organization workspaces, files, folders, immutable versions and group access grants.
 
 ## Ownership
 
@@ -11,6 +11,7 @@ Own drive schema and domain operations over the application's database and blob 
 ## Local Contracts
 
 - Shared documents belong to workspaces, independent of user deletion.
+- Personal workspaces are unique per immutable account ID, default to 10GiB, and allow only the active owner. Group grants are rejected for personal workspaces, including administrator grants. Retain ownership/data after offboarding; session revocation covers both personal and shared files.
 - Read current user status and group memberships when authorizing each operation. Global admin can manage workspace configuration; content requires an explicit group grant.
 - Publish immutable, generated blob IDs before transactionally committing version metadata. Check expected revisions and quotas under the transaction. Do not derive disk paths from user filenames.
 - SQLite is the initial supported drive database. Keep domain inputs independent of HTTP.

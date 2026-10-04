@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { Drive } from './pages/Drive';
+import type { Workspace } from './pages/Drive';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
@@ -15,6 +16,8 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<DriveUser | null>(null);
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState<boolean>(true);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState('');
   const [activeTab, setActiveTab] = useState<string>('drive');
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
 
@@ -59,6 +62,8 @@ export const App: React.FC = () => {
   const handleLogout = async () => {
     await secureFetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
+    setWorkspaces([]);
+    setSelectedWorkspace('');
   };
 
   if (loading) {
@@ -99,11 +104,14 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
         user={user}
+        workspaces={workspaces}
+        selectedWorkspace={selectedWorkspace}
+        onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
         onLogout={handleLogout}
       />
 
       <main className="app-main">
-        {activeTab === 'drive' && <Drive admin={user.role === 'admin'} />}
+        {activeTab === 'drive' && <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} />}
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}

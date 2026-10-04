@@ -93,7 +93,7 @@ func (s *Store) CallbackActor(ctx context.Context, file string, revision int64) 
 }
 func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error) {
 	// Query live memberships at the boundary. No stale role snapshots authorize edits.
-	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE expires<=? OR NOT EXISTS(SELECT 1 FROM drive_files f JOIN drive_grants g ON g.workspace=f.workspace JOIN group_members m ON m.group_id=g.group_id JOIN users u ON u.id=m.user_id WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND u.id=drive_editor_sessions.user_id AND u.status='active' AND (g.role IN ('editor','manager') OR drive_editor_sessions.editable=false))`, time.Now().Unix())
+	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE expires<=? OR NOT EXISTS(SELECT 1 FROM drive_files f JOIN users u ON u.id=drive_editor_sessions.user_id LEFT JOIN drive_personal_workspaces p ON p.workspace=f.workspace WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND u.status='active' AND (p.owner=u.id OR (p.workspace IS NULL AND EXISTS(SELECT 1 FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=f.workspace AND m.user_id=u.id AND (g.role IN ('editor','manager') OR drive_editor_sessions.editable=false)))))`, time.Now().Unix())
 	if err != nil {
 		return nil, err
 	}
