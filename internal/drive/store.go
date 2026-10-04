@@ -1,0 +1,489 @@
+package drive
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/google/uuid"
+)
+
+var (
+	ErrDenied   = errors.New("drive access denied")
+	ErrConflict = errors.New("revision conflict")
+	ErrQuota    = errors.New("workspace quota exceeded")
+	ErrInvalid  = errors.New("invalid drive input")
+)
+
+type Store struct{ db *sql.DB }
+type Workspace struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Quota int64  `json:"quota"`
+	Used  int64  `json:"used"`
+	Role  string `json:"role"`
+}
+type Grant struct {
+	GroupID string `json:"group_id"`
+	Name    string `json:"name"`
+	Role    string `json:"role"`
+}
+type Folder struct {
+	ID        string `json:"id"`
+	Workspace string `json:"workspace"`
+	Parent    string `json:"parent"`
+	Name      string `json:"name"`
+}
+type File struct {
+	ID        string `json:"id"`
+	Workspace string `json:"workspace"`
+	Parent    string `json:"parent"`
+	Name      string `json:"name"`
+	Revision  int64  `json:"revision"`
+	Trashed   bool   `json:"trashed"`
+	Size      int64  `json:"size"`
+	Digest    string `json:"digest"`
+	Blob      string `json:"-"`
+}
+type Version struct {
+	FileID   string `json:"file_id"`
+	Revision int64  `json:"revision"`
+	Blob     string `json:"-"`
+	Digest   string `json:"digest"`
+	Size     int64  `json:"size"`
+	Created  string `json:"created"`
+}
+type Event struct {
+	ID       string `json:"id"`
+	User     string `json:"user"`
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
+	Created  string `json:"created"`
+}
+
+func New(ctx context.Context, db *sql.DB) (*Store, error) {
+	_, err := db.ExecContext(ctx, `
+ CREATE UNIQUE INDEX IF NOT EXISTS drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';
+ CREATE UNIQUE INDEX IF NOT EXISTS drive_group_external ON groups(external_id) WHERE external_id!='';
+ CREATE TABLE IF NOT EXISTS drive_service_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires BIGINT NOT NULL,revoked BOOLEAN NOT NULL DEFAULT false);
+ CREATE TABLE IF NOT EXISTS drive_workspaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,quota BIGINT NOT NULL CHECK(quota>0));
+ CREATE TABLE IF NOT EXISTS drive_grants(workspace TEXT NOT NULL REFERENCES drive_workspaces(id),group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,role TEXT NOT NULL CHECK(role IN ('reader','editor','manager')),PRIMARY KEY(workspace,group_id));
+ CREATE TABLE IF NOT EXISTS drive_folders(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),parent TEXT NOT NULL,name TEXT NOT NULL,UNIQUE(workspace,parent,name));
+ CREATE TABLE IF NOT EXISTS drive_files(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),parent TEXT NOT NULL,name TEXT NOT NULL,revision BIGINT NOT NULL,trashed BOOLEAN NOT NULL DEFAULT false);
+ CREATE UNIQUE INDEX IF NOT EXISTS drive_live_names ON drive_files(workspace,parent,name) WHERE trashed=false;
+ CREATE TABLE IF NOT EXISTS drive_versions(file_id TEXT NOT NULL REFERENCES drive_files(id),revision BIGINT NOT NULL,blob TEXT NOT NULL,digest TEXT NOT NULL,size BIGINT NOT NULL CHECK(size>=0),created TEXT NOT NULL,PRIMARY KEY(file_id,revision));
+ CREATE TABLE IF NOT EXISTS drive_events(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,action TEXT NOT NULL,resource TEXT NOT NULL,created TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS drive_editor_sessions(id TEXT PRIMARY KEY,file_id TEXT NOT NULL REFERENCES drive_files(id),revision BIGINT NOT NULL,user_id TEXT NOT NULL,token_hash TEXT NOT NULL,expires BIGINT NOT NULL,revoked BOOLEAN NOT NULL DEFAULT false,drop_done BOOLEAN NOT NULL DEFAULT false,editable BOOLEAN NOT NULL DEFAULT true);
+ CREATE TABLE IF NOT EXISTS drive_editor_documents(key TEXT PRIMARY KEY,file_id TEXT NOT NULL,base_revision BIGINT NOT NULL,current_revision BIGINT NOT NULL,closed BOOLEAN NOT NULL DEFAULT false);
+ CREATE TABLE IF NOT EXISTS drive_editor_saves(key TEXT NOT NULL,digest TEXT NOT NULL,revision BIGINT NOT NULL,PRIMARY KEY(key,digest));
+ CREATE INDEX IF NOT EXISTS drive_editor_expiry ON drive_editor_sessions(expires);
+ `)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{db: db}, nil
+}
+
+func ValidName(name string) bool {
+	if name == "" || len(name) > 255 || strings.TrimSpace(name) != name || name == "." || name == ".." {
+		return false
+	}
+	for _, r := range name {
+		if r == '/' || r == '\\' || unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
+			return false
+		}
+	}
+	return true
+}
+func Rank(role string) int {
+	switch role {
+	case "reader":
+		return 1
+	case "editor":
+		return 2
+	case "manager":
+		return 3
+	}
+	return 0
+}
+
+type queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func authorize(ctx context.Context, q queryer, user, workspace string, need int) error {
+	if a, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok && (a.Workspace != workspace || a.Rank < need) {
+		return ErrDenied
+	}
+	var rank int
+	err := q.QueryRowContext(ctx, `SELECT COALESCE(MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END),0) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id JOIN users u ON u.id=m.user_id WHERE g.workspace=? AND u.id=? AND u.status='active'`, workspace, user).Scan(&rank)
+	if err != nil {
+		return err
+	}
+	if rank < need {
+		return ErrDenied
+	}
+	return nil
+}
+func admin(ctx context.Context, q queryer, user string) error {
+	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok {
+		return ErrDenied
+	}
+	var n int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active' AND role='admin'`, user).Scan(&n)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events VALUES(?,?,?,?,?)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = f(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func (s *Store) Authorize(ctx context.Context, user, workspace string, need int) error {
+	return authorize(ctx, s.db, user, workspace, need)
+}
+
+func (s *Store) Workspaces(ctx context.Context, user string, administration bool) ([]Workspace, error) {
+	if administration {
+		if err := admin(ctx, s.db, user); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=?),0) FROM drive_workspaces w ORDER BY w.name`, user)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Workspace{}
+	for rows.Next() {
+		var w Workspace
+		var rank int
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.Used, &rank); err != nil {
+			return nil, err
+		}
+		w.Role = []string{"", "reader", "editor", "manager"}[rank]
+		if a, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok && a.Workspace != w.ID {
+			continue
+		}
+		if rank > 0 || administration {
+			out = append(out, w)
+		}
+	}
+	return out, rows.Err()
+}
+func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota int64) (Workspace, error) {
+	w := Workspace{ID: uuid.NewString(), Name: name, Quota: quota}
+	if !ValidName(name) || quota < 1 {
+		return w, ErrInvalid
+	}
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := admin(ctx, tx, user); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, w.ID, name, quota); err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "workspace.created", w.ID)
+	})
+	return w, err
+}
+func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, error) {
+	if err := admin(ctx, s.db, user); err != nil {
+		if err = authorize(ctx, s.db, user, workspace, 3); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT g.group_id,i.display_name,g.role FROM drive_grants g JOIN groups i ON i.id=g.group_id WHERE workspace=? ORDER BY i.display_name`, workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Grant{}
+	for rows.Next() {
+		var g Grant
+		if err = rows.Scan(&g.GroupID, &g.Name, &g.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) error {
+	if role != "" && Rank(role) == 0 {
+		return ErrInvalid
+	}
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := admin(ctx, tx, user); err != nil {
+			if err = authorize(ctx, tx, user, workspace, 3); err != nil {
+				return err
+			}
+		}
+		if role == "" {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM drive_grants WHERE workspace=? AND group_id=?`, workspace, group); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_grants VALUES(?,?,?) ON CONFLICT(workspace,group_id) DO UPDATE SET role=excluded.role`, workspace, group, role); err != nil {
+				return err
+			}
+		}
+		return event(ctx, tx, user, "workspace.permission_changed", workspace+":"+group)
+	})
+}
+func (s *Store) Quota(ctx context.Context, user, workspace string, quota int64) error {
+	if quota < 1 {
+		return ErrInvalid
+	}
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := admin(ctx, tx, user); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET quota=? WHERE id=?`, quota, workspace)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n != 1 {
+			return ErrInvalid
+		}
+		return event(ctx, tx, user, "workspace.quota_changed", workspace)
+	})
+}
+func parentOK(ctx context.Context, q queryer, workspace, parent string) error {
+	if parent == "" {
+		return nil
+	}
+	var n int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=?`, parent, workspace).Scan(&n)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrInvalid
+	}
+	return nil
+}
+func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name string) (Folder, error) {
+	f := Folder{uuid.NewString(), workspace, parent, name}
+	if !ValidName(name) {
+		return f, ErrInvalid
+	}
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+			return err
+		}
+		if err := parentOK(ctx, tx, workspace, parent); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "folder.created", f.ID)
+	})
+	return f, err
+}
+func (s *Store) Folders(ctx context.Context, user, workspace string) ([]Folder, error) {
+	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name FROM drive_folders WHERE workspace=? ORDER BY name`, workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Folder{}
+	for rows.Next() {
+		var f Folder
+		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob`
+
+func scanFile(row interface{ Scan(...any) error }) (File, error) {
+	var f File
+	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrDenied
+	}
+	return f, err
+}
+func (s *Store) File(ctx context.Context, user, id string, need int) (File, error) {
+	f, err := scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
+	if err != nil {
+		return f, err
+	}
+	err = authorize(ctx, s.db, user, f.Workspace, need)
+	return f, err
+}
+func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool) ([]File, error) {
+	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.workspace=? AND f.trashed=? ORDER BY f.name`, workspace, trashed)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []File{}
+	for rows.Next() {
+		f, e := scanFile(rows)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// Publish makes a durably stored immutable blob visible. Caller owns that blob until success.
+func (s *Store) Publish(ctx context.Context, user string, f File, v Version, expected int64) (File, error) {
+	if !ValidName(f.Name) || v.Size < 0 || len(v.Digest) != 64 || v.Blob == "" {
+		return f, ErrInvalid
+	}
+	if f.ID == "" {
+		f.ID = uuid.NewString()
+	}
+	v.FileID = f.ID
+	v.Revision = expected + 1
+	v.Created = time.Now().UTC().Format(time.RFC3339Nano)
+	err := s.transaction(ctx, func(tx *sql.Tx) error { return publishTX(ctx, tx, user, f, v, expected) })
+	if err != nil {
+		return f, err
+	}
+	f.Revision = v.Revision
+	f.Size = v.Size
+	f.Digest = v.Digest
+	f.Blob = v.Blob
+	return f, nil
+}
+func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error) {
+	if _, err := s.File(ctx, user, id, 1); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT file_id,revision,blob,digest,size,created FROM drive_versions WHERE file_id=? ORDER BY revision DESC`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Version{}
+	for rows.Next() {
+		var v Version
+		if err = rows.Scan(&v.FileID, &v.Revision, &v.Blob, &v.Digest, &v.Size, &v.Created); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, trash bool) error {
+	f, err := s.File(ctx, user, id, 2)
+	if err != nil {
+		return err
+	}
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET trashed=? WHERE id=? AND revision=?`, trash, id, expected)
+		if err != nil {
+			return ErrConflict
+		}
+		n, _ := res.RowsAffected()
+		if n != 1 {
+			return ErrConflict
+		}
+		return event(ctx, tx, user, "file.trash_changed", id)
+	})
+}
+func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, expected int64) (File, error) {
+	f, err := s.File(ctx, user, id, 2)
+	if err != nil {
+		return f, err
+	}
+	if f.Trashed {
+		return f, ErrConflict
+	}
+	var v Version
+	err = s.db.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size)
+	if err != nil {
+		return f, ErrInvalid
+	}
+	return s.Publish(ctx, user, f, v, expected)
+}
+func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
+	if err := admin(ctx, s.db, user); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id,action,resource,created FROM drive_events ORDER BY created DESC LIMIT 200`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Event{}
+	for rows.Next() {
+		var e Event
+		if err = rows.Scan(&e.ID, &e.User, &e.Action, &e.Resource, &e.Created); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, expected int64) error {
+	if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		return err
+	}
+	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
+		return err
+	}
+	var used, quota int64
+	if err := tx.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, f.Workspace, f.Workspace).Scan(&quota, &used); err != nil {
+		return err
+	}
+	if used > quota || v.Size > quota-used {
+		return ErrQuota
+	}
+	if expected == 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files VALUES(?,?,?,?,?,false)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
+			return fmt.Errorf("%w: name or file exists", ErrConflict)
+		}
+	} else {
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET revision=revision+1 WHERE id=? AND workspace=? AND revision=? AND trashed=false`, f.ID, f.Workspace, expected)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n != 1 {
+			return ErrConflict
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions VALUES(?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created); err != nil {
+		return err
+	}
+	return event(ctx, tx, user, "file.version_created", f.ID)
+}

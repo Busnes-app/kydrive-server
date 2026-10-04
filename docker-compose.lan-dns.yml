@@ -1,0 +1,6 @@
+# Add with -f alongside every existing overlay. This changes only DNS resolution.
+# The private-recovery opt-in belongs in .env.runtime and remains off by default.
+services:
+  app:
+    dns:
+      - ${KY_DNS:?set KY_DNS to your LAN DNS server}

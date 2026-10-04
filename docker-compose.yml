@@ -1,0 +1,30 @@
+services:
+  app:
+    image: ${KY_IMAGE:-kydrive-server:local}
+    platform: linux/amd64
+    container_name: kydrive-server
+    user: "${KY_UID:-1000}:${KY_GID:-1000}"
+    restart: unless-stopped
+    stop_grace_period: 20m
+    ports:
+      - "${KY_BIND_IP:-127.0.0.1}:${KY_HTTP_PORT:-8080}:8080"
+    env_file:
+      - .env.runtime
+    environment:
+      KY_HOST: 0.0.0.0
+      KY_PORT: "8080"
+      KY_APP_NAME: KyDrive
+      KY_ENV: production
+      KY_DB_DRIVER: sqlite
+      KY_DATA_DIR: /app/data
+      KY_BACKUP_DIR: /app/backups
+      KYDRIVE_BULK_BACKUP_REPOSITORY: /app/bulk
+    volumes:
+      - ${KY_DATA_PATH:-./data}:/app/data
+      - ${KY_BACKUP_PATH:-./backups}:/app/backups
+      - ${KY_BULK_PATH:?Set an independent bulk repository path}:/app/bulk
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

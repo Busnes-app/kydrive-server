@@ -1,0 +1,39 @@
+# Binaries
+kydrive-server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Data & Backups
+/data/
+/backups/
+*.db
+*.db-wal
+*.db-shm
+*.kycap
+
+# Frontend
+web/node_modules/
+web/test-results/
+web/playwright-report/
+.browser/
+
+# Logs & OS
+*.log
+.DS_Store
+.env
+.env.local
+
+# Coverage
+coverage.out
+.env.*
+!.env.example
+
+!.env.runtime.example
+/bulk-test-repository/
+/deploy/rendered/
+
+**/__pycache__/
+
+web/*.tsbuildinfo

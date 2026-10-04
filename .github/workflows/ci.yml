@@ -1,0 +1,75 @@
+name: KyDrive CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 26
+      - run: sudo apt-get update && sudo apt-get install -y restic
+      - run: go test -race ./... && go vet ./...
+      - run: test -z "$(gofmt -l $(git ls-files '*.go'))" && go mod verify
+      - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
+      - run: git diff --exit-code web/dist
+      - run: python -m unittest discover -s deploy -p '*_test.py'
+      - run: go build -o kydrive-server ./cmd/server && scripts/smoke-test.sh
+      - run: docker build --platform linux/amd64 --build-arg SOURCE_REVISION="$GITHUB_SHA" -t kydrive-server:ci .
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: docker save kydrive-server:ci | gzip > tested-image.tar.gz
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tested-image
+          path: tested-image.tar.gz
+          retention-days: 7
+  publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: tested-image
+      - run: docker load < tested-image.tar.gz
+      - env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - id: push
+        run: |
+          set -euo pipefail
+          name="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/kydrive-server"
+          docker tag kydrive-server:ci "$name:$GITHUB_SHA"
+          docker push "$name:$GITHUB_SHA"
+          digest="$(docker buildx imagetools inspect "$name:$GITHUB_SHA" --format '{{.Manifest.Digest}}')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME: ${{ steps.push.outputs.name }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          gh attestation verify "oci://$NAME@$DIGEST" --repo "$GITHUB_REPOSITORY" \
+            --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/ci.yml@refs/heads/master"
+

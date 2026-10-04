@@ -1,0 +1,10 @@
+# Local source build. Include this overlay on each compose invocation.
+services:
+  app:
+    image: kydrive-server:local
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
