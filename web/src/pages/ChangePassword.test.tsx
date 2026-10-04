@@ -42,6 +42,6 @@ it('routes a restricted signed-in user to replacement instead of the dashboard',
   ), { status: 200 })));
   render(<App />);
   expect(await screen.findByRole('heading', { name: 'Change your password' })).toBeTruthy();
-  expect(screen.queryByText('Files & permissions')).toBeNull();
+  expect(screen.queryByText('Files', { exact: true })).toBeNull();
   expect(screen.queryByText('Recovery')).toBeNull();
 });

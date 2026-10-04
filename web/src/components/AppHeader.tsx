@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { Smartphone, LogOut, Settings as SettingsIcon, Folder, Archive } from 'lucide-react';
+import React from 'react';
+import { LogOut, Settings as SettingsIcon, Folder, Archive } from 'lucide-react';
 import { ThemeSwitcher } from './ThemeSwitcher';
-import { QRPairingModal } from './QRPairingModal';
 
 interface AppHeaderProps {
   appName: string;
@@ -12,10 +11,9 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout }) => {
-  const [showPairing, setShowPairing] = useState<boolean>(false);
 
   const navItems = [
-    { id: 'drive', label: 'Files & permissions', icon: Folder },
+    { id: 'drive', label: 'Files', icon: Folder },
     { id: 'backup', label: 'Recovery', icon: Archive },
     { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
   ].filter(item => item.id === 'drive' || user?.role === 'admin');
@@ -46,11 +44,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             })}
           </nav>
         <div className="app-header-actions">
-          <button className="btn-secondary app-pair" onClick={() => setShowPairing(true)}>
-            <Smartphone size={16} style={{ color: 'var(--accent)' }} />
-            <span>Pair Device</span>
-          </button>
-
           <ThemeSwitcher />
 
           {user && (
@@ -72,7 +65,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
         </div>
       </header>
 
-      {showPairing && <QRPairingModal onClose={() => setShowPairing(false)} />}
     </>
   );
 };
