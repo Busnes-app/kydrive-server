@@ -9,6 +9,7 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `DeviceStore`, 
 ## Local Contracts
 - `CompletePasswordChange` atomically compares the old password, updates a flagged local account, clears the flag, deletes sessions/MFA challenges/device pairings and records `auth.password_changed`. Session/MFA issuance locks the same user row against the verified hash; MFA challenges persist the creation-time password hash, and consumption returns that snapshot to reject stale completions. Migration 4 discards preexisting challenges because their credential snapshot is unknown.
 - `ResetAdminPassword` reactivates a local administrator with the replacement flag set and shares the atomic grant purge and audit path with `CompletePasswordChange`; it also works for disabled accounts.
+- `SetDirectoryRole` is an explicit operator grant to exactly one active SCIM/KyIdentity subject. It accepts only admin/user, preserves directory identity, revokes sessions/MFA/device grants and records the role change atomically. Local and inactive accounts are excluded.
 - `RenameLocalAdmin` atomically renames only a local administrator and records an audit row. Identity, credentials and privileges stay intact; it cannot rename directory accounts or replace another account.
 - `store.Open(ctx, cfg)` initializes and auto-migrates the configured database backend.
 - SQLite runs in WAL mode with foreign keys enabled.

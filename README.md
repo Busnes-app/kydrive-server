@@ -41,6 +41,14 @@ Create a workspace in KyDrive and grant a KyIdentity group reader, editor or man
 
 The main sidebar lists My files and shared workspaces. Each active account gets one private workspace, initially 10GiB; its owner can edit files, and group grants cannot expose it to others. Shared workspaces use group grants. New file creates a blank DOCX, XLSX or PPTX in the selected workspace and opens Euro-Office. The UI also provides folders, upload/download, versions, trash restore, quotas, operational status and audit. The people/group action links to KyIdentity; it does not duplicate the directory or embed another administration application.
 
+To make an installation owner an application administrator, run the audited operator command inside the drive container:
+
+```sh
+/app/kydrive-server set-directory-role -subject <exact-KyIdentity-subject> -role admin
+```
+
+This preserves the directory account and revokes its existing sessions; sign in with KyIdentity again. Use `-role user` to remove the grant. SCIM roles do not assign application administration, and offboarding still disables administrators. The distinct local `recovery-admin` account is for recovery; deployment credentials belong in an operator-controlled secret location.
+
 ## Editor
 
 Set `KYDRIVE_EDITOR_URL` to the browser-visible HTTPS Euro-Office origin and `KYDRIVE_EDITOR_SECRET` to the same JWT secret supplied to Euro-Office. `KYDRIVE_EDITOR_DRIVE_URL` defaults to `KY_APP_URL`; the editor must resolve and reach it for authorized downloads and signed callbacks. Optional `KYDRIVE_EDITOR_INTERNAL_URL` changes server-to-editor transport, while output URLs must still name the configured public origin. No redirects are followed. HTTP origins are accepted only with `KY_ENV=development` for local testing.

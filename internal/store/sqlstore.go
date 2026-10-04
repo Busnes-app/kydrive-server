@@ -101,6 +101,42 @@ type userStore struct {
 	store *SQLStore
 }
 
+// SetDirectoryRole is an explicit operator grant, never inferred from a directory role.
+func (u *userStore) SetDirectoryRole(ctx context.Context, subject, role string) error {
+	if subject == "" || len(subject) > 512 || strings.TrimSpace(subject) != subject || (role != "admin" && role != "user") {
+		return fmt.Errorf("exact directory subject and role admin or user required")
+	}
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var count int
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(*) FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&count); err != nil {
+		return err
+	}
+	if count != 1 {
+		return fmt.Errorf("expected exactly one active directory account; found %d", count)
+	}
+	var id, oldRole string
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id,role FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&id, &oldRole); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET role=?,updated_at=? WHERE id=?`), role, now, id); err != nil {
+		return err
+	}
+	for _, table := range []string{"sessions", "mfa_challenges", "device_pairings"} {
+		if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM "+table+" WHERE user_id=?"), id); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // RenameLocalAdmin frees a directory username without linking or elevating identities.
 func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName string) error {
 	tx, err := u.store.db.BeginTx(ctx, nil)

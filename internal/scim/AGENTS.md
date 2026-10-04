@@ -13,7 +13,7 @@ Owns local persistence adapters and bearer authentication; the library owns `/sc
 - SCIM protocol models and parsing must come from `github.com/elimity-com/scim`; do not add parallel local request/response implementations.
 
 - KyIdentity is the directory authority. Support exact, bounded `externalId` lookup for Users/Groups and replayable PUT membership replacement. External identifiers are immutable; filter attributes must not fall back to substring search.
-- Incoming directory roles cannot elevate application administration. SCIM user operations cannot modify a local break-glass account. Membership updates use the store’s atomic replacement.
+- Incoming directory roles cannot elevate application administration or replace an explicit operator role grant. Offboarding still disables an application administrator. SCIM user operations cannot modify a local break-glass account. Membership updates use the store’s atomic replacement.
 
 ## Verification
 - `go test -v ./internal/scim/...`

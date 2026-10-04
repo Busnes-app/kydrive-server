@@ -38,6 +38,7 @@ type UserStore interface {
 	UpdateUser(ctx context.Context, u *User) error
 	ResetAdminPassword(ctx context.Context, userID, newHash string) error
 	RenameLocalAdmin(ctx context.Context, oldName, newName string) error
+	SetDirectoryRole(ctx context.Context, subject, role string) error
 	CompletePasswordChange(ctx context.Context, userID, oldHash, newHash, ip string) error
 	UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, newHashes string) error
 	// SpendTOTPCounter records counter as used. It returns ErrAlreadyExists when counter is

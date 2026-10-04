@@ -95,7 +95,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 ## User Preferences
 - Bootstrap and operator-reset passwords must be replaced before privileged use; resets revoke sessions/MFA/device grants.
 - Euro-Office is the editor; no Nextcloud or ONLYOFFICE product deployment. Inherited Euro code/branding does not prove an independent artifact build chain.
-- People/groups live in KyIdentity. Group permission administration lives in KyDrive.
+- People/groups live in KyIdentity. Group permission administration lives in KyDrive. The installation owner’s KyIdentity account must receive an explicit KyDrive administrator grant; do not leave owner administration dependent on an undisclosed local recovery login. Use the audited set-directory-role CLI with the exact directory subject.
 - Reserve a distinct local recovery administrator username when the directory also uses `admin`; use the audited `rename-local-admin -from admin -to recovery-admin` operator command on existing installations. Directory provisioning never adopts the local account.
 - General drive API covers uploads/downloads, folders, versions, trash, quotas and workspace-scoped service credentials. Desktop sync, WebDAV, SMB, advanced search and HA are deferred.
 - Preserve shared Busnes light/dark themes, named themes and saved browser choices.
