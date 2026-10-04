@@ -86,7 +86,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Read `../DRIVE_IMPLEMENTATION_PLAN.md` and `docs/ACCEPTANCE.md` for scope and gates. A local pass is not production readiness or a suite-wide installer.
 - Shared files are workspace-owned and survive user/group deletion. Administration does not bypass content grants.
 - Production integrations use HTTPS, stable OIDC subject/SCIM externalId mapping, durable secrets and authenticated service/editor APIs.
-- Recovery uses `ky-primitives/recoveryclient`; no copied library crypto. Sealed metadata binds the exact independent Restic snapshot and includes every integration secret needed for restore.
+- Recovery uses `ky-primitives/recoveryclient`; no copied library crypto. Sealed metadata binds the exact Restic snapshot and includes every integration secret needed for restore. The user deferred independent bulk storage for the pilot; NAS-local snapshots are not independent recovery copies.
 - Retain all referenced versions/blobs and Restic snapshots. No automatic destructive garbage collection or bulk pruning.
 - `runServer` stops HTTP, cancels the scheduler/editor worker and waits for detached backup handlers before closing the store. Shutdown timeout closes remaining HTTP connections. Compose's 20m grace period exceeds HTTP drain plus the library backup wait budget.
 - Keep generated credentials, database files, rendered Secrets, opened capsules and bulk repositories out of Git and Docker build contexts.
@@ -95,6 +95,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Bootstrap and operator-reset passwords must be replaced before privileged use; resets revoke sessions/MFA/device grants.
 - Euro-Office is the editor; no Nextcloud or ONLYOFFICE product deployment. Inherited Euro code/branding does not prove an independent artifact build chain.
 - People/groups live in KyIdentity. Group permission administration lives in KyDrive.
+- Reserve a distinct local recovery administrator username when the directory also uses `admin`; use the audited `rename-local-admin -from admin -to recovery-admin` operator command on existing installations. Directory provisioning never adopts the local account.
 - General drive API covers uploads/downloads, folders, versions, trash, quotas and workspace-scoped service credentials. Desktop sync, WebDAV, SMB, advanced search and HA are deferred.
 - Preserve shared Busnes light/dark themes, named themes and saved browser choices.
 

@@ -16,6 +16,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/password"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
@@ -52,6 +53,31 @@ func main() {
 			return
 		case "init-admin":
 			runInitAdmin(os.Args[2:])
+			return
+		case "rename-local-admin":
+			fs := flag.NewFlagSet("rename-local-admin", flag.ExitOnError)
+			from := fs.String("from", "", "existing local administrator username")
+			to := fs.String("to", "", "new local administrator username")
+			fs.Parse(os.Args[2:])
+			if err := auth.ValidateUsername(*from); err != nil {
+				log.Fatal(err)
+			}
+			if err := auth.ValidateUsername(*to); err != nil {
+				log.Fatal(err)
+			}
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				log.Fatal(err)
+			}
+			st, err := store.Open(context.Background(), cfg.Database)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer st.Close()
+			if err = st.Users().RenameLocalAdmin(context.Background(), *from, *to); err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Local administrator renamed from %q to %q; identity and privileges preserved", *from, *to)
 			return
 		case "backup-drill":
 			runBackupDrill(os.Args[2:])

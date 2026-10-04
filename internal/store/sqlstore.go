@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"strconv"
@@ -98,6 +99,37 @@ func (s *SQLStore) rebind(query string) string {
 
 type userStore struct {
 	store *SQLStore
+}
+
+// RenameLocalAdmin frees a directory username without linking or elevating identities.
+func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName string) error {
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username)=LOWER(?))`), newName).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrAlreadyExists
+	}
+	var id string
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin'`), oldName).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	now := time.Now().UTC()
+	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET username=?, updated_at=? WHERE id=? AND sso_provider='local' AND role='admin'`), newName, now, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), id, "auth.local_admin_renamed", id, oldName+" -> "+newName, "operator-cli", now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (u *userStore) CreateUser(ctx context.Context, user *User) error {
