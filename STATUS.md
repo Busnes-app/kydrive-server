@@ -1,28 +1,14 @@
 **Repo:** KyDrive-server
-**Worktree:** /home/yoshi/git/busnes.app/KyDrive-server (branch work/drive)
+**Worktree:** /home/yoshi/git/busnes.app/KyDrive-server (branch master)
 
-# Local delivery complete — 2026-10-03
+# Live pilot — 2026-10-04
 
-Built and tested locally across all seven implementation areas: drive/storage and authorization, SCIM/OIDC wiring, Euro-Office sessions/callbacks/revocation, browser administration, sealed metadata plus encrypted bulk recovery, and NAS/Kubernetes packaging. Exact evidence and remaining production gates: `docs/ACCEPTANCE.md`. Operator configuration: `README.md`; restore: `docs/RESTORE.md`.
+Local seven-phase acceptance is complete. The live pilot has NAS storage, Kubernetes Euro-Office, HTTPS, KyIdentity SSO/SCIM user/group delivery, shared manager access, all three new Office file types and sealed KyRecovery deposits with passing metadata/bulk restore drills. Current image/source and receipts are in `docs/PILOT.md`.
 
-Actual Euro-Office DOCX collaboration, XLSX cell editing and PPTX title editing all saved and reopened. Deactivating an active collaborator revoked its editor access while shared files survived. Final container recovery drill restored every referenced blob and sealed the integration secrets. Go race tests/vet, frontend tests/build/audit, renderer tests, smoke checks, Docker and Compose validation passed.
+The latest user requests are deployed: My files is private to its active owner; group-owned shared workspaces appear directly in the main sidebar. New file creates DOCX/XLSX/PPTX in the selected workspace and opens Euro-Office. Redundant Files navigation, nested workspace selection and Pair Device are removed. Local real-domain tests verify personal isolation, rejected grants and offboarding. Actual native UI created and edited all three formats; authenticated saved-content checks verified revision 2 and K/S/P. Three test files are in trash; original Validation.xlsx remains. Desktop/mobile checks have no document overflow.
 
-The user explicitly limited this delivery to build/test local. No live NAS/Kubernetes/DNS/KyIdentity/KyRecovery provisioning and no image publication occurred. Target NAS is `unraid.urlxl.us` / KyYard `hluswcdata01`; people/groups belong in KyIdentity, group permissions in KyDrive; recovery target is `https://kyrecovery.urlxl.us/`. Root suite installer remains separate work. Original server-base and KyIdentity worktrees are clean.
+Current runtime source `109e6f6`; CI 37182399482 passed and provenance was independently verified. Pinned image digest `493de5b520a521e3c152a205591c8cec1a3dc1b805c69200af45b7b39dcd6fa8`; audited KyYard recreate succeeded. Personal ownership schema survives restarts. Rollback must use a personal-aware version.
 
-## Review state
+KyRecovery pairing remains pinned to the existing 2-of-5 suite key. Fresh sealed backup and seven-check restore drill include the new personal schema and all file versions. Independent bulk storage remains deferred by the user; NAS-local Restic is not independent recovery. Local operator is recovery-admin; directory Yoshi remains role user with group-derived shared permissions. Credentials stay private under ~/.local/state/kydrive-pilot/.
 
-New repository is on branch `work/drive`, all source files remain untracked pending review; no commit, remote or PR was created. Local image `kydrive-server:local` is amd64/non-root and built from current source. It is not a published deployment digest.
-
-Local demo remains running at `http://localhost:18090`, routed by an ephemeral preview proxy to Docker containers `kydrive-local` and `kydrive-euro-local-test`. Disposable credentials and fixture data are in `/tmp/kydrive-local-test`, with private credential files mode 0600; never copy them into Git, images or the handoff board. `env.json` identifies generated local credentials; these are not production credentials. The browser administrator session is already authenticated. The second local SCIM test user is intentionally inactive after the revocation test.
-
-To stop the demo: `docker stop kydrive-local kydrive-euro-local-test`; inspect the proxy command/process before terminating the PID in `/tmp/kydrive-local-test/proxy.pid`. Do not use the old server.pid: it refers to a stopped initial server. These temporary files are not durable product storage.
-
-## Next production work
-
-Verify source-to-artifact provenance for the pinned Euro image, choose real NAS persistent paths and independent bulk storage, supply TLS/DNS and cluster storage settings, connect KyIdentity OIDC/SCIM and pair KyRecovery. Then validate real offboarding, HTTPS transfers, NAS durability/capacity, large restore, upgrade and rollback. A renderer produces reviewable manifests; it neither applies them nor implements the full suite one-prompt installer.
-
-## Careful
-
-Do not silently grant document access to identity administrators. Do not prune bulk snapshots referenced by retained capsules. A metadata-only restore is incomplete: restore and verify the exact bound Restic snapshot. Keep integration secrets sealed and persistent. Private-network editor fetches require a constrained deployment policy; the renderer does not enable arbitrary private access. Euro provenance and production acceptance remain open despite passing local editing tests.
-
-DOX pass updated root/product/domain/deployment contracts and child indexes. Auth, crypto, devices and testdb contracts were intentionally unchanged because their inherited responsibilities did not change. Root plan records the local-only scope and links the acceptance record. This handoff and the plan are mirrored to myslop.
+Remaining pilot gates: live collaboration/offboarding, full editor pod restart/rollback, custodian-led recovery. All three temporary NAS storage helpers were removed. Current UI request is complete; these remaining pilot gates are not a sign-in blocker. DOX contracts/indexes updated; docs ownership is unchanged because this pass adds evidence. Mirror this record, PILOT and the parent plan to myslop before stopping.

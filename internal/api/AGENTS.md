@@ -44,4 +44,4 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - `scripts/smoke-test.sh` asserts the same boundaries against a running binary
 
 ## Child DOX Index
-None.
+- `templates/` — blank Office Open XML creation assets and provenance.

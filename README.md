@@ -1,8 +1,8 @@
 # KyDrive
 
-Open-source shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Euro-Office is the first editor integration. The drive stores arbitrary files and exposes a workspace-scoped service API for other suite applications.
+Open-source personal and shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Euro-Office is the first editor integration. The drive stores arbitrary files and exposes a workspace-scoped service API for other suite applications.
 
-Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. The requested NAS is `unraid.urlxl.us` / KyYard `hluswcdata01`; its filesystem and deployment have not been validated. This delivery builds and tests locally.
+Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. The live pilot uses NAS `unraid.urlxl.us` / KyYard `hluswcdata01`; verified deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
 
 ## Local development
 
@@ -39,7 +39,7 @@ Configure a KyIdentity outbound SCIM system at `<drive origin>/scim/v2` with `KY
 
 Create a workspace in KyDrive and grant a KyIdentity group reader, editor or manager access. Grants inherit throughout the workspace. An administrator can configure quotas/grants and view audits, but needs a group grant to read document content. Workspace files survive deletion of any employee or group. A manager can issue reader/editor service credentials scoped to their workspace, expiring after 90 days and invalidated when that user's membership or account ceases to authorize them.
 
-The UI provides files, folders, upload/download, versions, trash restore, group grants, quotas, editor opening, operational status and audit. The people/group action links to KyIdentity; it does not duplicate the directory or embed another administration application.
+The main sidebar lists My files and shared workspaces. Each active account gets one private workspace, initially 10GiB; its owner can edit files, and group grants cannot expose it to others. Shared workspaces use group grants. New file creates a blank DOCX, XLSX or PPTX in the selected workspace and opens Euro-Office. The UI also provides folders, upload/download, versions, trash restore, quotas, operational status and audit. The people/group action links to KyIdentity; it does not duplicate the directory or embed another administration application.
 
 ## Editor
 
@@ -49,7 +49,7 @@ DOCX/ODT/TXT use the document editor; XLSX/ODS/CSV use the spreadsheet editor; P
 
 Deactivation, membership loss, permission downgrade, trash and session expiry queue durable revocations. The worker scans every two seconds and retries failed Euro-Office `drop` commands. The administration UI shows pending commands. Revoked users lose online editing and file access; plaintext already delivered to a browser cannot be recalled. Euro-Office processes plaintext. This is not CryptPad-style client-side encryption.
 
-The local image under test is Euro-Office `v9.3.4-hotfix.1`, amd64 digest in `deploy/render.py`. The documented `9.3.1` tag was unavailable. Its runtime carries AGPLv3 and inherited ONLYOFFICE strings. The image has no source-revision provenance label; digest pinning and a matching version do not independently prove its complete build chain. The release tag pins Euro-Office-owned submodules and its workflow publishes to the Euro-Office registry; this verifies declared source/build ownership, not reproducibility of the pulled bytes. See [acceptance evidence](docs/ACCEPTANCE.md) before a production release decision.
+The local image under test is Euro-Office `v9.3.4-hotfix.1`, amd64 digest in `deploy/render.py`. The documented `9.3.1` tag was unavailable. Its runtime carries AGPLv3 and inherited ONLYOFFICE strings. Release workflow and BuildKit provenance bind the selected amd64 digest to its Euro-Office source commit. This establishes observed build correspondence; an independently reproducible rebuild is not claimed. See [provenance evidence](docs/EURO-PROVENANCE.md) and [pilot gates](docs/PILOT.md).
 
 ## Recovery
 
@@ -85,7 +85,7 @@ python -m unittest discover -s deploy -p '*_test.py'
 docker build --platform linux/amd64 -t kydrive-server:local .
 ```
 
-The browser shell and actual Euro-Office were exercised through the native T3 collaborative browser. Evidence and limits are in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`. Local testing does not establish a live KyIdentity pairing, production TLS, NAS storage semantics or suite-wide one-prompt installation.
+The browser shell and actual Euro-Office were exercised through the native T3 collaborative browser. Evidence and limits are in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`. Live identity, HTTPS, NAS storage, spreadsheet save/reopen and recovery drill evidence is recorded separately in `docs/PILOT.md`. Suite-wide one-prompt installation is not implemented.
 
 ## Scope
 
