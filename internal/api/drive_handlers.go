@@ -119,7 +119,7 @@ func (s *Server) driveDirectory(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	s.writeJSON(w, 200, map[string]any{"groups": groups, "identity_url": identityURL(), "authority": "KyIdentity"})
+	s.writeJSON(w, 200, map[string]any{"groups": append([]*store.Group{}, groups...), "identity_url": identityURL(), "authority": "KyIdentity"})
 }
 func (s *Server) driveAudit(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.Drive().Events(r.Context(), s.driveUser(r).ID)
