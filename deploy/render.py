@@ -61,7 +61,7 @@ def render(a):
     sec = resource('Secret', 'editor-jwt'); sec['type'] = 'Opaque'; sec['data'] = {'secret': base64.b64encode(jwt.encode()).decode()}
     claim = pvc('euro-runtime', a.storage_class, '30Gi')
     env = {'JWT_ENABLED': 'true', 'ALLOW_PRIVATE_IP_ADDRESS': 'false', 'ALLOW_META_IP_ADDRESS': 'false'}
-    euro = deployment('euro-office', a.editor_image, env, [{'name': 'runtime', 'mountPath': '/var/lib/euro-office'}], [{'name': 'runtime', 'persistentVolumeClaim': {'claimName': 'euro-runtime'}}], 80, True)
+    euro = deployment('euro-office', a.editor_image, env, [{'name': 'runtime', 'mountPath': '/var/lib/euro-office', 'subPath': 'editor-runtime'}], [{'name': 'runtime', 'persistentVolumeClaim': {'claimName': 'euro-runtime'}}], 80, True)
     euro['spec']['template']['spec']['containers'][0]['env'].append({'name': 'JWT_SECRET', 'valueFrom': {'secretKeyRef': {'name': 'editor-jwt', 'key': 'secret'}}})
     # The bundled distribution uses PostgreSQL, RabbitMQ and Redis internally. Persist its
     # database and document cache independently of the image, with no extra replicas.
@@ -69,6 +69,9 @@ def render(a):
     pod['containers'][0]['volumeMounts'].append({'name': 'runtime', 'mountPath': '/var/www/euro-office/Data', 'subPath': 'editor-data'})
     for directory in ['postgresql', 'rabbitmq', 'redis']:
         pod['containers'][0]['volumeMounts'].append({'name': 'runtime', 'mountPath': '/var/lib/'+directory, 'subPath': directory})
+    # Preserve the distribution's initialized databases before empty PVC mounts hide them.
+    seed = 'set -eu\nif test ! -f /seed/.vendor-state-seeded; then\n  for pair in postgresql:/var/lib/postgresql rabbitmq:/var/lib/rabbitmq redis:/var/lib/redis editor-runtime:/var/lib/euro-office editor-data:/var/www/euro-office/Data; do\n    name=${pair%%:*}; source=${pair#*:}\n    mkdir -p /seed/$name\n    test -z "$(ls -A /seed/$name)"\n    stage=$(mktemp -d /seed/.seed-$name.XXXXXX)\n    cp -a "$source/." "$stage/"\n    chown --reference="$source" "$stage"\n    chmod --reference="$source" "$stage"\n    rmdir /seed/$name\n    mv "$stage" /seed/$name\n  done\n  touch /seed/.vendor-state-seeded\nfi\n'
+    pod['initContainers'] = [{'name': 'seed-bundled-services', 'image': a.editor_image, 'command': ['/bin/sh', '-ec', seed], 'volumeMounts': [{'name': 'runtime', 'mountPath': '/seed'}]}]
     items = [ns, sec, claim, euro] + expose('euro-office', a.editor_url, 80, a.ingress_class)
     profile = 'NAS endpoint '+a.drive_url
     if a.kubernetes_drive:

@@ -13,6 +13,8 @@ Owns `render.py` and the generated installation contract. Root Compose owns NAS 
 - TLS, ingress class, storage class and independent bulk storage are operator inputs. A PVC alone does not establish an independent backup destination.
 - A NAS connection is an external endpoint; kubeconfig grants no NAS authority.
 
+- Initialize the bundled service data from the same pinned editor image on the first start, refusing non-empty unmarked destinations. Preserve the source directory owner and mode on staging roots as well as copied contents. Keep each service and editor runtime in a separate subPath; never mount the PVC root over the editor cache.
+
 ## Work Guidance
 
 ## Verification
