@@ -16,6 +16,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - Register the service worker from the production JS bundle; keep `script-src 'self'` intact. Pairing uses a native modal dialog for focus containment, Escape and focus restoration.
 - Worker caching is limited to the same-origin public shell, manifest and assets. HTML is network-first with offline fallback so deployments refresh; dynamic/auth routes stay uncached.
 - KyDrive deployments use SQLite; inherited recovery UI still reports snapshot preconditions.
+- The suite SSO button reads `Sign On with KyIdentity`; the login description identifies organization files and shared workspaces.
 
 - KyDrive owns files, folders, versions/trash, workspace permissions/quotas and operational status/audit. People/group management links to KyIdentity; no separate local directory editor.
 - Hide privileged navigation from staff. Directory-managed group membership and workspace access are distinct. Managers can configure group grants; only administrators set quota or see global operations.

@@ -121,7 +121,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
             <img src="/app-icon.png" width={56} height={56} alt="" />
           </div>
           <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>{appName || 'Busnes.app'}</h1>
-          <p style={{ color: 'var(--ink)', fontSize: '14px', marginTop: '4px' }}>Cloud Mobile First Base Platform</p>
+          <p style={{ color: 'var(--ink)', fontSize: '14px', marginTop: '4px' }}>Organization files and shared workspaces</p>
         </div>
 
         <div className="panel">
@@ -224,7 +224,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
                   style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}
                 >
                   <Key size={16} style={{ color: 'var(--accent)' }} />
-                  <span>KySignOn Identity</span>
+                  <span>Sign On with KyIdentity</span>
                 </a>
               </div>
             </form>
