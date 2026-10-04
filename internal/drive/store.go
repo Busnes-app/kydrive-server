@@ -243,7 +243,28 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 	})
 	return w, err
 }
+func sharedWorkspace(ctx context.Context, q queryer, workspace string) error {
+	var shared int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE w.id=? AND p.workspace IS NULL`, workspace).Scan(&shared); err != nil {
+		return err
+	}
+	if shared != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+
+func (s *Store) AuthorizeSharedManager(ctx context.Context, user, workspace string) error {
+	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
+		return err
+	}
+	return authorize(ctx, s.db, user, workspace, 3)
+}
+
 func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, error) {
+	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
+		return nil, err
+	}
 	if err := admin(ctx, s.db, user); err != nil {
 		if err = authorize(ctx, s.db, user, workspace, 3); err != nil {
 			return nil, err
@@ -269,12 +290,8 @@ func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) 
 		return ErrInvalid
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var personal int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_personal_workspaces WHERE workspace=?`, workspace).Scan(&personal); err != nil {
+		if err := sharedWorkspace(ctx, tx, workspace); err != nil {
 			return err
-		}
-		if personal != 0 {
-			return ErrDenied
 		}
 		if err := admin(ctx, tx, user); err != nil {
 			if err = authorize(ctx, tx, user, workspace, 3); err != nil {

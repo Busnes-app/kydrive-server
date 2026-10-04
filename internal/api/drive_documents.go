@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -57,6 +58,10 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		path, _ := drive.BlobPath(s.blobRoot(), version.Blob)
 		os.Remove(path)
+		if errors.Is(err, drive.ErrConflict) {
+			s.writeError(w, http.StatusConflict, "A file with that name already exists; choose another name")
+			return
+		}
 		s.driveError(w, err)
 		return
 	}

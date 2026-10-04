@@ -485,7 +485,7 @@ func identityURL() string {
 }
 
 func (s *Server) driveWorkspaceDirectory(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.Drive().Authorize(r.Context(), s.driveUser(r).ID, r.PathValue("id"), 3); err != nil {
+	if err := s.store.Drive().AuthorizeSharedManager(r.Context(), s.driveUser(r).ID, r.PathValue("id")); err != nil {
 		s.driveError(w, err)
 		return
 	}

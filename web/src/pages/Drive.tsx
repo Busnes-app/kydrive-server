@@ -61,6 +61,15 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   useEffect(() => { if (!canManage) return; void (async () => { const v = await response(await fetch(admin ? '/api/drive/directory' : `/api/drive/workspaces/${selected}/directory`)); if (!record(v) || !Array.isArray(v.groups) || !v.groups.every(group)) throw new Error('Invalid directory'); setGroups(v.groups); if (typeof v.identity_url === 'string' && v.identity_url.startsWith('https://')) setIdentityURL(v.identity_url); })().catch(e => setMessage(e instanceof Error ? e.message : 'Directory unavailable')); }, [admin, selected, canManage]);
   useEffect(() => { if (!admin) return; let active = true; const refresh = async () => { try { const v = await response(await fetch('/api/drive/status')); if (record(v) && record(v.editor_revocations) && typeof v.editor_revocations.pending === 'number' && active) setOperations(`Directory: ${v.scim_enabled ? 'SCIM enabled' : 'SCIM disabled'} · Editor: ${v.editor_configured ? 'configured' : 'not configured'} · Pending editor revocations: ${v.editor_revocations.pending} · Bulk backup: ${v.bulk_repository_configured ? 'configured' : 'not configured'}`); const events = await response(await fetch('/api/drive/audit')); if (Array.isArray(events) && active) setAudit(events.filter(record).filter(e => typeof e.action === 'string' && typeof e.created === 'string').slice(0,10).map(e => `${e.created} · ${e.action}`)); } catch { if (active) setOperations('Operational status unavailable; refresh before assuming access changes have reconciled.'); } }; void refresh(); const timer = setInterval(() => void refresh(),5000); return () => { active = false; clearInterval(timer); }; }, [admin]);
   useEffect(() => { const dialog = documentDialog.current; if (newDocument && dialog && !dialog.open) dialog.showModal(); return () => { if (dialog?.open) dialog.close(); }; }, [newDocument?.kind]);
+  function startDocument(kind: DocumentKind) {
+    const extension = {document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx'}[kind];
+    const base = `Untitled ${kind}`;
+    let name = base;
+    let suffix = 2;
+    const names = new Set(files.filter(f => !f.trashed && f.parent === parent).map(f => f.name.toLowerCase()));
+    while (names.has(`${name}.${extension}`.toLowerCase())) name = `${base} (${suffix++})`;
+    setNewDocument({kind, name});
+  }
   async function run(action: () => Promise<unknown>) { setBusy(true); setMessage(''); try { await action(); await reload(); } catch (e) { setMessage(e instanceof Error ? e.message : 'Operation failed'); } finally { setBusy(false); } }
   return <section className="drive-page">
     <div className="drive-heading"><div><h1>{current?.name || 'Workspaces'}</h1><p>{current?.kind === 'personal' ? 'Private files for your account' : 'Shared files for your team'}</p></div>{identityURL && <a className="btn-secondary" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity</a>}</div>
@@ -75,7 +84,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
         <div className="drive-toolbar">
           <label className="drive-folder-filter"><span>Folder</span><select value={parent} onChange={e => setParent(e.target.value)}><option value="">Workspace root</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
           <div className="drive-toolbar-actions">
-            {canEdit && !trash && <details className="drive-new-file"><summary className="btn">New file</summary><div className="drive-new-file-options">{(['document','spreadsheet','presentation'] satisfies DocumentKind[]).map(kind => <button className="btn-secondary" key={kind} onClick={() => setNewDocument({kind, name: `Untitled ${kind}`})}>New {kind}</button>)}</div></details>}
+            {canEdit && !trash && <details className="drive-new-file"><summary className="btn">New file</summary><div className="drive-new-file-options">{(['document','spreadsheet','presentation'] satisfies DocumentKind[]).map(kind => <button className="btn-secondary" key={kind} onClick={() => startDocument(kind)}>New {kind}</button>)}</div></details>}
             <button className="btn-secondary" aria-pressed={trash} onClick={() => setTrash(!trash)}>{trash ? 'Back to files' : 'Trash'}</button>
             <button className="btn-secondary" disabled={busy} onClick={() => void run(reload)}>Refresh</button>
             {canEdit && !trash && <><input ref={uploadInput} type="file" hidden aria-label="Choose file to upload" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void run(() => responseAsyncUpload(selected, parent, f)); e.target.value = ''; }} /><button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}>Upload file</button>

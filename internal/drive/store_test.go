@@ -257,6 +257,9 @@ func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
 	if err := d.Grant(ctx, "admin", id, "team", "reader"); !errors.Is(err, drive.ErrDenied) {
 		t.Fatal("admin shared personal workspace", err)
 	}
+	if err := d.AuthorizeSharedManager(ctx, "worker", id); !errors.Is(err, drive.ErrDenied) {
+		t.Fatal("private owner received directory management", err)
+	}
 	ws, err := d.Workspaces(ctx, "worker", false)
 	if err != nil {
 		t.Fatal(err)
