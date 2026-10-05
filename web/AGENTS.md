@@ -18,7 +18,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - KyDrive deployments use SQLite; inherited recovery UI still reports snapshot preconditions.
 - The suite SSO button reads `Sign On with KyIdentity`; the login description identifies organization files and shared workspaces.
 
-- My files and Shared workspaces live in the main application sidebar, with no redundant Files destination. The selected workspace names the page. Personal workspace creation is an idempotent authenticated POST before listing. New file offers document/spreadsheet/presentation creation with a native name dialog, then opens the created file in Euro-Office. The drive opens on files with a compact upload/folder toolbar and per-file action menus. Workspace settings contain group permissions and quotas; they do not crowd the file list. Do not expose inherited device pairing without a supported KyDrive client.
+- My files and Shared workspaces live in the main application sidebar, with no redundant Files destination. The selected workspace names the page. Personal workspace creation is an idempotent authenticated POST before listing. New file offers document/spreadsheet/presentation/markdown/rtf/whiteboard creation with a native name dialog, then opens the created file in Euro-Office (for Office/PDF/Markdown/RTF) or native Excalidraw-compatible whiteboard (for `.excalidraw`). The drive opens on files with a compact upload/folder toolbar and per-file action menus. Workspace settings contain group permissions and quotas; they do not crowd the file list. Do not expose inherited device pairing without a supported KyDrive client.
 - KyDrive owns files, folders, versions/trash, workspace permissions/quotas and operational status/audit. People/group management links to KyIdentity; no separate local directory editor.
 - Hide privileged navigation from staff. Directory-managed group membership and workspace access are distinct. Managers can configure group grants; only administrators set quota or see global operations.
 
@@ -30,7 +30,6 @@ Owns user interface components, service worker caching, PWA installation manifes
 
 - `src/ky-ui/` is generated from Busnes-app/ky-ui, pinned by `VERSION` file hashes. Change shared colors, navigation states and storage helpers upstream, then run its consumer sync with an explicit worktree map; do not hand-edit vendored files.
 - Products own layout, routes, saved choice keys and named palettes. Busnes aliases consume shared tokens; mark primary navigation with `ky-nav-item` while preserving current-page semantics.
-- Verify vendored files with `node src/ky-ui/check-vendor.mjs` from this document's directory. Builds/CI run that check. Rendered evidence and capture limitations are recorded in the repository-root `UI-VERIFICATION.md`.
-
+- Verify vendored files with `node src/ky-ui/check-vendor.mjs` from this document's directory. Builds/CI run that check. Rendered evidence and capture limitations are recorded in the repository-root `UI-VERIFICATION.md`.\n
 ## Child DOX Index
 - [browser/AGENTS.md](./browser/AGENTS.md): Production-server browser regression harness and disposable test data.

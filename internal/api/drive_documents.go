@@ -11,7 +11,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
-// Blank Office Open XML files contain no scripts, macros or external resources.
+// Blank document, spreadsheet, presentation and drawing templates contain no scripts or external resources.
 //
 //go:embed templates/blank.*
 var documentTemplates embed.FS
@@ -26,7 +26,16 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	extension := map[string]string{"document": "docx", "spreadsheet": "xlsx", "presentation": "pptx"}[in.Kind]
+	extension := map[string]string{
+		"document":     "docx",
+		"spreadsheet":  "xlsx",
+		"presentation": "pptx",
+		"markdown":     "md",
+		"note":         "md",
+		"rtf":          "rtf",
+		"whiteboard":   "excalidraw",
+		"diagram":      "excalidraw",
+	}[in.Kind]
 	if extension == "" || !drive.ValidName(in.Name) {
 		s.driveError(w, drive.ErrInvalid)
 		return
