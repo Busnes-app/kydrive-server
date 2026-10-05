@@ -1,7 +1,7 @@
 # API
 
 ## Purpose
-Exposes HTTP REST routes, authentication endpoints, Single Sign-On callbacks, SCIM endpoints, backup restore drill handlers, and static React PWA hosting.
+Exposes HTTP REST routes, authentication endpoints, Single Sign-On callbacks, SCIM endpoints, backup restore drill handlers, whiteboard editor, and static React PWA hosting.
 
 ## Ownership
 Owns HTTP routing, request parsing, session cookie validation, CORS headers, and error response formatting.
@@ -33,15 +33,18 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - `GET /api/settings` tiers its payload: public fields for the login screen, `db_driver`/`scim_enabled` for any session, and `extra_settings` for admins only; KyRecovery tokens are omitted in both sealed and legacy plaintext forms, dropped by the `kyrecovery_token` key prefix rather than by literal key name.
 
 - `/api/drive/*` routes use a validated session or workspace-scoped service token; admin-only routes do not accept service tokens. Middleware places the validated actor in request context; domain code rechecks current membership inside mutations. Uploads stream with a 128 MiB cap; other request bodies stay capped at 1 MiB.
+- `GET /api/drive/files/{id}` returns file metadata (`id`, `workspace`, `parent`, `name`, `size`, `revision`, `editable`) for authorized workspace members.
 - `/api/editor/download/{session}` uses only a hashed, expiring editor credential and current membership. `/api/editor/callback` trusts the verified JWT payload, restricts output origin/path, publishes via the persisted editor revision pointer and acknowledges exact retries.
+- Euro-Office editor integration routes `docx`, `odt`, `txt`, `rtf`, and `md` to `documentType: word`, `xlsx`, `ods`, and `csv` to `documentType: cell`, `pptx` and `odp` to `documentType: slide`, and `pdf` to `documentType: pdf`.
 - `/editor.html` scopes its CSP to the configured Euro origin and uses a same-origin bootstrap script. Operational status exposes pending editor revocations without credentials.
+- `GET /whiteboard.html` and `GET /whiteboard-bootstrap.js` provide an embedded zero-dependency high-DPI vector whiteboard compatible with `.excalidraw` schema (shapes, lines, arrows, freedraw, text, colors, zoom, pan, undo/redo, auto-save to uploads API, and PNG export).
 
 - POST `/api/drive/personal-workspace` idempotently ensures the authenticated account’s private workspace; service credentials are refused. GET workspace lists distinguish `kind: personal|shared` and exclude other accounts’ personal workspaces, even from administrative browsing.
-- POST `/api/drive/workspaces/{id}/documents` accepts `{name, kind: document|spreadsheet|presentation, parent}`, adds the Office extension, and publishes a bundled blank OOXML template through the normal authorization/quota/version path. Templates are product-owned assets under `templates/`; DOCX uses minimal OOXML, XLSX/PPTX originate from the selected Euro-Office local blank fixtures with cleared core metadata.
+- POST `/api/drive/workspaces/{id}/documents` accepts `{name, kind: document|spreadsheet|presentation|markdown|rtf|whiteboard, parent}`, adds the corresponding extension (`.docx`, `.xlsx`, `.pptx`, `.md`, `.rtf`, `.excalidraw`), and publishes a bundled blank template through the normal authorization/quota/version path. Templates are product-owned assets under `templates/`; DOCX uses minimal OOXML, XLSX/PPTX originate from the selected Euro-Office local blank fixtures with cleared core metadata, MD/RTF/Excalidraw use standardized blank formats.
 
 ## Verification
 - `go test -v ./internal/api/...` (`authz_test.go` pins the per-role exposure of every privileged route; `backup_test.go` the backup routes, on SQLite only because a run snapshots the database)
 - `scripts/smoke-test.sh` asserts the same boundaries against a running binary
 
 ## Child DOX Index
-- `templates/` — blank Office Open XML creation assets and provenance.
+- `templates/` — blank Office Open XML, Markdown, RTF, and Excalidraw creation assets and provenance.

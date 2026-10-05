@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/Busnes-app/kydrive-server/internal/store"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 func TestDriveServiceAPIScopeAndStreamingUpload(t *testing.T) {
@@ -100,7 +101,7 @@ func TestNewDocumentsUseWorkspacePermissions(t *testing.T) {
 	if _, err := st.Drive().CreateServiceToken(ctx, "documents", w.ID, "New docs", "editor", token); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"document", "spreadsheet", "presentation", "invalid"} {
+	for _, kind := range []string{"document", "spreadsheet", "presentation", "markdown", "rtf", "whiteboard", "invalid"} {
 		body, _ := json.Marshal(map[string]string{"name": "Blank " + kind, "kind": kind, "parent": ""})
 		r := httptest.NewRequest("POST", "/api/drive/workspaces/"+w.ID+"/documents", bytes.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)

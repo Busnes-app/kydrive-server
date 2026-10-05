@@ -23,6 +23,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/directory", s.requireAuthenticated(s.driveWorkspaceDirectory))
 	s.mux.HandleFunc("GET /editor.html", s.requireAuthenticated(s.editorPage))
 	s.mux.HandleFunc("GET /editor-bootstrap.js", s.editorScript)
+	s.mux.HandleFunc("GET /whiteboard.html", s.requireAuthenticated(s.whiteboardPage))
+	s.mux.HandleFunc("GET /whiteboard-bootstrap.js", s.whiteboardScript)
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/tokens", s.requireAuthenticated(s.driveCreateToken))
 	s.mux.HandleFunc("DELETE /api/drive/tokens/{id}", s.requireAuthenticated(s.driveRevokeToken))
 	s.mux.HandleFunc("POST /api/drive/personal-workspace", s.requireAuthenticated(s.drivePersonalWorkspace))
@@ -38,6 +40,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
+	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
 	s.mux.HandleFunc("PUT /api/drive/files/{id}/trash", s.requireAuthenticated(s.driveTrash))
@@ -274,6 +277,24 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File)
 	w.Header().Set("ETag", `"`+f.Digest+`"`)
 	http.ServeContent(w, r, f.Name, stat.ModTime(), file)
 }
+func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
+	user := s.driveUser(r).ID
+	f, err := s.store.Drive().File(r.Context(), user, r.PathValue("id"), 1)
+	if err != nil || f.Trashed {
+		s.driveError(w, drive.ErrDenied)
+		return
+	}
+	canEdit := s.store.Drive().Authorize(r.Context(), user, f.Workspace, 2) == nil
+	s.writeJSON(w, 200, map[string]any{
+		"id":        f.ID,
+		"workspace": f.Workspace,
+		"parent":    f.Parent,
+		"name":      f.Name,
+		"size":      f.Size,
+		"revision":  f.Revision,
+		"editable":  canEdit,
+	})
+}
 func (s *Server) driveDownload(w http.ResponseWriter, r *http.Request) {
 	f, err := s.store.Drive().File(r.Context(), s.driveUser(r).ID, r.PathValue("id"), 1)
 	if err != nil || f.Trashed {
@@ -340,12 +361,14 @@ func (s *Server) driveEditor(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(f.Name), "."))
 	kind := ""
 	switch ext {
-	case "docx", "odt", "txt":
+	case "docx", "odt", "txt", "rtf", "md":
 		kind = "word"
 	case "xlsx", "ods", "csv":
 		kind = "cell"
 	case "pptx", "odp":
 		kind = "slide"
+	case "pdf":
+		kind = "pdf"
 	}
 	if kind == "" {
 		s.writeError(w, 400, "This file format is download-only")
