@@ -1,0 +1,8 @@
+html, body, #root { height: 100%; margin: 0; }
+.wb-status { align-self: center; font: 0.875rem system-ui, sans-serif; color: var(--color-gray-60, #666); white-space: nowrap; }
+.wb-message { font: 1rem system-ui, sans-serif; padding: 2rem; }
+/* Excalidraw's own mobile breakpoint, where the toolbar leaves no top-right room. */
+.wb-status-mobile { display: none; }
+@media (max-width: 729.98px), (max-width: 999.98px) and (max-height: 499.98px) {
+  .wb-status-mobile { display: block; position: fixed; z-index: 10; top: 64px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 2rem); padding: 0.25rem 0.75rem; border-radius: 1rem; background: Canvas; color: CanvasText; box-shadow: 0 1px 4px rgb(0 0 0 / 0.2); white-space: normal; text-align: center; }
+}

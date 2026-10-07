@@ -25,4 +25,5 @@
 
 /bulk-test-repository/
 /deploy/rendered/
+/web/dist-fonts/
 **/__pycache__/

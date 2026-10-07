@@ -39,3 +39,4 @@ coverage.out
 web/*.tsbuildinfo
 /web/dist/*
 !/web/dist/.gitkeep
+/web/dist-fonts/

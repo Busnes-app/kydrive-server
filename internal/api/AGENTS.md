@@ -1,7 +1,7 @@
 # API
 
 ## Purpose
-Exposes HTTP REST routes, authentication endpoints, Single Sign-On callbacks, SCIM endpoints, backup restore drill handlers, whiteboard editor, and static React PWA hosting.
+Exposes HTTP REST routes, authentication endpoints, Single Sign-On callbacks, SCIM endpoints, backup restore drill handlers, and static React PWA hosting.
 
 ## Ownership
 Owns HTTP routing, request parsing, session cookie validation, CORS headers, and error response formatting.
@@ -37,7 +37,8 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - `/api/editor/download/{session}` uses only a hashed, expiring editor credential and current membership. `/api/editor/callback` trusts the verified JWT payload, restricts output origin/path, publishes via the persisted editor revision pointer and acknowledges exact retries.
 - Euro-Office editor integration routes `docx`, `odt`, `txt`, `rtf`, and `md` to `documentType: word`, `xlsx`, `ods`, and `csv` to `documentType: cell`, `pptx` and `odp` to `documentType: slide`, and `pdf` to `documentType: pdf`.
 - `/editor.html` scopes its CSP to the configured Euro origin and uses a same-origin bootstrap script. Operational status exposes pending editor revocations without credentials.
-- `GET /whiteboard.html` and `GET /whiteboard-bootstrap.js` provide an embedded zero-dependency high-DPI vector whiteboard compatible with `.excalidraw` schema (shapes, lines, arrows, freedraw, text, colors, zoom, pan, undo/redo, auto-save to uploads API, and PNG export).
+
+- `GET /excalidraw/fonts/Xiaolai/` serves files from `<KY_EXCALIDRAW_FONTS_DIR>/Xiaolai` only, unauthenticated like the embedded fonts, with no directory listings; unset returns 404 rather than the SPA shell. `excalidraw_fonts_test.go` pins confinement.
 
 - POST `/api/drive/personal-workspace` idempotently ensures the authenticated account’s private workspace; service credentials are refused. GET workspace lists distinguish `kind: personal|shared` and exclude other accounts’ personal workspaces, even from administrative browsing.
 - POST `/api/drive/workspaces/{id}/documents` accepts `{name, kind: document|spreadsheet|presentation|markdown|rtf|whiteboard, parent}`, adds the corresponding extension (`.docx`, `.xlsx`, `.pptx`, `.md`, `.rtf`, `.excalidraw`), and publishes a bundled blank template through the normal authorization/quota/version path. Templates are product-owned assets under `templates/`; DOCX uses minimal OOXML, XLSX/PPTX originate from the selected Euro-Office local blank fixtures with cleared core metadata, MD/RTF/Excalidraw use standardized blank formats.

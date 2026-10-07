@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -250,6 +252,19 @@ func (s *Server) routes() {
 
 	// SCIM 2.0 routes
 	s.scim.RegisterRoutes(s.mux)
+
+	// CJK whiteboard fonts (13 MB) stay out of the binary; without a directory they are absent.
+	fonts := http.NotFoundHandler()
+	if dir := s.config.Server.ExcalidrawFontsDir; dir != "" {
+		fonts = http.StripPrefix("/excalidraw/fonts/Xiaolai", http.FileServerFS(os.DirFS(filepath.Join(dir, "Xiaolai"))))
+	}
+	s.mux.HandleFunc("GET /excalidraw/fonts/Xiaolai/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r) // no directory listings
+			return
+		}
+		fonts.ServeHTTP(w, r)
+	})
 
 	// Embedded React PWA Frontend
 	s.mux.Handle("/", web.Handler())

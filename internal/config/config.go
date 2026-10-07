@@ -34,6 +34,8 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration `json:"read_timeout"`
 	WriteTimeout time.Duration `json:"write_timeout"`
 	Environment  string        `json:"environment"`
+	// ExcalidrawFontsDir holds the CJK whiteboard fonts kept out of the binary; empty serves none.
+	ExcalidrawFontsDir string `json:"excalidraw_fonts_dir"`
 }
 
 // DatabaseConfig holds connection settings for pluggable storage (SQLite, PostgreSQL, MySQL).
@@ -170,15 +172,22 @@ func LoadFromEnv() (*Config, error) {
 	if err != nil || writeTimeout < 15*time.Second || writeTimeout > 15*time.Minute {
 		return nil, fmt.Errorf("KY_WRITE_TIMEOUT must be between 15s and 15m")
 	}
+	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
+	if fontsDir != "" {
+		if info, err := os.Stat(fontsDir); err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("KY_EXCALIDRAW_FONTS_DIR: %s is not a directory", fontsDir)
+		}
+	}
 	cfg := &Config{
 		Server: ServerConfig{
-			Host:         host,
-			Port:         port,
-			AppURL:       strings.TrimRight(appURL, "/"),
-			AppName:      appName,
-			ReadTimeout:  readTimeout,
-			WriteTimeout: writeTimeout,
-			Environment:  env,
+			Host:               host,
+			Port:               port,
+			AppURL:             strings.TrimRight(appURL, "/"),
+			AppName:            appName,
+			ReadTimeout:        readTimeout,
+			WriteTimeout:       writeTimeout,
+			Environment:        env,
+			ExcalidrawFontsDir: fontsDir,
 		},
 		Database: DatabaseConfig{
 			Driver:          driver,
