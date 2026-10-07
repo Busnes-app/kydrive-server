@@ -20,6 +20,7 @@ export const App: React.FC = () => {
   const [selectedWorkspace, setSelectedWorkspace] = useState('');
   const [activeTab, setActiveTab] = useState<string>('drive');
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
+  const [openInNewTab, setOpenInNewTab] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -38,6 +39,7 @@ export const App: React.FC = () => {
           const a: unknown = await authResp.json();
           if (isRecord(a) && a.authenticated && isDriveUser(a.user)) {
             setUser(a.user);
+            if (typeof a.open_in_new_tab === 'boolean') setOpenInNewTab(a.open_in_new_tab);
           }
         }
       } catch (err) {
@@ -57,6 +59,19 @@ export const App: React.FC = () => {
       const s: unknown = await resp.json();
       if (isRecord(s)) setSettings(s);
     }
+  };
+
+  const loadPreferences = async () => {
+    const resp = await fetch('/api/auth/me');
+    if (!resp.ok) return;
+    const a: unknown = await resp.json();
+    if (isRecord(a) && typeof a.open_in_new_tab === 'boolean') setOpenInNewTab(a.open_in_new_tab);
+  };
+
+  const changeOpenInNewTab = async (value: boolean) => {
+    setOpenInNewTab(value);
+    const resp = await secureFetch('/api/auth/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open_in_new_tab: value }) }).catch(() => null);
+    if (!resp?.ok) setOpenInNewTab(!value);
   };
 
   const handleLogout = async () => {
@@ -84,6 +99,7 @@ export const App: React.FC = () => {
           setNotice('');
           if (isDriveUser(u)) setUser(u);
           void loadSettings();
+          void loadPreferences();
         }}
       />
       </>
@@ -108,10 +124,12 @@ export const App: React.FC = () => {
         selectedWorkspace={selectedWorkspace}
         onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
         onLogout={handleLogout}
+        openInNewTab={openInNewTab}
+        onOpenInNewTabChange={value => void changeOpenInNewTab(value)}
       />
 
       <main className="app-main">
-        {activeTab === 'drive' && <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} />}
+        {activeTab === 'drive' && <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />}
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}

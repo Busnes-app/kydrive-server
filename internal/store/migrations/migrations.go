@@ -217,6 +217,12 @@ ALTER TABLE mfa_challenges ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';`,
 		Postgres: `DELETE FROM mfa_challenges;
 ALTER TABLE mfa_challenges ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';`,
 	},
+	{
+		Version:  5,
+		Name:     "open_in_new_tab",
+		SQLite:   `ALTER TABLE users ADD COLUMN open_in_new_tab BOOLEAN NOT NULL DEFAULT 1;`,
+		Postgres: `ALTER TABLE users ADD COLUMN IF NOT EXISTS open_in_new_tab BOOLEAN NOT NULL DEFAULT TRUE;`,
+	},
 }
 
 // Run executes all pending migrations for the specified database driver.

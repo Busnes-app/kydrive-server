@@ -8,6 +8,7 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 
 ## Local Contracts
 - POST `/api/auth/change-password` accepts a restricted local session, current password and a different policy-valid new password. Browser CSRF and per-IP/account limits apply. Success revokes all sessions and requires sign-in again; flagged sessions get `password_change_required` on protected routes and public-only settings.
+- `GET /api/auth/me` includes `open_in_new_tab`. `PUT /api/auth/preferences` takes exactly `{"open_in_new_tab": bool}` from a session (CSRF-checked; service tokens and restricted sessions refused) and changes only the caller's own preference. `preferences_test.go` pins validation.
 - All JSON API endpoints return structured errors `{"error": "message"}` upon failure.
 - Non-API routes fall back to serving `web.Handler()` for client-side SPA routing.
 - New routes are unauthenticated only by deliberate choice; privileged ones are registered wrapped in `s.requireAdmin` in `routes()`, so the trust level of every route is readable in one place.

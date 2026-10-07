@@ -504,3 +504,5 @@ dialog.modal-window::backdrop {
 .drive-document-dialog h2 { font-size: 1.2rem; margin-bottom: 8px; }
 .drive-document-dialog p { color: var(--ink); margin-bottom: 20px; }
 .drive-dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 24px; }
+.app-preference { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--ink); }
+@media (max-width: 720px) { .app-preference { font-size: .75rem; white-space: nowrap; } }

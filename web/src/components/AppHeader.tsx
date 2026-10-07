@@ -12,9 +12,11 @@ interface AppHeaderProps {
   workspaces: Workspace[];
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
+  openInNewTab: boolean;
+  onOpenInNewTabChange: (value: boolean) => void;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, openInNewTab, onOpenInNewTabChange }) => {
 
   const navItems = [
     { id: 'backup', label: 'Recovery', icon: Archive },
@@ -55,6 +57,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
           </nav>}
         <div className="app-header-actions">
           <ThemeSwitcher />
+          <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
 
           {user && (
             <div className="app-user">

@@ -222,6 +222,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
+	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
 
 	// SSO
 	s.mux.HandleFunc("/api/sso/kysignon/login", s.handleKySignOnLogin)

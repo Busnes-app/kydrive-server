@@ -286,9 +286,31 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 		return
 	}
+	newTab, err := s.store.Users().OpenInNewTab(r.Context(), user.ID)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Failed to load preferences")
+		return
+	}
 
 	s.writeJSON(w, http.StatusOK, map[string]any{
-		"authenticated": true,
-		"user":          user,
+		"authenticated":   true,
+		"user":            user,
+		"open_in_new_tab": newTab,
 	})
+}
+
+// handleSetPreferences stores the signed-in user's own display preferences.
+func (s *Server) handleSetPreferences(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		OpenInNewTab *bool `json:"open_in_new_tab"`
+	}
+	if decodeDrive(r, &in) != nil || in.OpenInNewTab == nil {
+		s.writeError(w, http.StatusBadRequest, "Invalid preferences")
+		return
+	}
+	if err := s.store.Users().SetOpenInNewTab(r.Context(), s.driveUser(r).ID, *in.OpenInNewTab); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Failed to save preferences")
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]bool{"open_in_new_tab": *in.OpenInNewTab})
 }
