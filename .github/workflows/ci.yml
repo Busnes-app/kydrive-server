@@ -19,10 +19,11 @@ jobs:
         with:
           node-version: 26
       - run: sudo apt-get update && sudo apt-get install -y restic
+      # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
+      - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - run: go test -race ./... && go vet ./...
       - run: test -z "$(gofmt -l $(git ls-files '*.go'))" && go mod verify
-      - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
-      - run: git diff --exit-code web/dist
+      - run: go build -o .browser/server ./cmd/server && cd web && npx playwright install --with-deps chromium && npm run test:browser
       - run: python -m unittest discover -s deploy -p '*_test.py'
       - run: go build -o kydrive-server ./cmd/server && scripts/smoke-test.sh
       - run: docker build --platform linux/amd64 --build-arg SOURCE_REVISION="$GITHUB_SHA" -t kydrive-server:ci .

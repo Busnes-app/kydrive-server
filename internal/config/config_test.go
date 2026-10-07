@@ -133,3 +133,17 @@ func TestBackupKeepBelowOneIsRefused(t *testing.T) {
 		t.Fatalf("want KY_BACKUP_KEEP error, got %v", err)
 	}
 }
+
+func TestExcalidrawFontsDirMustExist(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("KY_EXCALIDRAW_FONTS_DIR", dir)
+	cfg, err := config.LoadFromEnv()
+	if err != nil || cfg.Server.ExcalidrawFontsDir != dir {
+		t.Fatalf("cfg=%+v err=%v", cfg, err)
+	}
+	t.Setenv("KY_EXCALIDRAW_FONTS_DIR", dir+"/missing")
+	if _, err := config.LoadFromEnv(); err == nil {
+		t.Fatal("missing fonts directory accepted")
+	}
+}

@@ -17,7 +17,7 @@ This directory owns test setup, disposable server launch and UI assertions. The 
 
 ## Work Guidance
 
-Prefer browser-native behavior and assertions over screenshot-only checks. A passing suite covers these workflows, not every page or a complete accessibility audit.
+Prefer browser-native behavior and assertions over screenshot-only checks. `whiteboard.spec.mjs` round-trips an excalidraw.com-shaped scene (bent arrow, deleted element, image, text, background), checks self-hosted fonts, no external requests and conflict handling. A passing suite covers these workflows, not every page or a complete accessibility audit.
 
 ## Verification
 

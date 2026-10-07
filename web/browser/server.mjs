@@ -14,6 +14,7 @@ const server = spawn(fileURLToPath(new URL('../../.browser/server', import.meta.
     KY_HOST: '127.0.0.1', KY_PORT: '5391', KY_DB_DRIVER: 'sqlite',
     KY_DATA_DIR: join(dir, 'data'), KY_BACKUP_DIR: join(dir, 'backups'),
     KY_ADMIN_PASSWORD: 'BrowserInitial123!', KY_CAPTCHA_PROVIDER: 'none',
+    KY_EXCALIDRAW_FONTS_DIR: fileURLToPath(new URL('../dist-fonts', import.meta.url)),
   },
   stdio: 'inherit',
 });

@@ -37,3 +37,6 @@ coverage.out
 **/__pycache__/
 
 web/*.tsbuildinfo
+/web/dist/*
+!/web/dist/.gitkeep
+/web/dist-fonts/
