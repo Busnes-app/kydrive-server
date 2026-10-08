@@ -468,31 +468,39 @@ func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error
 	return out, rows.Err()
 }
 func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, trash bool) error {
-	f, err := s.File(ctx, user, id, 2)
-	if err != nil {
-		return err
-	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		var workspace string
+		if err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_files WHERE id=?`, id).Scan(&workspace); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrDenied
+			}
 			return err
 		}
-		query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND revision=? AND trashed=false`
-		args := []any{now(), uuid.NewString(), id, expected}
-		if !trash {
-			// A file whose folder is still in the trash comes back at the workspace root.
-			query = `UPDATE drive_files SET trashed=false,trashed_at='',trash_batch='',parent=CASE WHEN parent='' OR EXISTS(SELECT 1 FROM drive_folders d WHERE d.id=drive_files.parent AND d.trashed=false) THEN parent ELSE '' END WHERE id=? AND revision=? AND trashed=true`
-			args = []any{id, expected}
-		}
-		res, err := tx.ExecContext(ctx, query, args...)
-		if err != nil {
-			return restoreErr(err)
-		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			return ErrConflict
-		}
-		return event(ctx, tx, user, "file.trash_changed", id)
+		return setTrash(ctx, tx, user, id, workspace, expected, trash)
 	})
+}
+
+// setTrash changes the file only while it is still in the workspace just authorized.
+func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expected int64, trash bool) error {
+	if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+		return err
+	}
+	query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`
+	args := []any{now(), uuid.NewString(), id, workspace, expected}
+	if !trash {
+		// A file whose folder is still in the trash comes back at the workspace root.
+		query = `UPDATE drive_files SET trashed=false,trashed_at='',trash_batch='',parent=CASE WHEN parent='' OR EXISTS(SELECT 1 FROM drive_folders d WHERE d.id=drive_files.parent AND d.trashed=false) THEN parent ELSE '' END WHERE id=? AND workspace=? AND revision=? AND trashed=true`
+		args = []any{id, workspace, expected}
+	}
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return restoreErr(err)
+	}
+	n, _ := res.RowsAffected()
+	if n != 1 {
+		return ErrConflict
+	}
+	return event(ctx, tx, user, "file.trash_changed", id)
 }
 func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, expected int64) (File, error) {
 	f, err := s.File(ctx, user, id, 2)

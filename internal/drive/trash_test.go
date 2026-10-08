@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 func names(t *testing.T, d *drive.Store, user, workspace string, trashed bool) map[string]bool {
@@ -160,5 +161,45 @@ func TestFolderTrashHidesStateFromStrangers(t *testing.T) {
 	}
 	if err = d.SetFolderTrash(ctx, "worker", gone.ID, true); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("re-trash: %v", err)
+	}
+}
+
+// A move between a caller's lookup and its trash transaction must not let the caller trash the
+// file in a workspace it cannot reach.
+func TestTrashIsBoundToTheAuthorizedWorkspace(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := st.Users().CreateUser(ctx, &store.User{ID: "colleague", Username: "colleague", Email: "colleague@local.test", Role: "user", Status: "active", SSOProvider: "scim"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "editors", DisplayName: "Editors", ExternalID: "external-editors", Members: []string{"colleague"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Grant(ctx, "admin", w.ID, "editors", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, root, "p"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "plan.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.SetTrashAs(ctx, d, "colleague", f.ID, w.ID, 1, true); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("stale workspace trash: %v", err)
+	}
+	if got, err := d.File(ctx, "worker", f.ID, 1); err != nil || got.Trashed || got.Workspace != mine {
+		t.Fatalf("file changed: %+v %v", got, err)
+	}
+	if err = d.SetTrash(ctx, "colleague", f.ID, 1, true); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("colleague trashed a file outside its workspaces: %v", err)
 	}
 }

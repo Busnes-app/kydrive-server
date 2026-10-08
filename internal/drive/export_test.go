@@ -38,3 +38,8 @@ func RetainVersion(ctx context.Context, s *Store, id string, revision int64) ([]
 	})
 	return blobs, err
 }
+
+// SetTrashAs runs the trash step with a workspace resolved earlier, as a caller holding a stale lookup would.
+func SetTrashAs(ctx context.Context, s *Store, user, id, workspace string, expected int64, trash bool) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return setTrash(ctx, tx, user, id, workspace, expected, trash) })
+}

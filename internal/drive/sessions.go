@@ -34,7 +34,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id, token string) (Edit
 		if err := authorize(ctx, tx, user, f.Workspace, 1); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable) SELECT ?,id,?,?,?,?,? FROM drive_files WHERE id=? AND revision=? AND trashed=false`, e.ID, e.Revision, user, tokenHash(token), e.Expires, editable, id, e.Revision)
+		res, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable) SELECT ?,id,?,?,?,?,? FROM drive_files WHERE id=? AND workspace=? AND revision=? AND trashed=false`, e.ID, e.Revision, user, tokenHash(token), e.Expires, editable, id, f.Workspace, e.Revision)
 		if err != nil {
 			return err
 		}
