@@ -50,14 +50,15 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 |---|---|---|---|
 | PUT | `/api/drive/files/{id}/location` | `driveMoveFile` | `{revision, workspace, parent, name}`; moved file; runs revocations |
 | POST | `/api/drive/files/{id}/copy` | `driveCopyFile` | `{workspace, parent, name}`; new file |
-| PUT | `/api/drive/folders/{id}/location` | `driveMoveFolder` | `{workspace, parent, name}`; same workspace only |
+| PUT | `/api/drive/folders/{id}/location` | `driveMoveFolder` | `{parent, name}`; same workspace only |
 | PUT | `/api/drive/folders/{id}/trash` | `driveFolderTrash` | `{trashed}`; one batch |
 | DELETE | `/api/drive/files/{id}` | `drivePurgeFile` | trashed file only; 409 if live |
 | DELETE | `/api/drive/folders/{id}` | `drivePurgeFolder` | trashed folder and its trashed contents |
 | DELETE | `/api/drive/files/{id}/versions/{revision}` | `drivePurgeVersion` | non-current version |
-| PUT | `/api/drive/workspaces/{id}/retention` | `driveRetention` | admin; `{trash_days, keep_versions}`; 0 = off |
+| PUT | `/api/drive/workspaces/{id}/retention` | `driveRetention` | admin; shared workspaces only (403 for personal); `{trash_days, keep_versions}`; 0 = off |
 
 - Purge handlers delete blobs (`drive.RemoveBlobs`) only after the metadata transaction commits; a failed removal costs disk space, never a version without bytes. Workspace listings include `trash_days` and `keep_versions`.
+- `driveError` maps `ErrDenied` 403, `ErrInvalid` 400, `ErrConflict` 409 with the wrapped domain reason (`err.Error()`, e.g. `revision conflict: move to trash first`), `ErrQuota` 413; anything else is a generic 500.
 - `RunRetention` is a background loop (hourly) like `RunEditorRevocations`; `cmd/server` waits for both before closing the store.
 
 ## Verification

@@ -11,9 +11,10 @@ import (
 
 type Location struct{ Workspace, Parent, Name string }
 
-// MoveFile renames or relocates a file without creating a version. Another workspace needs
-// manager rights on the source (the move removes the file from it) and editor rights there and room for every retained version; open editors that lose access
-// are revoked by the next PendingRevocations pass.
+// MoveFile renames or relocates a file without creating a version. Moving to another
+// workspace needs manager rights on the source, since the file leaves it, plus editor rights
+// and room for every retained version on the target. Open editors that lose access are
+// revoked by the next PendingRevocations pass.
 func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, to Location) (File, error) {
 	if !ValidName(to.Name) {
 		return File{}, ErrInvalid
