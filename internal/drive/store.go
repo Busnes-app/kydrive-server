@@ -21,12 +21,14 @@ var (
 
 type Store struct{ db *sql.DB }
 type Workspace struct {
-	Kind  string `json:"kind"`
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Quota int64  `json:"quota"`
-	Used  int64  `json:"used"`
-	Role  string `json:"role"`
+	Kind         string `json:"kind"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Quota        int64  `json:"quota"`
+	Used         int64  `json:"used"`
+	Role         string `json:"role"`
+	TrashDays    int    `json:"trash_days"`
+	KeepVersions int    `json:"keep_versions"`
 }
 type Grant struct {
 	GroupID string `json:"group_id"`
@@ -175,7 +177,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +186,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.Kind, &w.Used, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.Kind, &w.Used, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]
