@@ -73,11 +73,12 @@ func TestFileManagementRoutes(t *testing.T) {
 		t.Fatalf("rename %d %s", out.Code, out.Body.String())
 	}
 	body, _ = json.Marshal(map[string]any{"workspace": w.ID, "parent": "", "name": "copy.txt"})
-	if out = send(t, srv, "POST", "/api/drive/files/"+file.ID+"/copy", string(body), mover, ""); out.Code != 201 {
+	var copied struct{ ID string }
+	if out = send(t, srv, "POST", "/api/drive/files/"+file.ID+"/copy", string(body), mover, ""); out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &copied) != nil {
 		t.Fatalf("copy %d %s", out.Code, out.Body.String())
 	}
-	if out = send(t, srv, "DELETE", "/api/drive/files/"+file.ID, "", mover, ""); out.Code != 409 {
-		t.Fatalf("purge of a live file: %d", out.Code)
+	if out = send(t, srv, "DELETE", "/api/drive/files/"+file.ID, "", mover, ""); out.Code != 409 || !strings.Contains(out.Body.String(), "move to trash first") {
+		t.Fatalf("purge of a live file: %d %s", out.Code, out.Body.String())
 	}
 	if out = send(t, srv, "PUT", "/api/drive/files/"+file.ID+"/trash", `{"revision":1,"trashed":true}`, mover, ""); out.Code != 200 {
 		t.Fatalf("trash %d", out.Code)
@@ -95,6 +96,30 @@ func TestFileManagementRoutes(t *testing.T) {
 	if n := blobCount(); n != 1 {
 		t.Fatalf("shared blob removed while the copy still uses it: %d", n)
 	}
+	if out = send(t, srv, "PUT", "/api/drive/files/"+copied.ID+"/trash", `{"revision":1,"trashed":true}`, mover, ""); out.Code != 200 {
+		t.Fatalf("trash copy %d", out.Code)
+	}
+	if out = send(t, srv, "DELETE", "/api/drive/files/"+copied.ID, "", mover, ""); out.Code != 200 {
+		t.Fatalf("purge copy %d %s", out.Code, out.Body.String())
+	}
+	if n := blobCount(); n != 0 {
+		t.Fatalf("blob kept after its last reference was purged: %d", n)
+	}
+	var versioned struct{ ID string }
+	if out = send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=v.txt&revision=0", "one", mover, ""); out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &versioned) != nil {
+		t.Fatalf("upload v1 %d %s", out.Code, out.Body.String())
+	}
+	if out = send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=v.txt&revision=1&file="+versioned.ID, "two", mover, ""); out.Code != 201 {
+		t.Fatalf("upload v2 %d %s", out.Code, out.Body.String())
+	}
+	for _, rev := range []string{"0", "abc"} {
+		if out = send(t, srv, "DELETE", "/api/drive/files/"+versioned.ID+"/versions/"+rev, "", mover, ""); out.Code != 400 {
+			t.Fatalf("version %s: %d", rev, out.Code)
+		}
+	}
+	if out = send(t, srv, "DELETE", "/api/drive/files/"+versioned.ID+"/versions/1", "", mover, ""); out.Code != 200 {
+		t.Fatalf("version purge %d %s", out.Code, out.Body.String())
+	}
 	var folder struct{ ID string }
 	out = send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/folders", `{"parent":"","name":"Old"}`, mover, "")
 	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &folder) != nil {
@@ -102,6 +127,9 @@ func TestFileManagementRoutes(t *testing.T) {
 	}
 	if out = send(t, srv, "PUT", "/api/drive/folders/"+folder.ID+"/location", `{"parent":"","name":"Archive"}`, mover, ""); out.Code != 200 {
 		t.Fatalf("folder rename %d", out.Code)
+	}
+	if out = send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=inside.txt&revision=0&parent="+folder.ID, "in", mover, ""); out.Code != 201 {
+		t.Fatalf("upload into folder %d %s", out.Code, out.Body.String())
 	}
 	if out = send(t, srv, "PUT", "/api/drive/folders/"+folder.ID+"/trash", `{"trashed":true}`, mover, ""); out.Code != 200 {
 		t.Fatalf("folder trash %d", out.Code)
@@ -111,6 +139,19 @@ func TestFileManagementRoutes(t *testing.T) {
 	}
 	if out = send(t, srv, "DELETE", "/api/drive/folders/"+folder.ID, "", mover, ""); out.Code != 200 {
 		t.Fatalf("folder purge %d", out.Code)
+	}
+	if out = send(t, srv, "GET", "/api/drive/workspaces/"+w.ID+"/files?trash=true", "", mover, ""); out.Code != 200 || strings.Contains(out.Body.String(), "inside.txt") {
+		t.Fatalf("file survived folder purge %d %s", out.Code, out.Body.String())
+	}
+	if out = send(t, srv, "PUT", "/api/drive/workspaces/"+w.ID+"/retention", `{"trash_days":30,"keep_versions":10}`, nil, token); out.Code != 401 && out.Code != 403 {
+		t.Fatalf("service token set retention: %d", out.Code)
+	}
+	mine, err := st.Drive().EnsurePersonalWorkspace(ctx, "usr_mover")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out = send(t, srv, "PUT", "/api/drive/workspaces/"+mine+"/retention", `{"trash_days":1,"keep_versions":1}`, boss, ""); out.Code != 403 {
+		t.Fatalf("admin set retention on My files: %d", out.Code)
 	}
 	if out = send(t, srv, "PUT", "/api/drive/workspaces/"+w.ID+"/retention", `{"trash_days":30,"keep_versions":10}`, mover, ""); out.Code != 403 {
 		t.Fatalf("non-admin set retention: %d", out.Code)

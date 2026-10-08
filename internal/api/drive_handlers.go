@@ -82,7 +82,7 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 		message = "Invalid drive input"
 	case errors.Is(err, drive.ErrConflict):
 		status = 409
-		message = "Revision conflict; reload before retrying"
+		message = err.Error()
 	case errors.Is(err, drive.ErrQuota):
 		status = 413
 		message = "Upload or workspace quota exceeded"
