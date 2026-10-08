@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 type Location struct{ Workspace, Parent, Name string }
@@ -61,6 +63,27 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 	}
 	f.Workspace, f.Parent, f.Name = to.Workspace, to.Parent, to.Name
 	return f, nil
+}
+
+// CopyFile publishes the source's current bytes as revision 1 of a new file. The source is
+// read inside the same transaction, so a concurrent purge cannot remove the shared blob.
+func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (File, error) {
+	out := File{ID: uuid.NewString(), Workspace: to.Workspace, Parent: to.Parent, Name: to.Name, Revision: 1}
+	if !ValidName(to.Name) {
+		return out, ErrInvalid
+	}
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		src, err := scanFile(tx.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND f.trashed=false`, id))
+		if err != nil {
+			return err
+		}
+		if err = authorize(ctx, tx, user, src.Workspace, 1); err != nil {
+			return err
+		}
+		out.Size, out.Digest, out.Blob = src.Size, src.Digest, src.Blob
+		return publishTX(ctx, tx, user, out, Version{FileID: out.ID, Revision: 1, Blob: src.Blob, Digest: src.Digest, Size: src.Size, Created: now()}, 0)
+	})
+	return out, err
 }
 
 // MoveFolder renames or re-parents a live folder within its workspace.

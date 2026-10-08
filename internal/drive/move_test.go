@@ -178,3 +178,33 @@ func TestMoveFolderRejectsCycles(t *testing.T) {
 		t.Fatalf("stranger moved folder: %v", err)
 	}
 }
+
+func TestCopyFileSharesBlobAndCountsQuota(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "twelve bytes"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := d.CopyFile(ctx, "worker", f.ID, drive.Location{Workspace: w.ID, Name: "a copy.txt"})
+	if err != nil || c.ID == f.ID || c.Revision != 1 || c.Digest != f.Digest {
+		t.Fatalf("copy: %+v %v", c, err)
+	}
+	ws, _ := d.Workspaces(ctx, "worker", false)
+	if ws[0].Used != 24 {
+		t.Fatalf("quota must count the copy: %d", ws[0].Used)
+	}
+	if _, err = d.CopyFile(ctx, "worker", f.ID, drive.Location{Workspace: w.ID, Name: "a copy.txt"}); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("copy over a live name: %v", err)
+	}
+	if _, err = d.CopyFile(ctx, "stranger", f.ID, drive.Location{Workspace: w.ID, Name: "x.txt"}); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("stranger copied: %v", err)
+	}
+	if err = d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.CopyFile(ctx, "worker", f.ID, drive.Location{Workspace: w.ID, Name: "y.txt"}); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("copied a trashed file: %v", err)
+	}
+}

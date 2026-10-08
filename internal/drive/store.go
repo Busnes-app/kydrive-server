@@ -500,12 +500,19 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if f.Trashed {
 		return f, ErrConflict
 	}
-	var v Version
-	err = s.db.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size)
+	v := Version{FileID: id, Revision: expected + 1, Created: now()}
+	// Read the old version inside the publish transaction: a purge cannot slip in between.
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size); err != nil {
+			return ErrInvalid
+		}
+		return publishTX(ctx, tx, user, f, v, expected)
+	})
 	if err != nil {
-		return f, ErrInvalid
+		return f, err
 	}
-	return s.Publish(ctx, user, f, v, expected)
+	f.Revision, f.Size, f.Digest, f.Blob = v.Revision, v.Size, v.Digest, v.Blob
+	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 	if err := admin(ctx, s.db, user); err != nil {
