@@ -19,6 +19,9 @@ func (s *Store) SetRetention(ctx context.Context, user, workspace string, trashD
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
+		if err := sharedWorkspace(ctx, tx, workspace); err != nil {
+			return err
+		}
 		res, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET trash_days=?,keep_versions=? WHERE id=?`, trashDays, keepVersions, workspace)
 		if err != nil {
 			return err
@@ -39,7 +42,7 @@ const (
 )
 
 // retainFile purges one file if the workspace policy still expires it; no match is ErrInvalid.
-func retainFile(ctx context.Context, tx *sql.Tx, id, stamp string, at int64) ([]string, error) {
+func retainFile(ctx context.Context, tx *sql.Tx, id, stamp string) ([]string, error) {
 	var one int
 	err := tx.QueryRowContext(ctx, `SELECT 1 `+expiredFile+` AND f.id=?`, stamp, id).Scan(&one)
 	if err == sql.ErrNoRows {
@@ -48,11 +51,11 @@ func retainFile(ctx context.Context, tx *sql.Tx, id, stamp string, at int64) ([]
 	if err != nil {
 		return nil, err
 	}
-	return purgeFile(ctx, tx, id, at)
+	return purgeFile(ctx, tx, id)
 }
 
 // retainVersion purges one version if the policy still expires it, judged against the file's current revision.
-func retainVersion(ctx context.Context, tx *sql.Tx, id string, revision, at int64) ([]string, error) {
+func retainVersion(ctx context.Context, tx *sql.Tx, id string, revision int64) ([]string, error) {
 	var current int64
 	err := tx.QueryRowContext(ctx, `SELECT f.revision `+expiredVersion+` AND v.file_id=? AND v.revision=?`, id, revision).Scan(&current)
 	if err == sql.ErrNoRows {
@@ -61,7 +64,7 @@ func retainVersion(ctx context.Context, tx *sql.Tx, id string, revision, at int6
 	if err != nil {
 		return nil, err
 	}
-	return purgeVersion(ctx, tx, id, revision, current, at)
+	return purgeVersion(ctx, tx, id, revision, current)
 }
 
 // ApplyRetention purges what workspace policies have expired as of at. Each item commits on
@@ -69,7 +72,7 @@ func retainVersion(ctx context.Context, tx *sql.Tx, id string, revision, at int6
 // document still open in an editor does not hold back the rest. Selection pages by cursor,
 // so permanently skipped items cannot starve later ones.
 func (s *Store) ApplyRetention(ctx context.Context, at time.Time) ([]string, error) {
-	stamp, unix := at.UTC().Format(time.RFC3339Nano), at.Unix()
+	stamp := at.UTC().Format(time.RFC3339Nano)
 	var blobs []string
 	skipped := 0
 	defer func() {
@@ -129,7 +132,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time) ([]string, err
 		}
 	}
 	err := pages(`SELECT f.trashed_at,f.id `+expiredFile+` AND (f.trashed_at>? OR (f.trashed_at=? AND f.id>?)) ORDER BY f.trashed_at,f.id LIMIT 500`, []any{stamp}, func(_, id string) error {
-		return each("file.retention_purged", id, func(tx *sql.Tx) ([]string, error) { return retainFile(ctx, tx, id, stamp, unix) })
+		return each("file.retention_purged", id, func(tx *sql.Tx) ([]string, error) { return retainFile(ctx, tx, id, stamp) })
 	})
 	if err != nil {
 		return blobs, err
@@ -159,7 +162,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time) ([]string, err
 	err = pages(`SELECT v.file_id||'', printf('%020d',v.revision) `+expiredVersion+` AND (v.file_id>? OR (v.file_id=? AND printf('%020d',v.revision)>?)) ORDER BY v.file_id,v.revision LIMIT 500`, nil, func(file, rev string) error {
 		revision, _ := strconv.ParseInt(rev, 10, 64)
 		return each("version.retention_purged", fmt.Sprintf("%s:%d", file, revision), func(tx *sql.Tx) ([]string, error) {
-			return retainVersion(ctx, tx, file, revision, unix)
+			return retainVersion(ctx, tx, file, revision)
 		})
 	})
 	return blobs, err

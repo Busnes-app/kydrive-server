@@ -135,3 +135,30 @@ func mustFolder(t *testing.T, d *drive.Store, workspace, name string, trashed bo
 	t.Fatalf("no folder %q", name)
 	return ""
 }
+
+func TestFolderTrashHidesStateFromStrangers(t *testing.T) {
+	st, w, _ := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	live, err := d.AddFolder(ctx, "worker", w.ID, "", "Live")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, err := d.AddFolder(ctx, "worker", w.ID, "", "Gone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", gone.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{live.ID, gone.ID, "missing"} {
+		for _, trash := range []bool{true, false} {
+			if err = d.SetFolderTrash(ctx, "stranger", id, trash); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("stranger %s trash=%v: %v", id, trash, err)
+			}
+		}
+	}
+	if err = d.SetFolderTrash(ctx, "worker", gone.ID, true); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("re-trash: %v", err)
+	}
+}

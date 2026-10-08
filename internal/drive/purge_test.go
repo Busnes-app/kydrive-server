@@ -166,6 +166,9 @@ func TestPurgeBlockedByUndeliveredDropAfterExpiry(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `UPDATE drive_editor_sessions SET expires=1`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.PurgeFile(ctx, "worker", f.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("purged an expired session before the sweep: %v", err)
+	}
 	pending, err := d.PendingRevocations(ctx)
 	if err != nil || len(pending) != 1 {
 		t.Fatal(pending, err)

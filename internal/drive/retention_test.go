@@ -154,7 +154,7 @@ func TestRetentionRechecksKeepVersionsBeforePurgingVersion(t *testing.T) {
 	if err := d.SetRetention(ctx, "admin", w.ID, 0, 5); err != nil {
 		t.Fatal(err)
 	}
-	if blobs, err := drive.RetainVersion(ctx, d, f.ID, 1, time.Now()); !errors.Is(err, drive.ErrInvalid) || len(blobs) != 0 {
+	if blobs, err := drive.RetainVersion(ctx, d, f.ID, 1); !errors.Is(err, drive.ErrInvalid) || len(blobs) != 0 {
 		t.Fatalf("raised keep: %v %v", blobs, err)
 	}
 	if vs, _ := d.Versions(ctx, "worker", f.ID); len(vs) != 3 {
@@ -186,5 +186,27 @@ INSERT INTO drive_files(id,workspace,parent,name,revision,trashed,trashed_at) SE
 	vs, _ := d.Versions(ctx, "worker", "free")
 	if len(vs) != 0 {
 		t.Fatalf("starved: %+v", vs)
+	}
+}
+
+func TestRetentionRefusesPersonalWorkspace(t *testing.T) {
+	d, _, root := managerFixture(t)
+	ctx := context.Background()
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: mine, Name: "a.txt"}, blob(t, root, "a"), 0)
+	if err = d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetRetention(ctx, "admin", mine, 1, 1); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("admin set retention on My files: %v", err)
+	}
+	if _, err = d.ApplyRetention(ctx, time.Now().Add(3650*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.File(ctx, "worker", f.ID, 1); err != nil {
+		t.Fatalf("personal file purged: %v", err)
 	}
 }

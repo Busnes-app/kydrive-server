@@ -3,6 +3,7 @@ package drive
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -40,18 +41,18 @@ func subtree(ctx context.Context, tx *sql.Tx, root, cond string, args ...any) ([
 func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace, parent, batch string
-		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trash_batch FROM drive_folders WHERE id=? AND trashed=?`, id, !trash).Scan(&workspace, &parent, &batch); err != nil {
+		var trashed bool
+		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trash_batch,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &parent, &batch, &trashed); err != nil {
 			if err == sql.ErrNoRows {
-				var n int
-				if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=?`, id).Scan(&n); err == nil && n == 1 {
-					return ErrConflict
-				}
 				return ErrDenied
 			}
 			return err
 		}
 		if err := authorize(ctx, tx, user, workspace, 2); err != nil {
 			return err
+		}
+		if trashed == trash {
+			return ErrConflict
 		}
 		if trash {
 			tree, err := subtree(ctx, tx, id, `d.trashed=false`)
@@ -86,12 +87,19 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 		}
 		for _, folder := range tree {
 			if _, err = tx.ExecContext(ctx, `UPDATE drive_files SET trashed=false,trashed_at='',trash_batch='' WHERE parent=? AND trash_batch=?`, folder, batch); err != nil {
-				return ErrConflict
+				return restoreErr(err)
 			}
 			if _, err = tx.ExecContext(ctx, `UPDATE drive_folders SET trashed=false,trashed_at='',trash_batch='' WHERE id=?`, folder); err != nil {
-				return ErrConflict
+				return restoreErr(err)
 			}
 		}
 		return event(ctx, tx, user, "folder.restored", id)
 	})
+}
+
+func restoreErr(err error) error {
+	if uniqueViolation(err) {
+		return fmt.Errorf("%w: name exists", ErrConflict)
+	}
+	return err
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 // unreferenced returns the candidates no version row still names. Called inside the purging
@@ -24,7 +23,7 @@ func unreferenced(ctx context.Context, tx *sql.Tx, blobs []string) ([]string, er
 }
 
 // purgeFile deletes a trashed file and its history once no editor can still save to it.
-func purgeFile(ctx context.Context, tx *sql.Tx, id string, at int64) ([]string, error) {
+func purgeFile(ctx context.Context, tx *sql.Tx, id string) ([]string, error) {
 	var trashed bool
 	if err := tx.QueryRowContext(ctx, `SELECT trashed FROM drive_files WHERE id=?`, id).Scan(&trashed); err != nil {
 		if err == sql.ErrNoRows {
@@ -36,7 +35,7 @@ func purgeFile(ctx context.Context, tx *sql.Tx, id string, at int64) ([]string, 
 		return nil, fmt.Errorf("%w: move to trash first", ErrConflict)
 	}
 	var open int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND ((revoked=false AND expires>?) OR (revoked=true AND drop_done=false))`, id, at).Scan(&open); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND drop_done=false`, id).Scan(&open); err != nil {
 		return nil, err
 	}
 	if open > 0 {
@@ -66,12 +65,12 @@ func purgeFile(ctx context.Context, tx *sql.Tx, id string, at int64) ([]string, 
 	return unreferenced(ctx, tx, blobs)
 }
 
-func purgeVersion(ctx context.Context, tx *sql.Tx, id string, revision, current, at int64) ([]string, error) {
+func purgeVersion(ctx context.Context, tx *sql.Tx, id string, revision, current int64) ([]string, error) {
 	if revision >= current {
 		return nil, ErrInvalid
 	}
 	var open int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND revision=? AND ((revoked=false AND expires>?) OR (revoked=true AND drop_done=false))`, id, revision, at).Scan(&open); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND revision=? AND drop_done=false`, id, revision).Scan(&open); err != nil {
 		return nil, err
 	}
 	if open > 0 {
@@ -108,7 +107,7 @@ func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error
 			return fmt.Errorf("%w: move to trash first", ErrConflict)
 		}
 		var err error
-		if blobs, err = purgeFile(ctx, tx, id, time.Now().Unix()); err != nil {
+		if blobs, err = purgeFile(ctx, tx, id); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "file.purged", id)
@@ -140,7 +139,6 @@ func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, err
 		if err != nil {
 			return err
 		}
-		at := time.Now().Unix()
 		for _, folder := range tree {
 			var live int
 			if err = tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE parent=? AND trashed=false)+(SELECT COUNT(*) FROM drive_folders WHERE parent=? AND trashed=false)`, folder, folder).Scan(&live); err != nil {
@@ -154,7 +152,7 @@ func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, err
 				return err
 			}
 			for _, f := range files {
-				b, err := purgeFile(ctx, tx, f, at)
+				b, err := purgeFile(ctx, tx, f)
 				if err != nil {
 					return err
 				}
@@ -187,7 +185,7 @@ func (s *Store) PurgeVersion(ctx context.Context, user, id string, revision int6
 			return err
 		}
 		var err error
-		if blobs, err = purgeVersion(ctx, tx, id, revision, current, time.Now().Unix()); err != nil {
+		if blobs, err = purgeVersion(ctx, tx, id, revision, current); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "version.purged", fmt.Sprintf("%s:%d", id, revision))

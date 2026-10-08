@@ -485,7 +485,7 @@ func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, t
 		}
 		res, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
-			return ErrConflict
+			return restoreErr(err)
 		}
 		n, _ := res.RowsAffected()
 		if n != 1 {
@@ -506,7 +506,10 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	// Read the old version inside the publish transaction: a purge cannot slip in between.
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := tx.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size); err != nil {
-			return ErrInvalid
+			if err == sql.ErrNoRows {
+				return ErrInvalid
+			}
+			return err
 		}
 		return publishTX(ctx, tx, user, f, v, expected)
 	})
