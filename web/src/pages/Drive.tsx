@@ -48,9 +48,14 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const canEdit = current?.role === 'editor' || current?.role === 'manager';
   const canPurge = current?.role === 'manager';
   const canManage = current?.kind === 'shared' && (admin || current.role === 'manager');
+  const generation = useRef(0);
   const reload = useCallback(async () => {
+    // A reload started for an earlier view (e.g. trash) must not overwrite a newer one.
+    const mine = ++generation.current;
+    const stale = () => mine !== generation.current;
     await change('/api/drive/personal-workspace', 'POST', {});
     const listWorkspaces = await list(`/api/drive/workspaces${admin ? '?admin=true' : ''}`, workspace);
+    if (stale()) return;
     onWorkspacesChange(listWorkspaces);
     if (!selected) {
       const personal = listWorkspaces.find(w => w.kind === 'personal') || listWorkspaces[0];
@@ -59,9 +64,11 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     }
     const currentWS = listWorkspaces.find(w => w.id === selected);
     if (currentWS?.role) {
-      const [fs, ds] = await Promise.all([list(`/api/drive/workspaces/${selected}/files?trash=${trash}`, file), list(`/api/drive/workspaces/${selected}/folders?trash=${trash}`, folder)]); setFiles(fs); setFolders(ds);
+      const [fs, ds] = await Promise.all([list(`/api/drive/workspaces/${selected}/files?trash=${trash}`, file), list(`/api/drive/workspaces/${selected}/folders?trash=${trash}`, folder)]);
+      if (stale()) return;
+      setFiles(fs); setFolders(ds);
     } else { setFiles([]); setFolders([]); }
-    if (currentWS?.kind === 'shared' && (admin || currentWS.role === 'manager')) setGrants(await list(`/api/drive/workspaces/${selected}/grants`, grant)); else setGrants([]);
+    if (currentWS?.kind === 'shared' && (admin || currentWS.role === 'manager')) { const gs = await list(`/api/drive/workspaces/${selected}/grants`, grant); if (!stale()) setGrants(gs); } else setGrants([]);
   }, [admin, selected, trash, onWorkspacesChange, onSelectWorkspace]);
   useEffect(() => { setTrashDays(current?.trash_days ?? 0); setKeepVersions(current?.keep_versions ?? 0); }, [current?.id, current?.trash_days, current?.keep_versions]);
   useEffect(() => { setParent(''); setHistory(null); setView('files'); }, [selected]);
