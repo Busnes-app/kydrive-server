@@ -539,7 +539,10 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 	}
 	if expected == 0 {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,revision) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
-			return fmt.Errorf("%w: name or file exists", ErrConflict)
+			if uniqueViolation(err) {
+				return fmt.Errorf("%w: name or file exists", ErrConflict)
+			}
+			return err
 		}
 	} else {
 		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET revision=revision+1 WHERE id=? AND workspace=? AND revision=? AND trashed=false`, f.ID, f.Workspace, expected)
@@ -567,4 +570,8 @@ func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
 		return ErrQuota
 	}
 	return nil
+}
+
+func uniqueViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

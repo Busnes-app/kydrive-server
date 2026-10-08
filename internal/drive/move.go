@@ -39,8 +39,11 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 			}
 		}
 		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, to.Name, id, f.Workspace, expected)
-		if err != nil {
+		if uniqueViolation(err) {
 			return fmt.Errorf("%w: name exists", ErrConflict)
+		}
+		if err != nil {
+			return err
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
 			return ErrConflict

@@ -100,3 +100,17 @@ func TestMoveAcrossWorkspacesRevokesLostAccess(t *testing.T) {
 		t.Fatalf("colleague still reads moved file: %v", err)
 	}
 }
+
+func TestMoveFileCancelledContextIsNotConflict(t *testing.T) {
+	st, w, root := fixture(t)
+	d := st.Drive()
+	f, err := d.Publish(context.Background(), "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "a"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: w.ID, Name: "b.txt"}); err == nil || errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("want non-conflict error, got %v", err)
+	}
+}
