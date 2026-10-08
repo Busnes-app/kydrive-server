@@ -182,7 +182,7 @@ func (s *Server) driveQuota(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]bool{"applied": true})
 }
 func (s *Server) driveFolders(w http.ResponseWriter, r *http.Request) {
-	out, err := s.store.Drive().Folders(r.Context(), s.driveUser(r).ID, r.PathValue("id"))
+	out, err := s.store.Drive().Folders(r.Context(), s.driveUser(r).ID, r.PathValue("id"), r.URL.Query().Get("trash") == "true")
 	if err != nil {
 		s.driveError(w, err)
 		return

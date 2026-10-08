@@ -38,6 +38,7 @@ type Folder struct {
 	Workspace string `json:"workspace"`
 	Parent    string `json:"parent"`
 	Name      string `json:"name"`
+	Trashed   bool   `json:"trashed"`
 }
 type File struct {
 	ID        string `json:"id"`
@@ -338,7 +339,7 @@ func parentOK(ctx context.Context, q queryer, workspace, parent string) error {
 		return nil
 	}
 	var n int
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=?`, parent, workspace).Scan(&n)
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=? AND trashed=false`, parent, workspace).Scan(&n)
 	if err != nil {
 		return err
 	}
@@ -348,7 +349,7 @@ func parentOK(ctx context.Context, q queryer, workspace, parent string) error {
 	return nil
 }
 func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name string) (Folder, error) {
-	f := Folder{uuid.NewString(), workspace, parent, name}
+	f := Folder{ID: uuid.NewString(), Workspace: workspace, Parent: parent, Name: name}
 	if !ValidName(name) {
 		return f, ErrInvalid
 	}
@@ -366,11 +367,11 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 	})
 	return f, err
 }
-func (s *Store) Folders(ctx context.Context, user, workspace string) ([]Folder, error) {
+func (s *Store) Folders(ctx context.Context, user, workspace string, trashed bool) ([]Folder, error) {
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name FROM drive_folders WHERE workspace=? ORDER BY name`, workspace)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=? ORDER BY name`, workspace, trashed)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +379,7 @@ func (s *Store) Folders(ctx context.Context, user, workspace string) ([]Folder, 
 	out := []Folder{}
 	for rows.Next() {
 		var f Folder
-		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name); err != nil {
+		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -473,7 +474,14 @@ func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, t
 		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET trashed=? WHERE id=? AND revision=?`, trash, id, expected)
+		query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND revision=? AND trashed=false`
+		args := []any{now(), uuid.NewString(), id, expected}
+		if !trash {
+			// A file whose folder is still in the trash comes back at the workspace root.
+			query = `UPDATE drive_files SET trashed=false,trashed_at='',trash_batch='',parent=CASE WHEN parent='' OR EXISTS(SELECT 1 FROM drive_folders d WHERE d.id=drive_files.parent AND d.trashed=false) THEN parent ELSE '' END WHERE id=? AND revision=? AND trashed=true`
+			args = []any{id, expected}
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return ErrConflict
 		}
