@@ -183,6 +183,8 @@ func runServer() {
 	}
 	editorDone := make(chan struct{})
 	go func() { defer close(editorDone); srv.RunEditorRevocations(ctx) }()
+	retentionDone := make(chan struct{})
+	go func() { defer close(retentionDone); srv.RunRetention(ctx) }()
 	backupDone := make(chan struct{})
 	go backupLoop(ctx, cfg, st, backupDone)
 
@@ -223,6 +225,11 @@ func runServer() {
 	case <-editorDone:
 	case <-waitCtx.Done():
 		log.Print("Editor shutdown timed out")
+	}
+	select {
+	case <-retentionDone:
+	case <-waitCtx.Done():
+		log.Print("Retention shutdown timed out")
 	}
 	log.Println("[KY-BASE] Server stopped")
 }

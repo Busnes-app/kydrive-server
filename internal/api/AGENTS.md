@@ -44,6 +44,23 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - POST `/api/drive/personal-workspace` idempotently ensures the authenticated account’s private workspace; service credentials are refused. GET workspace lists distinguish `kind: personal|shared` and exclude other accounts’ personal workspaces, even from administrative browsing.
 - POST `/api/drive/workspaces/{id}/documents` accepts `{name, kind: document|spreadsheet|presentation|markdown|rtf|whiteboard, parent}`, adds the corresponding extension (`.docx`, `.xlsx`, `.pptx`, `.md`, `.rtf`, `.excalidraw`), and publishes a bundled blank template through the normal authorization/quota/version path. Templates are product-owned assets under `templates/`; DOCX uses minimal OOXML, XLSX/PPTX originate from the selected Euro-Office local blank fixtures with cleared core metadata, MD/RTF/Excalidraw use standardized blank formats.
 
+- File management routes (all `requireAuthenticated` except retention, which is `requireAdmin`; domain code enforces rank):
+
+| Method | Path | Handler | Body / response |
+|---|---|---|---|
+| PUT | `/api/drive/files/{id}/location` | `driveMoveFile` | `{revision, workspace, parent, name}`; moved file; runs revocations |
+| POST | `/api/drive/files/{id}/copy` | `driveCopyFile` | `{workspace, parent, name}`; new file |
+| PUT | `/api/drive/folders/{id}/location` | `driveMoveFolder` | `{parent, name}`; same workspace only |
+| PUT | `/api/drive/folders/{id}/trash` | `driveFolderTrash` | `{trashed}`; one batch |
+| DELETE | `/api/drive/files/{id}` | `drivePurgeFile` | trashed file only; 409 if live |
+| DELETE | `/api/drive/folders/{id}` | `drivePurgeFolder` | trashed folder and its trashed contents |
+| DELETE | `/api/drive/files/{id}/versions/{revision}` | `drivePurgeVersion` | non-current version |
+| PUT | `/api/drive/workspaces/{id}/retention` | `driveRetention` | admin; shared workspaces only (403 for personal); `{trash_days, keep_versions}`; 0 = off |
+
+- Purge handlers delete blobs (`drive.RemoveBlobs`) only after the metadata transaction commits; a failed removal costs disk space, never a version without bytes. Workspace listings include `trash_days` and `keep_versions`.
+- `driveError` maps `ErrDenied` 403, `ErrInvalid` 400, `ErrConflict` 409 with the wrapped domain reason (`err.Error()`, e.g. `revision conflict: move to trash first`), `ErrQuota` 413; anything else is a generic 500.
+- `RunRetention` is a background loop (hourly) like `RunEditorRevocations`; `cmd/server` waits for both before closing the store.
+
 ## Verification
 - `go test -v ./internal/api/...` (`authz_test.go` pins the per-role exposure of every privileged route; `backup_test.go` the backup routes, on SQLite only because a run snapshots the database)
 - `scripts/smoke-test.sh` asserts the same boundaries against a running binary

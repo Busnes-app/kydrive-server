@@ -34,6 +34,6 @@ Local SCIM identities received test-only password hashes directly in the disposa
 
 ## Boundaries
 
-Single writer/instance; no HA. No desktop sync, WebDAV, SMB, advanced search, automatic blob collection or Restic pruning. Retained versions and trash consume quota. Standard Euro-Office editing exposes plaintext to the editor service; this is not CryptPad-style end-to-end encryption. Its error logs may include scoped document URLs; treat editor logs as sensitive and configure access/retention before production.
+Single writer/instance; no HA. No desktop sync, WebDAV, SMB, advanced search, Restic pruning. Blobs are removed only by manager purge or an opt-in workspace retention policy; trash and versions otherwise stay and consume quota. Standard Euro-Office editing exposes plaintext to the editor service; this is not CryptPad-style end-to-end encryption. Its error logs may include scoped document URLs; treat editor logs as sensitive and configure access/retention before production.
 
 See [README](../README.md), [restore runbook](RESTORE.md), [UI verification](../UI-VERIFICATION.md) and [handoff](../STATUS.md). Local completion does not close the production gates above.

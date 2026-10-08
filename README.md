@@ -29,7 +29,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
 docker compose exec app /app/kydrive-server bulk-init
 ```
 
-The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Retained versions and trash count toward quota. Backups do not prune Restic snapshots automatically: retain every snapshot named by a retained capsule.
+The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Backups do not prune Restic snapshots automatically: retain every snapshot named by a retained capsule.
 
 ## Identity and permissions
 
@@ -48,6 +48,10 @@ To make an installation owner an application administrator, run the audited oper
 ```
 
 This preserves the directory account and revokes its existing sessions; sign in with KyIdentity again. Use `-role user` to remove the grant. SCIM roles do not assign application administration, and offboarding still disables administrators. The distinct local `recovery-admin` account is for recovery; deployment credentials belong in an operator-controlled secret location.
+
+## Retention and permanent delete
+
+Nothing is deleted permanently by default. A manager of a workspace (or the owner of a personal one) can permanently delete trashed files and folders, delete a non-current version, or empty the trash; each action is audited and confirmed in the UI. A file with an open or undelivered editor session cannot be purged. An administrator can set per-workspace retention on shared workspaces: `trash_days` (purge items trashed longer than N days) and `keep_versions` (keep only the newest N versions); 0 turns a rule off and both default to 0. An hourly worker applies the policies as actor `system` and logs how many items it skipped. Files trashed before an upgrade count from the upgrade. Backups still hold purged bytes until their own snapshots are retired. Known limitation: if a purge removes a blob during the hard-link pass that follows a bulk backup's database snapshot, that run fails loudly and is retried at the next interval.
 
 ## Editor
 
@@ -97,7 +101,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion or HA. Interrupted unpublished uploads may leave unreferenced blobs; retain them for operator review rather than deleting potentially recoverable output. An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads may leave unreferenced blobs; retain them for operator review rather than deleting potentially recoverable output. An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 

@@ -3,8 +3,10 @@ package drive
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -64,4 +66,22 @@ func BlobPath(root, id string) (string, error) {
 		return "", ErrInvalid
 	}
 	return filepath.Join(root, id), nil
+}
+
+// RemoveBlobs deletes blobs whose last reference was purged. A missing file is already gone.
+func RemoveBlobs(root string, ids []string) error {
+	var errs []error
+	for _, id := range ids {
+		path, err := BlobPath(root, id)
+		if err == nil {
+			err = os.Remove(path)
+		}
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	if len(ids) > 0 {
+		errs = append(errs, SyncDirectory(root))
+	}
+	return errors.Join(errs...)
 }

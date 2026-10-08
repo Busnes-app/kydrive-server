@@ -88,8 +88,8 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Shared files are workspace-owned and survive user/group deletion. Administration does not bypass content grants.
 - Production integrations use HTTPS, stable OIDC subject/SCIM externalId mapping, durable secrets and authenticated service/editor APIs.
 - Recovery uses `ky-primitives/recoveryclient`; no copied library crypto. Sealed metadata binds the exact Restic snapshot and includes every integration secret needed for restore. The user deferred independent bulk storage for the pilot; NAS-local snapshots are not independent recovery copies.
-- Retain all referenced versions/blobs and Restic snapshots. No automatic destructive garbage collection or bulk pruning.
-- `runServer` stops HTTP, cancels the scheduler/editor worker and waits for detached backup handlers before closing the store. Shutdown timeout closes remaining HTTP connections. Compose's 20m grace period exceeds HTTP drain plus the library backup wait budget.
+- Versions and blobs are removed only by an explicit manager purge of trashed items or old versions, or by an admin-enabled per-workspace retention policy (off by default); both are audited. Metadata commits before blob removal, and a blob is removed only when the purging transaction found it unreferenced. Restic snapshots are never pruned automatically.
+- `runServer` stops HTTP, cancels the scheduler, editor and retention workers and waits for them and detached backup handlers before closing the store. Shutdown timeout closes remaining HTTP connections. Compose's 20m grace period exceeds HTTP drain plus the library backup wait budget.
 - Keep generated credentials, database files, rendered Secrets, opened capsules and bulk repositories out of Git and Docker build contexts.
 
 ## User Preferences
@@ -99,11 +99,12 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Reserve a distinct local recovery administrator username when the directory also uses `admin`; use the audited `rename-local-admin -from admin -to recovery-admin` operator command on existing installations. Directory provisioning never adopts the local account.
 - General drive API covers uploads/downloads, folders, versions, trash, quotas and workspace-scoped service credentials. Desktop sync, WebDAV, SMB, advanced search and HA are deferred.
 - Preserve shared Busnes light/dark themes, named themes and saved browser choices.
+- OneDrive/SharePoint parity decisions (2026-10-07), planned in `docs/superpowers/plans/2026-10-07-onedrive-parity-roadmap.md`: per-workspace opt-in retention (admin-set, off by default) plus manager purge; an admin hands a leaver's My files to a shared workspace or named colleague; sharing covers people, per-folder grants, organisation links and external guest links; independent bulk backup goes offsite (S3-compatible or rest-server over HTTPS). Current contracts above stay binding until each milestone ships and rewrites them.
 
 ## Verification
 - `PATH=/path/to/restic:$PATH go test -race ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable.
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
-- `scripts/smoke-test.sh` against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
+- `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.
 - Native T3 browser evidence and remaining gates are recorded in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`.
 
