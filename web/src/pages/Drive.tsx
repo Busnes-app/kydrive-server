@@ -1,23 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { secureFetch } from '../api';
+import { bytes, breadcrumb, change, file, folder, grant, group, list, record, response, version, workspace } from './drive/client';
+import type { DriveFile, Folder, Grant, Group, Version, Workspace } from './drive/client';
 
-export type Workspace = { id: string; name: string; role: string; kind: 'personal' | 'shared'; quota: number; used: number };
-type DriveFile = { id: string; name: string; parent: string; revision: number; size: number; trashed: boolean };
-type Folder = { id: string; name: string; parent: string };
-type Grant = { group_id: string; name: string; role: string };
-type Group = { id: string; display_name: string };
-type Version = { revision: number; size: number; created: string };
-function record(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
-function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && (v.kind === 'personal' || v.kind === 'shared') && typeof v.quota === 'number' && typeof v.used === 'number'; }
-function file(v: unknown): v is DriveFile { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.trashed === 'boolean'; }
-function folder(v: unknown): v is Folder { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string'; }
-function grant(v: unknown): v is Grant { return record(v) && typeof v.group_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
-function group(v: unknown): v is Group { return record(v) && typeof v.id === 'string' && typeof v.display_name === 'string'; }
-function version(v: unknown): v is Version { return record(v) && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.created === 'string'; }
-async function response(r: Response): Promise<unknown> { const v: unknown = await r.json(); if (!r.ok) throw new Error(record(v) && typeof v.error === 'string' ? v.error : 'Drive request failed'); return v; }
-async function list<T>(url: string, guard: (v: unknown) => v is T): Promise<T[]> { const v = await response(await fetch(url)); if (!Array.isArray(v) || !v.every(guard)) throw new Error('Invalid server response'); return v; }
-async function change(url: string, method: string, body: unknown): Promise<unknown> { return response(await secureFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })); }
-const bytes = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(1)} GiB`;
+export type { Workspace } from './drive/client';
+
 
 type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
 
@@ -52,6 +39,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [operations, setOperations] = useState('');
   const [audit, setAudit] = useState<string[]>([]);
   const current = workspaces.find(w => w.id === selected);
+  const visibleFolders = trash ? [] : folders.filter(d => d.parent === parent);
   const canEdit = current?.role === 'editor' || current?.role === 'manager';
   const canManage = current?.kind === 'shared' && (admin || current.role === 'manager');
   const reload = useCallback(async () => {
@@ -104,7 +92,10 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
       <div className="drive-workspace-heading"><div><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>
       {view === 'files' && (current.role ? <>
         <div className="drive-toolbar">
-          <label className="drive-folder-filter"><span>Folder</span><select value={parent} onChange={e => setParent(e.target.value)}><option value="">Workspace root</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+          <nav className="drive-breadcrumb" aria-label="Folder path">
+            <button className="btn-link" onClick={() => setParent('')} aria-current={parent === '' ? 'page' : undefined}>{current.name}</button>
+            {breadcrumb(folders, parent).map(f => <span key={f.id}> / <button className="btn-link" onClick={() => setParent(f.id)} aria-current={f.id === parent ? 'page' : undefined}>{f.name}</button></span>)}
+          </nav>
           <div className="drive-toolbar-actions">
             {canEdit && !trash && <details className="drive-new-file"><summary className="btn">New file</summary><div className="drive-new-file-options">{((['document','spreadsheet','presentation','markdown','rtf','whiteboard']) satisfies DocumentKind[]).map(kind => <button className="btn-secondary" key={kind} onClick={e => { e.currentTarget.closest('details')?.removeAttribute('open'); startDocument(kind); }}>New {kind}</button>)}</div></details>}
             <button className="btn-secondary" aria-pressed={trash} onClick={() => setTrash(!trash)}>{trash ? 'Back to files' : 'Trash'}</button>
@@ -113,8 +104,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
               <details className="drive-new-folder"><summary className="btn-secondary">New folder</summary><form className="drive-folder-form" onSubmit={e => { e.preventDefault(); void run(async () => { await change(`/api/drive/workspaces/${selected}/folders`, 'POST', { parent, name: newFolder }); setNewFolder(''); }); }}><label>Folder name<input required value={newFolder} onChange={e => setNewFolder(e.target.value)} /></label><button disabled={busy}>Create</button></form></details></>}
           </div>
         </div>
-        <div className="drive-table"><table><thead><tr><th>Name</th><th>Size</th><th>Version</th><th><span className="drive-actions-heading">Actions</span></th></tr></thead><tbody>{files.filter(f => trash || f.parent === parent).map(f => <tr key={f.id}><td>{!f.trashed ? <a className="drive-file-name" href={editorURL(f)} {...fileTarget}>{f.name}</a> : f.name}</td><td>{bytes(f.size)}</td><td>{f.revision}</td><td><details className="drive-file-menu"><summary className="btn-secondary" aria-label={`Actions for ${f.name}`}>Actions</summary><div className="drive-file-actions">{!f.trashed && <><a href={editorURL(f)} {...fileTarget}>Open editor</a><a href={`/api/drive/files/${f.id}/download`}>Download</a></>}<button className="btn-secondary" disabled={busy} onClick={() => void run(async () => setHistory({ file: f, versions: await list(`/api/drive/files/${f.id}/versions`, version) }))}>Version history</button>{canEdit && <button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: !f.trashed }))}>{f.trashed ? 'Restore from trash' : 'Move to trash'}</button>}</div></details></td></tr>)}</tbody></table></div>
-        {files.filter(f => trash || f.parent === parent).length === 0 && <div className="drive-empty"><h3>{trash ? 'Trash is empty' : 'No files here yet'}</h3><p>{trash ? 'Deleted files appear here until restored.' : canEdit ? 'Create a document or upload a file to get started.' : 'Files shared with this workspace will appear here.'}</p></div>}
+        <div className="drive-table"><table><thead><tr><th>Name</th><th>Size</th><th>Version</th><th><span className="drive-actions-heading">Actions</span></th></tr></thead><tbody>{visibleFolders.map(d => <tr key={`folder-${d.id}`}><td><button className="drive-folder-name btn-link" onClick={() => setParent(d.id)}>{d.name}/</button></td><td>Folder</td><td>—</td><td>{canEdit && <details className="drive-file-menu"><summary className="btn-secondary" aria-label={`Actions for folder ${d.name}`}>Actions</summary><div className="drive-file-actions"><button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed: true }))}>Move to trash</button></div></details>}</td></tr>)}{files.filter(f => trash || f.parent === parent).map(f => <tr key={f.id}><td>{!f.trashed ? <a className="drive-file-name" href={editorURL(f)} {...fileTarget}>{f.name}</a> : f.name}</td><td>{bytes(f.size)}</td><td>{f.revision}</td><td><details className="drive-file-menu"><summary className="btn-secondary" aria-label={`Actions for ${f.name}`}>Actions</summary><div className="drive-file-actions">{!f.trashed && <><a href={editorURL(f)} {...fileTarget}>Open editor</a><a href={`/api/drive/files/${f.id}/download`}>Download</a></>}<button className="btn-secondary" disabled={busy} onClick={() => void run(async () => setHistory({ file: f, versions: await list(`/api/drive/files/${f.id}/versions`, version) }))}>Version history</button>{canEdit && <button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: !f.trashed }))}>{f.trashed ? 'Restore from trash' : 'Move to trash'}</button>}</div></details></td></tr>)}</tbody></table></div>
+        {files.filter(f => trash || f.parent === parent).length + visibleFolders.length === 0 && <div className="drive-empty"><h3>{trash ? 'Trash is empty' : 'No files here yet'}</h3><p>{trash ? 'Deleted files appear here until restored.' : canEdit ? 'Create a document or upload a file to get started.' : 'Files shared with this workspace will appear here.'}</p></div>}
       </> : <p className="drive-empty">Assign a group permission in Workspace settings to access files.</p>)}
       </div>
     {history && <div className="panel"><h3>Versions of {history.file.name}</h3>{history.versions.map(v => <p key={v.revision}>Version {v.revision} · {v.created} · {bytes(v.size)} {canEdit && !history.file.trashed && <button disabled={busy} onClick={() => void run(async () => { await change(`/api/drive/files/${history.file.id}/restore`, 'POST', { revision: v.revision, expected: history.file.revision }); setHistory(null); })}>Restore as new version</button>}</p>)}<button onClick={() => setHistory(null)}>Close versions</button></div>}
