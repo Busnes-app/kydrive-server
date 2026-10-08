@@ -17,14 +17,21 @@ export function MoveDialog({ mode, item, workspaceID, workspaces, onClose, onDon
   // Moving a file across workspaces needs manager rights on the source; copying does not.
   const crossWorkspace = item.kind === 'file' && (mode === 'copy' || (mode === 'move' && workspaces.find(w => w.id === workspaceID)?.role === 'manager'));
   const [name, setName] = useState(original.name);
-  const [target, setTarget] = useState(mode === 'copy' && !writable.some(w => w.id === workspaceID) ? writable[0]?.id ?? workspaceID : workspaceID);
-  const [parent, setParent] = useState(original.parent);
+  const initialTarget = mode === 'copy' && !writable.some(w => w.id === workspaceID) ? writable[0]?.id ?? workspaceID : workspaceID;
+  const [target, setTarget] = useState(initialTarget);
+  const [parent, setParent] = useState(initialTarget === workspaceID ? original.parent : '');
   const [folders, setFolders] = useState<Folder[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // jsdom lacks showModal; opening by attribute keeps the form reachable in unit tests.
   useEffect(() => { const d = ref.current; if (d && !d.open) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } }, []);
-  useEffect(() => { if (mode === 'rename') return; void list(`/api/drive/workspaces/${target}/folders`, folder).then(setFolders).catch(e => setError(e instanceof Error ? e.message : 'Folders unavailable')); }, [mode, target]);
+  useEffect(() => {
+    if (mode === 'rename') return;
+    let live = true;
+    setFolders([]);
+    list(`/api/drive/workspaces/${target}/folders`, folder).then(fs => { if (live) setFolders(fs); }).catch(e => { if (live) setError(e instanceof Error ? e.message : 'Folders unavailable'); });
+    return () => { live = false; };
+  }, [mode, target]);
   const hidden = item.kind === 'folder' ? descendants(folders, item.folder.id) : new Set<string>();
   const verb = { rename: 'Rename', move: 'Move', copy: 'Copy' }[mode];
   async function submit() {

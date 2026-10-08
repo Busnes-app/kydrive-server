@@ -53,4 +53,38 @@ describe('MoveDialog', () => {
     expect(screen.queryByLabelText('Workspace')).toBeNull();
     expect(screen.queryByRole('option', { name: 'My files' })).toBeNull();
   });
+
+  it('copies from a read-only workspace into the writable target root', async () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push([String(input), init]);
+      return new Response(String(input).endsWith('/folders') ? '[]' : JSON.stringify(file), { status: 200 });
+    }));
+    const done = vi.fn();
+    render(<MoveDialog mode="copy" item={{ kind: 'file', file: { ...file, parent: 'dX' } }} workspaceID="w3" workspaces={workspaces} onClose={() => {}} onDone={done} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    const [url, init] = calls[calls.length - 1];
+    expect(url).toBe('/api/drive/files/f1/copy');
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({ workspace: 'w1', parent: '', name: 'a.docx' });
+  });
+
+  it('moves a folder with its new parent and name', async () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push([String(input), init]);
+      return new Response(String(input).endsWith('/folders') ? JSON.stringify([{ id: 'c', name: 'C', parent: '', trashed: false }]) : '{}', { status: 200 });
+    }));
+    const done = vi.fn();
+    render(<MoveDialog mode="move" item={{ kind: 'folder', folder: { id: 'a', name: 'A', parent: '', trashed: false } }} workspaceID="w1" workspaces={workspaces} onClose={() => {}} onDone={done} />);
+    await screen.findByRole('option', { name: 'C' });
+    fireEvent.change(screen.getByLabelText('Folder'), { target: { value: 'c' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    const [url, init] = calls[calls.length - 1];
+    expect(url).toBe('/api/drive/folders/a/location');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ parent: 'c', name: 'A' });
+  });
 });
