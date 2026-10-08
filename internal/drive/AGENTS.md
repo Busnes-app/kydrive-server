@@ -15,7 +15,12 @@ Own drive schema and domain operations over the application's database and blob 
 - Read current user status and group memberships when authorizing each operation. Global admin can manage workspace configuration; shared content requires an explicit group grant and personal content requires the active owner.
 - Publish immutable, generated blob IDs before transactionally committing version metadata. Check expected revisions and quotas under the transaction. Do not derive disk paths from user filenames.
 - SQLite is the initial supported drive database. Keep domain inputs independent of HTTP.
-- Drive schema changes are append-only entries in `schema.go`, applied once each and recorded in `drive_schema`. Name insert columns explicitly so added columns do not break inserts.
+- Drive schema changes are append-only entries in `schema.go`, applied once each and recorded in `drive_schema`. Name insert columns explicitly so added columns do not break inserts. Never edit a shipped entry.
+- Only SQLite unique-constraint violations (`uniqueViolation`) map to `ErrConflict`. Unknown ids map to `ErrDenied`/`ErrInvalid` only on `sql.ErrNoRows`; other database errors pass through.
+- Trash is batched: trashing a folder trashes its live subtree under one `trash_batch`; restore brings back that batch only; an item whose parent is still trashed returns to the workspace root. Trashed folders cannot receive items.
+- Moves never create versions. A same-workspace file move needs editor; a cross-workspace file move needs rank 3 (manager or personal owner) on the source and editor on the target, plus target quota for every version, and queues editor revocations for lost access. Folder moves stay in their workspace and cannot enter their own subtree. Copies share the immutable blob and count against target quota. Copy and restore read the reused blob inside their publishing transaction.
+- Purge needs rank 3. `purgeFile` fails closed before any delete: unknown is `ErrDenied`, a live file is `ErrConflict`. Purging a file or a non-current version is blocked while a matching editor session is `(revoked=false AND expires>now) OR (revoked=true AND drop_done=false)`.
+- Retention: `trash_days` and `keep_versions` per workspace, 0 = off, admin-set (`SetRetention`). `ApplyRetention` pages by cursor so stuck items cannot starve later ones, re-checks each item's policy inside that item's own transaction, writes `file.retention_purged`, `version.retention_purged` and `folder.retention_purged` as actor `system`, and logs one line with the skipped count when above 0. Empty expired trashed folders only. `export_test.go` exposes test hooks (`PurgeFileUnauthorized`, `ExecSQL`, `RetainFile`, `RetainVersion`).
 
 ## Work Guidance
 
@@ -27,6 +32,6 @@ Own drive schema and domain operations over the application's database and blob 
 - Service credentials are hashed, workspace-scoped reader/editor grants tied to current issuer membership and expire after 90 days.
 
 ## Verification
-- `go test -race ./internal/drive` covers concurrent saves, offboarding, quotas, trash, atomic memberships and editor replay/conflict.
+- `go test -race ./internal/drive` covers concurrent saves, offboarding, quotas, atomic memberships and editor replay/conflict; `schema_test.go` (migrations, legacy upgrade), `trash_test.go`, `move_test.go`, `purge_test.go` and `retention_test.go` cover the file-management contracts.
 
 ## Child DOX Index

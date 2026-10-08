@@ -88,7 +88,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Shared files are workspace-owned and survive user/group deletion. Administration does not bypass content grants.
 - Production integrations use HTTPS, stable OIDC subject/SCIM externalId mapping, durable secrets and authenticated service/editor APIs.
 - Recovery uses `ky-primitives/recoveryclient`; no copied library crypto. Sealed metadata binds the exact Restic snapshot and includes every integration secret needed for restore. The user deferred independent bulk storage for the pilot; NAS-local snapshots are not independent recovery copies.
-- Retain all referenced versions/blobs and Restic snapshots. No automatic destructive garbage collection or bulk pruning.
+- Versions and blobs are removed only by an explicit manager purge of trashed items or old versions, or by an admin-enabled per-workspace retention policy (off by default); both are audited. Metadata commits before blob removal, and a blob is removed only when the purging transaction found it unreferenced. Restic snapshots are never pruned automatically.
 - `runServer` stops HTTP, cancels the scheduler/editor worker and waits for detached backup handlers before closing the store. Shutdown timeout closes remaining HTTP connections. Compose's 20m grace period exceeds HTTP drain plus the library backup wait budget.
 - Keep generated credentials, database files, rendered Secrets, opened capsules and bulk repositories out of Git and Docker build contexts.
 
