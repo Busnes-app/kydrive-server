@@ -475,6 +475,10 @@ dialog.modal-window::backdrop {
 .drive-file-name:hover { text-decoration: underline; }
 .drive-file-menu { width: 160px; }
 .drive-file-menu summary { width: fit-content; margin-left: auto; }
+.drive-breadcrumb { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
+.drive-breadcrumb [aria-current="page"] { font-weight: 600; }
+.drive-folder-name { font-weight: 600; }
+.btn-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; }
 .drive-file-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding-top: 8px; }
 .drive-file-actions a,.drive-file-actions button { padding: 8px 10px; text-align: left; font-size: .8rem; text-decoration: none; }
 .drive-actions-heading { display: block; text-align: right; }

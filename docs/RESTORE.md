@@ -27,4 +27,4 @@ A complete restore requires a sealed KyDrive `.kycap`, its independent Restic re
 
 For an upgrade, stop the only writer, take a successful complete backup, retain the previous image, then start the new image against the persistent mounts. For rollback, restore the matched database/blob checkpoint and its integration secrets together; do not assume an older binary understands a newer schema. This package has no HA or destructive migrations.
 
-Retain every Restic snapshot referenced by a retained capsule. Automatic bulk pruning is not implemented. Backup retention, independent destination and recovery objectives must be chosen for the actual deployment; the local fixture establishes mechanics, not a representative production restore-time objective.
+Retain every Restic snapshot referenced by a retained capsule. Automatic bulk pruning is not implemented. Purged and retention-expired files remain in older snapshots until those snapshots are retired. Backup retention, independent destination and recovery objectives must be chosen for the actual deployment; the local fixture establishes mechanics, not a representative production restore-time objective.

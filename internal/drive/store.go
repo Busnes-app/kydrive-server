@@ -21,12 +21,14 @@ var (
 
 type Store struct{ db *sql.DB }
 type Workspace struct {
-	Kind  string `json:"kind"`
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Quota int64  `json:"quota"`
-	Used  int64  `json:"used"`
-	Role  string `json:"role"`
+	Kind         string `json:"kind"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Quota        int64  `json:"quota"`
+	Used         int64  `json:"used"`
+	Role         string `json:"role"`
+	TrashDays    int    `json:"trash_days"`
+	KeepVersions int    `json:"keep_versions"`
 }
 type Grant struct {
 	GroupID string `json:"group_id"`
@@ -38,6 +40,7 @@ type Folder struct {
 	Workspace string `json:"workspace"`
 	Parent    string `json:"parent"`
 	Name      string `json:"name"`
+	Trashed   bool   `json:"trashed"`
 }
 type File struct {
 	ID        string `json:"id"`
@@ -87,7 +90,11 @@ func New(ctx context.Context, db *sql.DB) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err = s.migrate(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func ValidName(name string) bool {
@@ -170,7 +177,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +186,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.Kind, &w.Used, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.Kind, &w.Used, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]
@@ -216,7 +223,7 @@ func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (strin
 			return err
 		}
 		id = uuid.NewString()
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces VALUES(?,?)`, id, user); err != nil {
@@ -236,7 +243,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, w.ID, name, quota); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, w.ID, name, quota); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "workspace.created", w.ID)
@@ -334,7 +341,7 @@ func parentOK(ctx context.Context, q queryer, workspace, parent string) error {
 		return nil
 	}
 	var n int
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=?`, parent, workspace).Scan(&n)
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=? AND trashed=false`, parent, workspace).Scan(&n)
 	if err != nil {
 		return err
 	}
@@ -344,7 +351,7 @@ func parentOK(ctx context.Context, q queryer, workspace, parent string) error {
 	return nil
 }
 func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name string) (Folder, error) {
-	f := Folder{uuid.NewString(), workspace, parent, name}
+	f := Folder{ID: uuid.NewString(), Workspace: workspace, Parent: parent, Name: name}
 	if !ValidName(name) {
 		return f, ErrInvalid
 	}
@@ -355,18 +362,18 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		if err := parentOK(ctx, tx, workspace, parent); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name) VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "folder.created", f.ID)
 	})
 	return f, err
 }
-func (s *Store) Folders(ctx context.Context, user, workspace string) ([]Folder, error) {
+func (s *Store) Folders(ctx context.Context, user, workspace string, trashed bool) ([]Folder, error) {
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name FROM drive_folders WHERE workspace=? ORDER BY name`, workspace)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=? ORDER BY name`, workspace, trashed)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +381,7 @@ func (s *Store) Folders(ctx context.Context, user, workspace string) ([]Folder, 
 	out := []Folder{}
 	for rows.Next() {
 		var f Folder
-		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name); err != nil {
+		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -461,24 +468,39 @@ func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error
 	return out, rows.Err()
 }
 func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, trash bool) error {
-	f, err := s.File(ctx, user, id, 2)
-	if err != nil {
-		return err
-	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		var workspace string
+		if err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_files WHERE id=?`, id).Scan(&workspace); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrDenied
+			}
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET trashed=? WHERE id=? AND revision=?`, trash, id, expected)
-		if err != nil {
-			return ErrConflict
-		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			return ErrConflict
-		}
-		return event(ctx, tx, user, "file.trash_changed", id)
+		return setTrash(ctx, tx, user, id, workspace, expected, trash)
 	})
+}
+
+// setTrash changes the file only while it is still in the workspace just authorized.
+func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expected int64, trash bool) error {
+	if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+		return err
+	}
+	query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`
+	args := []any{now(), uuid.NewString(), id, workspace, expected}
+	if !trash {
+		// A file whose folder is still in the trash comes back at the workspace root.
+		query = `UPDATE drive_files SET trashed=false,trashed_at='',trash_batch='',parent=CASE WHEN parent='' OR EXISTS(SELECT 1 FROM drive_folders d WHERE d.id=drive_files.parent AND d.trashed=false) THEN parent ELSE '' END WHERE id=? AND workspace=? AND revision=? AND trashed=true`
+		args = []any{id, workspace, expected}
+	}
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return restoreErr(err)
+	}
+	n, _ := res.RowsAffected()
+	if n != 1 {
+		return ErrConflict
+	}
+	return event(ctx, tx, user, "file.trash_changed", id)
 }
 func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, expected int64) (File, error) {
 	f, err := s.File(ctx, user, id, 2)
@@ -488,12 +510,22 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if f.Trashed {
 		return f, ErrConflict
 	}
-	var v Version
-	err = s.db.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size)
+	v := Version{FileID: id, Revision: expected + 1, Created: now()}
+	// Read the old version inside the publish transaction: a purge cannot slip in between.
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size); err != nil {
+			if err == sql.ErrNoRows {
+				return ErrInvalid
+			}
+			return err
+		}
+		return publishTX(ctx, tx, user, f, v, expected)
+	})
 	if err != nil {
-		return f, ErrInvalid
+		return f, err
 	}
-	return s.Publish(ctx, user, f, v, expected)
+	f.Revision, f.Size, f.Digest, f.Blob = v.Revision, v.Size, v.Digest, v.Blob
+	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 	if err := admin(ctx, s.db, user); err != nil {
@@ -522,16 +554,15 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
 		return err
 	}
-	var used, quota int64
-	if err := tx.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, f.Workspace, f.Workspace).Scan(&quota, &used); err != nil {
+	if err := fits(ctx, tx, f.Workspace, v.Size); err != nil {
 		return err
 	}
-	if used > quota || v.Size > quota-used {
-		return ErrQuota
-	}
 	if expected == 0 {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files VALUES(?,?,?,?,?,false)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
-			return fmt.Errorf("%w: name or file exists", ErrConflict)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,revision) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
+			if uniqueViolation(err) {
+				return fmt.Errorf("%w: name or file exists", ErrConflict)
+			}
+			return err
 		}
 	} else {
 		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET revision=revision+1 WHERE id=? AND workspace=? AND revision=? AND trashed=false`, f.ID, f.Workspace, expected)
@@ -547,4 +578,20 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 		return err
 	}
 	return event(ctx, tx, user, "file.version_created", f.ID)
+}
+
+// fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
+func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
+	var used, quota int64
+	if err := q.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, workspace, workspace).Scan(&quota, &used); err != nil {
+		return err
+	}
+	if used > quota || extra > quota-used {
+		return ErrQuota
+	}
+	return nil
+}
+
+func uniqueViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

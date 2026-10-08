@@ -78,7 +78,7 @@ test('whiteboard opens, edits and saves Excalidraw scenes without loss', async (
   await page.mouse.down();
   await page.mouse.move(box.x + 140, box.y + box.height - 100, { steps: 5 });
   await page.mouse.up();
-  await expect(page.getByRole('status').filter({ hasText: 'Not saved' })).toContainText('Revision conflict');
+  await expect(page.getByRole('status').filter({ hasText: 'Not saved' })).toContainText(/revision conflict/i);
   await page.screenshot({ path: testInfo.outputPath('conflict.png') });
   expect(await revision()).toBe(opened + 2);
 
