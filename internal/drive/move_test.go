@@ -145,3 +145,36 @@ func TestCrossWorkspaceMoveNeedsSourceManager(t *testing.T) {
 		t.Fatalf("owner move to shared: %+v %v", moved, err)
 	}
 }
+
+func TestMoveFolderRejectsCycles(t *testing.T) {
+	st, w, _ := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	a, _ := d.AddFolder(ctx, "worker", w.ID, "", "A")
+	b, _ := d.AddFolder(ctx, "worker", w.ID, a.ID, "B")
+	c, _ := d.AddFolder(ctx, "worker", w.ID, b.ID, "C")
+	if _, err := d.AddFolder(ctx, "worker", w.ID, "", "Taken"); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		id, parent, name string
+		want             error
+	}{
+		"into self":       {a.ID, a.ID, "A", drive.ErrInvalid},
+		"into grandchild": {a.ID, c.ID, "A", drive.ErrInvalid},
+		"taken":           {b.ID, "", "Taken", drive.ErrConflict},
+		"bad name":        {b.ID, "", "..", drive.ErrInvalid},
+		"missing parent":  {b.ID, "nope", "B", drive.ErrInvalid},
+	} {
+		if _, err := d.MoveFolder(ctx, "worker", tc.id, tc.parent, tc.name); !errors.Is(err, tc.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	moved, err := d.MoveFolder(ctx, "worker", c.ID, "", "C renamed")
+	if err != nil || moved.Parent != "" || moved.Name != "C renamed" {
+		t.Fatalf("move: %+v %v", moved, err)
+	}
+	if _, err = d.MoveFolder(ctx, "stranger", b.ID, "", "Mine"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("stranger moved folder: %v", err)
+	}
+}

@@ -3,6 +3,7 @@ package drive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -60,4 +61,43 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 	}
 	f.Workspace, f.Parent, f.Name = to.Workspace, to.Parent, to.Name
 	return f, nil
+}
+
+// MoveFolder renames or re-parents a live folder within its workspace.
+func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (Folder, error) {
+	f := Folder{ID: id, Parent: parent, Name: name}
+	if !ValidName(name) || parent == id {
+		return f, ErrInvalid
+	}
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_folders WHERE id=? AND trashed=false`, id).Scan(&f.Workspace)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDenied
+		}
+		if err != nil {
+			return err
+		}
+		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+			return err
+		}
+		if err := parentOK(ctx, tx, f.Workspace, parent); err != nil {
+			return err
+		}
+		var cycle int
+		if err := tx.QueryRowContext(ctx, `WITH RECURSIVE up(id) AS (SELECT ? UNION SELECT d.parent FROM drive_folders d JOIN up ON d.id=up.id WHERE d.parent!='') SELECT COUNT(*) FROM up WHERE id=?`, parent, id).Scan(&cycle); err != nil {
+			return err
+		}
+		if cycle > 0 {
+			return ErrInvalid
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE drive_folders SET parent=?,name=? WHERE id=?`, parent, name, id)
+		if uniqueViolation(err) {
+			return fmt.Errorf("%w: name exists", ErrConflict)
+		}
+		if err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "folder.moved", id)
+	})
+	return f, err
 }
