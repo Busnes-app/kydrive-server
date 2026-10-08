@@ -327,6 +327,28 @@ func (u *userStore) UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, 
 	return nil
 }
 
+func (u *userStore) OpenInNewTab(ctx context.Context, userID string) (bool, error) {
+	var v bool
+	err := u.store.db.QueryRowContext(ctx, u.store.rebind("SELECT open_in_new_tab FROM users WHERE id = ?"), userID).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	return v, err
+}
+
+func (u *userStore) SetOpenInNewTab(ctx context.Context, userID string, v bool) error {
+	res, err := u.store.db.ExecContext(ctx, u.store.rebind("UPDATE users SET open_in_new_tab = ? WHERE id = ?"), v, userID)
+	if err != nil {
+		return err
+	}
+	if rows, err := res.RowsAffected(); err != nil {
+		return err
+	} else if rows != 1 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (u *userStore) SpendTOTPCounter(ctx context.Context, userID string, counter int64) error {
 	q := u.store.rebind("UPDATE users SET totp_last_counter = ?, updated_at = ? WHERE id = ? AND totp_last_counter < ?")
 	res, err := u.store.db.ExecContext(ctx, q, counter, time.Now().UTC(), userID, counter)

@@ -45,6 +45,10 @@ type UserStore interface {
 	// not greater than the stored one, which is how a replayed code inside the skew window fails.
 	SpendTOTPCounter(ctx context.Context, userID string, counter int64) error
 	DeleteUser(ctx context.Context, id string) error
+	// OpenInNewTab is the user's choice to open files in a new browser tab (default true).
+	// It lives outside User so profile and directory updates never overwrite it.
+	OpenInNewTab(ctx context.Context, userID string) (bool, error)
+	SetOpenInNewTab(ctx context.Context, userID string, v bool) error
 	ListUsers(ctx context.Context, offset, limit int, search string) ([]*User, int, error)
 	CountUsers(ctx context.Context) (int, error)
 }
