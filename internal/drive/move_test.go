@@ -208,3 +208,36 @@ func TestCopyFileSharesBlobAndCountsQuota(t *testing.T) {
 		t.Fatalf("copied a trashed file: %v", err)
 	}
 }
+
+// A session opened through a service token records only its issuer. Moving the file to another
+// workspace must end it even when the issuer can reach the destination.
+func TestCrossWorkspaceMoveEndsScopedEditorSessions(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, root, "p"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scoped := drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2})
+	if _, err = d.EditorSession(scoped, "worker", f.ID, "service-token"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "plan.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.CallbackActor(ctx, f.ID, 1); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("moved file still accepts the source-scoped session: %v", err)
+	}
+	pending, err := d.PendingRevocations(ctx)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("drop not queued: %+v %v", pending, err)
+	}
+}

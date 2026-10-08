@@ -13,8 +13,8 @@ type Location struct{ Workspace, Parent, Name string }
 
 // MoveFile renames or relocates a file without creating a version. Moving to another
 // workspace needs manager rights on the source, since the file leaves it, plus editor rights
-// and room for every retained version on the target. Open editors that lose access are
-// revoked by the next PendingRevocations pass.
+// and room for every retained version on the target. It revokes every open editor session
+// on the file, since each was authorized for the source workspace.
 func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, to Location) (File, error) {
 	if !ValidName(to.Name) {
 		return File{}, ErrInvalid
@@ -56,6 +56,12 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
 			return ErrConflict
+		}
+		if to.Workspace != f.Workspace {
+			// Sessions were authorized for the source, possibly through a credential scoped to it.
+			if _, err := tx.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE file_id=? AND revoked=false`, id); err != nil {
+				return err
+			}
 		}
 		return event(ctx, tx, user, "file.moved", fmt.Sprintf("%s:%s->%s", id, f.Workspace, to.Workspace))
 	})
