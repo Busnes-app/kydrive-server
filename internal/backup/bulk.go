@@ -154,15 +154,18 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]by
 	if err = os.Mkdir(root, 0700); err != nil {
 		return nil, err
 	}
+	// Link first so a purge after the database snapshot can only race this loop, not hashing.
 	for _, f := range files {
 		source, err := drive.BlobPath(filepath.Join(dataDir, "blobs"), f.Blob)
 		if err != nil {
 			return nil, err
 		}
-		if err = verifyBulkFile(source, f); err != nil {
+		if err = os.Link(source, filepath.Join(root, f.Blob)); err != nil {
 			return nil, err
 		}
-		if err = os.Link(source, filepath.Join(root, f.Blob)); err != nil {
+	}
+	for _, f := range files {
+		if err = verifyBulkFile(filepath.Join(root, f.Blob), f); err != nil {
 			return nil, err
 		}
 	}
