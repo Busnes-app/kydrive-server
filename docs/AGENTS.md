@@ -4,7 +4,7 @@
 Own restore instructions, local acceptance evidence and captured product UI assets.
 
 ## Ownership
-`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. Root README owns configuration; root STATUS owns handoff.
+`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans; its roadmap file records milestone decisions. Root README owns configuration; root STATUS owns handoff.
 
 ## Local Contracts
 - Document exact verified behavior; local fixtures do not establish live suite integration or production readiness.

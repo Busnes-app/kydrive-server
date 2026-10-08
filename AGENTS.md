@@ -99,6 +99,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Reserve a distinct local recovery administrator username when the directory also uses `admin`; use the audited `rename-local-admin -from admin -to recovery-admin` operator command on existing installations. Directory provisioning never adopts the local account.
 - General drive API covers uploads/downloads, folders, versions, trash, quotas and workspace-scoped service credentials. Desktop sync, WebDAV, SMB, advanced search and HA are deferred.
 - Preserve shared Busnes light/dark themes, named themes and saved browser choices.
+- OneDrive/SharePoint parity decisions (2026-10-07), planned in `docs/superpowers/plans/2026-10-07-onedrive-parity-roadmap.md`: per-workspace opt-in retention (admin-set, off by default) plus manager purge; an admin hands a leaver's My files to a shared workspace or named colleague; sharing covers people, per-folder grants, organisation links and external guest links; independent bulk backup goes offsite (S3-compatible or rest-server over HTTPS). Current contracts above stay binding until each milestone ships and rewrites them.
 
 ## Verification
 - `PATH=/path/to/restic:$PATH go test -race ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable.
