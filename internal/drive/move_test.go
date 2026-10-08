@@ -76,6 +76,9 @@ func TestMoveAcrossWorkspacesRevokesLostAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
 	small, _ := d.CreateWorkspace(ctx, "admin", "Small", 1)
 	if err = d.Grant(ctx, "admin", small.ID, "private", "editor"); err != nil {
 		t.Fatal(err)
@@ -112,5 +115,33 @@ func TestMoveFileCancelledContextIsNotConflict(t *testing.T) {
 	cancel()
 	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: w.ID, Name: "b.txt"}); err == nil || errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("want non-conflict error, got %v", err)
+	}
+}
+
+func TestCrossWorkspaceMoveNeedsSourceManager(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "org.txt"}, blob(t, root, "o"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "org.txt"}); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("editor moved a shared file out: %v", err)
+	}
+	if got, err := d.File(ctx, "worker", f.ID, 1); err != nil || got.Workspace != w.ID {
+		t.Fatalf("file moved: %+v %v", got, err)
+	}
+	own, err := d.Publish(ctx, "worker", drive.File{Workspace: mine, Name: "own.txt"}, blob(t, root, "p"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := d.MoveFile(ctx, "worker", own.ID, 1, drive.Location{Workspace: w.ID, Name: "own.txt"})
+	if err != nil || moved.Workspace != w.ID {
+		t.Fatalf("owner move to shared: %+v %v", moved, err)
 	}
 }

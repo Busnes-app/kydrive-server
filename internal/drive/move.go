@@ -9,7 +9,7 @@ import (
 type Location struct{ Workspace, Parent, Name string }
 
 // MoveFile renames or relocates a file without creating a version. Another workspace needs
-// editor rights there and room for every retained version; open editors that lose access
+// manager rights on the source (the move removes the file from it) and editor rights there and room for every retained version; open editors that lose access
 // are revoked by the next PendingRevocations pass.
 func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, to Location) (File, error) {
 	if !ValidName(to.Name) {
@@ -22,6 +22,11 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
 			return err
+		}
+		if to.Workspace != f.Workspace {
+			if err := authorize(ctx, tx, user, f.Workspace, 3); err != nil {
+				return err
+			}
 		}
 		if err := authorize(ctx, tx, user, to.Workspace, 2); err != nil {
 			return err
