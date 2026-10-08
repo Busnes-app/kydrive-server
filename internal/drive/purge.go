@@ -25,8 +25,18 @@ func unreferenced(ctx context.Context, tx *sql.Tx, blobs []string) ([]string, er
 
 // purgeFile deletes a trashed file and its history once no editor can still save to it.
 func purgeFile(ctx context.Context, tx *sql.Tx, id string, at int64) ([]string, error) {
+	var trashed bool
+	if err := tx.QueryRowContext(ctx, `SELECT trashed FROM drive_files WHERE id=?`, id).Scan(&trashed); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrDenied
+		}
+		return nil, err
+	}
+	if !trashed {
+		return nil, fmt.Errorf("%w: move to trash first", ErrConflict)
+	}
 	var open int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND (revoked=false OR drop_done=false) AND expires>?`, id, at).Scan(&open); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND ((revoked=false AND expires>?) OR (revoked=true AND drop_done=false))`, id, at).Scan(&open); err != nil {
 		return nil, err
 	}
 	if open > 0 {
@@ -41,11 +51,17 @@ func purgeFile(ctx context.Context, tx *sql.Tx, id string, at int64) ([]string, 
 		`DELETE FROM drive_editor_documents WHERE file_id=?`,
 		`DELETE FROM drive_editor_sessions WHERE file_id=?`,
 		`DELETE FROM drive_versions WHERE file_id=?`,
-		`DELETE FROM drive_files WHERE id=? AND trashed=true`,
 	} {
 		if _, err = tx.ExecContext(ctx, q, id); err != nil {
 			return nil, err
 		}
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM drive_files WHERE id=? AND trashed=true`, id)
+	if err != nil {
+		return nil, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return nil, fmt.Errorf("%w: file changed during purge", ErrConflict)
 	}
 	return unreferenced(ctx, tx, blobs)
 }
@@ -55,7 +71,7 @@ func purgeVersion(ctx context.Context, tx *sql.Tx, id string, revision, current,
 		return nil, ErrInvalid
 	}
 	var open int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND revision=? AND revoked=false AND expires>?`, id, revision, at).Scan(&open); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_editor_sessions WHERE file_id=? AND revision=? AND ((revoked=false AND expires>?) OR (revoked=true AND drop_done=false))`, id, revision, at).Scan(&open); err != nil {
 		return nil, err
 	}
 	if open > 0 {

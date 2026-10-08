@@ -137,3 +137,46 @@ func TestPurgeFolderRemovesTrashedSubtree(t *testing.T) {
 		t.Fatalf("usage not released: %d", ws[0].Used)
 	}
 }
+
+func TestPurgeFileRefusesLiveFile(t *testing.T) {
+	d, w, root := managerFixture(t)
+	ctx := context.Background()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "a"), 0)
+	if _, err := drive.PurgeFileUnauthorized(ctx, d, f.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("purged a live file: %v", err)
+	}
+	if _, err := drive.PurgeFileUnauthorized(ctx, d, "missing"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("unknown id: %v", err)
+	}
+	if vs, err := d.Versions(ctx, "worker", f.ID); err != nil || len(vs) != 1 {
+		t.Fatalf("versions lost: %v %v", vs, err)
+	}
+}
+
+func TestPurgeBlockedByUndeliveredDropAfterExpiry(t *testing.T) {
+	d, w, root := managerFixture(t)
+	ctx := context.Background()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "a"), 0)
+	if _, err := d.EditorSession(ctx, "worker", f.ID, "token"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_editor_sessions SET expires=1`); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := d.PendingRevocations(ctx)
+	if err != nil || len(pending) != 1 {
+		t.Fatal(pending, err)
+	}
+	if _, err = d.PurgeFile(ctx, "worker", f.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("purged before the drop was delivered: %v", err)
+	}
+	if err = d.MarkDropped(ctx, pending[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PurgeFile(ctx, "worker", f.ID); err != nil {
+		t.Fatalf("purge after drop: %v", err)
+	}
+}
