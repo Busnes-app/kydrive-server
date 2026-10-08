@@ -87,7 +87,11 @@ func New(ctx context.Context, db *sql.DB) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err = s.migrate(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func ValidName(name string) bool {
@@ -216,7 +220,7 @@ func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (strin
 			return err
 		}
 		id = uuid.NewString()
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces VALUES(?,?)`, id, user); err != nil {
@@ -236,7 +240,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces VALUES(?,?,?)`, w.ID, name, quota); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, w.ID, name, quota); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "workspace.created", w.ID)
@@ -355,7 +359,7 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		if err := parentOK(ctx, tx, workspace, parent); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name) VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "folder.created", f.ID)
@@ -530,7 +534,7 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 		return ErrQuota
 	}
 	if expected == 0 {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files VALUES(?,?,?,?,?,false)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,revision) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
 			return fmt.Errorf("%w: name or file exists", ErrConflict)
 		}
 	} else {

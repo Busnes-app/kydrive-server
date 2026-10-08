@@ -15,6 +15,7 @@ Own drive schema and domain operations over the application's database and blob 
 - Read current user status and group memberships when authorizing each operation. Global admin can manage workspace configuration; shared content requires an explicit group grant and personal content requires the active owner.
 - Publish immutable, generated blob IDs before transactionally committing version metadata. Check expected revisions and quotas under the transaction. Do not derive disk paths from user filenames.
 - SQLite is the initial supported drive database. Keep domain inputs independent of HTTP.
+- Drive schema changes are append-only entries in `schema.go`, applied once each and recorded in `drive_schema`. Name insert columns explicitly so added columns do not break inserts.
 
 ## Work Guidance
 
