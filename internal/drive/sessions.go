@@ -5,7 +5,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,8 +20,32 @@ type EditorSession struct {
 	Expires               int64
 }
 
-func DocumentKey(file string, revision int64) string { return file + "-" + fmtRevision(revision) }
-func fmtRevision(n int64) string                     { return fmt.Sprintf("%d", n) }
+// DocumentKey names one editor document. Epoch 0 keeps the original "<file>-<revision>" form;
+// a cross-workspace move starts a new epoch so sessions after it never share a key with older ones.
+func DocumentKey(file string, revision, epoch int64) string {
+	key := fmt.Sprintf("%s-%d", file, revision)
+	if epoch > 0 {
+		key += fmt.Sprintf("e%d", epoch)
+	}
+	return key
+}
+
+func ParseDocumentKey(key string) (file string, revision, epoch int64, err error) {
+	at := strings.LastIndex(key, "-")
+	if at < 1 {
+		return "", 0, 0, ErrInvalid
+	}
+	rev, ep, found := strings.Cut(key[at+1:], "e")
+	if revision, err = strconv.ParseInt(rev, 10, 64); err != nil || revision < 1 {
+		return "", 0, 0, ErrInvalid
+	}
+	if found {
+		if epoch, err = strconv.ParseInt(ep, 10, 64); err != nil || epoch < 1 {
+			return "", 0, 0, ErrInvalid
+		}
+	}
+	return key[:at], revision, epoch, nil
+}
 func tokenHash(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
@@ -28,21 +55,24 @@ func (s *Store) EditorSession(ctx context.Context, user, id, token string) (Edit
 	if err != nil || f.Trashed {
 		return EditorSession{}, ErrDenied
 	}
-	e := EditorSession{ID: uuid.NewString(), FileID: id, User: user, Revision: f.Revision, Key: DocumentKey(id, f.Revision), Expires: time.Now().Add(12 * time.Hour).Unix()}
+	e := EditorSession{ID: uuid.NewString(), FileID: id, User: user, Revision: f.Revision, Expires: time.Now().Add(12 * time.Hour).Unix()}
 	editable := s.Authorize(ctx, user, f.Workspace, 2) == nil
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := authorize(ctx, tx, user, f.Workspace, 1); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable) SELECT ?,id,?,?,?,?,? FROM drive_files WHERE id=? AND workspace=? AND revision=? AND trashed=false`, e.ID, e.Revision, user, tokenHash(token), e.Expires, editable, id, f.Workspace, e.Revision)
-		if err != nil {
+		var epoch int64
+		if err := tx.QueryRowContext(ctx, `SELECT editor_epoch FROM drive_files WHERE id=? AND workspace=? AND revision=? AND trashed=false`, id, f.Workspace, e.Revision).Scan(&epoch); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrConflict
+			}
 			return err
 		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			return ErrConflict
+		e.Key = DocumentKey(id, e.Revision, epoch)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable,epoch) VALUES(?,?,?,?,?,?,?,?)`, e.ID, id, e.Revision, user, tokenHash(token), e.Expires, editable, epoch); err != nil {
+			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision) VALUES(?,?,?,?) ON CONFLICT DO NOTHING`, e.Key, id, e.Revision, e.Revision)
+		_, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision) VALUES(?,?,?,?) ON CONFLICT DO NOTHING`, e.Key, id, e.Revision, e.Revision)
 		return err
 	})
 	return e, err
@@ -64,8 +94,8 @@ func (s *Store) EditorDownload(ctx context.Context, id, token string) (File, err
 }
 
 // CallbackActor chooses an authorized participant; ownership does not follow the first opener.
-func (s *Store) CallbackActor(ctx context.Context, file string, revision int64) (string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT user_id FROM drive_editor_sessions WHERE file_id=? AND revision=? AND revoked=false AND expires>?`, file, revision, time.Now().Unix())
+func (s *Store) CallbackActor(ctx context.Context, file string, revision, epoch int64) (string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT user_id FROM drive_editor_sessions WHERE file_id=? AND revision=? AND epoch=? AND revoked=false AND expires>?`, file, revision, epoch, time.Now().Unix())
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +127,7 @@ func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,file_id,revision,user_id,expires FROM drive_editor_sessions WHERE revoked=true AND drop_done=false LIMIT 100`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,file_id,revision,epoch,user_id,expires FROM drive_editor_sessions WHERE revoked=true AND drop_done=false LIMIT 100`)
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +135,11 @@ func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error)
 	out := []EditorSession{}
 	for rows.Next() {
 		var e EditorSession
-		if err = rows.Scan(&e.ID, &e.FileID, &e.Revision, &e.User, &e.Expires); err != nil {
+		var epoch int64
+		if err = rows.Scan(&e.ID, &e.FileID, &e.Revision, &epoch, &e.User, &e.Expires); err != nil {
 			return nil, err
 		}
-		e.Key = DocumentKey(e.FileID, e.Revision)
+		e.Key = DocumentKey(e.FileID, e.Revision, epoch)
 		out = append(out, e)
 	}
 	return out, rows.Err()

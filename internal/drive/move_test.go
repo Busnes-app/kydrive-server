@@ -233,11 +233,78 @@ func TestCrossWorkspaceMoveEndsScopedEditorSessions(t *testing.T) {
 	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "plan.txt"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = d.CallbackActor(ctx, f.ID, 1); !errors.Is(err, drive.ErrDenied) {
+	if _, err = d.CallbackActor(ctx, f.ID, 1, 0); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("moved file still accepts the source-scoped session: %v", err)
 	}
 	pending, err := d.PendingRevocations(ctx)
 	if err != nil || len(pending) != 1 {
 		t.Fatalf("drop not queued: %+v %v", pending, err)
+	}
+}
+
+// A callback that resolved its actor before a cross-workspace move must not publish afterwards,
+// even when the actor can reach the destination. Sessions opened after the move get a new key.
+func TestCrossWorkspaceMoveFencesInFlightEditorCallbacks(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, root, "p"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := d.EditorSession(drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2}), "worker", f.ID, "service-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, revision, epoch, err := drive.ParseDocumentKey(old.Key)
+	if err != nil || file != f.ID || revision != 1 || epoch != 0 {
+		t.Fatalf("parse %q: %s %d %d %v", old.Key, file, revision, epoch, err)
+	}
+	// The callback resolves its actor, then the move commits before it publishes.
+	actor, err := d.CallbackActor(ctx, file, revision, epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "plan.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := d.File(ctx, actor, f.ID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PublishEditor(ctx, actor, moved, blob(t, root, "late"), old.Key, true); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("in-flight callback published after the move: %v", err)
+	}
+	if vs, _ := d.Versions(ctx, "worker", f.ID); len(vs) != 1 {
+		t.Fatalf("versions after fenced callback: %d", len(vs))
+	}
+	fresh, err := d.EditorSession(ctx, "worker", f.ID, "fresh-token")
+	if err != nil || fresh.Key == old.Key {
+		t.Fatalf("new session key %q (old %q): %v", fresh.Key, old.Key, err)
+	}
+	if _, err = d.PublishEditor(ctx, "worker", moved, blob(t, root, "new"), fresh.Key, true); err != nil {
+		t.Fatalf("new session cannot save: %v", err)
+	}
+}
+
+func TestDocumentKeyRoundTrip(t *testing.T) {
+	for _, c := range []struct{ rev, epoch int64 }{{1, 0}, {7, 0}, {3, 2}} {
+		key := drive.DocumentKey("0f6c7c2e-1111-4a2b-9c3d-123456789abc", c.rev, c.epoch)
+		file, rev, epoch, err := drive.ParseDocumentKey(key)
+		if err != nil || file != "0f6c7c2e-1111-4a2b-9c3d-123456789abc" || rev != c.rev || epoch != c.epoch {
+			t.Errorf("%q: %s %d %d %v", key, file, rev, epoch, err)
+		}
+	}
+	for _, bad := range []string{"", "nodash", "-1", "f-0", "f-x", "f-1e0", "f-1e", "f-1ex"} {
+		if _, _, _, err := drive.ParseDocumentKey(bad); !errors.Is(err, drive.ErrInvalid) {
+			t.Errorf("%q accepted: %v", bad, err)
+		}
 	}
 }

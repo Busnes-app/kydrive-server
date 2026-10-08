@@ -434,18 +434,12 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, 200, map[string]int{"error": 0})
 		return
 	}
-	at := strings.LastIndex(cb.Key, "-")
-	if at < 1 {
-		s.driveError(w, drive.ErrInvalid)
-		return
-	}
-	id := cb.Key[:at]
-	revision, err := strconv.ParseInt(cb.Key[at+1:], 10, 64)
+	id, revision, epoch, err := drive.ParseDocumentKey(cb.Key)
 	if err != nil {
-		s.driveError(w, drive.ErrInvalid)
+		s.driveError(w, err)
 		return
 	}
-	user, err := s.store.Drive().CallbackActor(r.Context(), id, revision)
+	user, err := s.store.Drive().CallbackActor(r.Context(), id, revision, epoch)
 	if err != nil {
 		s.driveError(w, err)
 		return

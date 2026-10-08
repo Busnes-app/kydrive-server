@@ -20,6 +20,8 @@ ALTER TABLE drive_folders_v2 RENAME TO drive_folders;
 CREATE UNIQUE INDEX drive_live_folders ON drive_folders(workspace,parent,name) WHERE trashed=false;
 ALTER TABLE drive_workspaces ADD COLUMN trash_days INTEGER NOT NULL DEFAULT 0 CHECK(trash_days BETWEEN 0 AND 3650);
 ALTER TABLE drive_workspaces ADD COLUMN keep_versions INTEGER NOT NULL DEFAULT 0 CHECK(keep_versions BETWEEN 0 AND 1000);`,
+	`ALTER TABLE drive_files ADD COLUMN editor_epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE drive_editor_sessions ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0;`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {

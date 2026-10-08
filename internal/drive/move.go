@@ -59,8 +59,16 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 		}
 		if to.Workspace != f.Workspace {
 			// Sessions were authorized for the source, possibly through a credential scoped to it.
-			if _, err := tx.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE file_id=? AND revoked=false`, id); err != nil {
-				return err
+			// Closing their documents fences callbacks already in flight; the new epoch gives later
+			// sessions fresh document keys.
+			for _, q := range []string{
+				`UPDATE drive_editor_sessions SET revoked=true WHERE file_id=? AND revoked=false`,
+				`UPDATE drive_editor_documents SET closed=true WHERE file_id=?`,
+				`UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id=?`,
+			} {
+				if _, err := tx.ExecContext(ctx, q, id); err != nil {
+					return err
+				}
 			}
 		}
 		return event(ctx, tx, user, "file.moved", fmt.Sprintf("%s:%s->%s", id, f.Workspace, to.Workspace))
