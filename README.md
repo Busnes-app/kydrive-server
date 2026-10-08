@@ -101,7 +101,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion or HA. Interrupted unpublished uploads may leave unreferenced blobs; retain them for operator review rather than deleting potentially recoverable output. An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads may leave unreferenced blobs; retain them for operator review rather than deleting potentially recoverable output. An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 

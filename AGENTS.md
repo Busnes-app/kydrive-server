@@ -104,7 +104,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 ## Verification
 - `PATH=/path/to/restic:$PATH go test -race ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable.
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
-- `scripts/smoke-test.sh` against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
+- `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.
 - Native T3 browser evidence and remaining gates are recorded in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`.
 
