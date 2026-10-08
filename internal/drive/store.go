@@ -534,12 +534,8 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
 		return err
 	}
-	var used, quota int64
-	if err := tx.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, f.Workspace, f.Workspace).Scan(&quota, &used); err != nil {
+	if err := fits(ctx, tx, f.Workspace, v.Size); err != nil {
 		return err
-	}
-	if used > quota || v.Size > quota-used {
-		return ErrQuota
 	}
 	if expected == 0 {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,revision) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
@@ -559,4 +555,16 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 		return err
 	}
 	return event(ctx, tx, user, "file.version_created", f.ID)
+}
+
+// fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
+func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
+	var used, quota int64
+	if err := q.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, workspace, workspace).Scan(&quota, &used); err != nil {
+		return err
+	}
+	if used > quota || extra > quota-used {
+		return ErrQuota
+	}
+	return nil
 }
