@@ -49,8 +49,12 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const canPurge = current?.role === 'manager';
   const canManage = current?.kind === 'shared' && (admin || current.role === 'manager');
   const generation = useRef(0);
+  const shown = useRef({ selected, trash });
+  shown.current = { selected, trash };
   const reload = useCallback(async () => {
-    // A reload started for an earlier view (e.g. trash) must not overwrite a newer one.
+    // Load the view on screen now, not the one an earlier action started from,
+    // and let a newer reload win over an older one still in flight.
+    const { selected, trash } = shown.current;
     const mine = ++generation.current;
     const stale = () => mine !== generation.current;
     await change('/api/drive/personal-workspace', 'POST', {});
