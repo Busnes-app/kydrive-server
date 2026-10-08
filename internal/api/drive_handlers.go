@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -43,6 +44,14 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
 	s.mux.HandleFunc("PUT /api/drive/files/{id}/trash", s.requireAuthenticated(s.driveTrash))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/restore", s.requireAuthenticated(s.driveRestore))
+	s.mux.HandleFunc("PUT /api/drive/files/{id}/location", s.requireAuthenticated(s.driveMoveFile))
+	s.mux.HandleFunc("POST /api/drive/files/{id}/copy", s.requireAuthenticated(s.driveCopyFile))
+	s.mux.HandleFunc("DELETE /api/drive/files/{id}", s.requireAuthenticated(s.drivePurgeFile))
+	s.mux.HandleFunc("DELETE /api/drive/files/{id}/versions/{revision}", s.requireAuthenticated(s.drivePurgeVersion))
+	s.mux.HandleFunc("PUT /api/drive/folders/{id}/location", s.requireAuthenticated(s.driveMoveFolder))
+	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
+	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
+	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/editor", s.requireAuthenticated(s.driveEditor))
 	// Only editor-scoped credentials reach these routes; browser sessions grant no access here.
 	s.mux.HandleFunc("GET /api/editor/download/{id}", s.editorDownload)
@@ -519,4 +528,124 @@ func (s *Server) driveStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, map[string]any{"editor_configured": s.editor != nil, "editor_revocations": out, "scim_enabled": s.config.SCIM.Enabled, "identity_authority": "KyIdentity", "bulk_repository_configured": os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY") != ""})
+}
+
+func (s *Server) driveMoveFile(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Revision  int64  `json:"revision"`
+		Workspace string `json:"workspace"`
+		Parent    string `json:"parent"`
+		Name      string `json:"name"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	out, err := s.store.Drive().MoveFile(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Revision, drive.Location{Workspace: in.Workspace, Parent: in.Parent, Name: in.Name})
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	// A move to another workspace can take away someone's access to an open document.
+	if _, err := s.store.Drive().PendingRevocations(r.Context()); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, out)
+}
+func (s *Server) driveCopyFile(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Workspace string `json:"workspace"`
+		Parent    string `json:"parent"`
+		Name      string `json:"name"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	out, err := s.store.Drive().CopyFile(r.Context(), s.driveUser(r).ID, r.PathValue("id"), drive.Location{Workspace: in.Workspace, Parent: in.Parent, Name: in.Name})
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 201, out)
+}
+func (s *Server) driveMoveFolder(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Parent string `json:"parent"`
+		Name   string `json:"name"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	out, err := s.store.Drive().MoveFolder(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Parent, in.Name)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, out)
+}
+func (s *Server) driveFolderTrash(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Trashed bool `json:"trashed"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	if err := s.store.Drive().SetFolderTrash(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Trashed); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	if _, err := s.store.Drive().PendingRevocations(r.Context()); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]bool{"applied": true})
+}
+func (s *Server) drivePurgeFile(w http.ResponseWriter, r *http.Request) {
+	blobs, err := s.store.Drive().PurgeFile(r.Context(), s.driveUser(r).ID, r.PathValue("id"))
+	s.purged(w, blobs, err)
+}
+func (s *Server) drivePurgeFolder(w http.ResponseWriter, r *http.Request) {
+	blobs, err := s.store.Drive().PurgeFolder(r.Context(), s.driveUser(r).ID, r.PathValue("id"))
+	s.purged(w, blobs, err)
+}
+func (s *Server) drivePurgeVersion(w http.ResponseWriter, r *http.Request) {
+	revision, err := strconv.ParseInt(r.PathValue("revision"), 10, 64)
+	if err != nil || revision < 1 {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	blobs, err := s.store.Drive().PurgeVersion(r.Context(), s.driveUser(r).ID, r.PathValue("id"), revision)
+	s.purged(w, blobs, err)
+}
+
+// purged removes blobs only after their metadata is gone; a failed removal costs disk space,
+// never a version without bytes.
+func (s *Server) purged(w http.ResponseWriter, blobs []string, err error) {
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	if err = drive.RemoveBlobs(s.blobRoot(), blobs); err != nil {
+		log.Printf("purged blob cleanup: %v", err)
+	}
+	s.writeJSON(w, 200, map[string]bool{"purged": true})
+}
+func (s *Server) driveRetention(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		TrashDays    int `json:"trash_days"`
+		KeepVersions int `json:"keep_versions"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	if err := s.store.Drive().SetRetention(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.TrashDays, in.KeepVersions); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]bool{"applied": true})
 }
