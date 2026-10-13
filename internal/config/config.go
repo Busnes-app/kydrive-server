@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/ky-primitives/keyfile"
 )
 
@@ -236,7 +237,17 @@ func LoadFromEnv() (*Config, error) {
 		},
 	}
 
-	if env == "production" && cfg.SCIM.Enabled && os.Getenv("KY_SCIM_TOKEN") == "" {
+	if file := os.Getenv("KY_SCIM_TOKEN_FILE"); file != "" {
+		token, err := applysetup.Secret(file)
+		if err != nil {
+			return nil, err
+		}
+		if explicit := os.Getenv("KY_SCIM_TOKEN"); explicit != "" && explicit != token {
+			return nil, fmt.Errorf("conflicting SCIM token sources")
+		}
+		cfg.SCIM.BearerToken = token
+	}
+	if env == "production" && cfg.SCIM.Enabled && os.Getenv("KY_SCIM_TOKEN") == "" && os.Getenv("KY_SCIM_TOKEN_FILE") == "" {
 		return nil, fmt.Errorf("KY_SCIM_TOKEN is required for production provisioning")
 	}
 	return cfg, nil

@@ -82,6 +82,11 @@ KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyD
 Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared verification and operator documentation. Domain packages own contracts in the Child DOX Index.
 
 ## Local Contracts
+- `apply-setup` is the installer boundary: bounded private bundle, capabilities, read-only check and explicit graceful restart. A private data-directory Unix socket reaches the running server. New directory identities and settings are audited and owned by stable setup ID; existing accounts are never adopted. See `docs/INSTALLER-SETUP.md` for supported fields and remaining setup gates.
+- `apply-setup --stage` prepares immutable secret-free metadata at
+  `<KY_DATA_DIR>/installer/<setup UUID>/setup.json` through shared `applysetup` authority.
+  It requires protected data-directory ancestry; check creates nothing. Preparation
+  requires native SCIM references for SSO and creates no credentials, identities or settings.
 - One SQLite writer and immutable filesystem blobs; target linux/amd64. PostgreSQL code inherited from the base is not a supported drive deployment.
 - Read `../DRIVE_IMPLEMENTATION_PLAN.md` and `docs/ACCEPTANCE.md` for scope and gates. A local pass is not production readiness or a suite-wide installer.
 - Personal files belong to one active account’s private workspace; shared files use group grants. The sidebar lists My files and shared workspaces directly. New file creates blank DOCX/XLSX/PPTX and opens Euro-Office.
@@ -103,6 +108,8 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 
 ## Verification
 - `PATH=/path/to/restic:$PATH go test -race ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable.
+- `go test -race ./cmd/server -run '^TestInstallerPreparation$' -count=1` checks native
+  metadata staging/check/resume and input refusal without UI rendering or a running server.
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
 - `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.

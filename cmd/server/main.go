@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/ky-primitives/password"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/api"
@@ -29,6 +30,11 @@ const appVersion = "0.1.0"
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "apply-setup":
+			if err := runInstaller(os.Args[2:]); err != nil {
+				log.Fatal(err)
+			}
+			return
 		case "bulk-init":
 			cfg, err := config.LoadFromEnv()
 			if err != nil {
@@ -147,6 +153,9 @@ func runServer() {
 		log.Fatalf("Failed to initialize database (%s): %v", cfg.Database.Driver, err)
 	}
 	defer st.Close()
+	if err := loadInstallerConfiguration(ctx, cfg, st); err != nil {
+		log.Fatal("Installer configuration refused: ", err)
+	}
 
 	// Ensure default admin user exists if database is empty
 	count, _ := st.Users().CountUsers(ctx)
@@ -199,6 +208,20 @@ func runServer() {
 	// Graceful shutdown channel
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	socket, err := config.InstallerSocket(cfg.Database.DataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	closeSetup, err := applysetup.StartLocal(ctx, socket, srv.ApplyInstaller, func() {
+		select {
+		case stop <- syscall.SIGTERM:
+		default:
+		}
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeSetup()
 
 	go func() {
 		log.Printf("[KY-BASE] %s listening on http://%s (DB: %s)", cfg.Server.AppName, addr, cfg.Database.Driver)
@@ -209,6 +232,9 @@ func runServer() {
 
 	<-stop
 	log.Println("[KY-BASE] Shutting down gracefully...")
+	if err := closeSetup(); err != nil {
+		log.Print("Installer control shutdown failed")
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()

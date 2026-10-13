@@ -4,6 +4,7 @@
 Own restore instructions, local acceptance evidence and captured product UI assets.
 
 ## Ownership
+`INSTALLER-SETUP.md` owns the container-local setup schema, runtime activation and adapter limitations.
 `RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans; its roadmap file records milestone decisions. Root README owns configuration; root STATUS owns handoff.
 
 ## Local Contracts
