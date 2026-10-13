@@ -1,6 +1,6 @@
 module github.com/Busnes-app/kydrive-server
 
-go 1.26.6
+go 1.26.9
 
 require (
 	github.com/Busnes-app/ky-primitives v0.9.0
@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.60.1
 )
 
