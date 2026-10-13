@@ -7,9 +7,8 @@ requests graceful shutdown so the workload controller can activate saved configu
 The installer waits for a successful check with no pending activation. Use Docker's
 `always`/`unless-stopped` policy or a Kubernetes controller that restarts the process.
 
-The binary and the new `ky-primitives/applysetup` package must be built together until
-that library package has a published release. The development workspace is explicit;
-existing released images do not gain this command automatically.
+The command uses `ky-primitives/applysetup` from ky-primitives v0.10.0. Images released
+before this change do not have it.
 
 The `bundle-preparation` capability enables secret-free metadata preparation without a
 running server. Set `KY_DATA_DIR` to the existing protected runtime-owned data directory,
