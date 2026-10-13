@@ -113,6 +113,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
 - `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.
+- Publishing a GitHub release `vX.Y.Z` runs `release-image.yml`. It refuses a malformed tag, a tag that disagrees with both `appVersion` constants and `web/package.json`, and any commit on which a ci.yml job in its `REQUIRED` list (`test`) did not pass. It then builds `:X.Y.Z` with provenance and SBOM, attests and verifies it (identity `release-image.yml@refs/tags/vX.Y.Z`), and moves `:stable` to that digest only for the highest non-prerelease. `:stable` is the only mutable tag; master CI publishes commit tags only. A job added to ci.yml must be added to `REQUIRED` too.
 - Native T3 browser evidence and remaining gates are recorded in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`.
 
 ## Child DOX Index
