@@ -7,6 +7,7 @@ Manages environment and file-based configuration loading, defaults, and type con
 Owns environment variable parsing, configuration validation, default fallbacks, and security key generations.
 
 ## Local Contracts
+- `KY_SCIM_TOKEN_FILE` reads an existing private target-owned credential through `applysetup.Secret`; conflicting token sources fail. Installer configuration references credentials, never embeds them. Startup merges only absent SSO settings, refusing operator conflicts and automatic provisioning; SCIM must already have the matching durable token.
 - `LoadFromEnv() (*Config, error)` must supply safe, valid defaults for all subsystems.
 - Never log plaintext secrets or sensitive tokens.
 - `KY_TRUSTED_PROXIES` is a comma-separated list of reverse-proxy IPs or CIDRs, empty by default, parsed once at startup into `[]netip.Prefix`; an unparsable entry fails startup. Only a request whose peer address is in the list may speak for another client through `X-Forwarded-For`. `0.0.0.0/0` and `::/0` are refused at startup; list only the proxy's own address or subnet.

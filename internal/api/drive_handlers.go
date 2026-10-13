@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -61,7 +62,8 @@ func (s *Server) driveRoutes() {
 			s.writeError(w, 503, "Database unavailable")
 			return
 		}
-		s.writeJSON(w, 200, map[string]string{"service": "kydrive", "status": "ok"})
+		clientIP, trusted, scheme := auth.RequestNetwork(r, s.config.Security.TrustedProxies)
+		s.writeJSON(w, 200, map[string]any{"service": "kydrive", "status": "ok", "clientIp": clientIP, "proxyHeadersTrusted": trusted, "scheme": scheme})
 	})
 }
 

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
@@ -22,6 +23,8 @@ type Store interface {
 	Groups() GroupStore
 	Audit() AuditStore
 	Settings() SettingsStore
+	ApplyInstaller(context.Context, applysetup.Common, bool) (applysetup.Report, error)
+	InstallerAdministrator(context.Context, string) (bool, error)
 
 	Driver() string
 	Ping(ctx context.Context) error

@@ -2,11 +2,30 @@ package auth_test
 
 import (
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 )
+
+func TestRequestNetworkRefusesForgedPeerAndUsesNearestProxy(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.9/32")}
+	r := httptest.NewRequest("GET", "http://drive.test/healthz", nil)
+	r.RemoteAddr = "203.0.113.9:1234"
+	r.Header.Set("X-Forwarded-For", "198.51.100.66")
+	r.Header.Set("X-Forwarded-Proto", "https")
+	if ip, accepted, scheme := auth.RequestNetwork(r, trusted); ip != "203.0.113.9" || accepted || scheme != "http" {
+		t.Fatal(ip, accepted, scheme)
+	}
+	r.RemoteAddr = "10.0.0.9:1234"
+	r.Header.Set("X-Forwarded-For", "198.51.100.66, 203.0.113.9")
+	r.Header.Set("X-Forwarded-Proto", "http")
+	r.Header.Add("X-Forwarded-Proto", "https")
+	if ip, accepted, scheme := auth.RequestNetwork(r, trusted); ip != "203.0.113.9" || !accepted || scheme != "https" {
+		t.Fatal(ip, accepted, scheme)
+	}
+}
 
 func TestClientIP(t *testing.T) {
 	tests := []struct {

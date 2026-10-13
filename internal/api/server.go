@@ -305,6 +305,9 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			ctx := drive.WithServiceAccess(r.Context(), access)
+			if !s.allowInstallerActor(w, r, user) {
+				return
+			}
 			h(w, r.WithContext(context.WithValue(ctx, driveUserKey{}, user)))
 			return
 		}
@@ -315,6 +318,9 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 			} else {
 				s.writeError(w, http.StatusUnauthorized, "Authentication required")
 			}
+			return
+		}
+		if !s.allowInstallerActor(w, r, user) {
 			return
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), driveUserKey{}, user)))

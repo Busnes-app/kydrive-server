@@ -7,6 +7,8 @@ Exposes HTTP REST routes, authentication endpoints, Single Sign-On callbacks, SC
 Owns HTTP routing, request parsing, session cookie validation, CORS headers, and error response formatting.
 
 ## Local Contracts
+- `ApplyInstaller` is a private Unix-socket callback, never a public route. It validates desired configuration before transactional writes and reports restart pending until the running snapshot matches. Dedicated installer administrators cannot create personal workspaces, access files/editor sessions or mint service credentials; shared-workspace management remains available. Existing mixed-use accounts require explicit migration.
+- `GET /healthz` reports `clientIp`, `proxyHeadersTrusted` and `scheme` from the same peer allowlist used by authentication. Installer ownership/configuration rows are omitted from `/api/settings`.
 - POST `/api/auth/change-password` accepts a restricted local session, current password and a different policy-valid new password. Browser CSRF and per-IP/account limits apply. Success revokes all sessions and requires sign-in again; flagged sessions get `password_change_required` on protected routes and public-only settings.
 - `GET /api/auth/me` includes `open_in_new_tab`. `PUT /api/auth/preferences` takes exactly `{"open_in_new_tab": bool}` from a session (CSRF-checked; service tokens and restricted sessions refused) and changes only the caller's own preference. `preferences_test.go` pins validation.
 - All JSON API endpoints return structured errors `{"error": "message"}` upon failure.
