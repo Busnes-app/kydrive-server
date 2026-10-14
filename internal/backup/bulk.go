@@ -15,9 +15,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"golang.org/x/sys/unix"
 )
 
 const BulkManifestPath = "data/drive-bulk.json"
@@ -72,12 +74,24 @@ func restic(ctx context.Context, repo string, key []byte, dir string, args ...st
 	cmd.Env = append(cmd.Env, "RESTIC_PASSWORD="+hex.EncodeToString(key))
 	// Commands never run through a shell. Restic owns authenticated encryption and deduplication.
 	var out limitedBuffer
+	var stderr tailBuffer
 	cmd.Stdout = &out
-	cmd.Stderr = io.Discard
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("restic %s failed: %w", args[0], err)
+		return nil, fmt.Errorf("restic %s failed: %w: %s", args[0], err, bytes.TrimSpace(stderr.b))
 	}
 	return out.Bytes(), nil
+}
+
+// tailBuffer keeps the last 2 KiB written, where restic puts the reason it failed.
+type tailBuffer struct{ b []byte }
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if len(t.b) > 2<<10 {
+		t.b = t.b[len(t.b)-2<<10:]
+	}
+	return len(p), nil
 }
 
 type limitedBuffer struct{ bytes.Buffer }
@@ -142,7 +156,18 @@ func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkF
 	}
 	return files, rows.Err()
 }
-func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]byte, error) {
+
+// Purpose tags a bulk snapshot with why it was taken, so retention treats deposits apart
+// from drills and exports. Snapshots from before tagging carry only "kydrive".
+type Purpose string
+
+const (
+	PurposeDeposit Purpose = "deposit"
+	PurposeDrill   Purpose = "drill"
+	PurposeExport  Purpose = "export"
+)
+
+func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte, purpose Purpose) ([]byte, error) {
 	files, err := snapshotFiles(ctx, dbBytes, dataDir)
 	if err != nil {
 		return nil, err
@@ -154,6 +179,11 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]by
 	if err != nil {
 		return nil, err
 	}
+	lock, err := lockFile(dataDir, bulkLock, true)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Close()
 	stage, err := os.MkdirTemp(dataDir, "bulk-stage-*")
 	if err != nil {
 		return nil, err
@@ -178,7 +208,7 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]by
 			return nil, err
 		}
 	}
-	out, err := restic(ctx, repo, key, stage, "backup", "--json", "--tag", "kydrive", "blobs")
+	out, err := restic(ctx, repo, key, stage, "backup", "--json", "--tag", "kydrive,"+string(purpose), "blobs")
 	if err != nil {
 		return nil, err
 	}
@@ -305,4 +335,62 @@ func RestoreBulk(ctx context.Context, openedDir, repository, target string) erro
 		return err
 	}
 	return drive.SyncDirectory(parent)
+}
+
+// PruneBulk forgets bulk snapshots outside policy, then prunes unreferenced data. Off forgets
+// nothing. The newest keepLast deposit snapshots, and the newest keepLast of any kind (which
+// covers untagged ones a retained local copy may still name), are never forgotten. Prune runs
+// even when nothing was forgotten, so a run that died after forget is finished by the next.
+// Another bulk operation holding the lock returns ErrBulkBusy.
+func PruneBulk(ctx context.Context, dataDir string, key []byte, policy BulkPolicy, keepLast int) (int, error) {
+	if policy.Off() {
+		return 0, nil
+	}
+	if err := policy.validate(); err != nil || keepLast < 1 {
+		return 0, ErrBadBulkPolicy
+	}
+	lock, err := lockFile(dataDir, bulkLock, false)
+	if errors.Is(err, unix.EWOULDBLOCK) {
+		return 0, ErrBulkBusy
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer lock.Close()
+	repo, err := bulkRepository(dataDir)
+	if err != nil {
+		return 0, err
+	}
+	last := strconv.Itoa(keepLast)
+	// keep-daily and friends count days that have snapshots, so a tag that stops receiving
+	// them (legacy, rare exports) never ages out under them; it ages out by date instead.
+	horizon := fmt.Sprintf("%dd", max(policy.Daily, 7*policy.Weekly, 31*policy.Monthly))
+	passes := [][]string{
+		{"--tag", "kydrive," + string(PurposeDeposit), "--keep-last", last, "--keep-daily", strconv.Itoa(policy.Daily),
+			"--keep-weekly", strconv.Itoa(policy.Weekly), "--keep-monthly", strconv.Itoa(policy.Monthly)},
+		{"--tag", "kydrive", "--keep-tag", string(PurposeDeposit), "--keep-last", last, "--keep-within", horizon},
+		// A drill capsule never leaves the server; its snapshot is needed only while it runs.
+		{"--tag", "kydrive," + string(PurposeDrill), "--keep-within", "1d"},
+	}
+	forgotten := 0
+	for _, pass := range passes {
+		out, err := restic(ctx, repo, key, "", append([]string{"forget", "--json", "--group-by", ""}, pass...)...)
+		if err != nil {
+			return forgotten, err
+		}
+		// No matching snapshot prints nothing at all.
+		var groups []struct {
+			Remove []json.RawMessage `json:"remove"`
+		}
+		if len(bytes.TrimSpace(out)) > 0 {
+			if err = json.Unmarshal(out, &groups); err != nil {
+				return forgotten, err
+			}
+		}
+		for _, g := range groups {
+			forgotten += len(g.Remove)
+		}
+	}
+	_, err = restic(ctx, repo, key, "", "prune")
+	return forgotten, err
 }

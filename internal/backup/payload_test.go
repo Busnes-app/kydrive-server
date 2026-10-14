@@ -27,7 +27,7 @@ func payloadConfig(t *testing.T) (*config.Config, []byte) {
 // a restore without it hands the operator a database whose MFA secrets are gone for good.
 func TestCollectCarriesTheEncryptionKey(t *testing.T) {
 	cfg, key := payloadConfig(t)
-	payload, err := backup.Collect(context.Background(), cfg, "1.0.0")
+	payload, err := backup.Collect(context.Background(), cfg, "1.0.0", backup.PurposeDeposit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestCollectCarriesTheRecoveryPublicKeyWhenPaired(t *testing.T) {
 	cfg, _ := payloadConfig(t)
 	ctx := context.Background()
 
-	unpaired, err := backup.Collect(ctx, cfg, "1.0.0")
+	unpaired, err := backup.Collect(ctx, cfg, "1.0.0", backup.PurposeDeposit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestCollectCarriesTheRecoveryPublicKeyWhenPaired(t *testing.T) {
 	if err := os.WriteFile(pubPath, pub, 0600); err != nil {
 		t.Fatal(err)
 	}
-	paired, err := backup.Collect(ctx, cfg, "1.0.0")
+	paired, err := backup.Collect(ctx, cfg, "1.0.0", backup.PurposeDeposit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func findFile(files []recoveryclient.File, path string) *recoveryclient.File {
 func TestCollectRefusesAShortKey(t *testing.T) {
 	cfg, _ := payloadConfig(t)
 	cfg.Security.EncryptionKey = cfg.Security.EncryptionKey[:16]
-	if _, err := backup.Collect(context.Background(), cfg, "1.0.0"); err == nil {
+	if _, err := backup.Collect(context.Background(), cfg, "1.0.0", backup.PurposeDeposit); err == nil {
 		t.Fatal("a 16-byte encryption key was accepted")
 	}
 }
@@ -122,7 +122,7 @@ func TestSnapshotSeesUncheckpointedCommit(t *testing.T) {
 	if err := st.Settings().SetSetting(ctx, "canary", "still-in-the-wal"); err != nil {
 		t.Fatal(err)
 	}
-	payload, err := backup.Collect(ctx, cfg, "1.0.0")
+	payload, err := backup.Collect(ctx, cfg, "1.0.0", backup.PurposeDeposit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestSnapshotSeesUncheckpointedCommit(t *testing.T) {
 func TestCollectRefusesADriverItCannotSnapshot(t *testing.T) {
 	cfg, _ := payloadConfig(t)
 	cfg.Database.Driver = "postgres"
-	if _, err := backup.Collect(context.Background(), cfg, "1.0.0"); !errors.Is(err, backup.ErrNoDatabaseSnapshot) {
+	if _, err := backup.Collect(context.Background(), cfg, "1.0.0", backup.PurposeDeposit); !errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		t.Fatalf("got %v, want ErrNoDatabaseSnapshot", err)
 	}
 }

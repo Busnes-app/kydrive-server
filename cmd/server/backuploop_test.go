@@ -5,11 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 // A deployment key that cannot seal is a configuration fault, not a run that might succeed
@@ -106,5 +110,31 @@ func TestWaitForBackupWorkWaitsBothAtOnce(t *testing.T) {
 	})
 	if !finished.Load() {
 		t.Fatal("the detached-handler wait had not run when waitForBackupWork returned; a hung scheduled deposit consumed its whole budget")
+	}
+}
+
+// A scheduled prune is audited as system with its outcome, including restic never starting.
+func TestPruneBulkAuditsAsSystem(t *testing.T) {
+	ctx := context.Background()
+	dbCfg := testdb.Config(t)
+	dbCfg.DataDir = t.TempDir()
+	st, err := store.Open(ctx, dbCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", "")
+	cfg := &config.Config{Database: dbCfg, Security: config.SecurityConfig{EncryptionKey: make([]byte, 32)}, Backup: config.BackupConfig{Keep: 1}}
+	if err := backup.SetBulkPolicy(backup.Settings(ctx, st.Settings()), backup.BulkPolicy{Daily: 7}); err != nil {
+		t.Fatal(err)
+	}
+	pruneBulk(ctx, ctx, cfg, st)
+	pruneBulk(ctx, ctx, cfg, st) // within the day: no second row
+	records, _, err := st.Audit().ListAuditRecords(ctx, 0, 10)
+	if err != nil || len(records) != 1 {
+		t.Fatalf("audit rows: %v %v", records, err)
+	}
+	if r := records[0]; r.UserID != "system" || r.Action != "backup.bulk_prune" || !strings.HasPrefix(r.Details, `outcome="failure" forgotten="0" error=`) || !strings.Contains(r.Details, "KYDRIVE_BULK_BACKUP_REPOSITORY") {
+		t.Fatalf("audit row: %+v", r)
 	}
 }

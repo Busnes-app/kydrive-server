@@ -136,6 +136,7 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 		{"DELETE", "/api/backup/pairing"},
 		{"POST", "/api/backup/pin-key"},
 		{"PUT", "/api/backup/schedule"},
+		{"PUT", "/api/backup/bulk-retention"},
 		{"GET", "/api/backup/status"},
 		{"POST", "/api/settings/theme"},
 	}

@@ -9,7 +9,7 @@ checks (`Checks`).
 
 ## Ownership
 Owns the settings adapter (`settings.go`), payload collection (`payload.go`), and restore-drill
-checks (`drill.go`) and serialized drill entry point (`run_drill.go`). It holds no private key, no share, and no pairing state of its own — those
+checks (`drill.go`), serialized drill entry point and locks (`run_drill.go`), Restic bulk binding and pruning (`bulk.go`) and the bulk retention policy (`retention.go`). It holds no private key, no share, and no pairing state of its own — those
 live in `recoveryclient` and in the settings rows it reads and writes through the adapter.
 
 ## Local Contracts
@@ -50,13 +50,20 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
 - `Collect` also seals `config/integrations.json` with session, OIDC, SCIM and editor secrets. Keep this member out of responses and logs.
 - A drive with versions requires `KYDRIVE_BULK_BACKUP_REPOSITORY` outside its primary data directory. Restic encrypts/deduplicates the exact blobs referenced by the SQLite snapshot; `data/drive-bulk.json` binds snapshot ID, blob UUIDs, sizes and SHA-256 digests to the sealed capsule.
 - `drive-bulk.json` is version 2: each file carries `sealed`, and a sealed blob is checked at `drive.SealedSize` and decrypted to verify its plaintext digest. `RestoreBulk` accepts version 1 (plaintext blobs only) and version 2; restore decrypts with the key the capsule carries.
-- `RestoreBulk` compares manifest references with the restored database and authenticates/verifies every file before publishing a new blobs directory. Drills perform this restore in scratch space. No automatic pruning of snapshots named by retained capsules.
+- `RestoreBulk` compares manifest references with the restored database and authenticates/verifies every file before publishing a new blobs directory. Drills perform this restore in scratch space.
+- Bulk snapshots are tagged `kydrive` plus the `Collect` purpose (`deposit`, `drill`, `export`); older ones carry only `kydrive`.
+- `PruneBulk` is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design. It runs three `restic forget --group-by ''` passes, then always `prune` (so a run killed after forget is finished by the next): deposits keep the policy plus `--keep-last KY_BACKUP_KEEP`; every non-deposit snapshot outside the policy horizon (max of days, 7×weeks, 31×months) goes, except the newest KY_BACKUP_KEEP of any kind, which covers untagged ones a retained local copy names; drill snapshots go after a day. Restic's `--keep-daily` counts days that have snapshots, so per-tag grouping would never age out legacy or rare export snapshots.
+- `PruneBulkIfDue` (scheduler, after a successful scheduled deposit) runs it at most once per 24 hours and records every attempt, success or failure, in `bulk_last_prune`. The policy is the `bulk_retention` setting; all zero is off.
+- `<data dir>/bulk.lock` serializes bulk repository use across processes: `CollectBulk` and `RunDrill` (around the drill's bulk restore) wait for it; `PruneBulk` returns `ErrBulkBusy` and the prune is skipped until the next deposit. `restic` failures carry the tail of its stderr.
 
 ## Verification
 - `go test -v ./internal/backup/...` covers decoded seal/open checks, malformed recipes,
   subprocess lock contention/exit, scratch cleanup and the synthetic KyDrive pairing fixture
   in `testdata/pairing-kydrive.json`. The fixture uses a 32-byte 0x01 deployment key and retains
   no recovery private key.
+- `bulk_test.go` needs `restic` on PATH (it skips otherwise; run with `-v` and confirm it did not skip). It pins that a purged blob
+  leaves the repository after prune (`restic list blobs`, `check --read-data`), the newest capsule still restores, an off policy
+  forgets nothing, legacy and drill snapshots age out, and `bulk.lock` contention.
 
 ## Child DOX Index
 None.

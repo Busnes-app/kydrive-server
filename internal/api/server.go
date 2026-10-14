@@ -245,6 +245,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/backup/pairing", s.requireAdmin(s.handleUnpair))
 	s.mux.HandleFunc("POST /api/backup/pin-key", s.tracked(s.requireAdmin(s.handlePinKey)))
 	s.mux.HandleFunc("PUT /api/backup/schedule", s.requireAdmin(s.handleSetSchedule))
+	s.mux.HandleFunc("PUT /api/backup/bulk-retention", s.requireAdmin(s.handleSetBulkRetention))
 	s.mux.HandleFunc("GET /api/backup/status", s.requireAdmin(s.handleBackupStatus))
 
 	// Settings & Theme. The read endpoint tiers its own payload by role.

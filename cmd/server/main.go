@@ -330,7 +330,9 @@ func runBackup(ctx context.Context, cfg *config.Config, st store.Store) (recover
 	}
 	client := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 	return recoveryclient.Run(ctx, rc, backup.Settings(ctx, st.Settings()),
-		func() (recoveryclient.Payload, error) { return backup.Collect(ctx, cfg, appVersion) }, client)
+		func() (recoveryclient.Payload, error) {
+			return backup.Collect(ctx, cfg, appVersion, backup.PurposeDeposit)
+		}, client)
 }
 
 // backupLoop polls the admin's schedule once a minute; a change in the UI needs no restart
@@ -366,12 +368,35 @@ func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done ch
 		}
 		runCtx := context.WithoutCancel(ctx)
 		res, err := recoveryclient.Run(runCtx, rc, backup.Settings(runCtx, st.Settings()),
-			func() (recoveryclient.Payload, error) { return backup.Collect(runCtx, cfg, appVersion) }, client)
+			func() (recoveryclient.Payload, error) {
+				return backup.Collect(runCtx, cfg, appVersion, backup.PurposeDeposit)
+			}, client)
 		if errors.Is(err, recoveryclient.ErrNotPaired) || errors.Is(err, recoveryclient.ErrNoDestination) {
 			continue // never configured; nothing to report
 		}
 		recordRun(runCtx, st, "system", res, err)
+		if err == nil {
+			// Cancellable: restic leaves a repository consistent when killed mid-prune.
+			pruneBulk(ctx, runCtx, cfg, st)
+		}
 	}
+}
+
+// pruneBulk applies the admin's bulk retention, at most daily, and audits each run as system.
+func pruneBulk(ctx, runCtx context.Context, cfg *config.Config, st store.Store) {
+	res, ran, err := backup.PruneBulkIfDue(ctx, cfg, backup.Settings(runCtx, st.Settings()), time.Now())
+	if !ran {
+		if err != nil {
+			log.Printf("[BACKUP] bulk prune skipped: %s", recoveryclient.AuditSafe(err.Error()))
+		}
+		return
+	}
+	details := map[string]any{"outcome": "success", "forgotten": res.Forgotten}
+	if err != nil {
+		details["outcome"], details["error"] = "failure", err.Error()
+		log.Printf("[BACKUP] bulk prune: %s", recoveryclient.AuditSafe(err.Error()))
+	}
+	_ = st.Audit().LogAudit(runCtx, &store.AuditRecord{UserID: "system", Action: "backup.bulk_prune", Details: api.AuditDetails(details)})
 }
 
 // recordRun audits one run the same way the admin route does, under the actor that started it.
@@ -463,8 +488,8 @@ func runInitAdmin(args []string) {
 }
 
 // collectFiles is what every CLI seal uses; the sealed-only members are safe here and nowhere else.
-func collectFiles(ctx context.Context, cfg *config.Config) recoveryclient.Payload {
-	payload, err := backup.Collect(ctx, cfg, appVersion)
+func collectFiles(ctx context.Context, cfg *config.Config, purpose backup.Purpose) recoveryclient.Payload {
+	payload, err := backup.Collect(ctx, cfg, appVersion, purpose)
 	if err != nil {
 		log.Fatalf("Failed to collect backup files: %v", err)
 	}
@@ -483,7 +508,7 @@ func runBackupDrill(args []string) {
 	}
 	defer st.Close()
 
-	payload := collectFiles(ctx, cfg)
+	payload := collectFiles(ctx, cfg, backup.PurposeDrill)
 	result, err := backup.RunDrill(ctx, cfg, payload)
 	if err != nil {
 		log.Fatalf("Drill execution error: %v", err)
@@ -522,7 +547,7 @@ func runExportCapsule(args []string) {
 	if err != nil {
 		log.Fatalf("Recovery key: %v", err)
 	}
-	raw, m, err := recoveryclient.Seal(collectFiles(ctx, cfg), key)
+	raw, m, err := recoveryclient.Seal(collectFiles(ctx, cfg, backup.PurposeExport), key)
 	if err != nil {
 		log.Fatalf("Seal: %v", err)
 	}

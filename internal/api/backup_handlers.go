@@ -104,7 +104,7 @@ func (s *Server) handleBackupDrill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	payload, err := backup.Collect(ctx, s.config, appVersion)
+	payload, err := backup.Collect(ctx, s.config, appVersion, backup.PurposeDrill)
 	if errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		// An honest failed drill, not a 500: the operator needs to read why no backup exists.
 		s.writeJSON(w, http.StatusOK, &recoveryclient.DrillResult{Passed: false, ErrorMessage: err.Error(),
@@ -151,7 +151,7 @@ func (s *Server) handleExportCapsule(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "Failed to load recovery key")
 		return
 	}
-	payload, err := backup.Collect(ctx, s.config, appVersion)
+	payload, err := backup.Collect(ctx, s.config, appVersion, backup.PurposeExport)
 	if errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		s.writeError(w, http.StatusPreconditionFailed, err.Error())
 		return
@@ -290,7 +290,7 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	settings := backup.Settings(ctx, s.store.Settings())
 	res, err := recoveryclient.Run(ctx, rc, settings, func() (recoveryclient.Payload, error) {
-		return backup.Collect(ctx, s.config, appVersion)
+		return backup.Collect(ctx, s.config, appVersion, backup.PurposeDeposit)
 	}, s.recovery)
 
 	action, outcome, details := recoveryclient.Outcome(res, err)
@@ -462,6 +462,38 @@ func (s *Server) handleSetSchedule(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]any{"interval_sec": sec})
 }
 
+// handleSetBulkRetention stores the opt-in bulk snapshot retention. All zero turns it off;
+// a policy forgets snapshots, so the admin-only, CSRF-protected and audited boundary matters.
+func (s *Server) handleSetBulkRetention(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+	var req backup.BulkPolicy
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "Invalid JSON request body")
+		return
+	}
+	ctx := r.Context()
+	actor := s.actorID(r)
+	settings := backup.Settings(ctx, s.store.Settings())
+	if err := backup.SetBulkPolicy(settings, req); err != nil {
+		if errors.Is(err, backup.ErrBadBulkPolicy) {
+			s.writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "Failed to save the bulk retention")
+		return
+	}
+	stored, err := backup.LoadBulkPolicy(settings)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Failed to read the bulk retention back")
+		return
+	}
+	s.auditBackup(ctx, actor, r, "admin.bulk_retention", "", fmt.Sprintf("keep_daily=%d keep_weekly=%d keep_monthly=%d", stored.Daily, stored.Weekly, stored.Monthly))
+	s.writeJSON(w, http.StatusOK, stored)
+}
+
 // handleBackupStatus reports pairing and the last receipt. It never decrypts or echoes the
 // credential.
 func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
@@ -500,6 +532,13 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if last, ok, err := recoveryclient.LastDeposit(settings); err == nil && ok {
 		out["last_deposit"] = last
+	}
+	if policy, err := backup.LoadBulkPolicy(settings); err == nil {
+		out["bulk_retention"] = policy
+		out["bulk_keep_last"] = s.config.Backup.Keep
+	}
+	if last, ok, err := backup.LastBulkPrune(settings); err == nil && ok {
+		out["bulk_last_prune"] = last
 	}
 	if s.config.Backup.Dir != "" {
 		out["local_dir"] = s.config.Backup.Dir
