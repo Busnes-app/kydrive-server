@@ -207,6 +207,58 @@ func TestNameMigrationEncryptsPopulatedDatabase(t *testing.T) {
 	}
 }
 
+// A reader in another process blocks the truncating checkpoint; the scrub marker must survive
+// so the next start scrubs again.
+func TestNameScrubRetriesWhenCheckpointIsBlocked(t *testing.T) {
+	ctx := context.Background()
+	cfg := legacyDB(t)
+	st, err := store.Open(ctx, cfg, testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	d := st.Drive()
+	marker := func() int {
+		n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM sqlite_master WHERE name='drive_name_scrub'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if err = drive.ExecSQL(ctx, d, `CREATE TABLE drive_name_scrub(done INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := sql.Open("sqlite", cfg.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	tx, err := reader.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err = tx.QueryRow(`SELECT COUNT(*) FROM drive_files`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.Scrub(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if marker() != 1 {
+		t.Fatal("scrub marker dropped while a reader blocked the checkpoint")
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.Scrub(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if marker() != 0 {
+		t.Fatal("scrub marker kept after an unblocked checkpoint")
+	}
+	noPlaintext(t, cfg.DSN, legacyNames)
+}
+
 func TestNameMigrationRefusesWithoutKey(t *testing.T) {
 	ctx := context.Background()
 	cfg := legacyDB(t)

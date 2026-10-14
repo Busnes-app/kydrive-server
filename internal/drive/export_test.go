@@ -15,6 +15,8 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 	return blobs, err
 }
 
+func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
+
 func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {
 	_, err := s.db.ExecContext(ctx, q, args...)
 	return err

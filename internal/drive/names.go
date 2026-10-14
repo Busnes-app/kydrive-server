@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 )
@@ -117,10 +118,21 @@ func scrub(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='drive_name_scrub'`).Scan(&pending); err != nil || pending == 0 {
 		return err
 	}
-	for _, q := range []string{`VACUUM`, `PRAGMA wal_checkpoint(TRUNCATE)`, `DROP TABLE drive_name_scrub`} {
-		if _, err := db.ExecContext(ctx, q); err != nil {
-			return fmt.Errorf("drive name scrub: %w", err)
-		}
+	if _, err := db.ExecContext(ctx, `VACUUM`); err != nil {
+		return fmt.Errorf("drive name scrub: %w", err)
+	}
+	// A reader in another process blocks truncation without an SQL error; keep the marker
+	// so the next start scrubs again.
+	var busy, frames, done int
+	if err := db.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &frames, &done); err != nil {
+		return fmt.Errorf("drive name scrub: %w", err)
+	}
+	if busy != 0 {
+		log.Printf("drive name scrub: WAL checkpoint blocked by a reader; retrying at next start")
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `DROP TABLE drive_name_scrub`); err != nil {
+		return fmt.Errorf("drive name scrub: %w", err)
 	}
 	return nil
 }
