@@ -1,13 +1,12 @@
 name: publish release image
 
-# A published release vX.Y.Z publishes the immutable :X.Y.Z image, attests and
-# verifies it, then moves :stable. :<sha> belongs to ci.yml.
+# A published release vX.Y.Z publishes the immutable :X.Y.Z image, then attests and
+# verifies it. KyDrive has no mutable release tag; :<sha> belongs to ci.yml.
 on:
   release:
     types: [published]
 
-# Serialised so two releases cannot race to move :stable. Never cancelled: a run
-# that pushed :X.Y.Z must finish attesting it.
+# Serialised and never cancelled: a run that pushed :X.Y.Z must finish attesting it.
 concurrency:
   group: release-image
   cancel-in-progress: false
@@ -113,8 +112,6 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
-      # Only the immutable tag here. :stable moves after the attestation verifies,
-      # so a failed attest never leaves :stable on an unattested image.
       - name: Build and publish the immutable version tag
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -135,61 +132,14 @@ jobs:
           push-to-registry: true
 
       # Verified the way an operator would, pinned to this workflow at this tag.
-      - name: Verify the attestation before promoting
+      - name: Verify the attestation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DIGEST: ${{ steps.build.outputs.digest }}
           TAG: ${{ github.event.release.tag_name }}
+          VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
           gh attestation verify "oci://$IMAGE_NAME@$DIGEST" --repo "$GITHUB_REPOSITORY" \
             --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release-image.yml@refs/tags/$TAG"
-
-      # :stable only moves forward, and never to a prerelease: publishing a patch
-      # for an old line must not downgrade everyone following :stable.
-      - name: Decide whether this release may move stable
-        id: promote
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.value }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
-        run: |
-          set -euo pipefail
-          if [ "$PRERELEASE" = "true" ]; then
-            echo "::notice::$VERSION is a prerelease; :stable stays where it is"
-            echo "move=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # A failed lookup must stop here: an empty list would make this release "highest".
-          tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
-            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')"
-          published="$(printf '%s\n' "$tags" | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)"
-          highest="$(printf '%s\n%s\n' "$published" "$VERSION" | sort -V | tail -n1)"
-          echo "highest published release: $highest; this release: $VERSION"
-          if [ "$highest" != "$VERSION" ]; then
-            echo "::notice::$VERSION is older than $highest; :stable stays where it is"
-            echo "move=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "move=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # By digest, as a carbon copy (--prefer-index=false), then asserted and
-      # verified on the tag operators actually pull.
-      - name: Promote the verified digest to stable
-        if: steps.promote.outputs.move == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          TAG: ${{ github.event.release.tag_name }}
-          VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          set -euo pipefail
-          docker buildx imagetools create --prefer-index=false --tag "$IMAGE_NAME:stable" "$IMAGE_NAME@$DIGEST"
-          stable="$(docker buildx imagetools inspect "$IMAGE_NAME:stable" --format '{{.Manifest.Digest}}')"
-          if [ "$stable" != "$DIGEST" ]; then
-            echo "::error:::stable resolves to $stable, attested digest is $DIGEST" >&2
-            exit 1
-          fi
-          gh attestation verify "oci://$IMAGE_NAME:stable" --repo "$GITHUB_REPOSITORY" \
-            --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release-image.yml@refs/tags/$TAG"
-          echo "Published \`$IMAGE_NAME@$DIGEST\` as \`:$VERSION\` and \`:stable\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published \`$IMAGE_NAME@$DIGEST\` as \`:$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
