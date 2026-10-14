@@ -401,7 +401,8 @@ func TestPruneBulkIfDueRecordsFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, ran, err := backup.PruneBulkIfDue(ctx, f.cfg, settings, time.Now())
-	if !ran || err == nil || !strings.Contains(res.Error, "repository does not exist") {
+	// restic's wording varies by version; its "Fatal:" prefix shows stderr was kept.
+	if !ran || err == nil || !strings.Contains(res.Error, "Fatal:") {
 		t.Fatalf("failure not recorded: %+v %v %v", res, ran, err)
 	}
 	if last, ok, _ := backup.LastBulkPrune(settings); !ok || last.Error != res.Error {
