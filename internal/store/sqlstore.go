@@ -316,7 +316,8 @@ WHERE id = ?
 var directoryUsername = regexp.MustCompile(`^[A-Za-z0-9._@+\-]{1,128}$`)
 
 func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error) {
-	if !directoryUsername.MatchString(d.Username) {
+	// Disabling an existing account changes only its status, so it works whatever its username.
+	if (d.ID == "" || d.Active) && !directoryUsername.MatchString(d.Username) {
 		return nil, ErrInvalidUsername
 	}
 	status := "inactive"
@@ -338,14 +339,18 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_ts, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
 			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.EventTime, now, now)
 	} else {
-		q := `UPDATE users SET username = ?, email = ?, display_name = ?, status = ?, updated_at = ?, directory_ts = ? WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`
-		args := []any{d.Username, d.Email, d.DisplayName, status, now, d.EventTime, id}
-		if d.EventTime == 0 {
-			q = strings.Replace(q, "directory_ts = ?", "directory_ts = directory_ts", 1)
-			args = []any{d.Username, d.Email, d.DisplayName, status, now, id}
-		} else {
-			q += " AND directory_ts < ?"
-			args = append(args, d.EventTime)
+		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
+		if !d.Active {
+			set, args = "status = ?", []any{status}
+		}
+		set, args = set+", updated_at = ?", append(args, now)
+		if d.EventTime != 0 {
+			set, args = set+", directory_ts = ?", append(args, d.EventTime)
+		}
+		q := "UPDATE users SET " + set + " WHERE id = ? AND sso_provider IN ('scim', 'kysignon')"
+		args = append(args, id)
+		if d.EventTime != 0 {
+			q, args = q+" AND directory_ts "+newerThan(d.Active)+" ?", append(args, d.EventTime)
 		}
 		var res sql.Result
 		if res, err = tx.ExecContext(ctx, u.store.rebind(q), args...); err == nil {
@@ -377,7 +382,7 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, eventTim
 	defer tx.Rollback()
 	q, args := `DELETE FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`, []any{id}
 	if eventTime != 0 {
-		q, args = q+" AND directory_ts < ?", append(args, eventTime)
+		q, args = q+" AND directory_ts "+newerThan(false)+" ?", append(args, eventTime)
 	}
 	res, err := tx.ExecContext(ctx, u.store.rebind(q), args...)
 	if err != nil {
@@ -390,6 +395,15 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, eventTim
 		return err
 	}
 	return tx.Commit()
+}
+
+// newerThan compares an event's timestamp to the account's last one. Same-second events cannot
+// be ordered, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
+func newerThan(enables bool) string {
+	if enables {
+		return "<"
+	}
+	return "<="
 }
 
 // directoryRowMissing explains a directory write that touched no row: stale or absent.
@@ -687,8 +701,16 @@ func (s *SQLStore) revokeGrants(ctx context.Context, tx *sql.Tx, userID string) 
 	return s.drive.RevokeUserEditors(ctx, tx, userID)
 }
 
-func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expectedPasswordHash string) error {
+func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expectedPasswordHash string, mfaEnabled bool) error {
 	return s.store.withPassword(ctx, sess.UserID, expectedPasswordHash, func(tx *sql.Tx) error {
+		// withPassword holds the user row, so an MFA change either lands before this read or waits.
+		var enabled bool
+		if err := tx.QueryRowContext(ctx, s.store.rebind(`SELECT totp_enabled FROM users WHERE id = ?`), sess.UserID).Scan(&enabled); err != nil {
+			return err
+		}
+		if enabled != mfaEnabled {
+			return ErrNotFound
+		}
 		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt)
 		return err
 	})

@@ -74,7 +74,8 @@ type UserStore interface {
 
 // SessionStore defines repository operations for active login sessions.
 type SessionStore interface {
-	CreateSession(ctx context.Context, s *Session, expectedPasswordHash string) error
+	// CreateSession refuses when the password or the MFA state changed since the caller checked them.
+	CreateSession(ctx context.Context, s *Session, expectedPasswordHash string, mfaEnabled bool) error
 	GetSession(ctx context.Context, tokenHash string) (*Session, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
 	DeleteUserSessions(ctx context.Context, userID string) error

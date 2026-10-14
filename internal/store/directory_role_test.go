@@ -19,7 +19,7 @@ func TestDirectoryRoleGrantIsExactAuditedAndRevokesSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "session", UserID: "directory", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, ""); err != nil {
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "session", UserID: "directory", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, subject := range []string{"identity", "yoshi", "local-subject", "disabled-subject"} {

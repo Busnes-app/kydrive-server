@@ -20,7 +20,7 @@ func TestApplyDirectoryUserOwnsNoRoleAndRevokesOnDisable(t *testing.T) {
 	if err := st.Users().SetDirectoryRole(ctx, "s-1", "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "live", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, ""); err != nil {
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "live", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Sessions().CreateMFAChallenge(ctx, &store.MFAChallenge{TokenHash: "mfa", UserID: u.ID, ExpiresAt: time.Now().Add(time.Hour)}, ""); err != nil {
@@ -73,7 +73,7 @@ func TestCleanExpiredRows(t *testing.T) {
 	}
 	past, future := time.Now().UTC().Add(-time.Minute), time.Now().UTC().Add(time.Hour)
 	for hash, exp := range map[string]time.Time{"old": past, "new": future} {
-		if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: hash, UserID: "u", CreatedAt: past, ExpiresAt: exp}, ""); err != nil {
+		if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: hash, UserID: "u", CreatedAt: past, ExpiresAt: exp}, "", false); err != nil {
 			t.Fatal(err)
 		}
 		if err := st.Sessions().CreateMFAChallenge(ctx, &store.MFAChallenge{TokenHash: hash, UserID: "u", ExpiresAt: exp}, ""); err != nil {
@@ -130,5 +130,76 @@ func TestRecoveryCodeRedemptionIsSingleUseUnderConcurrency(t *testing.T) {
 	}
 	if err := st.Users().UpdateRecoveryCodes(ctx, "rc", `["a","b"]`, `["","b"]`); !errors.Is(err, store.ErrAlreadyExists) {
 		t.Fatal("spent code redeemed again", err)
+	}
+}
+
+func TestDirectoryTimestampTieFavoursTheRestrictiveEvent(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	const at = 1_800_000_000
+	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s", Username: "tie", Active: true, EventTime: at - 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, EventTime: at}); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "tie", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if u, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: false, EventTime: at}); err != nil || u.Status != "inactive" {
+		t.Fatalf("same-second deactivation: %+v %v", u, err)
+	}
+	if _, err = st.Sessions().GetSession(ctx, "tie"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("same-second deactivation kept the session", err)
+	}
+	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, EventTime: at}); !errors.Is(err, store.ErrStale) {
+		t.Fatalf("same-second reactivation applied: %v", err)
+	}
+	if err = st.Users().DeleteDirectoryUser(ctx, u.ID, at); err != nil {
+		t.Fatalf("same-second delete: %v", err)
+	}
+}
+
+func TestDirectoryDeactivatesLegacyUsername(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	if err := st.Users().CreateUser(ctx, &store.User{ID: "legacy", Username: "jürgen", Role: "user", Status: "active", SSOProvider: "scim", SSOSubject: "j"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "legacy", UserID: "legacy", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "legacy", Username: "jürgen", Active: false}); err != nil || u.Status != "inactive" || u.Username != "jürgen" {
+		t.Fatalf("legacy deactivation: %+v %v", u, err)
+	}
+	if _, err := st.Sessions().GetSession(ctx, "legacy"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("legacy deactivation kept the session", err)
+	}
+	if _, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "legacy", Username: "jürgen", Active: true}); !errors.Is(err, store.ErrInvalidUsername) {
+		t.Fatalf("legacy reactivation skipped validation: %v", err)
+	}
+}
+
+// A password login that read the account before MFA was enabled must not get a session after it.
+func TestSessionRefusedWhenMFAChangedSinceLogin(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	if err := st.Users().CreateUser(ctx, &store.User{ID: "m", Username: "m", PasswordHash: "h", Role: "user", Status: "active", TOTPSecretEnc: "sealed", RecoveryCodesHash: "[]"}); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := st.Users().GetUserByID(ctx, "m") // the login's view: MFA off
+	if err != nil || seen.TOTPEnabled {
+		t.Fatal(seen, err)
+	}
+	if err = st.Users().EnableTOTP(ctx, "m", "sealed", "[]", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	sess := &store.Session{TokenHash: "late", UserID: "m", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
+	if err = st.Sessions().CreateSession(ctx, sess, seen.PasswordHash, seen.TOTPEnabled); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("password-only session issued after MFA was enabled: %v", err)
+	}
+	if err = st.Sessions().CreateSession(ctx, sess, "h", true); err != nil {
+		t.Fatalf("MFA-verified session refused: %v", err)
 	}
 }
