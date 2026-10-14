@@ -34,7 +34,7 @@ func TestHandoverCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := drive.WriteBlob(t.TempDir(), strings.NewReader("private"), 1024)
+	v, err := drive.WriteBlob(t.TempDir(), bytes.Repeat([]byte{7}, 32), strings.NewReader("private"), 1024)
 	if err != nil {
 		t.Fatal(err)
 	}
