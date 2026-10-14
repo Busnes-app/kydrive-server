@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -78,6 +80,12 @@ func TestEncryptionKeyPersistsAcrossLoads(t *testing.T) {
 		t.Fatal("keyfile in the data directory not reported")
 	}
 	t.Setenv("KY_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+	if c, err := config.LoadFromEnv(); err != nil || !c.Security.KeyInDataDir {
+		t.Fatalf("leftover keyfile not reported with an environment key: %v", err)
+	}
+	if err = os.Remove(filepath.Join(os.Getenv("KY_DATA_DIR"), "encryption.key")); err != nil {
+		t.Fatal(err)
+	}
 	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
 		t.Fatalf("environment key reported as in the data directory: %v", err)
 	}

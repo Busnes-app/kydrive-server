@@ -50,7 +50,7 @@ Do not claim production readiness from local tests. Preserve existing services, 
 
 ## Encryption key location
 
-Blob encryption protects the NAS data directory only when the deployment key is not in it. Before relying on it, move the existing `data/encryption.key` hex into the container's environment secret as `KY_ENCRYPTION_KEY` (the same key, or existing files and MFA secrets become unreadable), restart, confirm the Recovery screen notice is gone, then remove the file from the data bind. The pilot's current key location is unverified.
+Blob encryption protects the NAS data directory only when the deployment key is not in it. Before relying on it, move the existing `data/encryption.key` hex into the container's environment secret as `KY_ENCRYPTION_KEY` (the same key, or existing files and MFA secrets become unreadable), remove the file from the data bind, restart, then confirm the Recovery screen notice is gone. The pilot's current key location is unverified.
 
 ## Remaining pilot gates
 
