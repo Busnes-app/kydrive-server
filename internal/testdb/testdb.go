@@ -6,6 +6,7 @@
 package testdb
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"os"
@@ -16,6 +17,9 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/google/uuid"
 )
+
+// Key is the deployment key tests pass to store.Open.
+var Key = bytes.Repeat([]byte{7}, 32)
 
 // Config returns a database config pointing at an isolated, empty database.
 func Config(t *testing.T) config.DatabaseConfig {

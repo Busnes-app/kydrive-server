@@ -27,7 +27,15 @@ CREATE INDEX drive_versions_blob ON drive_versions(blob);
 CREATE TABLE drive_blob_retire(blob TEXT PRIMARY KEY);`,
 	`ALTER TABLE drive_personal_workspaces ADD COLUMN owner_name TEXT NOT NULL DEFAULT '';
 UPDATE drive_personal_workspaces SET owner_name=COALESCE((SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=owner),'');`,
+	// names.encryptNames finishes this step in the same transaction.
+	`ALTER TABLE drive_files ADD COLUMN name_hmac TEXT NOT NULL DEFAULT '';
+ALTER TABLE drive_folders ADD COLUMN name_hmac TEXT NOT NULL DEFAULT '';
+DROP INDEX drive_live_names;
+DROP INDEX drive_live_folders;`,
 }
+
+// nameVersion is the schema version whose transaction encrypts existing names.
+const nameVersion = 5
 
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
@@ -42,6 +50,11 @@ func (s *Store) migrate(ctx context.Context) error {
 			if _, err := tx.ExecContext(ctx, ddl); err != nil {
 				return fmt.Errorf("drive schema %d: %w", i+1, err)
 			}
+			if i+1 == nameVersion {
+				if err := s.names.encryptNames(ctx, tx); err != nil {
+					return fmt.Errorf("drive schema %d: %w", i+1, err)
+				}
+			}
 			_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema VALUES(?)`, i+1)
 			return err
 		})
@@ -49,7 +62,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return scrub(ctx, s.db)
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }

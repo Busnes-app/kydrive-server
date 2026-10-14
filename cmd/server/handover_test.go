@@ -13,7 +13,7 @@ import (
 
 func TestHandoverCommand(t *testing.T) {
 	ctx := context.Background()
-	st, err := store.Open(ctx, testdb.Config(t))
+	st, err := store.Open(ctx, testdb.Config(t), testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestHandoverCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := drive.WriteBlob(t.TempDir(), bytes.Repeat([]byte{7}, 32), strings.NewReader("private"), 1024)
+	v, err := drive.WriteBlob(t.TempDir(), testdb.Key, strings.NewReader("private"), 1024)
 	if err != nil {
 		t.Fatal(err)
 	}

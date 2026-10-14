@@ -180,7 +180,7 @@ func (s *Store) PublishEditor(ctx context.Context, user string, f File, v Versio
 		v.FileID = f.ID
 		v.Revision = revision + 1
 		v.Created = time.Now().UTC().Format(time.RFC3339Nano)
-		if err = publishTX(ctx, tx, user, f, v, revision); err != nil {
+		if err = s.publishTX(ctx, tx, user, f, v, revision); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE drive_editor_documents SET current_revision=?,closed=? WHERE key=?`, v.Revision, final, key); err != nil {

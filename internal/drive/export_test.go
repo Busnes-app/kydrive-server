@@ -66,3 +66,8 @@ func QueryInt(ctx context.Context, s *Store, q string, args ...any) (n int, err 
 	err = s.db.QueryRowContext(ctx, q, args...).Scan(&n)
 	return
 }
+
+// RawNames returns the stored name and name_hmac of every row in table.
+func RawNames(ctx context.Context, s *Store, table string) ([]string, error) {
+	return column(ctx, s.db, `SELECT name||' '||name_hmac FROM `+table)
+}

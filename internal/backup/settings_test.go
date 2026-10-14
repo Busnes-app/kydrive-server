@@ -28,7 +28,7 @@ func sqliteInstance(t *testing.T) (*config.Config, store.Store) {
 	cfg.Database.DataDir = dir
 	cfg.Database.DSN = filepath.Join(dir, "ky_server.db") + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
 	cfg.Security.EncryptionKey = bytes.Repeat([]byte{1}, 32)
-	st, err := store.Open(context.Background(), cfg.Database)
+	st, err := store.Open(context.Background(), cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}

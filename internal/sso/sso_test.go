@@ -47,7 +47,7 @@ func TestOAuthAuthorizationURLUsesDiscoveryAndPKCE(t *testing.T) {
 }
 
 func TestKySignOnWebhookSync(t *testing.T) {
-	st, err := store.Open(context.Background(), testdb.Config(t))
+	st, err := store.Open(context.Background(), testdb.Config(t), testdb.Key)
 	if err != nil {
 		t.Fatalf("failed to open store: %v", err)
 	}

@@ -30,6 +30,22 @@ func TestAESGCMEncryption(t *testing.T) {
 	}
 }
 
+func TestAESGCMBindsAAD(t *testing.T) {
+	key := bytes.Repeat([]byte{0x42}, 32)
+	enc, err := crypto.EncryptAESGCMAAD([]byte("name"), key, []byte("row-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dec, err := crypto.DecryptAESGCMAAD(enc, key, []byte("row-1")); err != nil || string(dec) != "name" {
+		t.Fatalf("round trip: %q %v", dec, err)
+	}
+	for _, aad := range [][]byte{nil, []byte("row-2")} {
+		if _, err := crypto.DecryptAESGCMAAD(enc, key, aad); err == nil {
+			t.Fatalf("decrypted under aad %q", aad)
+		}
+	}
+}
+
 func TestAESGCMRefusesShortKey(t *testing.T) {
 	for _, n := range []int{0, 16, 31, 33, 64} {
 		_, err := crypto.EncryptAESGCM([]byte("x"), make([]byte, n))

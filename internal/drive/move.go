@@ -47,7 +47,11 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 				return err
 			}
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, to.Name, id, f.Workspace, expected)
+		stored, mac, err := s.names.seal("drive_files", id, to.Name)
+		if err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=?,name_hmac=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, stored, mac, id, f.Workspace, expected)
 		if uniqueViolation(err) {
 			return fmt.Errorf("%w: name exists", ErrConflict)
 		}
@@ -88,7 +92,7 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 		return out, ErrInvalid
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		src, err := scanFile(tx.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND f.trashed=false`, id))
+		src, err := s.scanFile(tx.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND f.trashed=false`, id))
 		if err != nil {
 			return err
 		}
@@ -96,7 +100,7 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 			return err
 		}
 		out.Size, out.Digest, out.Blob, out.Sealed = src.Size, src.Digest, src.Blob, src.Sealed
-		return publishTX(ctx, tx, user, out, Version{FileID: out.ID, Revision: 1, Blob: src.Blob, Digest: src.Digest, Size: src.Size, Created: now(), Sealed: src.Sealed}, 0)
+		return s.publishTX(ctx, tx, user, out, Version{FileID: out.ID, Revision: 1, Blob: src.Blob, Digest: src.Digest, Size: src.Size, Created: now(), Sealed: src.Sealed}, 0)
 	})
 	return out, err
 }
@@ -128,7 +132,11 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 		if cycle > 0 {
 			return ErrInvalid
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE drive_folders SET parent=?,name=? WHERE id=?`, parent, name, id)
+		stored, mac, err := s.names.seal("drive_folders", id, name)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE drive_folders SET parent=?,name=?,name_hmac=? WHERE id=?`, parent, stored, mac, id)
 		if uniqueViolation(err) {
 			return fmt.Errorf("%w: name exists", ErrConflict)
 		}

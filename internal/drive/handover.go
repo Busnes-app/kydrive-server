@@ -139,7 +139,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		if err = fits(ctx, tx, target, size); err != nil {
 			return err
 		}
-		if err = handoverFolder(ctx, tx, folder, target, owner); err != nil {
+		if err = handoverFolder(ctx, tx, s.names, folder, target, owner); err != nil {
 			return err
 		}
 		// Sessions and tokens were authorized for the source; as in MoveFile, closed documents
@@ -176,7 +176,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 }
 
 // handoverFolder creates "Handover from <owner> <date>" at the target root, numbering it when taken.
-func handoverFolder(ctx context.Context, tx *sql.Tx, id, workspace, owner string) error {
+func handoverFolder(ctx context.Context, tx *sql.Tx, nm names, id, workspace, owner string) error {
 	date := time.Now().UTC().Format(time.DateOnly)
 	base := "Handover from " + owner + " " + date
 	if !ValidName(base + " (100)") {
@@ -187,7 +187,11 @@ func handoverFolder(ctx context.Context, tx *sql.Tx, id, workspace, owner string
 		if n > 1 {
 			name = fmt.Sprintf("%s (%d)", base, n)
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name) VALUES(?,?,?,?)`, id, workspace, "", name)
+		stored, mac, err := nm.seal("drive_folders", id, name)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES(?,?,?,?,?)`, id, workspace, "", stored, mac)
 		if !uniqueViolation(err) {
 			return err
 		}

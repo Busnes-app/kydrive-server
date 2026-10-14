@@ -27,7 +27,7 @@ type SQLStore struct {
 }
 
 // newSQLStore creates and initializes a SQLStore, running migrations automatically.
-func newSQLStore(ctx context.Context, db *sql.DB, driver string) (*SQLStore, error) {
+func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte) (*SQLStore, error) {
 	driver = strings.ToLower(driver)
 	if driver == "postgresql" {
 		driver = "postgres"
@@ -51,7 +51,7 @@ func newSQLStore(ctx context.Context, db *sql.DB, driver string) (*SQLStore, err
 
 	if driver == "sqlite" {
 		var err error
-		s.drive, err = drive.New(ctx, db)
+		s.drive, err = drive.New(ctx, db, key)
 		if err != nil {
 			return nil, err
 		}

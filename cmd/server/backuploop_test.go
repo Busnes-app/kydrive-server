@@ -118,7 +118,7 @@ func TestPruneBulkAuditsAsSystem(t *testing.T) {
 	ctx := context.Background()
 	dbCfg := testdb.Config(t)
 	dbCfg.DataDir = t.TempDir()
-	st, err := store.Open(ctx, dbCfg)
+	st, err := store.Open(ctx, dbCfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}

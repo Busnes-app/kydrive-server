@@ -9,7 +9,7 @@ Owns core cryptographic implementations, key derivation, and constant-time equal
 ## Local Contracts
 - Never store or log plaintext cryptographic keys or master secrets.
 - Password hashing parameters are `ky-primitives/password`'s to choose; this package must not grow a second implementation.
-- AES-256-GCM uses fresh 12-byte random IVs per encryption operation. Blob encryption lives in `internal/drive/sealed.go` and uses counter nonces instead, safe only because every blob has its own HKDF key from a random salt.
+- AES-256-GCM uses fresh 12-byte random IVs per encryption operation. `EncryptAESGCMAAD`/`DecryptAESGCMAAD` add associated data; the plain functions are the nil-AAD case with an identical format. Drive names use the AAD form bound to their row. Blob encryption lives in `internal/drive/sealed.go` and uses counter nonces instead, safe only because every blob has its own HKDF key from a random salt.
 
 ## Verification
 - `go test -v ./internal/crypto/...`

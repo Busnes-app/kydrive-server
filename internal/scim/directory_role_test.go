@@ -14,7 +14,7 @@ import (
 
 func TestSCIMPreservesExplicitApplicationAdminAndOffboards(t *testing.T) {
 	ctx := context.Background()
-	st, err := store.Open(ctx, testdb.Config(t))
+	st, err := store.Open(ctx, testdb.Config(t), testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
