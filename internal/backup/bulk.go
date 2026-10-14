@@ -64,8 +64,12 @@ func bulkRepository(dataDir string) (string, error) {
 	return repo, nil
 }
 
-// errWrongPassword is restic's exit status 12: no key in the repository opens with the password.
+// errWrongPassword means no key in the repository opens with the password: exit status 12 from
+// restic 0.17 on, exit 1 with this message before it.
 var errWrongPassword = errors.New("wrong repository password")
+
+// keyIDPattern matches a restic key ID: full from 0.17, the 8-character short form before it.
+var keyIDPattern = regexp.MustCompile(`^[a-f0-9]{8,64}$`)
 
 // runRestic is the one exec seam; tests replace it.
 var runRestic = execRestic
@@ -92,7 +96,7 @@ func execRestic(ctx context.Context, repo string, password []byte, dir string, s
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		var exit *exec.ExitError
-		if errors.As(err, &exit) && exit.ExitCode() == 12 {
+		if errors.As(err, &exit) && (exit.ExitCode() == 12 || bytes.Contains(stderr.b, []byte("wrong password or no key found"))) {
 			err = errWrongPassword
 		}
 		return nil, fmt.Errorf("restic %s failed: %w: %s", args[0], err, bytes.TrimSpace(stderr.b))
@@ -156,7 +160,7 @@ func currentKey(ctx context.Context, repo string, password []byte) (string, erro
 		return "", err
 	}
 	for _, k := range keys {
-		if k.Current && shaPattern.MatchString(k.ID) {
+		if k.Current && keyIDPattern.MatchString(k.ID) {
 			return k.ID, nil
 		}
 	}
