@@ -101,6 +101,9 @@ func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = checkKey(ctx, db, key); err != nil {
+		return nil, err
+	}
 	s := &Store{db: db, names: n}
 	if err = s.migrate(ctx); err != nil {
 		return nil, err

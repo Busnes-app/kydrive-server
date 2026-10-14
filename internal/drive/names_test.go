@@ -178,11 +178,24 @@ func TestNameMigrationEncryptsPopulatedDatabase(t *testing.T) {
 	}
 
 	st.Close()
-	other, err := store.Open(ctx, cfg, bytes.Repeat([]byte{8}, 32))
+	if other, err := store.Open(ctx, cfg, bytes.Repeat([]byte{8}, 32)); !errors.Is(err, drive.ErrWrongKey) {
+		if err == nil {
+			other.Close()
+		}
+		t.Fatalf("opened under the wrong key: %v", err)
+	}
+	// Past the open-time check, a row sealed under another key still fails to read.
+	db, err := sql.Open("sqlite", cfg.DSN)
 	if err != nil {
 		t.Fatal(err)
 	}
-	st = other
+	if _, err = db.Exec(`DELETE FROM drive_key`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if st, err = store.Open(ctx, cfg, bytes.Repeat([]byte{8}, 32)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = st.Drive().Files(ctx, "worker", "w", false); err == nil {
 		t.Fatal("files listed under the wrong key")
 	}

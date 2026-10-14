@@ -29,6 +29,33 @@ func newNames(key []byte) (names, error) {
 	return names{enc, mac}, err
 }
 
+// ErrWrongKey means the deployment key differs from the one this drive was first opened with.
+var ErrWrongKey = errors.New("drive: deployment key does not match this database")
+
+// checkKey records a fingerprint of the key on first open and refuses any other key after,
+// so a lost or regenerated key cannot mix new names and blobs in with unreadable old ones.
+func checkKey(ctx context.Context, db *sql.DB, key []byte) error {
+	fp, err := hkdf.Key(sha256.New, key, nil, "kydrive:key-check", 32)
+	if err != nil {
+		return err
+	}
+	want := hex.EncodeToString(fp)
+	if _, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_key(id INTEGER PRIMARY KEY CHECK(id=1),fingerprint TEXT NOT NULL)`); err != nil {
+		return err
+	}
+	if _, err = db.ExecContext(ctx, `INSERT OR IGNORE INTO drive_key VALUES(1,?)`, want); err != nil {
+		return err
+	}
+	var got string
+	if err = db.QueryRowContext(ctx, `SELECT fingerprint FROM drive_key`).Scan(&got); err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(got), []byte(want)) {
+		return ErrWrongKey
+	}
+	return nil
+}
+
 // seal returns the stored name and name_hmac for a row of table (drive_files or drive_folders).
 // Every write that sets a name must set both columns from here.
 func (n names) seal(table, id, name string) (string, string, error) {
