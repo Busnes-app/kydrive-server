@@ -1,4 +1,6 @@
-const CACHE_NAME = 'ky-base-pwa-busnes-v3';
+// vite.config.ts stamps the build id here so each deploy gets a fresh cache and
+// activate drops the previous one with its old hashed assets.
+const CACHE_NAME = 'kydrive-__BUILD_ID__';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

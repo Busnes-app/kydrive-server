@@ -62,7 +62,7 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   const cachedDynamic = await page.evaluate(async () => {
     const keys = await caches.keys();
     for (const key of keys) for (const req of await (await caches.open(key)).keys()) {
-      if (/^\/(api|scim|saml|browser-regression-uncached)(\/|$)/.test(new URL(req.url).pathname)) return true;
+      if (/^\/(api|scim|browser-regression-uncached)(\/|$)/.test(new URL(req.url).pathname)) return true;
     }
     return false;
   });

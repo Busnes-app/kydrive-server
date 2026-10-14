@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Settings as SettingsIcon, Folder, Archive } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound } from 'lucide-react';
 import type { Workspace } from '../pages/Drive';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
@@ -19,9 +19,12 @@ interface AppHeaderProps {
 export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, openInNewTab, onOpenInNewTabChange }) => {
 
   const navItems = [
-    { id: 'backup', label: 'Recovery', icon: Archive },
-    { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
-  ].filter(() => user.role === 'admin');
+    { id: 'account', label: 'Account', icon: UserRound },
+    ...(user.role === 'admin' ? [
+      { id: 'backup', label: 'Recovery', icon: Archive },
+      { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
+    ] : []),
+  ];
 
   return (
     <>
@@ -38,7 +41,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             {workspaces.filter(w => w.kind === 'shared').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>{workspace.name}</span></button>)}
             {!workspaces.some(w => w.kind === 'shared') && <p className="app-nav-empty">No shared workspaces assigned</p>}
           </nav>
-          {navItems.length > 0 && <nav className="app-nav" aria-label="Primary">
+          <nav className="app-nav" aria-label="Primary">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
@@ -54,7 +57,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
                 </button>
               );
             })}
-          </nav>}
+          </nav>
         <div className="app-header-actions">
           <ThemeSwitcher />
           <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>

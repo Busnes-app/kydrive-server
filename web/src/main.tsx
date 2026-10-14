@@ -6,7 +6,7 @@ import { App } from './App';
 // Keep registration in the bundled script so script-src 'self' permits it.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {});
+    void navigator.serviceWorker.register('/sw.js').catch(err => console.warn('Service worker registration failed:', err));
   }, { once: true });
 }
 

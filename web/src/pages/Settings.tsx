@@ -1,6 +1,78 @@
-import React from 'react';
-import { Settings as SettingsIcon, Database, Palette } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Settings as SettingsIcon, Database, Palette, Trash2 } from 'lucide-react';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
+import { change, record, response } from './drive/client';
+
+const trashURL = '/api/drive/trash-retention';
+
+function trashDays(v: unknown): number {
+  if (!record(v) || typeof v.trash_days !== 'number') throw new Error('Invalid server response');
+  return v.trash_days;
+}
+
+// TrashRetention is the drive-wide trash purge age; a workspace's own trash setting overrides it.
+export const TrashRetention: React.FC = () => {
+  const [days, setDays] = useState<number | null>(null);
+  const [saved, setSaved] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const d = trashDays(await response(await fetch(trashURL)));
+        if (live) { setDays(d); setSaved(d); }
+      } catch (e) {
+        if (live) setLoadError(e instanceof Error ? e.message : 'Could not load the trash setting');
+      }
+    })();
+    return () => { live = false; };
+  }, []);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const d = trashDays(await change(trashURL, 'PUT', { trash_days: days }));
+      setDays(d);
+      setSaved(d);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the trash setting');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="panel">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <Trash2 size={20} style={{ color: 'var(--accent)' }} />
+        <h3 style={{ fontSize: '16px' }}>Trash</h3>
+      </div>
+      <p style={{ color: 'var(--ink)', fontSize: '13px', marginBottom: '16px' }}>
+        Applies to every workspace, including each person&apos;s My files, unless the workspace sets its own trash retention. Items are permanently deleted from the drive; only backups can bring them back. 0 keeps trash until someone empties it.
+      </p>
+      {loadError ? <p>{loadError}</p> : days === null ? <p>Loading…</p> : (
+        <form onSubmit={save} style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+          <label style={{ display: 'grid', gap: '4px', fontSize: '13px' }}>
+            Delete trashed items after (days)
+            <input type="number" min={0} max={3650} required value={Number.isNaN(days) ? '' : days} onChange={(e) => setDays(e.target.valueAsNumber)} />
+          </label>
+          <button type="submit" disabled={busy}>Save</button>
+        </form>
+      )}
+      {saved !== null && (
+        <p role="status" style={{ fontSize: '13px', marginTop: '12px' }}>
+          {saved === 0 ? 'Trash is kept until someone empties it.' : `Trashed items are permanently deleted after ${saved} days.`}
+        </p>
+      )}
+      {error && <p role="alert" style={{ fontSize: '13px', marginTop: '12px', color: 'var(--danger)' }}>{error}</p>}
+    </div>
+  );
+};
 
 interface SettingsProps {
   settings: any;
@@ -57,6 +129,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings }) => {
             <ThemeSwitcher />
           </div>
         </div>
+
+        <TrashRetention />
       </div>
     </div>
   );
