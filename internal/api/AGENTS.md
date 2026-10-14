@@ -61,7 +61,8 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 
 - Purge handlers delete blobs (`drive.RemoveBlobs`) only after the metadata transaction commits; a failed removal costs disk space, never a version without bytes. Workspace listings include `trash_days` and `keep_versions`.
 - `driveError` maps `ErrDenied` 403, `ErrInvalid` 400, `ErrConflict` 409 with the wrapped domain reason (`err.Error()`, e.g. `revision conflict: move to trash first`), `ErrQuota` 413; anything else is a generic 500.
-- `RunRetention` is a background loop (hourly) like `RunEditorRevocations`; `cmd/server` waits for both before closing the store.
+- `RunRetention` is a background loop (hourly) like `RunEditorRevocations`; `RunBlobSealing` runs `drive.SealLegacyBlobs` the same way. `cmd/server` waits for all three before closing the store.
+- Uploads, templates and editor saves go through `drive.WriteBlob` with the deployment key; downloads go through `drive.OpenBlob` and `http.ServeContent`, so Range requests decrypt only the chunks they touch. A blob that fails authentication is 503, never served. `GET /api/backup/status` carries `key_in_data_dir`.
 
 ## Verification
 - `go test -v ./internal/api/...` (`authz_test.go` pins the per-role exposure of every privileged route; `backup_test.go` the backup routes, on SQLite only because a run snapshots the database)

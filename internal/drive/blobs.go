@@ -13,8 +13,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// WriteBlob owns a unique staging file and publishes it only after a durable flush.
-func WriteBlob(root string, r io.Reader, limit int64) (Version, error) {
+// WriteBlob seals r under key into a unique staging file and publishes it only after a
+// durable flush. Digest and Size describe the plaintext.
+func WriteBlob(root string, key []byte, r io.Reader, limit int64) (Version, error) {
 	var v Version
 	if limit < 1 {
 		return v, ErrInvalid
@@ -30,7 +31,7 @@ func WriteBlob(root string, r io.Reader, limit int64) (Version, error) {
 	defer os.Remove(tmp)
 	defer f.Close()
 	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(r, limit+1))
+	n, err := seal(f, key, io.TeeReader(io.LimitReader(r, limit+1), h))
 	if err != nil {
 		return v, err
 	}
@@ -43,7 +44,7 @@ func WriteBlob(root string, r io.Reader, limit int64) (Version, error) {
 	if err = f.Close(); err != nil {
 		return v, err
 	}
-	v = Version{Blob: uuid.NewString(), Digest: hex.EncodeToString(h.Sum(nil)), Size: n}
+	v = Version{Blob: uuid.NewString(), Digest: hex.EncodeToString(h.Sum(nil)), Size: n, Sealed: true}
 	if err = os.Rename(tmp, filepath.Join(root, v.Blob)); err != nil {
 		return v, err
 	}

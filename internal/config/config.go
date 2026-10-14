@@ -59,6 +59,9 @@ type SecurityConfig struct {
 	// TrustedProxies is the parsed KY_TRUSTED_PROXIES allowlist. Only a request whose peer
 	// address falls inside it may speak for a client other than itself.
 	TrustedProxies []netip.Prefix `json:"-"`
+	// KeyInDataDir is set when the key came from <DataDir>/encryption.key, so a copy of the
+	// data directory carries the key that decrypts it.
+	KeyInDataDir bool `json:"-"`
 }
 
 // SSOConfig holds identity provider and federation parameters.
@@ -201,6 +204,7 @@ func LoadFromEnv() (*Config, error) {
 		Security: SecurityConfig{
 			SessionSecret:  sessionSecret,
 			EncryptionKey:  encryptionKey,
+			KeyInDataDir:   !ok,
 			CookieSecure:   getEnvBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:   getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:     7 * 24 * time.Hour,

@@ -71,5 +71,12 @@ describe('Backup', () => {
     render(<Backup />);
     await screen.findByText('https://recovery.example');
     expect(screen.queryByText(/Backups do not include the PostgreSQL database/)).toBeNull();
+    expect(screen.queryByText(/encryption key is stored in the data directory/)).toBeNull();
+  });
+
+  it('warns when the encryption key lives in the data directory', async () => {
+    mockStatus({ ...PAIRED, key_in_data_dir: true });
+    render(<Backup />);
+    expect(await screen.findByText(/encryption key is stored in the data directory/)).toBeTruthy();
   });
 });

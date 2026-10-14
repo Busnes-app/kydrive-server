@@ -38,6 +38,7 @@ export interface BackupStatus {
   allow_private_recovery: boolean;
   database_driver: string;
   members: string[];
+  key_in_data_dir?: boolean;
   recovery_url?: string;
   recovery_key_id?: string;
   recovery_key_error?: string;
@@ -347,6 +348,12 @@ export const Backup: React.FC = () => {
         <Alert kind="warn">
           Backups do not include the PostgreSQL database: a capsule can only snapshot SQLite. Back this database up
           with pg_dump on its own schedule.
+        </Alert>
+      )}
+      {status?.key_in_data_dir && (
+        <Alert kind="warn">
+          The encryption key is stored in the data directory, so a stolen copy of that directory can decrypt every file.
+          Move it to KY_ENCRYPTION_KEY from a Compose or Kubernetes secret.
         </Alert>
       )}
       {status && !keyPinned && <Alert kind="warn">No backups are being made. Pair with KyRecovery or pin the suite recovery key below.</Alert>}

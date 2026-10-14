@@ -58,7 +58,7 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	version, err := drive.WriteBlob(s.blobRoot(), bytes.NewReader(data), uploadLimit)
+	version, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, bytes.NewReader(data), uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return

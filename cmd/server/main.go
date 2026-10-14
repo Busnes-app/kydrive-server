@@ -141,6 +141,9 @@ func runServer() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+	if cfg.Security.KeyInDataDir {
+		log.Printf("[SECURITY] encryption key loaded from the data directory: a copy of the data directory can decrypt its files; move the key to KY_ENCRYPTION_KEY")
+	}
 	if cfg.Backup.AllowPrivateRecovery {
 		log.Printf("[BACKUP] KY_BACKUP_ALLOW_PRIVATE_RECOVERY is on: RFC1918 and CGNAT destinations admitted; loopback, link-local and other reserved addresses remain refused (HTTPS still required)")
 	}
@@ -194,6 +197,8 @@ func runServer() {
 	go func() { defer close(editorDone); srv.RunEditorRevocations(ctx) }()
 	retentionDone := make(chan struct{})
 	go func() { defer close(retentionDone); srv.RunRetention(ctx) }()
+	sealingDone := make(chan struct{})
+	go func() { defer close(sealingDone); srv.RunBlobSealing(ctx) }()
 	backupDone := make(chan struct{})
 	go backupLoop(ctx, cfg, st, backupDone)
 
@@ -256,6 +261,11 @@ func runServer() {
 	case <-retentionDone:
 	case <-waitCtx.Done():
 		log.Print("Retention shutdown timed out")
+	}
+	select {
+	case <-sealingDone:
+	case <-waitCtx.Done():
+		log.Print("Blob sealing shutdown timed out")
 	}
 	log.Println("[KY-BASE] Server stopped")
 }

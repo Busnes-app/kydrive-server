@@ -1,6 +1,7 @@
 package drive_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -42,9 +43,12 @@ func fixture(t *testing.T) (store.Store, drive.Workspace, string) {
 	}
 	return st, w, t.TempDir()
 }
+
+var testKey = bytes.Repeat([]byte{7}, 32)
+
 func blob(t *testing.T, root, body string) drive.Version {
 	t.Helper()
-	v, e := drive.WriteBlob(root, strings.NewReader(body), 1024)
+	v, e := drive.WriteBlob(root, testKey, strings.NewReader(body), 1024)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -206,7 +210,7 @@ func TestInterruptedAndOversizedBlobsNeverPublish(t *testing.T) {
 		body  interface{ Read([]byte) (int, error) }
 		limit int64
 	}{{brokenReader{}, 8}, {strings.NewReader("too large"), 2}} {
-		if _, err := drive.WriteBlob(root, reader.body, reader.limit); err == nil {
+		if _, err := drive.WriteBlob(root, testKey, reader.body, reader.limit); err == nil {
 			t.Fatal("failed stream accepted")
 		}
 		files, err := os.ReadDir(root)

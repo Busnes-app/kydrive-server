@@ -480,6 +480,7 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 		// Only the SQLite path can snapshot a database into a capsule; the screen says so.
 		"database_driver": s.config.Database.Driver,
 		"members":         backup.Members(s.config),
+		"key_in_data_dir": s.config.Security.KeyInDataDir,
 	}
 	if u, err := s.store.Settings().GetSetting(ctx, "kyrecovery_url"); err == nil {
 		out["recovery_url"] = u

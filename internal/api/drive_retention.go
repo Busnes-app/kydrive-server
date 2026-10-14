@@ -28,3 +28,24 @@ func (s *Server) RunRetention(ctx context.Context) {
 		}
 	}
 }
+
+// RunBlobSealing encrypts blobs written before sealing existed, now and then hourly. Each
+// pass first finishes swaps an earlier run committed but did not clean up.
+func (s *Server) RunBlobSealing(ctx context.Context) {
+	tick := time.NewTicker(time.Hour)
+	defer tick.Stop()
+	for {
+		n, err := s.store.Drive().SealLegacyBlobs(ctx, s.blobRoot(), s.config.Security.EncryptionKey)
+		if err != nil && ctx.Err() == nil {
+			log.Printf("blob sealing: %v", err)
+		}
+		if n > 0 {
+			log.Printf("blob sealing: sealed %d legacy blobs", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}

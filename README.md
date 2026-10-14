@@ -63,6 +63,12 @@ Deactivation, membership loss, permission downgrade, trash and session expiry qu
 
 The local image under test is Euro-Office `v9.3.4-hotfix.1`, amd64 digest in `deploy/render.py`. The documented `9.3.1` tag was unavailable. Its runtime carries AGPLv3 and inherited ONLYOFFICE strings. Release workflow and BuildKit provenance bind the selected amd64 digest to its Euro-Office source commit. This establishes observed build correspondence; an independently reproducible rebuild is not claimed. See [provenance evidence](docs/EURO-PROVENANCE.md) and [pilot gates](docs/PILOT.md).
 
+## Encryption at rest
+
+Every stored file version is encrypted with AES-256-GCM under a per-file key derived from the deployment encryption key. Files written by earlier releases are encrypted in the background after upgrade. This protects a stolen disk, NAS or copied data directory, but only if the key is not stored with the data: by default it is minted at `data/encryption.key`, and the server logs a warning and the Recovery screen shows a notice. Move it into a Compose or Kubernetes secret: set `KY_ENCRYPTION_KEY` to the file's exact hex contents (a different key cannot decrypt existing files or MFA secrets), restart, confirm the notice is gone, then delete `data/encryption.key` while keeping the secret safe. A restore copies `encryption.key` back into the data directory; move it out again.
+
+This is not end-to-end encryption. The server decrypts on download, Euro-Office edits plaintext, and the operator who holds the key can read every file. File and folder names are not encrypted.
+
 ## Recovery
 
 KyRecovery is the blind sealed-capsule destination at `https://kyrecovery.urlxl.us/`. Pair through the Recovery screen after the suite ceremony or pin its public key manually; compare fingerprints. Pairing pins the key permanently. `KY_BACKUP_ALLOW_PRIVATE_RECOVERY` is an explicit opt-in for HTTPS private-network destinations, with loopback still refused. A LAN resolver override is provided by `docker-compose.lan-dns.yml`.

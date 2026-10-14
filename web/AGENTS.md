@@ -15,7 +15,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - Authenticated state-changing requests use `secureFetch` so the `ky_csrf` cookie is mirrored into `X-CSRF-Token`.
 - Register the service worker from the production JS bundle; keep `script-src 'self'` intact.
 - Worker caching is limited to the same-origin public shell, manifest and assets. HTML is network-first with offline fallback so deployments refresh; dynamic/auth routes stay uncached.
-- KyDrive deployments use SQLite; inherited recovery UI still reports snapshot preconditions.
+- KyDrive deployments use SQLite; inherited recovery UI still reports snapshot preconditions. The Recovery screen warns when `key_in_data_dir` is set.
 - The suite SSO button reads `Sign On with KyIdentity`; the login description identifies organization files and shared workspaces.
 
 - My files and Shared workspaces live in the main application sidebar, with no redundant Files destination. The selected workspace names the page. Personal workspace creation is an idempotent authenticated POST before listing. New file offers document/spreadsheet/presentation/markdown/rtf/whiteboard creation with a native name dialog, then opens the created file in Euro-Office (for Office/PDF/Markdown/RTF) or the Excalidraw whiteboard (for `.excalidraw`). Choosing a type closes the New file menu.

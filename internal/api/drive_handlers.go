@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
@@ -249,7 +250,7 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	v, err := drive.WriteBlob(s.blobRoot(), r.Body, uploadLimit)
+	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, r.Body, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -269,22 +270,18 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File)
 		s.driveError(w, err)
 		return
 	}
-	file, err := os.Open(path)
+	file, err := drive.OpenBlob(path, s.config.Security.EncryptionKey, f.Sealed, f.Size)
 	if err != nil {
+		log.Printf("serve blob %s: %v", f.Blob, err)
 		s.writeError(w, 503, "Document bytes unavailable")
 		return
 	}
 	defer file.Close()
-	stat, err := file.Stat()
-	if err != nil {
-		s.driveError(w, err)
-		return
-	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.Name}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("ETag", `"`+f.Digest+`"`)
-	http.ServeContent(w, r, f.Name, stat.ModTime(), file)
+	http.ServeContent(w, r, f.Name, time.Time{}, file)
 }
 func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r).ID
@@ -458,7 +455,7 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer output.Close()
-	v, err := drive.WriteBlob(s.blobRoot(), output, uploadLimit)
+	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, output, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return

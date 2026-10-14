@@ -49,6 +49,7 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
 
 - `Collect` also seals `config/integrations.json` with session, OIDC, SCIM and editor secrets. Keep this member out of responses and logs.
 - A drive with versions requires `KYDRIVE_BULK_BACKUP_REPOSITORY` outside its primary data directory. Restic encrypts/deduplicates the exact blobs referenced by the SQLite snapshot; `data/drive-bulk.json` binds snapshot ID, blob UUIDs, sizes and SHA-256 digests to the sealed capsule.
+- `drive-bulk.json` is version 2: each file carries `sealed`, and a sealed blob is checked at `drive.SealedSize` and decrypted to verify its plaintext digest. `RestoreBulk` accepts version 1 (plaintext blobs only) and version 2; restore decrypts with the key the capsule carries.
 - `RestoreBulk` compares manifest references with the restored database and authenticates/verifies every file before publishing a new blobs directory. Drills perform this restore in scratch space. No automatic pruning of snapshots named by retained capsules.
 
 ## Verification

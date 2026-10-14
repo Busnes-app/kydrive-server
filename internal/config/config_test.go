@@ -74,6 +74,13 @@ func TestEncryptionKeyPersistsAcrossLoads(t *testing.T) {
 	if len(a.Security.EncryptionKey) != 32 || !bytes.Equal(a.Security.EncryptionKey, b.Security.EncryptionKey) {
 		t.Fatal("encryption key was not persisted between loads")
 	}
+	if !a.Security.KeyInDataDir {
+		t.Fatal("keyfile in the data directory not reported")
+	}
+	t.Setenv("KY_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
+		t.Fatalf("environment key reported as in the data directory: %v", err)
+	}
 }
 
 func TestEncryptionKeyFromEnvMustBe32Bytes(t *testing.T) {

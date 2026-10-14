@@ -52,6 +52,7 @@ type File struct {
 	Size      int64  `json:"size"`
 	Digest    string `json:"digest"`
 	Blob      string `json:"-"`
+	Sealed    bool   `json:"-"`
 }
 type Version struct {
 	FileID   string `json:"file_id"`
@@ -60,6 +61,7 @@ type Version struct {
 	Digest   string `json:"digest"`
 	Size     int64  `json:"size"`
 	Created  string `json:"created"`
+	Sealed   bool   `json:"-"`
 }
 type Event struct {
 	ID       string `json:"id"`
@@ -389,11 +391,11 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	return out, rows.Err()
 }
 
-const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob`
+const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed`
 
 func scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
-	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob)
+	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrDenied
 	}
@@ -446,13 +448,14 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	f.Size = v.Size
 	f.Digest = v.Digest
 	f.Blob = v.Blob
+	f.Sealed = v.Sealed
 	return f, nil
 }
 func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error) {
 	if _, err := s.File(ctx, user, id, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT file_id,revision,blob,digest,size,created FROM drive_versions WHERE file_id=? ORDER BY revision DESC`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT file_id,revision,blob,digest,size,created,sealed FROM drive_versions WHERE file_id=? ORDER BY revision DESC`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +463,7 @@ func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error
 	out := []Version{}
 	for rows.Next() {
 		var v Version
-		if err = rows.Scan(&v.FileID, &v.Revision, &v.Blob, &v.Digest, &v.Size, &v.Created); err != nil {
+		if err = rows.Scan(&v.FileID, &v.Revision, &v.Blob, &v.Digest, &v.Size, &v.Created, &v.Sealed); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -513,7 +516,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	v := Version{FileID: id, Revision: expected + 1, Created: now()}
 	// Read the old version inside the publish transaction: a purge cannot slip in between.
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := tx.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT blob,digest,size,sealed FROM drive_versions WHERE file_id=? AND revision=?`, id, revision).Scan(&v.Blob, &v.Digest, &v.Size, &v.Sealed); err != nil {
 			if err == sql.ErrNoRows {
 				return ErrInvalid
 			}
@@ -524,7 +527,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if err != nil {
 		return f, err
 	}
-	f.Revision, f.Size, f.Digest, f.Blob = v.Revision, v.Size, v.Digest, v.Blob
+	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed
 	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
@@ -574,7 +577,7 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 			return ErrConflict
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions VALUES(?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed) VALUES(?,?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created, v.Sealed); err != nil {
 		return err
 	}
 	return event(ctx, tx, user, "file.version_created", f.ID)
