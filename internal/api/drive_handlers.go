@@ -54,6 +54,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
 	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
+	s.mux.HandleFunc("GET /api/drive/leavers", s.requireAdmin(s.driveLeavers))
+	s.mux.HandleFunc("POST /api/drive/leavers/{workspace}/handover", s.requireAdmin(s.driveHandover))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/editor", s.requireAuthenticated(s.driveEditor))
 	// Only editor-scoped credentials reach these routes; browser sessions grant no access here.
 	s.mux.HandleFunc("GET /api/editor/download/{id}", s.editorDownload)
@@ -641,4 +643,62 @@ func (s *Server) driveRetention(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, map[string]bool{"applied": true})
+}
+
+// driveLeavers lists leavers' workspaces by size and count, never by content, and the colleagues
+// who can receive one. Dedicated installer administrators hold no personal files.
+func (s *Server) driveLeavers(w http.ResponseWriter, r *http.Request) {
+	user := s.driveUser(r).ID
+	leavers, err := s.store.Drive().Leavers(r.Context(), user)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	all, err := s.store.Drive().Colleagues(r.Context(), user)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	colleagues := []drive.Colleague{}
+	for _, c := range all {
+		dedicated, err := s.store.InstallerAdministrator(r.Context(), c.ID)
+		if err != nil {
+			s.driveError(w, err)
+			return
+		}
+		if !dedicated {
+			colleagues = append(colleagues, c)
+		}
+	}
+	s.writeJSON(w, 200, map[string]any{"leavers": leavers, "colleagues": colleagues})
+}
+func (s *Server) driveHandover(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Workspace string `json:"workspace"`
+		User      string `json:"user"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	if in.User != "" {
+		dedicated, err := s.store.InstallerAdministrator(r.Context(), in.User)
+		if err == nil && dedicated {
+			err = drive.ErrDenied
+		}
+		if err != nil {
+			s.driveError(w, err)
+			return
+		}
+	}
+	folder, err := s.store.Drive().Handover(r.Context(), s.driveUser(r).ID, r.PathValue("workspace"), drive.Target{Workspace: in.Workspace, User: in.User})
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	if _, err := s.store.Drive().PendingRevocations(r.Context()); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]string{"folder": folder})
 }

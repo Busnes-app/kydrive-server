@@ -49,6 +49,16 @@ To make an installation owner an application administrator, run the audited oper
 
 This preserves the directory account and revokes its existing sessions; sign in with KyIdentity again. Use `-role user` to remove the grant. SCIM roles do not assign application administration, and offboarding still disables administrators. The distinct local `recovery-admin` account is for recovery; deployment credentials belong in an operator-controlled secret location.
 
+## Leavers
+
+A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:
+
+```sh
+/app/kydrive-server handover                       # list leavers
+/app/kydrive-server handover -from <personal-workspace-id> -to-user <exact-KyIdentity-subject>
+/app/kydrive-server handover -from <personal-workspace-id> -workspace <shared-workspace-id>
+```
+
 ## Retention and permanent delete
 
 Nothing is deleted permanently by default. A manager of a workspace (or the owner of a personal one) can permanently delete trashed files and folders, delete a non-current version, or empty the trash; each action is audited and confirmed in the UI. A file with an open or undelivered editor session cannot be purged. An administrator can set per-workspace retention on shared workspaces: `trash_days` (purge items trashed longer than N days) and `keep_versions` (keep only the newest N versions); 0 turns a rule off and both default to 0. An hourly worker applies the policies as actor `system` and logs how many items it skipped. Files trashed before an upgrade count from the upgrade. Backups still hold purged bytes until their own snapshots are retired. Known limitation: if a purge removes a blob during the hard-link pass that follows a bulk backup's database snapshot, that run fails loudly and is retried at the next interval.

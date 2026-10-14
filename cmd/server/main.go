@@ -79,6 +79,23 @@ func main() {
 			}
 			log.Printf("Directory application role set to %q; sessions revoked; sign in with KyIdentity again", *role)
 			return
+		case "handover":
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				log.Fatal(err)
+			}
+			st, err := store.Open(context.Background(), cfg.Database)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer st.Close()
+			if st.Drive() == nil {
+				log.Fatal("KyDrive requires SQLite")
+			}
+			if err = handover(context.Background(), st, os.Args[2:], os.Stdout); err != nil {
+				log.Fatal(err)
+			}
+			return
 		case "rename-local-admin":
 			fs := flag.NewFlagSet("rename-local-admin", flag.ExitOnError)
 			from := fs.String("from", "", "existing local administrator username")
