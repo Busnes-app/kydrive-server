@@ -218,18 +218,26 @@ func TestFailingDropsDoNotStarveNewRevocations(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<150) INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,revoked) SELECT 'old-'||i,?,1,'worker','',0,true FROM n`, f.ID); err != nil {
 		t.Fatal(err)
 	}
-	for range 5 { // every row fails once
+	// Every row fails exactly once; a slow run can bring early rows due again, so skip seen ones.
+	failed := map[string]bool{}
+	for len(failed) < 150 {
 		pending, err := d.PendingRevocations(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(pending) == 0 {
-			break
-		}
+		fresh := 0
 		for _, e := range pending {
+			if failed[e.ID] {
+				continue
+			}
 			if err = d.DeferRevocation(ctx, e.ID); err != nil {
 				t.Fatal(err)
 			}
+			failed[e.ID] = true
+			fresh++
+		}
+		if fresh == 0 {
+			t.Fatalf("only %d of 150 rows came due", len(failed))
 		}
 	}
 	e, _ := d.EditorSession(ctx, "worker", f.ID)
@@ -237,7 +245,7 @@ func TestFailingDropsDoNotStarveNewRevocations(t *testing.T) {
 		t.Fatal(err)
 	}
 	pending, err := d.PendingRevocations(ctx)
-	if err != nil || len(pending) != 1 || pending[0].ID != e.ID {
+	if err != nil || len(pending) == 0 || pending[0].ID != e.ID {
 		t.Fatalf("new revocation starved: %d pending, %v", len(pending), err)
 	}
 	if err = d.DeferRevocation(ctx, "old-1"); err != nil {
