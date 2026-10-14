@@ -10,6 +10,10 @@ if [ "$#" -lt 1 ]; then
 fi
 
 APP_NAME="$1"
+if [[ ! $APP_NAME =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    echo "❌ Error: app name must be lowercase letters, digits and hyphens, starting with a letter or digit."
+    exit 1
+fi
 TARGET_DIR="${2:-../$APP_NAME}"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -23,15 +27,8 @@ fi
 
 mkdir -p "$TARGET_DIR"
 
-# Copy files excluding git, dist, node_modules, binaries, and local data
-rsync -av --progress "$BASE_DIR/" "$TARGET_DIR/" \
-    --exclude='.git' \
-    --exclude='web/node_modules' \
-    --exclude='web/dist' \
-    --exclude='data' \
-    --exclude='backups' \
-    --exclude='kydrive-server' \
-    --exclude='*.kycap'
+# Copy the committed tree only: local data, secrets, builds and capsules never leave the source.
+git -C "$BASE_DIR" archive HEAD | tar -x -C "$TARGET_DIR"
 
 cd "$TARGET_DIR"
 
@@ -47,15 +44,9 @@ if [ -f "web/package.json" ]; then
     sed -i "s|\"name\": \"kydrive-server-web\"|\"name\": \"${APP_NAME}-web\"|g" web/package.json
 fi
 
-# Update HTML title
-if [ -f "web/index.html" ]; then
-    sed -i "s|<title>Busnes.app Base</title>|<title>${APP_NAME}</title>|g" web/index.html
-fi
-
 # Update Docker Compose container name
 if [ -f "docker-compose.yml" ]; then
     sed -i "s|container_name: kydrive-server|container_name: ${APP_NAME}|g" docker-compose.yml
-    sed -i "s|KY_APP_NAME=Busnes.app Base|KY_APP_NAME=${APP_NAME}|g" docker-compose.yml
 fi
 
 echo "📦 Running go mod tidy..."

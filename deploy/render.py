@@ -36,7 +36,13 @@ def pvc(n, storage, size):
 
 def deployment(n, image, env, mounts, volumes, port, root=False):
     pod = {'nodeSelector': {'kubernetes.io/arch': 'amd64'}, 'terminationGracePeriodSeconds': 1210, 'containers': [{'name': n, 'image': image, 'ports': [{'containerPort': port}], 'env': [{'name': k, 'value': v} for k,v in env.items()], 'volumeMounts': mounts, 'resources': {'requests': {'cpu': '500m', 'memory': '2Gi' if root else '256Mi'}, 'limits': {'memory': '4Gi' if root else '1Gi'}}, 'readinessProbe': {'httpGet': {'path': '/healthcheck' if root else '/healthz', 'port': port}, 'initialDelaySeconds': 90 if root else 5, 'periodSeconds': 10}, 'livenessProbe': {'httpGet': {'path': '/healthcheck' if root else '/healthz', 'port': port}, 'initialDelaySeconds': 180 if root else 30}}], 'volumes': volumes}
-    if not root: pod['securityContext'] = {'runAsNonRoot': True, 'runAsUser': 1000, 'runAsGroup': 1000, 'fsGroup': 1000}
+    if not root:
+        pod['securityContext'] = {'runAsNonRoot': True, 'runAsUser': 1000, 'runAsGroup': 1000, 'fsGroup': 1000}
+        # The drive writes only to its mounted volumes and /tmp (Restic packs, SQLite temp files).
+        c = pod['containers'][0]
+        c['securityContext'] = {'allowPrivilegeEscalation': False, 'capabilities': {'drop': ['ALL']}, 'seccompProfile': {'type': 'RuntimeDefault'}, 'readOnlyRootFilesystem': True}
+        c['volumeMounts'] = mounts + [{'name': 'tmp', 'mountPath': '/tmp'}]
+        pod['volumes'] = volumes + [{'name': 'tmp', 'emptyDir': {}}]
     d = resource('Deployment', n, {'replicas': 1, 'strategy': {'type': 'Recreate'}, 'selector': {'matchLabels': {'app': n}}, 'template': {'metadata': {'labels': {'app': n}}, 'spec': pod}})
     d['apiVersion'] = 'apps/v1'
     return d
@@ -70,7 +76,8 @@ def render(a):
     for directory in ['postgresql', 'rabbitmq', 'redis']:
         pod['containers'][0]['volumeMounts'].append({'name': 'runtime', 'mountPath': '/var/lib/'+directory, 'subPath': directory})
     # Preserve the distribution's initialized databases before empty PVC mounts hide them.
-    seed = 'set -eu\nif test ! -f /seed/.vendor-state-seeded; then\n  for pair in postgresql:/var/lib/postgresql rabbitmq:/var/lib/rabbitmq redis:/var/lib/redis editor-runtime:/var/lib/euro-office editor-data:/var/www/euro-office/Data; do\n    name=${pair%%:*}; source=${pair#*:}\n    mkdir -p /seed/$name\n    test -z "$(ls -A /seed/$name)"\n    stage=$(mktemp -d /seed/.seed-$name.XXXXXX)\n    cp -a "$source/." "$stage/"\n    chown --reference="$source" "$stage"\n    chmod --reference="$source" "$stage"\n    rmdir /seed/$name\n    mv "$stage" /seed/$name\n  done\n  touch /seed/.vendor-state-seeded\nfi\n'
+    # A per-directory marker lets a start interrupted between moves resume; stale stages go.
+    seed = 'set -eu\nif test ! -f /seed/.vendor-state-seeded; then\n  for pair in postgresql:/var/lib/postgresql rabbitmq:/var/lib/rabbitmq redis:/var/lib/redis editor-runtime:/var/lib/euro-office editor-data:/var/www/euro-office/Data; do\n    name=${pair%%:*}; source=${pair#*:}\n    test -f /seed/.seeded-$name && continue\n    rm -rf /seed/.seed-$name.*\n    mkdir -p /seed/$name\n    test -z "$(ls -A /seed/$name)"\n    stage=$(mktemp -d /seed/.seed-$name.XXXXXX)\n    cp -a "$source/." "$stage/"\n    chown --reference="$source" "$stage"\n    chmod --reference="$source" "$stage"\n    rmdir /seed/$name\n    mv "$stage" /seed/$name\n    touch /seed/.seeded-$name\n  done\n  touch /seed/.vendor-state-seeded\nfi\n'
     pod['initContainers'] = [{'name': 'seed-bundled-services', 'image': a.editor_image, 'command': ['/bin/sh', '-ec', seed], 'volumeMounts': [{'name': 'runtime', 'mountPath': '/seed'}]}]
     items = [ns, sec, claim, euro] + expose('euro-office', a.editor_url, 80, a.ingress_class)
     profile = 'NAS endpoint '+a.drive_url
