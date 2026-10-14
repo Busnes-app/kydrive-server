@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +75,33 @@ func TestEncryptionKeyPersistsAcrossLoads(t *testing.T) {
 	}
 	if len(a.Security.EncryptionKey) != 32 || !bytes.Equal(a.Security.EncryptionKey, b.Security.EncryptionKey) {
 		t.Fatal("encryption key was not persisted between loads")
+	}
+	if !a.Security.KeyInDataDir {
+		t.Fatal("keyfile in the data directory not reported")
+	}
+	t.Setenv("KY_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+	if c, err := config.LoadFromEnv(); err != nil || !c.Security.KeyInDataDir {
+		t.Fatalf("leftover keyfile not reported with an environment key: %v", err)
+	}
+	if err = os.Remove(filepath.Join(os.Getenv("KY_DATA_DIR"), "encryption.key")); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
+		t.Fatalf("environment key reported as in the data directory: %v", err)
+	}
+	// An interrupted drill leaves an opened capsule, deployment key included, under drill/.
+	residue := filepath.Join(os.Getenv("KY_DATA_DIR"), "drill", "drill-interrupted")
+	if err = os.MkdirAll(residue, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := config.LoadFromEnv(); err != nil || !c.Security.KeyInDataDir {
+		t.Fatalf("drill residue not reported: %v", err)
+	}
+	if err = os.RemoveAll(residue); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
+		t.Fatalf("empty drill directory reported: %v", err)
 	}
 }
 

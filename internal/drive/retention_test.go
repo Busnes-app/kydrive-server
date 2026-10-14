@@ -179,7 +179,7 @@ func TestRetentionIsNotStarvedByStuckItems(t *testing.T) {
 INSERT INTO drive_files(id,workspace,parent,name,revision,trashed,trashed_at) SELECT 'stuck'||i,?,'','s'||i,1,true,'2000-01-01T00:00:00Z' FROM n`, w.ID)
 	must(`INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires) SELECT 'sess'||id,id,1,'worker','h',99999999999 FROM drive_files WHERE id LIKE 'stuck%'`)
 	must(`INSERT INTO drive_files(id,workspace,parent,name,revision,trashed,trashed_at) VALUES('free',?,'','free',1,true,'2001-01-01T00:00:00Z')`, w.ID)
-	must(`INSERT INTO drive_versions VALUES('free',1,'b','d',0,'2001-01-01T00:00:00Z')`)
+	must(`INSERT INTO drive_versions(file_id,revision,blob,digest,size,created) VALUES('free',1,'b','d',0,'2001-01-01T00:00:00Z')`)
 	if _, err := d.ApplyRetention(ctx, time.Now()); err != nil {
 		t.Fatal(err)
 	}

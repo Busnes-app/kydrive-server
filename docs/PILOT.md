@@ -48,6 +48,10 @@ Do not claim production readiness from local tests. Preserve existing services, 
 
 - Sealed backup after the role change succeeded locally and at KyRecovery: capsule `cap-KyDrive-1791095912078638861`, digest `7f86f5e5fc4c9855dac2a350ec145225602ce4d8a2115a765cb9c07f80dfe84b`, 23317 bytes, deposited 2026-10-04T06:38:32.088368115Z. This preserves the grant and audit in recovery metadata.
 
+## Encryption key location
+
+Blob encryption protects the NAS data directory only when the deployment key is not in it. Before relying on it, move the existing `data/encryption.key` hex into the container's environment secret as `KY_ENCRYPTION_KEY` (the same key, or existing files and MFA secrets become unreadable), remove the file from the data bind, restart, then confirm the Recovery screen notice is gone. The pilot's current key location is unverified.
+
 ## Remaining pilot gates
 
 Live collaboration and offboarding, full editor pod restart/rollback and custodian-led recovery remain open. All three named storage helpers were removed through audited commands; each completed successfully. The user's independent bulk destination deferral remains explicit: NAS-local Restic copies do not protect against losing the NAS. First-start renderer fixes were committed and pushed as `ae45aa4`; they do not change the running drive binary.

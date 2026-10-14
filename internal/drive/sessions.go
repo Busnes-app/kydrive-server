@@ -88,7 +88,7 @@ func (s *Store) EditorDownload(ctx context.Context, id, token string) (File, err
 	if err != nil || f.Trashed {
 		return File{}, ErrDenied
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT blob,digest,size FROM drive_versions WHERE file_id=? AND revision=?`, file, revision).Scan(&f.Blob, &f.Digest, &f.Size)
+	err = s.db.QueryRowContext(ctx, `SELECT blob,digest,size,sealed FROM drive_versions WHERE file_id=? AND revision=?`, file, revision).Scan(&f.Blob, &f.Digest, &f.Size, &f.Sealed)
 	f.Revision = revision
 	return f, err
 }

@@ -95,8 +95,8 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 		if err = authorize(ctx, tx, user, src.Workspace, 1); err != nil {
 			return err
 		}
-		out.Size, out.Digest, out.Blob = src.Size, src.Digest, src.Blob
-		return publishTX(ctx, tx, user, out, Version{FileID: out.ID, Revision: 1, Blob: src.Blob, Digest: src.Digest, Size: src.Size, Created: now()}, 0)
+		out.Size, out.Digest, out.Blob, out.Sealed = src.Size, src.Digest, src.Blob, src.Sealed
+		return publishTX(ctx, tx, user, out, Version{FileID: out.ID, Revision: 1, Blob: src.Blob, Digest: src.Digest, Size: src.Size, Created: now(), Sealed: src.Sealed}, 0)
 	})
 	return out, err
 }

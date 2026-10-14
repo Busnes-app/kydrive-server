@@ -26,6 +26,7 @@ type BulkFile struct {
 	Blob   string `json:"blob"`
 	Digest string `json:"digest"`
 	Size   int64  `json:"size"`
+	Sealed bool   `json:"sealed,omitempty"`
 }
 type BulkManifest struct {
 	Version  int        `json:"version"`
@@ -118,7 +119,15 @@ func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkF
 	if exists == 0 {
 		return nil, nil
 	}
-	rows, err := db.QueryContext(ctx, `SELECT DISTINCT blob,digest,size FROM drive_versions ORDER BY blob`)
+	// Databases from before blob sealing have no sealed column; every blob there is plaintext.
+	sealed := "0"
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('drive_versions') WHERE name='sealed'`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists == 1 {
+		sealed = "sealed"
+	}
+	rows, err := db.QueryContext(ctx, `SELECT DISTINCT blob,digest,size,`+sealed+` FROM drive_versions ORDER BY blob`)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +135,7 @@ func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkF
 	var files []BulkFile
 	for rows.Next() {
 		var f BulkFile
-		if err = rows.Scan(&f.Blob, &f.Digest, &f.Size); err != nil {
+		if err = rows.Scan(&f.Blob, &f.Digest, &f.Size, &f.Sealed); err != nil {
 			return nil, err
 		}
 		files = append(files, f)
@@ -165,7 +174,7 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]by
 		}
 	}
 	for _, f := range files {
-		if err = verifyBulkFile(filepath.Join(root, f.Blob), f); err != nil {
+		if err = verifyBulkFile(filepath.Join(root, f.Blob), f, key); err != nil {
 			return nil, err
 		}
 	}
@@ -190,14 +199,20 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte) ([]by
 	if !shaPattern.MatchString(snapshot) {
 		return nil, errors.New("restic did not return a full snapshot ID")
 	}
-	return json.Marshal(BulkManifest{Version: 1, Snapshot: snapshot, Root: "/blobs", Files: files})
+	return json.Marshal(BulkManifest{Version: 2, Snapshot: snapshot, Root: "/blobs", Files: files})
 }
-func verifyBulkFile(path string, f BulkFile) error {
+
+// verifyBulkFile checks a blob's size and plaintext digest, decrypting a sealed blob.
+func verifyBulkFile(path string, f BulkFile, key []byte) error {
+	size := f.Size
+	if f.Sealed {
+		size = drive.SealedSize(f.Size)
+	}
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() != f.Size {
+	if err != nil || !info.Mode().IsRegular() || info.Size() != size {
 		return errors.New("bulk file missing or size differs")
 	}
-	file, err := os.Open(path)
+	file, err := drive.OpenBlob(path, key, f.Sealed, f.Size)
 	if err != nil {
 		return err
 	}
@@ -225,7 +240,7 @@ func RestoreBulk(ctx context.Context, openedDir, repository, target string) erro
 	if err = dec.Decode(&manifest); err != nil {
 		return err
 	}
-	if manifest.Version != 1 || !shaPattern.MatchString(manifest.Snapshot) || !filepath.IsAbs(manifest.Root) || strings.Contains(manifest.Root, ":") || len(manifest.Files) == 0 {
+	if manifest.Version != 1 && manifest.Version != 2 || !shaPattern.MatchString(manifest.Snapshot) || !filepath.IsAbs(manifest.Root) || strings.Contains(manifest.Root, ":") || len(manifest.Files) == 0 {
 		return errors.New("invalid bulk manifest")
 	}
 	dbBytes, err := os.ReadFile(filepath.Join(openedDir, "data/ky_server.db"))
@@ -269,10 +284,10 @@ func RestoreBulk(ctx context.Context, openedDir, repository, target string) erro
 	}
 	for _, f := range manifest.Files {
 		path, e := drive.BlobPath(scratch, f.Blob)
-		if e != nil || f.Size < 0 || !shaPattern.MatchString(f.Digest) {
+		if e != nil || f.Size < 0 || !shaPattern.MatchString(f.Digest) || f.Sealed && manifest.Version < 2 {
 			return errors.New("invalid bulk file reference")
 		}
-		if err = verifyBulkFile(path, f); err != nil {
+		if err = verifyBulkFile(path, f, key); err != nil {
 			return err
 		}
 	}

@@ -43,3 +43,26 @@ func RetainVersion(ctx context.Context, s *Store, id string, revision int64) ([]
 func SetTrashAs(ctx context.Context, s *Store, user, id, workspace string, expected int64, trash bool) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error { return setTrash(ctx, tx, user, id, workspace, expected, trash) })
 }
+
+// SealUntilCommit runs one legacy swap up to its commit and stops, as a crash before cleanup would.
+func SealUntilCommit(ctx context.Context, s *Store, root string, key []byte, id string) error {
+	v, err := s.sealCopy(ctx, root, key, id)
+	if err != nil {
+		return err
+	}
+	return s.swapBlob(ctx, root, id, v)
+}
+
+// SealCopy and SwapBlob are the two halves of one legacy swap, so tests can interleave a purge.
+func SealCopy(ctx context.Context, s *Store, root string, key []byte, id string) (Version, error) {
+	return s.sealCopy(ctx, root, key, id)
+}
+
+func SwapBlob(ctx context.Context, s *Store, root, old string, v Version) error {
+	return s.swapBlob(ctx, root, old, v)
+}
+
+func QueryInt(ctx context.Context, s *Store, q string, args ...any) (n int, err error) {
+	err = s.db.QueryRowContext(ctx, q, args...).Scan(&n)
+	return
+}
