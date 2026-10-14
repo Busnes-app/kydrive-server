@@ -25,7 +25,7 @@ import (
 )
 
 // appVersion is what the capsule manifest records for this build.
-const appVersion = "0.1.0"
+const appVersion = "0.4.0"
 
 func main() {
 	if len(os.Args) > 1 {
