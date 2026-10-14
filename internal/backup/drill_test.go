@@ -98,6 +98,10 @@ func TestDrillRootIsUnderTheDataDir(t *testing.T) {
 	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		t.Fatalf("drill root %q is not under data dir %q", root, cfg.Database.DataDir)
 	}
+	// config.KeyInDataDir watches this path for drill residue.
+	if rel != "drill" {
+		t.Fatalf("drill root %q moved; update config's residue check", rel)
+	}
 }
 
 func manifestFor(payload recoveryclient.Payload) capsule.Manifest {

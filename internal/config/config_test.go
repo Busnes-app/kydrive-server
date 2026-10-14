@@ -89,6 +89,20 @@ func TestEncryptionKeyPersistsAcrossLoads(t *testing.T) {
 	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
 		t.Fatalf("environment key reported as in the data directory: %v", err)
 	}
+	// An interrupted drill leaves an opened capsule, deployment key included, under drill/.
+	residue := filepath.Join(os.Getenv("KY_DATA_DIR"), "drill", "drill-interrupted")
+	if err = os.MkdirAll(residue, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := config.LoadFromEnv(); err != nil || !c.Security.KeyInDataDir {
+		t.Fatalf("drill residue not reported: %v", err)
+	}
+	if err = os.RemoveAll(residue); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := config.LoadFromEnv(); err != nil || c.Security.KeyInDataDir {
+		t.Fatalf("empty drill directory reported: %v", err)
+	}
 }
 
 func TestEncryptionKeyFromEnvMustBe32Bytes(t *testing.T) {

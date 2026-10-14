@@ -60,7 +60,8 @@ type SecurityConfig struct {
 	// address falls inside it may speak for a client other than itself.
 	TrustedProxies []netip.Prefix `json:"-"`
 	// KeyInDataDir is set while <DataDir>/encryption.key exists, whether or not the key was
-	// read from it: a copy of the data directory then carries the key that decrypts it.
+	// read from it, or while <DataDir>/drill holds residue of an interrupted recovery drill
+	// (its opened capsule carries the key): a copy of the data directory then decrypts itself.
 	KeyInDataDir bool `json:"-"`
 }
 
@@ -151,6 +152,7 @@ func LoadFromEnv() (*Config, error) {
 		}
 	}
 	_, statErr := os.Lstat(keyPath)
+	drillResidue, _ := os.ReadDir(filepath.Join(dataDir, "drill"))
 
 	depositInterval, err := getEnvDuration("KY_BACKUP_DEPOSIT_INTERVAL", 24*time.Hour)
 	if err != nil {
@@ -206,7 +208,7 @@ func LoadFromEnv() (*Config, error) {
 		Security: SecurityConfig{
 			SessionSecret:  sessionSecret,
 			EncryptionKey:  encryptionKey,
-			KeyInDataDir:   statErr == nil,
+			KeyInDataDir:   statErr == nil || len(drillResidue) > 0,
 			CookieSecure:   getEnvBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:   getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:     7 * 24 * time.Hour,
