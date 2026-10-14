@@ -253,7 +253,7 @@ func TestSchemaBackfillsOwnerNames(t *testing.T) {
 	if cfg.Driver != "sqlite" {
 		t.Skip("drive is SQLite-only")
 	}
-	st, err := store.Open(ctx, cfg)
+	st, err := store.Open(ctx, cfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestSchemaBackfillsOwnerNames(t *testing.T) {
 	if _, err = db.ExecContext(ctx, `ALTER TABLE drive_personal_workspaces DROP COLUMN owner_name; DELETE FROM drive_schema WHERE version=4`); err != nil {
 		t.Fatal(err)
 	}
-	if st, err = store.Open(ctx, cfg); err != nil {
+	if st, err = store.Open(ctx, cfg, testdb.Key); err != nil {
 		t.Fatal(err)
 	}
 	st.Close()

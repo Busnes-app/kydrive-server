@@ -48,7 +48,7 @@ func newBulkFixture(t *testing.T) *bulkFixture {
 		t.Skip("drive SQLite-only")
 	}
 	dbCfg.DataDir = f.dir
-	st, err := store.Open(ctx, dbCfg)
+	st, err := store.Open(ctx, dbCfg, f.key)
 	if err != nil {
 		t.Fatal(err)
 	}

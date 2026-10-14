@@ -69,7 +69,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			st, err := store.Open(context.Background(), cfg.Database)
+			st, err := store.Open(context.Background(), cfg.Database, cfg.Security.EncryptionKey)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -84,7 +84,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			st, err := store.Open(context.Background(), cfg.Database)
+			st, err := store.Open(context.Background(), cfg.Database, cfg.Security.EncryptionKey)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -111,7 +111,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			st, err := store.Open(context.Background(), cfg.Database)
+			st, err := store.Open(context.Background(), cfg.Database, cfg.Security.EncryptionKey)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -168,7 +168,7 @@ func runServer() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize database (%s): %v", cfg.Database.Driver, err)
 	}
@@ -419,7 +419,7 @@ func runDeposit() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("DB error: %v", err)
 	}
@@ -450,7 +450,7 @@ func runInitAdmin(args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("DB error: %v", err)
 	}
@@ -502,7 +502,7 @@ func runBackupDrill(args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("DB error: %v", err)
 	}
@@ -537,7 +537,7 @@ func runExportCapsule(args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("DB error: %v", err)
 	}

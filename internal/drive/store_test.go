@@ -1,7 +1,6 @@
 package drive_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -17,7 +16,7 @@ import (
 func fixture(t *testing.T) (store.Store, drive.Workspace, string) {
 	t.Helper()
 	ctx := context.Background()
-	st, err := store.Open(ctx, testdb.Config(t))
+	st, err := store.Open(ctx, testdb.Config(t), testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +43,7 @@ func fixture(t *testing.T) (store.Store, drive.Workspace, string) {
 	return st, w, t.TempDir()
 }
 
-var testKey = bytes.Repeat([]byte{7}, 32)
+var testKey = testdb.Key
 
 func blob(t *testing.T, root, body string) drive.Version {
 	t.Helper()

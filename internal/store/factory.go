@@ -14,12 +14,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Open initializes and returns the configured database store backend.
-func Open(ctx context.Context, cfg config.DatabaseConfig) (Store, error) {
+// Open initializes and returns the configured database store backend. key is the
+// deployment key (Security.EncryptionKey); the SQLite drive store refuses to open without it.
+func Open(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, error) {
 	driver := strings.ToLower(cfg.Driver)
 	switch driver {
 	case "sqlite", "sqlite3", "":
-		return openSQLite(ctx, cfg.DSN)
+		return openSQLite(ctx, cfg.DSN, key)
 	case "postgres", "postgresql", "pgx":
 		return openPostgres(ctx, cfg.DSN, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
 	default:
@@ -27,7 +28,7 @@ func Open(ctx context.Context, cfg config.DatabaseConfig) (Store, error) {
 	}
 }
 
-func openSQLite(ctx context.Context, dsn string) (Store, error) {
+func openSQLite(ctx context.Context, dsn string, key []byte) (Store, error) {
 	filePath := dsn
 	if idx := strings.Index(dsn, "?"); idx != -1 {
 		filePath = dsn[:idx]
@@ -63,7 +64,7 @@ func openSQLite(ctx context.Context, dsn string) (Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return newSQLStore(ctx, db, "sqlite")
+	return newSQLStore(ctx, db, "sqlite", key)
 }
 
 func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLifetime time.Duration) (Store, error) {
@@ -91,5 +92,5 @@ func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLife
 		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
 	}
 
-	return newSQLStore(ctx, db, "postgres")
+	return newSQLStore(ctx, db, "postgres", nil)
 }

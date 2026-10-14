@@ -22,6 +22,11 @@ var ErrKeyLength = errors.New("crypto: AES-256-GCM key must be exactly 32 bytes"
 // EncryptAESGCM encrypts plaintext with AES-256-GCM under a 32-byte key and a random
 // 12-byte nonce, returning nonce||ciphertext as raw base64url.
 func EncryptAESGCM(plaintext, key []byte) (string, error) {
+	return EncryptAESGCMAAD(plaintext, key, nil)
+}
+
+// EncryptAESGCMAAD is EncryptAESGCM authenticating aad too; decrypting needs the same aad.
+func EncryptAESGCMAAD(plaintext, key, aad []byte) (string, error) {
 	aesGCM, err := newGCM(key)
 	if err != nil {
 		return "", err
@@ -30,11 +35,16 @@ func EncryptAESGCM(plaintext, key []byte) (string, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(aesGCM.Seal(nonce, nonce, plaintext, nil)), nil
+	return base64.RawURLEncoding.EncodeToString(aesGCM.Seal(nonce, nonce, plaintext, aad)), nil
 }
 
 // DecryptAESGCM reverses EncryptAESGCM.
 func DecryptAESGCM(encoded string, key []byte) ([]byte, error) {
+	return DecryptAESGCMAAD(encoded, key, nil)
+}
+
+// DecryptAESGCMAAD reverses EncryptAESGCMAAD.
+func DecryptAESGCMAAD(encoded string, key, aad []byte) ([]byte, error) {
 	aesGCM, err := newGCM(key)
 	if err != nil {
 		return nil, err
@@ -47,7 +57,7 @@ func DecryptAESGCM(encoded string, key []byte) ([]byte, error) {
 		return nil, ErrCiphertextTooShort
 	}
 	nonce, ciphertext := data[:aesGCM.NonceSize()], data[aesGCM.NonceSize():]
-	return aesGCM.Open(nil, nonce, ciphertext, nil)
+	return aesGCM.Open(nil, nonce, ciphertext, aad)
 }
 
 func newGCM(key []byte) (cipher.AEAD, error) {

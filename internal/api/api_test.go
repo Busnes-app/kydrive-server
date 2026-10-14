@@ -42,7 +42,7 @@ func setupTestServer(t *testing.T) (*api.Server, store.Store, *config.Config) {
 	cfg.Database = db
 	cfg.Captcha.Provider = "none" // disable captcha for unit test speed
 
-	st, err := store.Open(context.Background(), cfg.Database)
+	st, err := store.Open(context.Background(), cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		t.Fatalf("failed to open store: %v", err)
 	}

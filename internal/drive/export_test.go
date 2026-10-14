@@ -15,6 +15,8 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 	return blobs, err
 }
 
+func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
+
 func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {
 	_, err := s.db.ExecContext(ctx, q, args...)
 	return err
@@ -65,4 +67,9 @@ func SwapBlob(ctx context.Context, s *Store, root, old string, v Version) error 
 func QueryInt(ctx context.Context, s *Store, q string, args ...any) (n int, err error) {
 	err = s.db.QueryRowContext(ctx, q, args...).Scan(&n)
 	return
+}
+
+// RawNames returns the stored name and name_hmac of every row in table.
+func RawNames(ctx context.Context, s *Store, table string) ([]string, error) {
+	return column(ctx, s.db, `SELECT name||' '||name_hmac FROM `+table)
 }

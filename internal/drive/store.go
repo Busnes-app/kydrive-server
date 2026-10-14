@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -19,7 +20,10 @@ var (
 	ErrInvalid  = errors.New("invalid drive input")
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db    *sql.DB
+	names names
+}
 type Workspace struct {
 	Kind         string `json:"kind"`
 	ID           string `json:"id"`
@@ -71,8 +75,13 @@ type Event struct {
 	Created  string `json:"created"`
 }
 
-func New(ctx context.Context, db *sql.DB) (*Store, error) {
-	_, err := db.ExecContext(ctx, `
+// New opens the drive store. key is the deployment key; names are sealed under keys derived from it.
+func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
+	n, err := newNames(key)
+	if err != nil {
+		return nil, err
+	}
+	_, err = db.ExecContext(ctx, `
  CREATE UNIQUE INDEX IF NOT EXISTS drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';
  CREATE UNIQUE INDEX IF NOT EXISTS drive_group_external ON groups(external_id) WHERE external_id!='';
  CREATE TABLE IF NOT EXISTS drive_service_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires BIGINT NOT NULL,revoked BOOLEAN NOT NULL DEFAULT false);
@@ -92,7 +101,10 @@ func New(ctx context.Context, db *sql.DB) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db}
+	if err = checkKey(ctx, db, key); err != nil {
+		return nil, err
+	}
+	s := &Store{db: db, names: n}
 	if err = s.migrate(ctx); err != nil {
 		return nil, err
 	}
@@ -369,8 +381,12 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		if err := parentOK(ctx, tx, workspace, parent); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name) VALUES(?,?,?,?)`, f.ID, workspace, parent, name); err != nil {
+		stored, mac, err := s.names.seal("drive_folders", f.ID, name)
+		if err != nil {
 			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES(?,?,?,?,?)`, f.ID, workspace, parent, stored, mac); err != nil {
+			return restoreErr(err)
 		}
 		return event(ctx, tx, user, "folder.created", f.ID)
 	})
@@ -380,7 +396,7 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=? ORDER BY name`, workspace, trashed)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=?`, workspace, trashed)
 	if err != nil {
 		return nil, err
 	}
@@ -391,23 +407,30 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
 			return nil, err
 		}
+		if f.Name, err = s.names.open("drive_folders", f.ID, f.Name); err != nil {
+			return nil, err
+		}
 		out = append(out, f)
 	}
+	slices.SortStableFunc(out, func(a, b Folder) int { return strings.Compare(a.Name, b.Name) })
 	return out, rows.Err()
 }
 
 const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed`
 
-func scanFile(row interface{ Scan(...any) error }) (File, error) {
+func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
 	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = ErrDenied
+		return f, ErrDenied
+	}
+	if err == nil {
+		f.Name, err = s.names.open("drive_files", f.ID, f.Name)
 	}
 	return f, err
 }
 func (s *Store) File(ctx context.Context, user, id string, need int) (File, error) {
-	f, err := scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
+	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
 	if err != nil {
 		return f, err
 	}
@@ -418,19 +441,20 @@ func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool)
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.workspace=? AND f.trashed=? ORDER BY f.name`, workspace, trashed)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.workspace=? AND f.trashed=?`, workspace, trashed)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []File{}
 	for rows.Next() {
-		f, e := scanFile(rows)
+		f, e := s.scanFile(rows)
 		if e != nil {
 			return nil, e
 		}
 		out = append(out, f)
 	}
+	slices.SortStableFunc(out, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
 	return out, rows.Err()
 }
 
@@ -445,7 +469,7 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	v.FileID = f.ID
 	v.Revision = expected + 1
 	v.Created = time.Now().UTC().Format(time.RFC3339Nano)
-	err := s.transaction(ctx, func(tx *sql.Tx) error { return publishTX(ctx, tx, user, f, v, expected) })
+	err := s.transaction(ctx, func(tx *sql.Tx) error { return s.publishTX(ctx, tx, user, f, v, expected) })
 	if err != nil {
 		return f, err
 	}
@@ -527,7 +551,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 			}
 			return err
 		}
-		return publishTX(ctx, tx, user, f, v, expected)
+		return s.publishTX(ctx, tx, user, f, v, expected)
 	})
 	if err != nil {
 		return f, err
@@ -555,7 +579,7 @@ func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 	return out, rows.Err()
 }
 
-func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, expected int64) error {
+func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, expected int64) error {
 	if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
 		return err
 	}
@@ -566,7 +590,11 @@ func publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, 
 		return err
 	}
 	if expected == 0 {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,revision) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, f.Name, 1); err != nil {
+		stored, mac, err := s.names.seal("drive_files", f.ID, f.Name)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,name_hmac,revision) VALUES(?,?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, stored, mac, 1); err != nil {
 			if uniqueViolation(err) {
 				return fmt.Errorf("%w: name or file exists", ErrConflict)
 			}
