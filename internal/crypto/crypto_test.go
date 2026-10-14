@@ -2,6 +2,7 @@ package crypto_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"testing"
 
@@ -83,16 +84,20 @@ func TestPKCEGeneration(t *testing.T) {
 }
 
 func TestDeriveKey(t *testing.T) {
-	master := []byte("0123456789abcdef0123456789abcdef")
-	a := crypto.DeriveKey(master, "app:setting:one")
-	b := crypto.DeriveKey(master, "app:setting:two")
-	if len(a) != 32 {
-		t.Fatalf("derived key is %d bytes, want 32", len(a))
+	master := bytes.Repeat([]byte{0x01}, 32)
+	derive := func(label string) []byte {
+		k, err := crypto.DeriveKey(master, label)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k
 	}
-	if string(a) == string(b) {
-		t.Error("two different labels derived the same key")
+	a, b := derive("app:setting:one"), derive("app:setting:two")
+	if len(a) != 32 || bytes.Equal(a, b) || !bytes.Equal(a, derive("app:setting:one")) {
+		t.Fatal("derived keys must be 32 bytes, distinct per label and stable")
 	}
-	if string(a) != string(crypto.DeriveKey(master, "app:setting:one")) {
-		t.Error("the same label derived a different key on a second call")
+	// Restic repositories and TOTP rows are sealed under these; the output is a stored format.
+	if got := hex.EncodeToString(derive("kydrive:restic")); got != "8f9675f4176dc6ba3055bf1746d3dca7f04341318b53a7694523d88597299edd" {
+		t.Fatalf("kydrive:restic derivation changed: %s", got)
 	}
 }

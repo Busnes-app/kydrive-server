@@ -88,14 +88,14 @@ func TestConcurrentPublicationPermissionsAndOffboarding(t *testing.T) {
 	if success != 1 || conflict != 1 {
 		t.Fatalf("success %d conflict %d", success, conflict)
 	}
-	session, err := d.EditorSession(ctx, "worker", f.ID, "randomtoken")
+	session, err := d.EditorSession(ctx, "worker", f.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = st.Users().DeleteUser(ctx, "worker"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = d.EditorDownload(ctx, session.ID, "randomtoken"); !errors.Is(err, drive.ErrDenied) {
+	if _, err = d.EditorDownload(ctx, session.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatal(err)
 	}
 	pending, err := d.PendingRevocations(ctx)
@@ -131,7 +131,7 @@ func TestEditorForceSaveRetriesAndCompetingUpload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := d.EditorSession(ctx, "worker", f.ID, "token")
+	e, err := d.EditorSession(ctx, "worker", f.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
 	if !personal || !team {
 		t.Fatal(ws)
 	}
-	session, err := d.EditorSession(ctx, "worker", file.ID, "private-token")
+	session, err := d.EditorSession(ctx, "worker", file.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
 	if err := st.Users().DeleteUser(ctx, "worker"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.EditorDownload(ctx, session.ID, "private-token"); !errors.Is(err, drive.ErrDenied) {
+	if _, err := d.EditorDownload(ctx, session.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatal("offboarded personal download", err)
 	}
 	pending, err = d.PendingRevocations(ctx)

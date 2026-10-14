@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Busnes-app/kydrive-server/internal/auth"
+	"github.com/Busnes-app/kydrive-server/internal/api"
 )
 
 func TestOpenInNewTabPreferenceAPI(t *testing.T) {
@@ -20,8 +20,7 @@ func TestOpenInNewTabPreferenceAPI(t *testing.T) {
 			req.AddCookie(c)
 		}
 		if csrf {
-			req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-			req.Header.Set(auth.HeaderCSRF, "test-csrf")
+			api.SignCSRFForTest(srv, req)
 		}
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)

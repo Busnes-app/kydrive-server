@@ -1,10 +1,17 @@
 package api
 
 import (
+	"net/http"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
+
+// SignCSRFForTest sets the CSRF header that the request's own session cookie earns. Test-only.
+func SignCSRFForTest(s *Server, r *http.Request) {
+	r.Header.Set(auth.HeaderCSRF, s.sessions.CSRFToken(s.sessions.SessionToken(r)))
+}
 
 // SetRecoveryClientForTest replaces the KyRecovery pairing client. Test-only: this file is not
 // part of the package build.

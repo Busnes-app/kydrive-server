@@ -63,13 +63,10 @@ echo "==> CLI subcommands"
 check "version exits 0" "$("$BIN" version >/dev/null 2>&1 && echo 0 || echo 1)" "0"
 contains "version prints name" "$("$BIN" version)" "kydrive-server"
 
-# The drill seals to a throwaway key and reopens it, so the pipeline runs even unpaired.
-# Whether the suite key is pinned is the status route's report, not the drill's.
-DRILL_OUT="$(KY_DATA_DIR="$WORK/data" KY_PORT="$PORT" KY_DB_DRIVER=sqlite "$BIN" backup-drill)"
-contains "backup-drill seals and reopens the payload" "$DRILL_OUT" "extracted into a 0700 sandbox"
-contains "backup-drill verifies the required files" "$DRILL_OUT" "required files verified"
-contains "backup-drill checks database integrity" "$DRILL_OUT" "integrity_check passed"
-contains "backup-drill passes on a complete payload" "$DRILL_OUT" "Status:   PASSED"
+# Operator commands never mint a deployment: no key or database, no run.
+check "backup-drill refuses a missing deployment" \
+  "$(KY_DATA_DIR="$WORK/data" KY_DB_DRIVER=sqlite "$BIN" backup-drill >/dev/null 2>&1 && echo 0 || echo 1)" "1"
+check "backup-drill created nothing" "$(test -e "$WORK/data/encryption.key" && echo 0 || echo 1)" "1"
 
 check "init-admin rejects short password" \
   "$(KY_DATA_DIR="$WORK/cli" KY_DB_DRIVER=sqlite "$BIN" init-admin -password short >/dev/null 2>&1 && echo 0 || echo 1)" "1"
@@ -86,6 +83,12 @@ check "login blocked without captcha token" \
 check "malformed login body rejected" \
   "$(status -X POST -H 'Content-Type: application/json' -d 'not-json' "$BASE/api/auth/login")" "400"
 check "login rejects GET" "$(status "$BASE/api/auth/login")" "405"
+check "login refuses a form-encodable body" \
+  "$(status -X POST -H 'Content-Type: text/plain' -d '{"username":"admin","password":"x"}' "$BASE/api/auth/login")" "415"
+check "login refuses a cross-site Origin" \
+  "$(status -X POST -H 'Content-Type: application/json' -H 'Origin: https://evil.example' -d '{}' "$BASE/api/auth/login")" "403"
+check "placeholder secret refuses to start" \
+  "$(KY_DATA_DIR="$WORK/cli" KY_SESSION_SECRET=replace-with-secret "$BIN" init-admin -password "$ADMIN_PASS" >/dev/null 2>&1 && echo 0 || echo 1)" "1"
 check "pow challenge issued" "$(status "$BASE/api/auth/pow-challenge")" "200"
 contains "unauthenticated /me reports not authenticated" "$(curl -s "$BASE/api/auth/me")" '"authenticated":false' 
 check "scim rejects missing bearer" "$(status "$BASE/scim/v2/Users")" "401"
@@ -99,6 +102,14 @@ check "anonymous cannot unpair" "$(status -X DELETE "$BASE/api/backup/pairing")"
 check "anonymous cannot set site theme" "$(status -X POST -H 'Content-Type: application/json' -d '{"theme":"oled"}' "$BASE/api/settings/theme")" "401"
 check "scim rejects wrong bearer" "$(status -H 'Authorization: Bearer wrong' "$BASE/scim/v2/Users")" "401"
 stop_server
+
+# The drill seals to a throwaway key and reopens it, so the pipeline runs even unpaired.
+# Whether the suite key is pinned is the status route's report, not the drill's.
+DRILL_OUT="$(KY_DATA_DIR="$WORK/data" KY_PORT="$PORT" KY_DB_DRIVER=sqlite "$BIN" backup-drill)"
+contains "backup-drill seals and reopens the payload" "$DRILL_OUT" "extracted into a 0700 sandbox"
+contains "backup-drill verifies the required files" "$DRILL_OUT" "required files verified"
+contains "backup-drill checks database integrity" "$DRILL_OUT" "integrity_check passed"
+contains "backup-drill passes on a complete payload" "$DRILL_OUT" "Status:   PASSED"
 
 echo "==> HTTP auth flow (captcha disabled)"
 start_server none
@@ -176,20 +187,20 @@ check "schedule accepts off" \
 contains "status reads the schedule back" "$(curl -s -b "$WORK/cookies" "$BASE/api/backup/status")" '"interval_sec":0'
 check "run refuses without a key" "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X POST "$BASE/api/backup/deposit")" "412"
 check "unpair refuses while unpaired" "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X DELETE "$BASE/api/backup/pairing")" "412"
-check "cookie write rejects missing CSRF" "$(status -b "$WORK/cookies" -X POST "$BASE/api/devices/pair/init")" "403"
-check "device pairing init" "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X POST "$BASE/api/devices/pair/init")" "200"
-# pair/poll is unauthenticated: holding the secret must not hand over the code, the user or
-# the push token. Poll with a real secret and assert the projection.
-PAIR_INIT="$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X POST "$BASE/api/devices/pair/init")"
-PAIR_SECRET="$(printf '%s' "$PAIR_INIT" | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')"
-PAIR_POLL="$(curl -s "$BASE/api/devices/pair/poll?secret=$PAIR_SECRET")"
-contains "pairing poll reports status" "$PAIR_POLL" '"status"'
-check "pairing poll hides the secret" \
-  "$(if printf '%s' "$PAIR_POLL" | grep -q '"secret"'; then echo leaked; else echo hidden; fi)" "hidden"
-check "pairing poll hides the code" \
-  "$(if printf '%s' "$PAIR_POLL" | grep -q '"code"'; then echo leaked; else echo hidden; fi)" "hidden"
-check "pairing poll hides the push token" \
-  "$(if printf '%s' "$PAIR_POLL" | grep -q '"push_token"'; then echo leaked; else echo hidden; fi)" "hidden"
+PREFS='{"open_in_new_tab":true}'
+check "cookie write rejects missing CSRF" \
+  "$(status -b "$WORK/cookies" -H 'Content-Type: application/json' -d "$PREFS" -X PUT "$BASE/api/auth/preferences")" "403"
+check "cookie write with CSRF" \
+  "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PREFS" -X PUT "$BASE/api/auth/preferences")" "200"
+check "MFA enrolment rejects missing CSRF" \
+  "$(status -b "$WORK/cookies" -H 'Content-Type: application/json' -d '{}' -X POST "$BASE/api/auth/mfa/enroll")" "403"
+contains "MFA enrolment returns an otpauth URI" \
+  "$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{}' -X POST "$BASE/api/auth/mfa/enroll")" '"otpauth_uri":"otpauth://totp/'
+SESSION="$(awk '$6 == "ky_session" { print $7 }' "$WORK/cookies")"
+check "session cookie captured" "$([ -n "$SESSION" ] && echo yes)" "yes"
+check "session token is not a Bearer credential" \
+  "$(status -H "Authorization: Bearer $SESSION" "$BASE/api/drive/workspaces")" "401"
+check "device pairing routes are gone" "$(status "$BASE/api/devices/pair/poll?secret=x")" "404"
 check "logout succeeds" "$(status -b "$WORK/cookies" -c "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X POST "$BASE/api/auth/logout")" "200"
 contains "session dead after logout" "$(curl -s -b "$WORK/cookies" "$BASE/api/auth/me")" '"authenticated":false' 
 stop_server

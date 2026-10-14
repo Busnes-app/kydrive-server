@@ -36,16 +36,16 @@ func TestRetentionEmptiesOldTrash(t *testing.T) {
 	if err := d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {
 		t.Fatal(err)
 	}
-	if blobs, err := d.ApplyRetention(ctx, time.Now().Add(365*24*time.Hour)); err != nil || len(blobs) != 0 {
+	if blobs, err := d.ApplyRetention(ctx, time.Now().Add(365*24*time.Hour), 0); err != nil || len(blobs) != 0 {
 		t.Fatalf("retention off by default: %v %v", blobs, err)
 	}
 	if err := d.SetRetention(ctx, "admin", w.ID, 30, 0); err != nil {
 		t.Fatal(err)
 	}
-	if blobs, err := d.ApplyRetention(ctx, time.Now().Add(29*24*time.Hour)); err != nil || len(blobs) != 0 {
+	if blobs, err := d.ApplyRetention(ctx, time.Now().Add(29*24*time.Hour), 0); err != nil || len(blobs) != 0 {
 		t.Fatalf("purged early: %v", blobs)
 	}
-	blobs, err := d.ApplyRetention(ctx, time.Now().Add(31*24*time.Hour))
+	blobs, err := d.ApplyRetention(ctx, time.Now().Add(31*24*time.Hour), 0)
 	if err != nil || len(blobs) != 1 {
 		t.Fatalf("not purged: %v %v", blobs, err)
 	}
@@ -56,7 +56,7 @@ func TestRetentionSkipsLiveEditorVersions(t *testing.T) {
 	ctx := context.Background()
 	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "v1"), 0)
 	f, _ = d.Publish(ctx, "worker", f, blob(t, root, "v2"), 1)
-	if _, err := d.EditorSession(ctx, "worker", f.ID, "token"); err != nil { // based on revision 2
+	if _, err := d.EditorSession(ctx, "worker", f.ID); err != nil { // based on revision 2
 		t.Fatal(err)
 	}
 	f, _ = d.Publish(ctx, "worker", f, blob(t, root, "v3"), 2)
@@ -66,7 +66,7 @@ func TestRetentionSkipsLiveEditorVersions(t *testing.T) {
 	if err := d.SetRetention(ctx, "admin", w.ID, 0, 2); err != nil {
 		t.Fatal(err)
 	}
-	blobs, err := d.ApplyRetention(ctx, time.Now())
+	blobs, err := d.ApplyRetention(ctx, time.Now(), 0)
 	if err != nil || len(blobs) != 1 {
 		t.Fatalf("expected only revision 1 purged: %v %v", blobs, err)
 	}
@@ -87,7 +87,7 @@ func TestRetentionRemovesExpiredFolderTreesWithEvents(t *testing.T) {
 	if err := d.SetRetention(ctx, "admin", w.ID, 30, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.ApplyRetention(ctx, time.Now().Add(31*24*time.Hour)); err != nil {
+	if _, err := d.ApplyRetention(ctx, time.Now().Add(31*24*time.Hour), 0); err != nil {
 		t.Fatal(err)
 	}
 	fs, _ := d.Folders(ctx, "worker", w.ID, true)
@@ -180,7 +180,7 @@ INSERT INTO drive_files(id,workspace,parent,name,revision,trashed,trashed_at) SE
 	must(`INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires) SELECT 'sess'||id,id,1,'worker','h',99999999999 FROM drive_files WHERE id LIKE 'stuck%'`)
 	must(`INSERT INTO drive_files(id,workspace,parent,name,revision,trashed,trashed_at) VALUES('free',?,'','free',1,true,'2001-01-01T00:00:00Z')`, w.ID)
 	must(`INSERT INTO drive_versions(file_id,revision,blob,digest,size,created) VALUES('free',1,'b','d',0,'2001-01-01T00:00:00Z')`)
-	if _, err := d.ApplyRetention(ctx, time.Now()); err != nil {
+	if _, err := d.ApplyRetention(ctx, time.Now(), 0); err != nil {
 		t.Fatal(err)
 	}
 	vs, _ := d.Versions(ctx, "worker", "free")
@@ -203,7 +203,7 @@ func TestRetentionRefusesPersonalWorkspace(t *testing.T) {
 	if err = d.SetRetention(ctx, "admin", mine, 1, 1); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("admin set retention on My files: %v", err)
 	}
-	if _, err = d.ApplyRetention(ctx, time.Now().Add(3650*24*time.Hour)); err != nil {
+	if _, err = d.ApplyRetention(ctx, time.Now().Add(3650*24*time.Hour), 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = d.File(ctx, "worker", f.ID, 1); err != nil {

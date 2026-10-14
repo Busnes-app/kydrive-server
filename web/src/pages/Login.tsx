@@ -16,6 +16,8 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [captchaToken, setCaptchaToken] = useState<string>('');
+  // A solution is single-use server-side: each attempt mounts a fresh puzzle.
+  const [captchaRound, setCaptchaRound] = useState<number>(0);
   const [mfaChallenge, setMfaChallenge] = useState<MFAChallenge | null>(null);
   const [mfaCode, setMfaCode] = useState<string>('');
   const [isRecoveryCode, setIsRecoveryCode] = useState<boolean>(false);
@@ -37,6 +39,8 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
           captcha_token: captchaToken || undefined,
         }),
       });
+      setCaptchaToken('');
+      setCaptchaRound((n) => n + 1);
 
       const data = await resp.json();
       if (!resp.ok) {
@@ -207,7 +211,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
                 />
               </div>
 
-              <CaptchaWidget onToken={(tok) => setCaptchaToken(tok)} />
+              <CaptchaWidget key={captchaRound} onToken={setCaptchaToken} />
 
               <button type="submit" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} disabled={loading}>
                 <LogIn size={16} />

@@ -90,8 +90,8 @@ func (s *Store) swapBlob(ctx context.Context, root, old string, v Version) error
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil
+		if n, err := res.RowsAffected(); err != nil || n == 0 {
+			return err
 		}
 		swapped = true
 		_, err = tx.ExecContext(ctx, `INSERT INTO drive_blob_retire(blob) VALUES(?)`, old)

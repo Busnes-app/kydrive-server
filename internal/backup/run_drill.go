@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Busnes-app/ky-primitives/capsule"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"golang.org/x/sys/unix"
@@ -59,5 +60,12 @@ func RunDrill(ctx context.Context, cfg *config.Config, payload recoveryclient.Pa
 		return nil, err
 	}
 	defer bulk.Close()
-	return recoveryclient.Drill(ctx, root, payload, Checks)
+	if cfg.Backup.DrillTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Backup.DrillTimeout)
+		defer cancel()
+	}
+	return recoveryclient.Drill(ctx, root, payload, func(dir string, opened capsule.Manifest) []recoveryclient.Check {
+		return checks(ctx, dir, opened)
+	})
 }

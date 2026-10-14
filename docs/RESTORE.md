@@ -19,11 +19,13 @@ A complete restore requires a sealed KyDrive `.kycap`, its independent Restic re
      -repo /independent/restic-repository -to /new-drive/data/blobs
    ```
 
+   The Restic password is derived from the capsule's deployment key (`kydrive:restic`); a repository from before that derivation still opens with the raw key, and `bulk-restore` tries both without changing the repository's keys. The next backup moves it to the derived password.
+
    If the capsule contains no `data/drive-bulk.json`, verify that its database has no `drive_versions` rows; an empty drive has no bulk snapshot to restore. Never silently accept a missing manifest for a database with files.
 
 5. Copy `opened/data/ky_server.db`, `encryption.key` and (when present) `recovery.pub` into the new drive data directory, mode 0600 and owned by the runtime UID/GID. Blobs and file and folder names are encrypted under that key; a missing or different key leaves every file and name unreadable; supplying it as `KY_ENCRYPTION_KEY` from a secret instead of the file keeps it out of the data directory (README, Encryption at rest). Preserve `config/integrations.json` securely; reconstruct runtime configuration from it, keeping the original session/editor/SCIM/client secrets. Set database driver `sqlite`, the new persistent paths and the independent bulk mount. Change origins only deliberately and update the OIDC callback registration and editor integration together.
 6. Restore or relocate the retained local capsules. The key pin and sealed KyRecovery token live in the restored files/database. Do not pair to another key to work around a failed pin. Unpairing deletes only URL/token and requires a separate KyRecovery administrator to revoke the old token.
-7. Start the same tested image digest. Verify workspace permissions, quotas, versions and trash; download files and open one in the editor. Then run `backup-drill` or the Recovery screen's drill. Do not mark the service recovered unless both metadata and bulk checks pass.
+7. Start the same tested image digest. Verify workspace permissions, quotas, versions and trash; download files and open one in the editor. Then run `backup-drill` or the Recovery screen's drill; it restores the whole bulk snapshot into `KY_DRILL_DIR` (default `<data dir>/drill`) and refuses to start without the snapshot's size plus 10% and 64 MiB free there, so point it at a scratch volume when the data volume is tight. `bulk-restore` applies the same check to its destination. Do not mark the service recovered unless both metadata and bulk checks pass.
 
 For an upgrade, stop the only writer, take a successful complete backup, retain the previous image, then start the new image against the persistent mounts. For rollback, restore the matched database/blob checkpoint and its integration secrets together; do not assume an older binary understands a newer schema. This package has no HA or destructive migrations.
 

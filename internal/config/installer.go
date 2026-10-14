@@ -85,7 +85,10 @@ func ApplyInstallerConfiguration(cfg *Config, b applysetup.Common) error {
 			cfg.Backup.Keep = backup.Keep
 		}
 		if backup.Interval != "" {
-			d, _ := applysetup.Interval(backup.Interval)
+			d, err := applysetup.Interval(backup.Interval)
+			if err != nil {
+				return err
+			}
 			if os.Getenv("KY_BACKUP_DEPOSIT_INTERVAL") != "" && cfg.Backup.DepositInterval != d {
 				return errors.New("installer refuses to replace configured backup interval")
 			}

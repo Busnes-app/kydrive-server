@@ -54,6 +54,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
 	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
+	s.mux.HandleFunc("GET /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
+	s.mux.HandleFunc("PUT /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
 	s.mux.HandleFunc("GET /api/drive/leavers", s.requireAdmin(s.driveLeavers))
 	s.mux.HandleFunc("POST /api/drive/leavers/{workspace}/handover", s.requireAdmin(s.driveHandover))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/editor", s.requireAuthenticated(s.driveEditor))
@@ -228,6 +230,23 @@ func (s *Server) driveFiles(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, out)
 }
 func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
+
+// discardBlob removes a blob that never became a version. A failure is logged; the orphan
+// sweep retries it.
+func (s *Server) discardBlob(id string) {
+	path, err := drive.BlobPath(s.blobRoot(), id)
+	if err == nil {
+		err = os.Remove(path)
+	}
+	if err != nil {
+		log.Printf("discard blob %s: %v", id, err)
+	}
+}
+
+// editorConfigLifetime bounds the signed editor configuration, which Euro-Office checks when the
+// editor opens; the session row outlives it.
+const editorConfigLifetime = 10 * time.Minute
+
 func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r).ID
 	f := drive.File{Workspace: r.PathValue("id"), Parent: r.URL.Query().Get("parent"), Name: r.URL.Query().Get("name"), ID: r.URL.Query().Get("file")}
@@ -259,8 +278,7 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := s.store.Drive().Publish(r.Context(), user, f, v, expected)
 	if err != nil {
-		path, _ := drive.BlobPath(s.blobRoot(), v.Blob)
-		os.Remove(path)
+		s.discardBlob(v.Blob)
 		s.driveError(w, err)
 		return
 	}
@@ -382,8 +400,7 @@ func (s *Server) driveEditor(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, 400, "This file format is download-only")
 		return
 	}
-	token := crypto.RandomHex(32)
-	session, err := s.store.Drive().EditorSession(r.Context(), user.ID, f.ID, token)
+	session, err := s.store.Drive().EditorSession(r.Context(), user.ID, f.ID)
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -393,7 +410,7 @@ func (s *Server) driveEditor(w http.ResponseWriter, r *http.Request) {
 	if editable {
 		mode = "edit"
 	}
-	cfg := map[string]any{"documentType": kind, "document": map[string]any{"fileType": ext, "key": session.Key, "title": f.Name, "url": s.editor.DriveOrigin + "/api/editor/download/" + session.ID + "?token=" + token, "permissions": map[string]bool{"edit": editable, "download": true}}, "editorConfig": map[string]any{"mode": mode, "callbackUrl": s.editor.DriveOrigin + "/api/editor/callback", "user": map[string]string{"id": user.ID, "name": user.DisplayName}}, "exp": session.Expires}
+	cfg := map[string]any{"documentType": kind, "document": map[string]any{"fileType": ext, "key": session.Key, "title": f.Name, "url": s.editor.DriveOrigin + "/api/editor/download/" + session.ID, "permissions": map[string]bool{"edit": editable, "download": true}}, "editorConfig": map[string]any{"mode": mode, "callbackUrl": s.editor.DriveOrigin + "/api/editor/callback", "user": map[string]string{"id": user.ID, "name": user.DisplayName}}, "exp": time.Now().Add(editorConfigLifetime).Unix()}
 	signed, err := s.editor.Sign(cfg)
 	if err != nil {
 		s.driveError(w, err)
@@ -402,8 +419,20 @@ func (s *Server) driveEditor(w http.ResponseWriter, r *http.Request) {
 	cfg["token"] = signed
 	s.writeJSON(w, 200, map[string]any{"origin": s.editor.Origin, "config": cfg})
 }
+
+// editorDownload serves Euro-Office only: its outbox JWT must name this exact URL. The URL
+// carries no credential, so the browser holding the editor config cannot fetch it.
 func (s *Server) editorDownload(w http.ResponseWriter, r *http.Request) {
-	f, err := s.store.Drive().EditorDownload(r.Context(), r.PathValue("id"), r.URL.Query().Get("token"))
+	if s.editor == nil {
+		s.writeError(w, 503, "Euro-Office unavailable")
+		return
+	}
+	id := r.PathValue("id")
+	if s.editor.Download(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), s.editor.DriveOrigin+"/api/editor/download/"+id) != nil {
+		s.writeError(w, 401, "Invalid editor signature")
+		return
+	}
+	f, err := s.store.Drive().EditorDownload(r.Context(), id)
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -430,6 +459,12 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.writeError(w, 401, "Invalid editor signature")
 		return
+	}
+	if cb.Status == 4 {
+		if err = s.store.Drive().CloseEditor(r.Context(), cb.Key); err != nil {
+			s.driveError(w, err)
+			return
+		}
 	}
 	if cb.Status != 2 && cb.Status != 6 {
 		s.writeJSON(w, 200, map[string]int{"error": 0})
@@ -463,15 +498,12 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	duplicate, err := s.store.Drive().PublishEditor(r.Context(), user, f, v, cb.Key, cb.Status == 2)
+	if err != nil || duplicate {
+		s.discardBlob(v.Blob)
+	}
 	if err != nil {
-		path, _ := drive.BlobPath(s.blobRoot(), v.Blob)
-		os.Remove(path)
 		s.driveError(w, err)
 		return
-	}
-	if duplicate {
-		path, _ := drive.BlobPath(s.blobRoot(), v.Blob)
-		os.Remove(path)
 	}
 	s.writeJSON(w, 200, map[string]int{"error": 0})
 }

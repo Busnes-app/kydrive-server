@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -71,12 +72,11 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-// DeriveKey derives a 32-byte key from master for one specific use, so a value encrypted
-// under one derived key never decrypts under another even if master is shared.
-func DeriveKey(master []byte, label string) []byte {
-	h := hmac.New(sha256.New, master)
-	h.Write([]byte(label))
-	return h.Sum(nil)
+// DeriveKey is HKDF-SHA256(master, no salt, label) to 32 bytes, the convention internal/drive
+// uses, so a value sealed for one purpose never opens under another. Stored data depends on
+// the exact output: never change it.
+func DeriveKey(master []byte, label string) ([]byte, error) {
+	return hkdf.Key(sha256.New, master, nil, label, 32)
 }
 
 // ComputeHMACSHA256 computes HMAC-SHA256 hex string.
@@ -101,14 +101,14 @@ func SHA256Hex(data []byte) string {
 // RandomHex generates a cryptographically secure random hex string of 2*n characters.
 func RandomHex(n int) string {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	rand.Read(b) // never returns an error since Go 1.24; it crashes the program instead
 	return hex.EncodeToString(b)
 }
 
 // RandomBase64URL generates a cryptographically secure URL-safe base64 string.
 func RandomBase64URL(n int) string {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	rand.Read(b) // never returns an error since Go 1.24; it crashes the program instead
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 

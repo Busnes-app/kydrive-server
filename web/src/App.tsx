@@ -7,6 +7,7 @@ import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
 
 import { Settings } from './pages/Settings';
+import { TwoFactor } from './pages/TwoFactor';
 import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
@@ -25,10 +26,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const [authResp, setResp] = useResponses(
-          await fetch('/api/auth/me'),
-          await fetch('/api/settings')
-        );
+        const authResp = await fetch('/api/auth/me');
+        const setResp = await fetch('/api/settings');
 
         if (setResp.ok) {
           const s: unknown = await setResp.json();
@@ -75,10 +74,20 @@ export const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await secureFetch('/api/auth/logout', { method: 'POST' });
+    const resp = await secureFetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+    if (!resp?.ok) {
+      setNotice('Sign out failed. Try again.');
+      return;
+    }
+    // Drop everything the previous account loaded; settings may hold admin-only fields.
+    setNotice('');
     setUser(null);
     setWorkspaces([]);
     setSelectedWorkspace('');
+    setActiveTab('drive');
+    setSettings(null);
+    setOpenInNewTab(true);
+    void loadSettings().catch(() => {});
   };
 
   if (loading) {
@@ -107,10 +116,10 @@ export const App: React.FC = () => {
   }
 
   if (user.must_change_password) {
-    return <ChangePassword onLogout={handleLogout} onComplete={() => {
+    return <>{notice && <p role="alert" style={{ padding: 16 }}>{notice}</p>}<ChangePassword onLogout={handleLogout} onComplete={() => {
       setUser(null);
       setNotice('Password changed. Sign in with your new password.');
-    }} />;
+    }} /></>;
   }
 
   return (
@@ -129,19 +138,17 @@ export const App: React.FC = () => {
       />
 
       <main className="app-main">
+        {notice && <p role="alert" className="panel">{notice}</p>}
         {activeTab === 'drive' && <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />}
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}
+        {activeTab === 'account' && <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />}
       </main>
     </div>
   );
 };
 
-function useResponses(r1: Response, r2: Response): [Response, Response] {
-  return [r1, r2];
-}
-
-interface DriveUser { id: string; username: string; display_name: string; role: string; must_change_password?: boolean }
+interface DriveUser { id: string; username: string; display_name: string; role: string; must_change_password?: boolean; totp_enabled?: boolean; sso_provider?: string }
 function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
 function isDriveUser(v: unknown): v is DriveUser { return isRecord(v) && typeof v.id === 'string' && typeof v.username === 'string' && typeof v.display_name === 'string' && typeof v.role === 'string' && (v.must_change_password === undefined || typeof v.must_change_password === 'boolean'); }

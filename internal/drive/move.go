@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -58,8 +59,8 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n != 1 {
-			return ErrConflict
+		if n, err := res.RowsAffected(); err != nil || n != 1 {
+			return cmp.Or(err, ErrConflict)
 		}
 		if to.Workspace != f.Workspace {
 			// Sessions were authorized for the source, possibly through a credential scoped to it.

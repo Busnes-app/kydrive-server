@@ -2,10 +2,9 @@ package auth
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
+	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -13,6 +12,8 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
+// Base cookie names. Secure host-only deployments add the __Host- prefix (see cookieName),
+// so a sibling subdomain cannot plant them.
 const (
 	SessionCookieName = "ky_session"
 	CSRFCookieName    = "ky_csrf"
@@ -52,13 +53,12 @@ func (sm *SessionManager) IssueSession(ctx context.Context, w http.ResponseWrite
 		ExpiresAt: time.Now().UTC().Add(ttl),
 	}
 
-	if err := sm.store.Sessions().CreateSession(ctx, sess, user.PasswordHash); err != nil {
+	if err := sm.store.Sessions().CreateSession(ctx, sess, user.PasswordHash, user.TOTPEnabled); err != nil {
 		return nil, "", err
 	}
 
-	// Set HttpOnly session cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
+		Name:     sm.cookieName(SessionCookieName),
 		Value:    rawToken,
 		Path:     "/",
 		Expires:  sess.ExpiresAt,
@@ -67,40 +67,15 @@ func (sm *SessionManager) IssueSession(ctx context.Context, w http.ResponseWrite
 		SameSite: http.SameSiteLaxMode,
 		Domain:   sm.config.CookieDomain,
 	})
-
-	// Generate CSRF token for state-modifying endpoints
-	csrfToken := crypto.RandomHex(24)
-	http.SetCookie(w, &http.Cookie{
-		Name:     CSRFCookieName,
-		Value:    csrfToken,
-		Path:     "/",
-		Expires:  sess.ExpiresAt,
-		HttpOnly: false, // Read by JS to put into X-CSRF-Token header
-		Secure:   sm.config.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
-		Domain:   sm.config.CookieDomain,
-	})
+	sm.writeCSRFCookie(w, rawToken, sess.ExpiresAt)
 
 	return sess, rawToken, nil
 }
 
-// AuthenticateRequest extracts the session token from cookie or Authorization header and returns the user.
+// AuthenticateRequest reads the session cookie and returns the user. Sessions are cookie-only so
+// the CSRF check always applies; Bearer is reserved for drive service tokens.
 func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *store.Session, error) {
-	var rawToken string
-
-	// 1. Check Bearer token header
-	authHeader := r.Header.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		rawToken = strings.TrimPrefix(authHeader, "Bearer ")
-	}
-
-	// 2. Fallback to HttpOnly cookie
-	if rawToken == "" {
-		if cookie, err := r.Cookie(SessionCookieName); err == nil && cookie.Value != "" {
-			rawToken = cookie.Value
-		}
-	}
-
+	rawToken := sm.SessionToken(r)
 	if rawToken == "" {
 		return nil, nil, store.ErrNotFound
 	}
@@ -116,7 +91,9 @@ func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *st
 		return nil, nil, err
 	}
 	if user.Status != "active" {
-		_ = sm.store.Sessions().DeleteSession(r.Context(), tokenHash)
+		if err := sm.store.Sessions().DeleteSession(r.Context(), tokenHash); err != nil {
+			log.Printf("session of inactive account not deleted: %v", err)
+		}
 		return nil, nil, store.ErrNotFound
 	}
 
@@ -133,34 +110,60 @@ func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *st
 	return user, sess, nil
 }
 
-func ValidateCSRF(r *http.Request) bool {
-	cookie, err := r.Cookie(CSRFCookieName)
-	if err != nil || cookie.Value == "" {
-		return false
+func (sm *SessionManager) cookieName(base string) string {
+	if sm.config.CookieSecure && sm.config.CookieDomain == "" {
+		return "__Host-" + base
 	}
-	header := r.Header.Get(HeaderCSRF)
-	return len(header) == len(cookie.Value) && subtle.ConstantTimeCompare([]byte(header), []byte(cookie.Value)) == 1
+	return base
 }
 
-// RevokeSession deletes the active session and clears the browser cookies.
-func (sm *SessionManager) RevokeSession(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	rawToken := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-		rawToken = ""
+// SessionToken is the raw session token the request presents, or "".
+func (sm *SessionManager) SessionToken(r *http.Request) string {
+	if cookie, err := r.Cookie(sm.cookieName(SessionCookieName)); err == nil {
+		return cookie.Value
 	}
-	if rawToken == "" {
-		if cookie, err := r.Cookie(SessionCookieName); err == nil {
-			rawToken = cookie.Value
-		}
-	}
+	return ""
+}
 
-	if rawToken != "" {
-		tokenHash := crypto.SHA256Hex([]byte(rawToken))
-		_ = sm.store.Sessions().DeleteSession(ctx, tokenHash)
+// CSRFToken is derived from the session token, so only the session's own page can know it.
+func (sm *SessionManager) CSRFToken(rawSession string) string {
+	return crypto.ComputeHMACSHA256([]byte("ky-csrf:"+rawSession), sm.config.SessionSecret)
+}
+
+// ValidateCSRF compares the header with the token recomputed from the session cookie. The CSRF
+// cookie only carries the value to the SPA; a planted one proves nothing.
+func (sm *SessionManager) ValidateCSRF(r *http.Request) bool {
+	raw, header := sm.SessionToken(r), r.Header.Get(HeaderCSRF)
+	return raw != "" && header != "" && crypto.VerifyHMACSHA256([]byte("ky-csrf:"+raw), sm.config.SessionSecret, header)
+}
+
+// RefreshCSRF rewrites the CSRF cookie for the presented session (lost or pre-upgrade cookie).
+func (sm *SessionManager) RefreshCSRF(w http.ResponseWriter, r *http.Request, sess *store.Session) {
+	sm.writeCSRFCookie(w, sm.SessionToken(r), sess.ExpiresAt)
+}
+
+func (sm *SessionManager) writeCSRFCookie(w http.ResponseWriter, rawSession string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sm.cookieName(CSRFCookieName),
+		Value:    sm.CSRFToken(rawSession),
+		Path:     "/",
+		Expires:  expires,
+		HttpOnly: false, // read by the SPA into the X-CSRF-Token header
+		Secure:   sm.config.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Domain:   sm.config.CookieDomain,
+	})
+}
+
+// RevokeSession ends the active session, with the account's editor sessions, and clears the browser cookies.
+func (sm *SessionManager) RevokeSession(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	var err error
+	if raw := sm.SessionToken(r); raw != "" {
+		err = sm.store.Sessions().EndSession(ctx, crypto.SHA256Hex([]byte(raw)))
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
+		Name:     sm.cookieName(SessionCookieName),
 		Value:    "",
 		Path:     "/",
 		Expires:  time.Unix(0, 0),
@@ -171,7 +174,7 @@ func (sm *SessionManager) RevokeSession(ctx context.Context, w http.ResponseWrit
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     CSRFCookieName,
+		Name:     sm.cookieName(CSRFCookieName),
 		Value:    "",
 		Path:     "/",
 		Expires:  time.Unix(0, 0),
@@ -181,5 +184,5 @@ func (sm *SessionManager) RevokeSession(ctx context.Context, w http.ResponseWrit
 		Domain:   sm.config.CookieDomain,
 	})
 
-	return nil
+	return err
 }

@@ -24,6 +24,7 @@ jobs:
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - run: go test -race ./... && go vet ./...
       - run: test -z "$(gofmt -l $(git ls-files '*.go'))" && go mod verify
+      - run: go mod tidy && git diff --exit-code go.mod go.sum
       - run: go build -o .browser/server ./cmd/server && cd web && npx playwright install --with-deps chromium && npm run test:browser
       - run: python -m unittest discover -s deploy -p '*_test.py'
       - run: go build -o kydrive-server ./cmd/server && scripts/smoke-test.sh

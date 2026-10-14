@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -9,6 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -85,4 +88,44 @@ func RemoveBlobs(root string, ids []string) error {
 		errs = append(errs, SyncDirectory(root))
 	}
 	return errors.Join(errs...)
+}
+
+// SweepOrphans removes staging files left by a crash and blobs no version names. Only files
+// older than grace are touched, so an upload between its rename and its commit is safe; only
+// names WriteBlob creates are considered.
+func (s *Store) SweepOrphans(ctx context.Context, root string, grace time.Duration) (int, error) {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	cutoff := time.Now().Add(-grace)
+	removed := 0
+	var errs []error
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() || info.ModTime().After(cutoff) {
+			continue
+		}
+		if !strings.HasPrefix(e.Name(), ".upload-") {
+			if _, err := BlobPath(root, e.Name()); err != nil {
+				continue
+			}
+			var n int
+			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_versions WHERE blob=?`, e.Name()).Scan(&n); err != nil {
+				return removed, err
+			}
+			if n > 0 {
+				continue
+			}
+		}
+		if err := os.Remove(filepath.Join(root, e.Name())); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+			continue
+		}
+		removed++
+	}
+	return removed, errors.Join(errs...)
 }

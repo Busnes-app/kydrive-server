@@ -18,8 +18,9 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
-// appVersion is what the capsule manifest records for this build.
-const appVersion = "0.4.0"
+// AppVersion is this build's release version; capsule manifests record it. The release
+// workflow requires it to match the tag and web/package.json.
+const AppVersion = "0.4.1"
 
 // errRecoveryKeyMismatch answers a swapped recovery.pub: the pin in the database and the key
 // on disk disagree, so refuse rather than seal a capsule nobody's custodians can open.
@@ -104,7 +105,7 @@ func (s *Server) handleBackupDrill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	payload, err := backup.Collect(ctx, s.config, appVersion, backup.PurposeDrill)
+	payload, err := backup.Collect(ctx, s.config, AppVersion, backup.PurposeDrill)
 	if errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		// An honest failed drill, not a 500: the operator needs to read why no backup exists.
 		s.writeJSON(w, http.StatusOK, &recoveryclient.DrillResult{Passed: false, ErrorMessage: err.Error(),
@@ -151,7 +152,7 @@ func (s *Server) handleExportCapsule(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "Failed to load recovery key")
 		return
 	}
-	payload, err := backup.Collect(ctx, s.config, appVersion, backup.PurposeExport)
+	payload, err := backup.Collect(ctx, s.config, AppVersion, backup.PurposeExport)
 	if errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		s.writeError(w, http.StatusPreconditionFailed, err.Error())
 		return
@@ -178,7 +179,9 @@ func (s *Server) handleExportCapsule(w http.ResponseWriter, r *http.Request) {
 	// A capsule leaving the server is a copy of everything it holds; the trail says who took one.
 	s.auditBackup(ctx, actor, r, "admin.backup_export", m.CapsuleID, AuditDetails(map[string]any{"size_bytes": len(raw)}))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(raw)
+	if _, err := w.Write(raw); err != nil {
+		log.Printf("[BACKUP] capsule %s download incomplete: %v", m.CapsuleID, err)
+	}
 }
 
 type RemotePairRequest struct {
@@ -276,21 +279,23 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget))
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+		log.Printf("[BACKUP] deposit response keeps the default write timeout: %v", err)
+	}
 	// The acting admin is resolved while the request is still live; the audit row is written
 	// on the same detached context as the run, so a dropped connection cannot decide whether
 	// the row exists.
 	actor := s.actorID(r)
 	ctx := context.WithoutCancel(r.Context())
 
-	rc, err := backup.RunConfig(s.config, appVersion)
+	rc, err := backup.RunConfig(s.config, AppVersion)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Failed to prepare backup configuration")
 		return
 	}
 	settings := backup.Settings(ctx, s.store.Settings())
 	res, err := recoveryclient.Run(ctx, rc, settings, func() (recoveryclient.Payload, error) {
-		return backup.Collect(ctx, s.config, appVersion, backup.PurposeDeposit)
+		return backup.Collect(s.collecting, s.config, AppVersion, backup.PurposeDeposit)
 	}, s.recovery)
 
 	action, outcome, details := recoveryclient.Outcome(res, err)
@@ -362,7 +367,10 @@ func (s *Server) handleUnpair(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	actor := s.actorID(r)
 	settings := backup.Settings(ctx, s.store.Settings())
-	target, _ := s.store.Settings().GetSetting(ctx, "kyrecovery_url")
+	target, err := s.store.Settings().GetSetting(ctx, "kyrecovery_url")
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		log.Printf("[BACKUP] unpair: recovery URL unreadable: %v", err)
+	}
 	target = recoveryclient.AuditSafe(target)
 	if err := recoveryclient.ClearPairing(settings); err != nil {
 		if errors.Is(err, recoveryclient.ErrNotPaired) {
@@ -507,15 +515,21 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 		"paired":                 false,
 		"key_pinned":             false,
 		"app_name":               s.config.Server.AppName,
-		"app_version":            appVersion,
+		"app_version":            AppVersion,
 		"allow_private_recovery": s.config.Backup.AllowPrivateRecovery,
 		// Only the SQLite path can snapshot a database into a capsule; the screen says so.
 		"database_driver": s.config.Database.Driver,
 		"members":         backup.Members(s.config),
 		"key_in_data_dir": s.config.Security.KeyInDataDir,
 	}
+	// Each field is best effort: an unreadable one is logged and left out.
+	unreadable := func(what string, err error) {
+		log.Printf("[BACKUP] status: %s unreadable: %s", what, recoveryclient.AuditSafe(err.Error()))
+	}
 	if u, err := s.store.Settings().GetSetting(ctx, "kyrecovery_url"); err == nil {
 		out["recovery_url"] = u
+	} else if !errors.Is(err, store.ErrNotFound) {
+		unreadable("recovery URL", err)
 	}
 	key, err := recoveryclient.LoadRecoveryKey(s.config.Database.DataDir, settings)
 	switch {
@@ -530,14 +544,20 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 	case recoveryclient.HasPairing(settings):
 		out["recovery_key_error"] = "paired, but recovery.pub is missing; restore it or re-pair"
 	}
-	if last, ok, err := recoveryclient.LastDeposit(settings); err == nil && ok {
+	if last, ok, err := recoveryclient.LastDeposit(settings); err != nil {
+		unreadable("last deposit", err)
+	} else if ok {
 		out["last_deposit"] = last
 	}
-	if policy, err := backup.LoadBulkPolicy(settings); err == nil {
+	if policy, err := backup.LoadBulkPolicy(settings); err != nil {
+		unreadable("bulk retention", err)
+	} else {
 		out["bulk_retention"] = policy
 		out["bulk_keep_last"] = s.config.Backup.Keep
 	}
-	if last, ok, err := backup.LastBulkPrune(settings); err == nil && ok {
+	if last, ok, err := backup.LastBulkPrune(settings); err != nil {
+		unreadable("last bulk prune", err)
+	} else if ok {
 		out["bulk_last_prune"] = last
 	}
 	if s.config.Backup.Dir != "" {
@@ -549,10 +569,14 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 			out["local_error"] = recoveryclient.AuditSafe(err.Error())
 		}
 	}
-	if interval, err := recoveryclient.Interval(s.config.Backup.DepositInterval, settings); err == nil {
+	if interval, err := recoveryclient.Interval(s.config.Backup.DepositInterval, settings); err != nil {
+		unreadable("schedule", err)
+	} else {
 		out["interval_sec"] = int64(interval / time.Second)
 		out["min_interval_sec"] = int64(recoveryclient.MinInterval / time.Second)
-		if next, ok, err := recoveryclient.NextRun(s.config.Backup.DepositInterval, settings); err == nil && ok {
+		if next, ok, err := recoveryclient.NextRun(s.config.Backup.DepositInterval, settings); err != nil {
+			unreadable("next run", err)
+		} else if ok {
 			out["next_run_at"] = next.Format(time.RFC3339)
 		}
 	}

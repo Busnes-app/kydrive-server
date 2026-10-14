@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/password"
@@ -59,8 +60,7 @@ func do(t *testing.T, srv *api.Server, method, path string, cookie *http.Cookie)
 	req := httptest.NewRequest(method, path, nil)
 	if cookie != nil {
 		req.AddCookie(cookie)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 	}
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -139,11 +139,16 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 		{"PUT", "/api/backup/bulk-retention"},
 		{"GET", "/api/backup/status"},
 		{"POST", "/api/settings/theme"},
+		{"GET", "/api/drive/trash-retention"},
+		{"PUT", "/api/drive/trash-retention"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			srv, st, _ := setupTestServer(t)
+			if strings.HasPrefix(tc.path, "/api/drive/") && st.Drive() == nil {
+				t.Skip("drive routes are SQLite-only")
+			}
 
 			if got := do(t, srv, tc.method, tc.path, nil).Code; got != http.StatusUnauthorized {
 				t.Errorf("anonymous: got %d, want 401", got)
@@ -160,5 +165,50 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 				t.Errorf("admin was blocked: got %d", got)
 			}
 		})
+	}
+}
+
+// Sessions are cookie-only: a session token replayed as a Bearer header authenticates nothing,
+// so it can never skip the CSRF check that guards cookie sessions.
+func TestSessionTokenIsNotABearerCredential(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	cookie := loginAs(t, srv, st, "alice", "admin")
+	bearer := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+cookie.Value)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		return w
+	}
+	if w := bearer("GET", "/api/auth/me", ""); !strings.Contains(w.Body.String(), `"authenticated":false`) {
+		t.Fatalf("me accepted a Bearer session: %d %s", w.Code, w.Body)
+	}
+	if w := bearer("PUT", "/api/auth/preferences", `{"open_in_new_tab":false}`); w.Code != http.StatusUnauthorized {
+		t.Fatalf("preferences: %d %s", w.Code, w.Body)
+	}
+	if st.Drive() != nil {
+		if w := do(t, srv, "GET", "/api/drive/workspaces", cookie); w.Code != http.StatusOK {
+			t.Fatalf("cookie session rejected: %d", w.Code)
+		}
+		if w := bearer("GET", "/api/drive/workspaces", ""); w.Code != http.StatusUnauthorized {
+			t.Fatalf("drive accepted a Bearer session: %d %s", w.Code, w.Body)
+		}
+	}
+}
+
+func TestDevicePairingRoutesAreGone(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	cookie := loginAs(t, srv, st, "alice", "admin")
+	for _, path := range []string{"/api/devices/pair/init", "/api/devices/pair/verify", "/api/devices/pair/poll?secret=x"} {
+		for _, method := range []string{"GET", "POST"} {
+			req := httptest.NewRequest(method, path, nil)
+			req.AddCookie(cookie)
+			api.SignCSRFForTest(srv, req)
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("%s %s: %d", method, path, w.Code)
+			}
+		}
 	}
 }

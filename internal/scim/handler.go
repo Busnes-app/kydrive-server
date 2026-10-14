@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -78,19 +79,22 @@ func constantTimeEqual(a, b string) bool {
 func writeAuthError(w http.ResponseWriter, status int, detail string) {
 	w.Header().Set("Content-Type", "application/scim+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(protocolErrors.ScimError{Status: status, Detail: detail})
+	if err := json.NewEncoder(w).Encode(protocolErrors.ScimError{Status: status, Detail: detail}); err != nil {
+		log.Printf("scim: response not written: %v", err)
+	}
 }
 
 type userResourceHandler struct{ store store.Store }
 
 func (h *userResourceHandler) Create(r *http.Request, attrs protocol.ResourceAttributes) (protocol.Resource, error) {
 	username, _ := attrs["userName"].(string)
-	user := &store.User{ID: "usr_" + crypto.RandomHex(12), Username: username, Email: primaryValue(attrs["emails"]), DisplayName: stringValue(attrs, "displayName", username), Role: "user", Status: statusFromActive(attrs), SSOProvider: "scim", SSOSubject: stringValue(attrs, "externalId", "")}
-
-	if err := h.store.Users().CreateUser(r.Context(), user); err != nil {
-		return protocol.Resource{}, scimStoreError(err, user.ID)
+	user, err := h.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{Provider: "scim", Subject: stringValue(attrs, "externalId", ""), Username: username, Email: primaryValue(attrs["emails"]), DisplayName: stringValue(attrs, "displayName", username), Active: statusFromActive(attrs) == "active"})
+	if err != nil {
+		return protocol.Resource{}, scimStoreError(err, "")
 	}
-	_ = h.store.Audit().LogAudit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: "scim.user.create", Resource: user.Username})
+	if err := h.store.Audit().LogAudit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: "scim.user.create", Resource: user.Username}); err != nil {
+		log.Printf("audit scim.user.create not recorded: %v", err)
+	}
 	return userResource(user), nil
 }
 
@@ -105,7 +109,6 @@ func (h *userResourceHandler) Get(r *http.Request, id string) (protocol.Resource
 var equalityFilter = regexp.MustCompile(`(?i)^\s*(userName|externalId|displayName)\s+eq\s+("(?:[^"\\]|\\.)*")\s*$`)
 
 func (h *userResourceHandler) GetAll(r *http.Request, params protocol.ListRequestParams) (protocol.Page, error) {
-	search := ""
 	if raw := r.URL.Query().Get("filter"); raw != "" {
 		field, value, err := filterEquality(raw)
 		if err != nil {
@@ -117,6 +120,9 @@ func (h *userResourceHandler) GetAll(r *http.Request, params protocol.ListReques
 			user, err = h.store.Users().GetUserBySSO(r.Context(), "scim", value)
 		case "username":
 			user, err = h.store.Users().GetUserByUsername(r.Context(), value)
+			if err == nil && user.SSOProvider != "scim" {
+				err = store.ErrNotFound // local and sign-on accounts are not SCIM resources
+			}
 		default:
 			return protocol.Page{}, protocolErrors.ScimErrorInvalidFilter
 		}
@@ -128,7 +134,7 @@ func (h *userResourceHandler) GetAll(r *http.Request, params protocol.ListReques
 		}
 		return protocol.Page{TotalResults: 1, Resources: []protocol.Resource{userResource(user)}}, nil
 	}
-	users, total, err := h.store.Users().ListUsers(r.Context(), params.StartIndex-1, params.Count, search)
+	users, total, err := h.store.Users().ListDirectoryUsers(r.Context(), params.StartIndex-1, params.Count)
 	if err != nil {
 		return protocol.Page{}, err
 	}
@@ -140,28 +146,22 @@ func (h *userResourceHandler) GetAll(r *http.Request, params protocol.ListReques
 }
 
 func (h *userResourceHandler) Replace(r *http.Request, id string, attrs protocol.ResourceAttributes) (protocol.Resource, error) {
-	user, err := h.directoryUser(r, id)
+	if _, err := h.directoryUser(r, id); err != nil {
+		return protocol.Resource{}, scimStoreError(err, id)
+	}
+	username, _ := attrs["userName"].(string)
+	user, err := h.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{ID: id, Username: username, Email: primaryValue(attrs["emails"]), DisplayName: stringValue(attrs, "displayName", username), Active: statusFromActive(attrs) == "active"})
 	if err != nil {
 		return protocol.Resource{}, scimStoreError(err, id)
 	}
-	oldRole, oldStatus := user.Role, user.Status
-	user.Username, _ = attrs["userName"].(string)
-	user.Email = primaryValue(attrs["emails"])
-	user.DisplayName = stringValue(attrs, "displayName", user.Username)
-
-	user.Status = statusFromActive(attrs)
-	if err := h.store.Users().UpdateUser(r.Context(), user); err != nil {
-		return protocol.Resource{}, scimStoreError(err, id)
-	}
-	h.revokeIfPrivilegesChanged(r, user, oldRole, oldStatus)
 	return userResource(user), nil
 }
 
 func (h *userResourceHandler) Delete(r *http.Request, id string) error {
 	if _, err := h.directoryUser(r, id); err != nil {
-		return err
+		return scimStoreError(err, id)
 	}
-	return scimStoreError(h.store.Users().DeleteUser(r.Context(), id), id)
+	return scimStoreError(h.store.Users().DeleteDirectoryUser(r.Context(), id, 0), id)
 }
 
 func (h *userResourceHandler) Patch(r *http.Request, id string, operations []protocol.PatchOperation) (protocol.Resource, error) {
@@ -169,7 +169,6 @@ func (h *userResourceHandler) Patch(r *http.Request, id string, operations []pro
 	if err != nil {
 		return protocol.Resource{}, scimStoreError(err, id)
 	}
-	oldRole, oldStatus := user.Role, user.Status
 	for _, op := range operations {
 		if op.Op == protocol.PatchOperationRemove {
 			continue
@@ -182,17 +181,11 @@ func (h *userResourceHandler) Patch(r *http.Request, id string, operations []pro
 		}
 		applyUserValue(user, strings.ToLower(op.Path.String()), op.Value)
 	}
-	if err := h.store.Users().UpdateUser(r.Context(), user); err != nil {
+	user, err = h.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{ID: id, Username: user.Username, Email: user.Email, DisplayName: user.DisplayName, Active: user.Status == "active"})
+	if err != nil {
 		return protocol.Resource{}, scimStoreError(err, id)
 	}
-	h.revokeIfPrivilegesChanged(r, user, oldRole, oldStatus)
 	return userResource(user), nil
-}
-
-func (h *userResourceHandler) revokeIfPrivilegesChanged(r *http.Request, user *store.User, oldRole, oldStatus string) {
-	if user.Role != oldRole || user.Status != oldStatus {
-		_ = h.store.Sessions().DeleteUserSessions(r.Context(), user.ID)
-	}
 }
 
 func applyUserValues(user *store.User, values map[string]interface{}) {
@@ -444,6 +437,9 @@ func scimStoreError(err error, id string) error {
 	}
 	if errors.Is(err, store.ErrAlreadyExists) {
 		return protocolErrors.ScimErrorUniqueness
+	}
+	if errors.Is(err, store.ErrInvalidUsername) {
+		return protocolErrors.ScimErrorInvalidValue
 	}
 	return err
 }

@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -348,9 +349,9 @@ func (s *Store) Quota(ctx context.Context, user, workspace string, quota int64) 
 		if err != nil {
 			return err
 		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			return ErrInvalid
+		n, err := res.RowsAffected()
+		if err != nil || n != 1 {
+			return cmp.Or(err, ErrInvalid)
 		}
 		return event(ctx, tx, user, "workspace.quota_changed", workspace)
 	})
@@ -528,9 +529,9 @@ func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expec
 	if err != nil {
 		return restoreErr(err)
 	}
-	n, _ := res.RowsAffected()
-	if n != 1 {
-		return ErrConflict
+	n, err := res.RowsAffected()
+	if err != nil || n != 1 {
+		return cmp.Or(err, ErrConflict)
 	}
 	return event(ctx, tx, user, "file.trash_changed", id)
 }
@@ -605,9 +606,9 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 		if err != nil {
 			return err
 		}
-		n, _ := res.RowsAffected()
-		if n != 1 {
-			return ErrConflict
+		n, err := res.RowsAffected()
+		if err != nil || n != 1 {
+			return cmp.Or(err, ErrConflict)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed) VALUES(?,?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created, v.Sealed); err != nil {
@@ -616,10 +617,14 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 	return event(ctx, tx, user, "file.version_created", f.ID)
 }
 
+// usedBytes is a workspace's quota usage: the plaintext size of every version row, the same
+// rows a purge deletes. Indexed by drive_files_workspace.
+const usedBytes = `SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?`
+
 // fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
 func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
 	var used, quota int64
-	if err := q.QueryRowContext(ctx, `SELECT quota,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0) FROM drive_workspaces WHERE id=?`, workspace, workspace).Scan(&quota, &used); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT quota,COALESCE((`+usedBytes+`),0) FROM drive_workspaces WHERE id=?`, workspace, workspace).Scan(&quota, &used); err != nil {
 		return err
 	}
 	if used > quota || extra > quota-used {

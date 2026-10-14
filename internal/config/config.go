@@ -3,7 +3,9 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -67,17 +69,14 @@ type SecurityConfig struct {
 
 // SSOConfig holds identity provider and federation parameters.
 type SSOConfig struct {
-	Enabled             bool   `json:"enabled"`
-	KySignOnIssuer      string `json:"kysignon_issuer"`
-	KySignOnClientID    string `json:"kysignon_client_id"`
-	KySignOnSecret      string `json:"kysignon_secret"`
-	KySignOnHMACSecret  string `json:"kysignon_hmac_secret"`
-	GenericOIDCIssuer   string `json:"generic_oidc_issuer"`
-	GenericOIDCClientID string `json:"generic_oidc_client_id"`
-	GenericOIDCSecret   string `json:"generic_oidc_secret"`
-	SAMLEntityID        string `json:"saml_entity_id"`
-	SAMLMetadataURL     string `json:"saml_metadata_url"`
-	AutoProvision       bool   `json:"auto_provision"`
+	Enabled            bool   `json:"enabled"`
+	KySignOnIssuer     string `json:"kysignon_issuer"`
+	KySignOnClientID   string `json:"kysignon_client_id"`
+	KySignOnSecret     string `json:"kysignon_secret"`
+	KySignOnHMACSecret string `json:"kysignon_hmac_secret"`
+	GenericOIDCIssuer  string `json:"generic_oidc_issuer"`
+	SAMLMetadataURL    string `json:"saml_metadata_url"`
+	AutoProvision      bool   `json:"auto_provision"`
 }
 
 // SCIMConfig holds settings for RFC 7643/7644 inbound user provisioning.
@@ -97,6 +96,12 @@ type BackupConfig struct {
 	// AllowPrivateRecovery admits private and CGNAT KyRecovery destinations (HTTPS still
 	// required). Off by default: KyRecovery destinations must be public.
 	AllowPrivateRecovery bool `json:"allow_private_recovery"`
+	// CollectTimeout bounds one payload collection: database snapshot, blob verification and
+	// the Restic bulk snapshot. Zero is unbounded (literal test configs only).
+	CollectTimeout time.Duration `json:"collect_timeout"`
+	// DrillDir is the restore drill's scratch root; DrillTimeout bounds one drill (zero is unbounded).
+	DrillDir     string        `json:"drill_dir"`
+	DrillTimeout time.Duration `json:"drill_timeout"`
 }
 
 // CaptchaConfig holds anti-abuse settings (PoW default, Turnstile, Friendly).
@@ -116,12 +121,52 @@ const MinDepositInterval = 15 * time.Minute
 const DefaultAppName = "KyDrive"
 
 // LoadFromEnv initializes a Config struct populated from environment variables with sensible defaults.
-func LoadFromEnv() (*Config, error) {
-	port := getEnvInt("KY_PORT", getEnvInt("PORT", 8080))
+func LoadFromEnv() (*Config, error) { return load(false) }
+
+// LoadExisting is LoadFromEnv for operator commands on an existing deployment: a missing
+// keyfile or SQLite database is refused, never created.
+func LoadExisting() (*Config, error) {
+	cfg, err := load(true)
+	if err != nil || cfg.Database.Driver != "sqlite" {
+		return cfg, err
+	}
+	path, _, _ := strings.Cut(strings.TrimPrefix(cfg.Database.DSN, "file:"), "?")
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("no existing database at %s (check KY_DATA_DIR/KY_DB_DSN): %w", path, err)
+	}
+	return cfg, nil
+}
+
+func load(existing bool) (*Config, error) {
+	for _, key := range placeholderChecked {
+		if strings.Contains(strings.ToLower(os.Getenv(key)), "replace-with") {
+			return nil, fmt.Errorf("%s still holds the example placeholder; generate a value (openssl rand -hex 32)", key)
+		}
+	}
+	var invalid []string
+	envInt := func(key string, def int) int {
+		v, err := getEnvInt(key, def)
+		if err != nil {
+			invalid = append(invalid, key)
+		}
+		return v
+	}
+	envBool := func(key string, def bool) bool {
+		v, err := getEnvBool(key, def)
+		if err != nil {
+			invalid = append(invalid, key)
+		}
+		return v
+	}
+
+	port := envInt("KY_PORT", envInt("PORT", 8080))
 	host := getEnv("KY_HOST", "0.0.0.0")
 	appURL := getEnv("KY_APP_URL", fmt.Sprintf("http://localhost:%d", port))
 	appName := getEnv("KY_APP_NAME", DefaultAppName)
 	env := getEnv("KY_ENV", "development")
+	if env != "production" && env != "development" {
+		return nil, fmt.Errorf("KY_ENV must be production or development, got %q", env)
+	}
 
 	driver := strings.ToLower(getEnv("KY_DB_DRIVER", "sqlite"))
 	dataDir := getEnv("KY_DATA_DIR", "./data")
@@ -145,14 +190,36 @@ func LoadFromEnv() (*Config, error) {
 		return nil, fmt.Errorf("KY_ENCRYPTION_KEY: %w", err)
 	}
 	keyPath := filepath.Join(dataDir, "encryption.key")
-	if !ok {
+	if !ok && existing {
+		if encryptionKey, err = keyfile.Load(keyPath, 32); err != nil {
+			return nil, fmt.Errorf("no existing deployment key at %s (check KY_DATA_DIR or set KY_ENCRYPTION_KEY): %w", keyPath, err)
+		}
+	} else if !ok {
 		encryptionKey, err = keyfile.LoadOrCreate(keyPath, 32)
 		if err != nil {
 			return nil, fmt.Errorf("encryption key: %w", err)
 		}
 	}
 	_, statErr := os.Lstat(keyPath)
-	drillResidue, _ := os.ReadDir(filepath.Join(dataDir, "drill"))
+	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		return nil, fmt.Errorf("encryption key: %w", statErr)
+	}
+	drillDir := getEnv("KY_DRILL_DIR", filepath.Join(dataDir, "drill"))
+	if !filepath.IsAbs(drillDir) && getEnv("KY_DRILL_DIR", "") != "" {
+		return nil, fmt.Errorf("KY_DRILL_DIR must be an absolute path")
+	}
+	drillResidue, err := os.ReadDir(drillDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("recovery drill directory: %w", err)
+	}
+	collectTimeout, err := getEnvDuration("KY_BACKUP_COLLECT_TIMEOUT", 2*time.Hour)
+	if err != nil || collectTimeout < time.Minute {
+		return nil, fmt.Errorf("KY_BACKUP_COLLECT_TIMEOUT must be a duration of at least 1m")
+	}
+	drillTimeout, err := getEnvDuration("KY_DRILL_TIMEOUT", 2*time.Hour)
+	if err != nil || drillTimeout < time.Minute {
+		return nil, fmt.Errorf("KY_DRILL_TIMEOUT must be a duration of at least 1m")
+	}
 
 	depositInterval, err := getEnvDuration("KY_BACKUP_DEPOSIT_INTERVAL", 24*time.Hour)
 	if err != nil {
@@ -162,7 +229,7 @@ func LoadFromEnv() (*Config, error) {
 		return nil, fmt.Errorf("KY_BACKUP_DEPOSIT_INTERVAL: %s is below the %s minimum (0 disables)", depositInterval, MinDepositInterval)
 	}
 
-	backupKeep := getEnvInt("KY_BACKUP_KEEP", 7)
+	backupKeep := envInt("KY_BACKUP_KEEP", 7)
 	if backupKeep < 1 {
 		return nil, fmt.Errorf("KY_BACKUP_KEEP: must be at least 1, got %d", backupKeep)
 	}
@@ -201,48 +268,52 @@ func LoadFromEnv() (*Config, error) {
 			Driver:          driver,
 			DSN:             dsn,
 			DataDir:         dataDir,
-			MaxOpenConns:    getEnvInt("KY_DB_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getEnvInt("KY_DB_MAX_IDLE_CONNS", 5),
+			MaxOpenConns:    envInt("KY_DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    envInt("KY_DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: 15 * time.Minute,
 		},
 		Security: SecurityConfig{
 			SessionSecret:  sessionSecret,
 			EncryptionKey:  encryptionKey,
 			KeyInDataDir:   statErr == nil || len(drillResidue) > 0,
-			CookieSecure:   getEnvBool("KY_COOKIE_SECURE", env == "production"),
+			CookieSecure:   envBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:   getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:     7 * 24 * time.Hour,
 			TrustedProxies: trustedProxies,
 		},
 		SSO: SSOConfig{
-			Enabled:             getEnvBool("KY_SSO_ENABLED", true),
-			KySignOnIssuer:      getEnv("KY_KYSIGNON_ISSUER", ""),
-			KySignOnClientID:    getEnv("KY_KYSIGNON_CLIENT_ID", ""),
-			KySignOnSecret:      getEnv("KY_KYSIGNON_SECRET", ""),
-			KySignOnHMACSecret:  getEnv("KY_KYSIGNON_HMAC_SECRET", ""),
-			GenericOIDCIssuer:   getEnv("KY_OIDC_ISSUER", ""),
-			GenericOIDCClientID: getEnv("KY_OIDC_CLIENT_ID", ""),
-			GenericOIDCSecret:   getEnv("KY_OIDC_SECRET", ""),
-			SAMLEntityID:        getEnv("KY_SAML_ENTITY_ID", ""),
-			SAMLMetadataURL:     getEnv("KY_SAML_METADATA_URL", ""),
-			AutoProvision:       getEnvBool("KY_SSO_AUTO_PROVISION", false),
+			Enabled:            envBool("KY_SSO_ENABLED", true),
+			KySignOnIssuer:     getEnv("KY_KYSIGNON_ISSUER", ""),
+			KySignOnClientID:   getEnv("KY_KYSIGNON_CLIENT_ID", ""),
+			KySignOnSecret:     getEnv("KY_KYSIGNON_SECRET", ""),
+			KySignOnHMACSecret: getEnv("KY_KYSIGNON_HMAC_SECRET", ""),
+			GenericOIDCIssuer:  getEnv("KY_OIDC_ISSUER", ""),
+			SAMLMetadataURL:    getEnv("KY_SAML_METADATA_URL", ""),
+			AutoProvision:      envBool("KY_SSO_AUTO_PROVISION", false),
 		},
 		SCIM: SCIMConfig{
-			Enabled:     getEnvBool("KY_SCIM_ENABLED", true),
+			Enabled:     envBool("KY_SCIM_ENABLED", true),
 			BearerToken: getEnv("KY_SCIM_TOKEN", generateRandomHex(24)),
 		},
 		Backup: BackupConfig{
 			Dir:                  getEnv("KY_BACKUP_DIR", ""),
 			Keep:                 backupKeep,
 			DepositInterval:      depositInterval,
-			AllowPrivateRecovery: getEnvBool("KY_BACKUP_ALLOW_PRIVATE_RECOVERY", false),
+			AllowPrivateRecovery: envBool("KY_BACKUP_ALLOW_PRIVATE_RECOVERY", false),
+			CollectTimeout:       collectTimeout,
+			DrillDir:             filepath.Clean(drillDir),
+			DrillTimeout:         drillTimeout,
 		},
 		Captcha: CaptchaConfig{
 			Provider:      getEnv("KY_CAPTCHA_PROVIDER", "pow"),
 			SiteKey:       getEnv("KY_CAPTCHA_SITE_KEY", ""),
 			SecretKey:     getEnv("KY_CAPTCHA_SECRET_KEY", ""),
-			DifficultyPoW: getEnvInt("KY_CAPTCHA_POW_DIFFICULTY", 4),
+			DifficultyPoW: envInt("KY_CAPTCHA_POW_DIFFICULTY", 100000),
 		},
+	}
+
+	if len(invalid) > 0 {
+		return nil, fmt.Errorf("unparseable value for %s", strings.Join(invalid, ", "))
 	}
 
 	if file := os.Getenv("KY_SCIM_TOKEN_FILE"); file != "" {
@@ -268,21 +339,32 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func getEnvInt(key string, defaultVal int) int {
-	if val, ok := os.LookupEnv(key); ok {
-		if intVal, err := strconv.Atoi(strings.TrimSpace(val)); err == nil {
-			return intVal
-		}
+// placeholderChecked are secrets the example env files ship as "replace-with-..." text.
+var placeholderChecked = []string{"KY_SESSION_SECRET", "KY_KYSIGNON_SECRET", "KY_KYSIGNON_HMAC_SECRET", "KY_SCIM_TOKEN", "KYDRIVE_EDITOR_SECRET", "KY_ADMIN_PASSWORD"}
+
+// getEnvInt treats a blank value as unset; anything else must parse.
+func getEnvInt(key string, defaultVal int) (int, error) {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultVal, nil
 	}
-	return defaultVal
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultVal, err
+	}
+	return n, nil
 }
 
-func getEnvBool(key string, defaultVal bool) bool {
-	if val, ok := os.LookupEnv(key); ok {
-		lower := strings.ToLower(strings.TrimSpace(val))
-		return lower == "true" || lower == "1" || lower == "yes" || lower == "on"
+func getEnvBool(key string, defaultVal bool) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "":
+		return defaultVal, nil
+	case "true", "1", "yes", "on":
+		return true, nil
+	case "false", "0", "no", "off":
+		return false, nil
 	}
-	return defaultVal
+	return defaultVal, fmt.Errorf("%s is not a boolean", key)
 }
 
 // getEnvDuration parses a Go duration such as "24h" or "90m". Negative is refused; "0" disables.
@@ -303,7 +385,7 @@ func getEnvDuration(key string, defaultVal time.Duration) (time.Duration, error)
 
 func generateRandomHex(n int) string {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	rand.Read(b) // never returns an error since Go 1.24; it crashes the program instead
 	return hex.EncodeToString(b)
 }
 

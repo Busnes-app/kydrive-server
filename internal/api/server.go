@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +17,6 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
-	"github.com/Busnes-app/kydrive-server/internal/devices"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/editor"
 	"github.com/Busnes-app/kydrive-server/internal/scim"
@@ -38,19 +39,21 @@ type Server struct {
 	config     *config.Config
 	store      store.Store
 	sessions   *auth.SessionManager
-	pairing    *devices.PairingService
 	kysignon   *sso.KySignOnClient
-	oidc       *sso.GenericOIDCClient
-	saml       *sso.SAMLServiceProvider
 	scim       *scim.Server
 	recovery   recoveryClient
 	mux        *http.ServeMux
 	attemptsMu sync.Mutex
 	attempts   map[string]attemptWindow
+	powSpent   auth.PoWSpent
 	// detached counts the requests running on a context deliberately separated from their
 	// connection. http.Server.Shutdown does not know about them, so runServer waits on this
 	// before the store closes.
 	detached detachedCounter
+	// collecting outlives requests but not shutdown: a detached deposit still collecting
+	// has sent nothing, so StopBackupCollection may abandon it.
+	collecting     context.Context
+	stopCollecting context.CancelFunc
 }
 
 // detachedCounter is a WaitGroup that tolerates a registration arriving while the wait is
@@ -138,10 +141,7 @@ const attemptsCap = 10000
 
 func NewServer(cfg *config.Config, st store.Store) *Server {
 	sessions := auth.NewSessionManager(st, cfg.Security)
-	pairing := devices.NewPairingService(st, cfg.Server.AppName, cfg.Server.AppURL)
 	kysignon := sso.NewKySignOnClient(cfg.SSO, st)
-	oidc := sso.NewGenericOIDCClient(cfg.SSO, st)
-	saml := sso.NewSAMLServiceProvider(cfg.SSO.SAMLEntityID, cfg.Server.AppURL+"/saml/acs")
 	scimSrv := scim.NewServer(st, cfg.SCIM, cfg.Server.AppURL)
 	recovery := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 
@@ -149,20 +149,22 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 		config:   cfg,
 		store:    st,
 		sessions: sessions,
-		pairing:  pairing,
 		kysignon: kysignon,
-		oidc:     oidc,
-		saml:     saml,
 		scim:     scimSrv,
 		recovery: recovery,
 		mux:      http.NewServeMux(),
 		attempts: make(map[string]attemptWindow),
 	}
+	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
 
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
 	s.routes()
 	return s
 }
+
+// StopBackupCollection cancels detached deposits still collecting their payload, so shutdown
+// waits only for those sealing or uploading.
+func (s *Server) StopBackupCollection() { s.stopCollecting() }
 
 func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool {
 	now := time.Now()
@@ -174,6 +176,12 @@ func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool 
 	entry := bumpWindow(s.attempts[key], now, window)
 	s.attempts[key] = entry
 	return entry.count <= limit
+}
+
+func (s *Server) resetAttempts(key string) {
+	s.attemptsMu.Lock()
+	delete(s.attempts, key)
+	s.attemptsMu.Unlock()
 }
 
 // makeRoom frees a slot for a new key: it drops every expired window, and if the map is still
@@ -223,17 +231,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
 	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
+	// Session routes: CSRF-checked, unlike the pre-session MFA login routes above.
+	s.mux.HandleFunc("POST /api/auth/mfa/enroll", s.requireAuthenticated(s.handleMFAEnroll))
+	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))
+	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
 
 	// SSO
 	s.mux.HandleFunc("/api/sso/kysignon/login", s.handleKySignOnLogin)
 	s.mux.HandleFunc("/api/sso/kysignon/callback", s.handleKySignOnCallback)
 	s.mux.HandleFunc("/api/sso/kysignon/sync", s.handleKySignOnSyncWebhook)
-	s.mux.HandleFunc("/saml/metadata", s.handleSAMLMetadata)
-
-	// Devices & Ephemeral QR Pairing
-	s.mux.HandleFunc("/api/devices/pair/init", s.requireAuthenticated(s.handlePairInit))
-	s.mux.HandleFunc("/api/devices/pair/verify", s.handlePairVerify)
-	s.mux.HandleFunc("/api/devices/pair/poll", s.handlePairPoll)
 
 	// Feature 0 KyBackup & Restore Drills. Capsules carry site data and keys: admins only.
 	// Method patterns: only the declared method reaches a handler. Export is a POST so the
@@ -266,6 +272,11 @@ func (s *Server) routes() {
 			return
 		}
 		fonts.ServeHTTP(w, r)
+	})
+
+	// Unknown API paths are JSON 404s, not the SPA shell.
+	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		s.writeError(w, http.StatusNotFound, "Not found")
 	})
 
 	// Embedded React PWA Frontend
@@ -358,9 +369,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isUnsafeMethod(r.Method) && hasSessionCookie(r) && !csrfExempt(r.URL.Path) && !auth.ValidateCSRF(r) {
-		s.writeError(w, http.StatusForbidden, "Invalid CSRF token")
-		return
+	if isUnsafeMethod(r.Method) {
+		// The signed directory webhook is server-to-server; every other write must not be cross-site.
+		if r.URL.Path != "/api/sso/kysignon/sync" && !s.sameSiteRequest(r) {
+			s.writeError(w, http.StatusForbidden, "Cross-site request refused")
+			return
+		}
+		// Login and MFA predate a session; JSON-only keeps HTML forms from posting them.
+		if credentialRoute(r.URL.Path) && !isJSON(r) {
+			s.writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+			return
+		}
+		if s.sessions.SessionToken(r) != "" && !csrfExempt(r.URL.Path) && !s.sessions.ValidateCSRF(r) {
+			s.writeError(w, http.StatusForbidden, "Invalid CSRF token")
+			return
+		}
 	}
 	if r.Body != nil {
 		limit := int64(1 << 20)
@@ -383,13 +406,29 @@ func isUnsafeMethod(method string) bool {
 	return method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
 }
 
-func hasSessionCookie(r *http.Request) bool {
-	cookie, err := r.Cookie(auth.SessionCookieName)
-	return err == nil && cookie.Value != ""
+// credentialRoute is a pre-session sign-in step. Exact paths: MFA enrolment under the same
+// prefix is a session route and must keep its CSRF check.
+func credentialRoute(path string) bool {
+	return path == "/api/auth/login" || path == "/api/auth/mfa/totp" || path == "/api/auth/mfa/recovery-code"
 }
 
 func csrfExempt(path string) bool {
-	return path == "/api/auth/login" || strings.HasPrefix(path, "/api/auth/mfa/") || path == "/api/sso/kysignon/sync"
+	return credentialRoute(path) || path == "/api/sso/kysignon/sync"
+}
+
+func isJSON(r *http.Request) bool {
+	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return err == nil && mt == "application/json"
+}
+
+// sameSiteRequest refuses a write a browser marks as cross-site, or whose Origin is not the
+// app's. Non-browser clients send neither header.
+func (s *Server) sameSiteRequest(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	return origin == "" || sameOrigin(origin, s.config.Server.AppURL)
 }
 
 func sameOrigin(origin, appURL string) bool {
@@ -404,7 +443,16 @@ func sameOrigin(origin, appURL string) bool {
 func (s *Server) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("response not written: %v", err)
+	}
+}
+
+// audit records rec. The action has already happened, so a failed write is logged, not returned.
+func (s *Server) audit(ctx context.Context, rec *store.AuditRecord) {
+	if err := s.store.Audit().LogAudit(ctx, rec); err != nil {
+		log.Printf("audit %s not recorded: %v", rec.Action, err)
+	}
 }
 
 func (s *Server) writeError(w http.ResponseWriter, status int, message string) {

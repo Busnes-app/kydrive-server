@@ -52,7 +52,7 @@ func leaverFixture(t *testing.T) (store.Store, string, drive.File, drive.EditorS
 	if err = d.SetFolderTrash(ctx, "leaver", old.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	session, err := d.EditorSession(ctx, "leaver", a.ID, "leaver-editor")
+	session, err := d.EditorSession(ctx, "leaver", a.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

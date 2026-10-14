@@ -72,7 +72,7 @@ func TestMoveAcrossWorkspacesRevokesLostAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := d.EditorSession(ctx, "colleague", f.ID, "colleague-token")
+	session, err := d.EditorSession(ctx, "colleague", f.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestCrossWorkspaceMoveEndsScopedEditorSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	scoped := drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2})
-	if _, err = d.EditorSession(scoped, "worker", f.ID, "service-token"); err != nil {
+	if _, err = d.EditorSession(scoped, "worker", f.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = d.MoveFile(ctx, "worker", f.ID, 1, drive.Location{Workspace: mine, Name: "plan.txt"}); err != nil {
@@ -259,7 +259,7 @@ func TestCrossWorkspaceMoveFencesInFlightEditorCallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old, err := d.EditorSession(drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2}), "worker", f.ID, "service-token")
+	old, err := d.EditorSession(drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2}), "worker", f.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestCrossWorkspaceMoveFencesInFlightEditorCallbacks(t *testing.T) {
 	if vs, _ := d.Versions(ctx, "worker", f.ID); len(vs) != 1 {
 		t.Fatalf("versions after fenced callback: %d", len(vs))
 	}
-	fresh, err := d.EditorSession(ctx, "worker", f.ID, "fresh-token")
+	fresh, err := d.EditorSession(ctx, "worker", f.ID)
 	if err != nil || fresh.Key == old.Key {
 		t.Fatalf("new session key %q (old %q): %v", fresh.Key, old.Key, err)
 	}

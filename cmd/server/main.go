@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -24,9 +25,6 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
-// appVersion is what the capsule manifest records for this build.
-const appVersion = "0.4.0"
-
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -36,7 +34,7 @@ func main() {
 			}
 			return
 		case "bulk-init":
-			cfg, err := config.LoadFromEnv()
+			cfg, err := config.LoadExisting()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -65,7 +63,7 @@ func main() {
 			subject := fs.String("subject", "", "exact KyIdentity OIDC subject / SCIM externalId")
 			role := fs.String("role", "", "application role: admin or user")
 			fs.Parse(os.Args[2:])
-			cfg, err := config.LoadFromEnv()
+			cfg, err := config.LoadExisting()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -80,7 +78,7 @@ func main() {
 			log.Printf("Directory application role set to %q; sessions revoked; sign in with KyIdentity again", *role)
 			return
 		case "handover":
-			cfg, err := config.LoadFromEnv()
+			cfg, err := config.LoadExisting()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -107,7 +105,7 @@ func main() {
 			if err := auth.ValidateUsername(*to); err != nil {
 				log.Fatal(err)
 			}
-			cfg, err := config.LoadFromEnv()
+			cfg, err := config.LoadExisting()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -134,7 +132,7 @@ func main() {
 			runRestore(os.Args[2:])
 			return
 		case "version":
-			fmt.Println("kydrive-server v0.1.0 (KyDrive)")
+			fmt.Println("kydrive-server v" + api.AppVersion + " (KyDrive)")
 			return
 		}
 	}
@@ -149,6 +147,8 @@ const shutdownTimeout = 5 * time.Second
 // backupWaitTimeout bounds the wait for detached backup work. recoveryclient caps one deposit
 // at 15 minutes (its uploadTimeout, for a container of at most capsule.MaxContainerBytes,
 // 384 MiB); the extra two minutes cover sealing and the local copy either side of the upload.
+// Collection (KY_BACKUP_COLLECT_TIMEOUT) is outside it: shutdown cancels a deposit still
+// collecting, before anything has left the server.
 // docker-compose.yml's stop_grace_period must exceed shutdownTimeout + backupWaitTimeout, and
 // TestComposeGracePeriodCoversTheShutdownBudget holds the two in step.
 const backupWaitTimeout = 17 * time.Minute
@@ -178,28 +178,42 @@ func runServer() {
 	}
 
 	// Ensure default admin user exists if database is empty
-	count, _ := st.Users().CountUsers(ctx)
+	count, err := st.Users().CountUsers(ctx)
+	if err != nil {
+		log.Fatalf("Failed to count users: %v", err)
+	}
 	if count == 0 {
 		adminPass := os.Getenv("KY_ADMIN_PASSWORD")
+		passwordFile := ""
 		if adminPass == "" {
 			adminPass = crypto.RandomHex(12)
-			log.Printf("[SECURITY] Initial bootstrap: Created admin account. Username: admin | Password: %s", adminPass)
+			if passwordFile, err = writeInitialAdminPassword(cfg.Database.DataDir, adminPass); err != nil {
+				log.Fatalf("Failed to record bootstrap admin password: %v", err)
+			}
 		}
 		hash, err := password.Hash(adminPass)
-		if err != nil {
-			log.Fatalf("Failed to hash bootstrap admin password: %v", err)
+		if err == nil {
+			err = st.Users().CreateUser(ctx, &store.User{
+				ID:                 fmt.Sprintf("usr_%s", crypto.RandomHex(12)),
+				Username:           "admin",
+				DisplayName:        "Administrator",
+				PasswordHash:       hash,
+				Role:               "admin",
+				Status:             "active",
+				SSOProvider:        "local",
+				MustChangePassword: true,
+			})
 		}
-		if err := st.Users().CreateUser(ctx, &store.User{
-			ID:                 fmt.Sprintf("usr_%s", crypto.RandomHex(12)),
-			Username:           "admin",
-			DisplayName:        "Administrator",
-			PasswordHash:       hash,
-			Role:               "admin",
-			Status:             "active",
-			SSOProvider:        "local",
-			MustChangePassword: true,
-		}); err != nil {
+		if err != nil {
+			if passwordFile != "" {
+				if rerr := os.Remove(passwordFile); rerr != nil {
+					log.Printf("[SECURITY] remove %s by hand: %v", passwordFile, rerr)
+				}
+			}
 			log.Fatalf("Failed to create bootstrap admin: %v", err)
+		}
+		if passwordFile != "" {
+			log.Printf("[SECURITY] Initial bootstrap: created admin account %q; its password is in %s (delete the file after first sign-in)", "admin", passwordFile)
 		}
 	}
 
@@ -216,6 +230,8 @@ func runServer() {
 	go func() { defer close(retentionDone); srv.RunRetention(ctx) }()
 	sealingDone := make(chan struct{})
 	go func() { defer close(sealingDone); srv.RunBlobSealing(ctx) }()
+	cleanupDone := make(chan struct{})
+	go func() { defer close(cleanupDone); cleanExpiredLoop(ctx, st) }()
 	backupDone := make(chan struct{})
 	go backupLoop(ctx, cfg, st, backupDone)
 
@@ -266,6 +282,7 @@ func runServer() {
 		httpServer.Close()
 	}
 	cancel()
+	srv.StopBackupCollection()
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), backupWaitTimeout)
 	defer waitCancel()
 	waitForBackupWork(waitCtx, backupDone, srv.WaitDetached)
@@ -284,7 +301,49 @@ func runServer() {
 	case <-waitCtx.Done():
 		log.Print("Blob sealing shutdown timed out")
 	}
+	select {
+	case <-cleanupDone:
+	case <-waitCtx.Done():
+		log.Print("Expired-row cleanup shutdown timed out")
+	}
 	log.Println("[KY-BASE] Server stopped")
+}
+
+// writeInitialAdminPassword stores a generated bootstrap password in a new 0600 file, so it never
+// reaches a log. O_EXCL refuses to overwrite a file left by an earlier bootstrap.
+func writeInitialAdminPassword(dataDir, pass string) (string, error) {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dataDir, "initial-admin-password")
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	if _, err = f.WriteString(pass + "\n"); err != nil {
+		f.Close()
+		return "", err
+	}
+	return path, f.Close()
+}
+
+// cleanExpiredLoop deletes expired sessions and MFA challenges now and then hourly.
+func cleanExpiredLoop(ctx context.Context, st store.Store) {
+	tick := time.NewTicker(time.Hour)
+	defer tick.Stop()
+	for {
+		if err := st.Sessions().CleanExpiredSessions(ctx); err != nil && ctx.Err() == nil {
+			log.Printf("expired sessions cleanup: %v", err)
+		}
+		if err := st.Sessions().CleanExpiredMFAChallenges(ctx); err != nil && ctx.Err() == nil {
+			log.Printf("expired MFA challenges cleanup: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }
 
 // waitForBackupWork blocks until the scheduler loop and every detached handler have finished,
@@ -324,27 +383,27 @@ func waitForBackupWork(ctx context.Context, backupDone <-chan struct{}, waitDeta
 // runBackup seals one capsule and delivers it to every configured destination, for the CLI:
 // it builds its own RunConfig because a one-shot failure is reported to the operator and ends.
 func runBackup(ctx context.Context, cfg *config.Config, st store.Store) (recoveryclient.Result, error) {
-	rc, err := backup.RunConfig(cfg, appVersion)
+	rc, err := backup.RunConfig(cfg, api.AppVersion)
 	if err != nil {
 		return recoveryclient.Result{}, err
 	}
 	client := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 	return recoveryclient.Run(ctx, rc, backup.Settings(ctx, st.Settings()),
 		func() (recoveryclient.Payload, error) {
-			return backup.Collect(ctx, cfg, appVersion, backup.PurposeDeposit)
+			return backup.Collect(ctx, cfg, api.AppVersion, backup.PurposeDeposit)
 		}, client)
 }
 
 // backupLoop polls the admin's schedule once a minute; a change in the UI needs no restart
-// and a restart never loses its place, the last attempt is in the database. The wait honours
-// shutdown; the run does not, and done is closed only once the loop is between runs, so
-// SIGTERM cannot land between KyRecovery storing a capsule and the receipt being written.
+// and a restart never loses its place, the last attempt is in the database. The wait and
+// payload collection honour shutdown; sealing and upload do not, and done is closed only once
+// the loop is between runs, so SIGTERM cannot land between KyRecovery storing a capsule and the receipt being written.
 func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done chan<- struct{}) {
 	defer close(done)
 	// Built once: a deployment key that cannot seal is a configuration fault, not a run that
 	// might succeed next minute. Run never gets far enough to stamp the attempt, so retrying
 	// would log and audit a failure every tick forever.
-	rc, err := backup.RunConfig(cfg, appVersion)
+	rc, err := backup.RunConfig(cfg, api.AppVersion)
 	if err != nil {
 		log.Printf("[BACKUP] scheduler disabled: %v", err)
 		return
@@ -369,7 +428,7 @@ func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done ch
 		runCtx := context.WithoutCancel(ctx)
 		res, err := recoveryclient.Run(runCtx, rc, backup.Settings(runCtx, st.Settings()),
 			func() (recoveryclient.Payload, error) {
-				return backup.Collect(runCtx, cfg, appVersion, backup.PurposeDeposit)
+				return backup.Collect(ctx, cfg, api.AppVersion, backup.PurposeDeposit)
 			}, client)
 		if errors.Is(err, recoveryclient.ErrNotPaired) || errors.Is(err, recoveryclient.ErrNoDestination) {
 			continue // never configured; nothing to report
@@ -396,15 +455,19 @@ func pruneBulk(ctx, runCtx context.Context, cfg *config.Config, st store.Store) 
 		details["outcome"], details["error"] = "failure", err.Error()
 		log.Printf("[BACKUP] bulk prune: %s", recoveryclient.AuditSafe(err.Error()))
 	}
-	_ = st.Audit().LogAudit(runCtx, &store.AuditRecord{UserID: "system", Action: "backup.bulk_prune", Details: api.AuditDetails(details)})
+	if err := st.Audit().LogAudit(runCtx, &store.AuditRecord{UserID: "system", Action: "backup.bulk_prune", Details: api.AuditDetails(details)}); err != nil {
+		log.Printf("[BACKUP] audit backup.bulk_prune not recorded: %v", err)
+	}
 }
 
 // recordRun audits one run the same way the admin route does, under the actor that started it.
 func recordRun(ctx context.Context, st store.Store, actor string, res recoveryclient.Result, err error) {
 	action, outcome, details := recoveryclient.Outcome(res, err)
 	details["outcome"] = outcome
-	_ = st.Audit().LogAudit(ctx, &store.AuditRecord{UserID: actor, Action: action,
-		Resource: res.Manifest.CapsuleID, Details: api.AuditDetails(details)})
+	if aerr := st.Audit().LogAudit(ctx, &store.AuditRecord{UserID: actor, Action: action,
+		Resource: res.Manifest.CapsuleID, Details: api.AuditDetails(details)}); aerr != nil {
+		log.Printf("[BACKUP] audit %s not recorded: %v", action, aerr)
+	}
 	if err != nil {
 		log.Printf("[BACKUP] %s: %s", actor, recoveryclient.AuditSafe(err.Error()))
 		return
@@ -414,7 +477,7 @@ func recordRun(ctx context.Context, st store.Store, actor string, res recoverycl
 
 // runDeposit seals and delivers one capsule now, for cron or an operator at a shell.
 func runDeposit() {
-	cfg, err := config.LoadFromEnv()
+	cfg, err := config.LoadExisting()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -489,7 +552,7 @@ func runInitAdmin(args []string) {
 
 // collectFiles is what every CLI seal uses; the sealed-only members are safe here and nowhere else.
 func collectFiles(ctx context.Context, cfg *config.Config, purpose backup.Purpose) recoveryclient.Payload {
-	payload, err := backup.Collect(ctx, cfg, appVersion, purpose)
+	payload, err := backup.Collect(ctx, cfg, api.AppVersion, purpose)
 	if err != nil {
 		log.Fatalf("Failed to collect backup files: %v", err)
 	}
@@ -497,7 +560,7 @@ func collectFiles(ctx context.Context, cfg *config.Config, purpose backup.Purpos
 }
 
 func runBackupDrill(args []string) {
-	cfg, err := config.LoadFromEnv()
+	cfg, err := config.LoadExisting()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -532,7 +595,7 @@ func runExportCapsule(args []string) {
 	out := fs.String("out", "", "output path (default <capsule-id>.kycap in the current directory)")
 	_ = fs.Parse(args)
 
-	cfg, err := config.LoadFromEnv()
+	cfg, err := config.LoadExisting()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}

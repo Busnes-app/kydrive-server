@@ -34,6 +34,12 @@ var ErrNoDatabaseSnapshot = errors.New("backup: no consistent database snapshot 
 // sealed capsule (the encryption key, the pinned recovery public key). Nothing that returns
 // from here may leave the process except through a Sealer. purpose tags the bulk snapshot.
 func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose Purpose) (recoveryclient.Payload, error) {
+	// recoveryclient.Run calls its collector without a context; the bound lives here.
+	if cfg.Backup.CollectTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Backup.CollectTimeout)
+		defer cancel()
+	}
 	if strings.ToLower(cfg.Database.Driver) != "sqlite" {
 		return recoveryclient.Payload{}, fmt.Errorf("%w: %s", ErrNoDatabaseSnapshot, cfg.Database.Driver)
 	}
@@ -45,10 +51,13 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 	files := []recoveryclient.File{{Path: dbPath, Data: dbBytes, Mode: 0600}}
 	sqlitePaths := []string{dbPath}
 
-	cfgJSON, _ := json.MarshalIndent(map[string]any{
+	cfgJSON, err := json.MarshalIndent(map[string]any{
 		"server":   cfg.Server,
 		"database": map[string]any{"driver": cfg.Database.Driver},
 	}, "", "  ")
+	if err != nil {
+		return recoveryclient.Payload{}, err
+	}
 	files = append(files, recoveryclient.File{Path: "config/settings.json", Data: cfgJSON, Mode: 0600})
 
 	integrations := map[string]string{"KY_SESSION_SECRET": cfg.Security.SessionSecret, "KY_SSO_ENABLED": strconv.FormatBool(cfg.SSO.Enabled), "KY_SSO_AUTO_PROVISION": strconv.FormatBool(cfg.SSO.AutoProvision), "KY_KYSIGNON_ISSUER": cfg.SSO.KySignOnIssuer, "KY_KYSIGNON_CLIENT_ID": cfg.SSO.KySignOnClientID, "KY_KYSIGNON_SECRET": cfg.SSO.KySignOnSecret, "KY_KYSIGNON_HMAC_SECRET": cfg.SSO.KySignOnHMACSecret, "KY_SCIM_ENABLED": strconv.FormatBool(cfg.SCIM.Enabled), "KY_SCIM_TOKEN": cfg.SCIM.BearerToken, "KY_APP_URL": cfg.Server.AppURL, "KY_APP_NAME": cfg.Server.AppName, "KY_BACKUP_ALLOW_PRIVATE_RECOVERY": strconv.FormatBool(cfg.Backup.AllowPrivateRecovery)}
@@ -71,6 +80,8 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 
 	if pub, err := os.ReadFile(recoveryclient.RecoveryKeyPath(cfg.Database.DataDir)); err == nil {
 		files = append(files, recoveryclient.File{Path: recoveryPubPath, Data: pub, Mode: 0600})
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return recoveryclient.Payload{}, err
 	}
 
 	bulk, err := CollectBulk(ctx, cfg.Database.DataDir, dbBytes, cfg.Security.EncryptionKey, purpose)

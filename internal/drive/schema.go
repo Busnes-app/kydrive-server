@@ -32,6 +32,11 @@ UPDATE drive_personal_workspaces SET owner_name=COALESCE((SELECT COALESCE(NULLIF
 ALTER TABLE drive_folders ADD COLUMN name_hmac TEXT NOT NULL DEFAULT '';
 DROP INDEX drive_live_names;
 DROP INDEX drive_live_folders;`,
+	`ALTER TABLE drive_editor_sessions ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE drive_editor_sessions ADD COLUMN next_attempt INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX drive_editor_pending ON drive_editor_sessions(next_attempt) WHERE revoked=true AND drop_done=false;
+CREATE INDEX drive_editor_users ON drive_editor_sessions(user_id) WHERE revoked=false;
+CREATE INDEX drive_files_workspace ON drive_files(workspace);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

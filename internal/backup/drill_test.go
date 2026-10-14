@@ -102,6 +102,10 @@ func TestDrillRootIsUnderTheDataDir(t *testing.T) {
 	if rel != "drill" {
 		t.Fatalf("drill root %q moved; update config's residue check", rel)
 	}
+	cfg.Backup.DrillDir = "/srv/kydrive-drill"
+	if got := backup.DrillRoot(cfg); got != cfg.Backup.DrillDir {
+		t.Fatalf("KY_DRILL_DIR ignored: %q", got)
+	}
 }
 
 func manifestFor(payload recoveryclient.Payload) capsule.Manifest {

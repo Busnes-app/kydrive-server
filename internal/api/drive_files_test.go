@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
-	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -20,8 +19,7 @@ func send(t *testing.T, srv *api.Server, method, path, body string, cookie *http
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if cookie != nil {
 		req.AddCookie(cookie)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 	}
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)

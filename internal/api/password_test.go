@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/password"
+	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
@@ -24,60 +25,52 @@ func TestForcedPasswordReplacement(t *testing.T) {
 	}
 	manager := auth.NewSessionManager(st, cfg.Security)
 	login := httptest.NewRecorder()
-	_, token, err := manager.IssueSession(ctx, login, httptest.NewRequest("POST", "/api/auth/login", nil), user)
-	if err != nil {
+	if _, _, err := manager.IssueSession(ctx, login, httptest.NewRequest("POST", "/api/auth/login", nil), user); err != nil {
 		t.Fatal(err)
 	}
-	call := func(method, path, body string, cookie, csrf bool) *httptest.ResponseRecorder {
+	call := func(method, path, body string, csrf bool) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
-		if cookie {
-			for _, c := range login.Result().Cookies() {
-				req.AddCookie(c)
-				if csrf && c.Name == auth.CSRFCookieName {
-					req.Header.Set(auth.HeaderCSRF, c.Value)
-				}
+		for _, c := range login.Result().Cookies() {
+			req.AddCookie(c)
+			if csrf && c.Name == auth.CSRFCookieName {
+				req.Header.Set(auth.HeaderCSRF, c.Value)
 			}
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
 		}
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 		return w
 	}
-	for _, cookies := range []bool{false, true} {
-		for _, route := range []struct{ method, path string }{{"GET", "/api/backup/status"}, {"POST", "/api/devices/pair/init"}, {"POST", "/api/settings/theme"}, {"POST", "/api/backup/export-capsule"}} {
-			w := call(route.method, route.path, `{"theme":"oled"}`, cookies, true)
-			if w.Code != 403 || !strings.Contains(w.Body.String(), "password_change_required") {
-				t.Fatalf("restricted %s: %d %s", route.path, w.Code, w.Body)
-			}
-		}
-		w := call("GET", "/api/settings", "", cookies, true)
-		if strings.Contains(w.Body.String(), "extra_settings") || strings.Contains(w.Body.String(), "db_driver") {
-			t.Fatal("restricted settings leaked", w.Body)
+	for _, route := range []struct{ method, path string }{{"GET", "/api/backup/status"}, {"POST", "/api/settings/theme"}, {"POST", "/api/backup/export-capsule"}} {
+		w := call(route.method, route.path, `{"theme":"oled"}`, true)
+		if w.Code != 403 || !strings.Contains(w.Body.String(), "password_change_required") {
+			t.Fatalf("restricted %s: %d %s", route.path, w.Code, w.Body)
 		}
 	}
-	if w := call("GET", "/api/auth/me", "", true, true); !strings.Contains(w.Body.String(), `"must_change_password":true`) {
+	if w := call("GET", "/api/settings", "", true); strings.Contains(w.Body.String(), "extra_settings") || strings.Contains(w.Body.String(), "db_driver") {
+		t.Fatal("restricted settings leaked", w.Body)
+	}
+	if w := call("GET", "/api/auth/me", "", true); !strings.Contains(w.Body.String(), `"must_change_password":true`) {
 		t.Fatal(w.Body)
 	}
 	body := func(old, new string) string {
 		b, _ := json.Marshal(map[string]string{"current_password": old, "new_password": new})
 		return string(b)
 	}
-	if w := call("POST", "/api/auth/change-password", body(oldPassword, newPassword), true, false); w.Code != 403 {
+	if w := call("POST", "/api/auth/change-password", body(oldPassword, newPassword), false); w.Code != 403 {
 		t.Fatal("missing CSRF accepted", w.Code)
 	}
 	for _, bad := range []struct {
 		old, new string
 		status   int
 	}{{oldPassword, "short", 400}, {oldPassword, oldPassword, 400}, {"incorrect", newPassword, 401}} {
-		if w := call("POST", "/api/auth/change-password", body(bad.old, bad.new), true, true); w.Code != bad.status {
+		if w := call("POST", "/api/auth/change-password", body(bad.old, bad.new), true); w.Code != bad.status {
 			t.Fatal(w.Code, w.Body)
 		}
 	}
-	if w := call("POST", "/api/auth/change-password", body(oldPassword, newPassword), true, true); w.Code != 200 {
+	if w := call("POST", "/api/auth/change-password", body(oldPassword, newPassword), true); w.Code != 200 {
 		t.Fatal(w.Code, w.Body)
 	}
-	if w := call("GET", "/api/auth/me", "", false, true); strings.Contains(w.Body.String(), `"authenticated":true`) {
+	if w := call("GET", "/api/auth/me", "", true); strings.Contains(w.Body.String(), `"authenticated":true`) {
 		t.Fatal("old session survived")
 	}
 	updated, err := st.Users().GetUserByID(ctx, user.ID)
@@ -99,7 +92,9 @@ func TestForcedPasswordReplacement(t *testing.T) {
 	}{{oldPassword, 401}, {newPassword, 200}} {
 		b, _ := json.Marshal(map[string]string{"username": "admin", "password": tc.pass})
 		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(string(b))))
+		req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(string(b)))
+		req.Header.Set("Content-Type", "application/json")
+		srv.ServeHTTP(w, req)
 		if w.Code != tc.status {
 			t.Fatal("login after replacement", w.Code, w.Body)
 		}
@@ -177,7 +172,7 @@ func TestRestrictedSessionCannotInheritClearedFlag(t *testing.T) {
 	}}
 	manager = auth.NewSessionManager(&resetDuringReadStore{Store: st, users: users}, cfg.Security)
 	req := httptest.NewRequest("GET", "/api/backup/status", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
 	if _, _, err := manager.AuthenticateRequest(req); err == nil {
 		t.Fatal("revoked restricted session inherited full access")
 	}
@@ -201,7 +196,8 @@ func TestReplacementRefusesUnflaggedAndFederatedAccounts(t *testing.T) {
 				t.Fatal(err)
 			}
 			req := httptest.NewRequest("POST", "/api/auth/change-password", strings.NewReader(`{"current_password":"x","new_password":"NewPassword123!"}`))
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+			api.SignCSRFForTest(srv, req)
 			w := httptest.NewRecorder()
 			srv.ServeHTTP(w, req)
 			if w.Code != 409 {

@@ -13,7 +13,8 @@ Owns `render.py` and the generated installation contract. Root Compose owns NAS 
 - TLS, ingress class, storage class and independent bulk storage are operator inputs. A PVC alone does not establish an independent backup destination.
 - A NAS connection is an external endpoint; kubeconfig grants no NAS authority.
 
-- Initialize the bundled service data from the same pinned editor image on the first start, refusing non-empty unmarked destinations. Preserve the source directory owner and mode on staging roots as well as copied contents. Keep each service and editor runtime in a separate subPath; never mount the PVC root over the editor cache.
+- The non-root drive container sets `allowPrivilegeEscalation: false`, drops all capabilities, uses the `RuntimeDefault` seccomp profile and a read-only root filesystem with an emptyDir at `/tmp`. Euro-Office runs as root by design and keeps its defaults.
+- Initialize the bundled service data from the same pinned editor image on the first start, refusing non-empty unmarked destinations. Each directory gets `/seed/.seeded-<name>` after its move and is skipped once marked; stale `/seed/.seed-<name>.*` stages are removed before staging, so a start interrupted between moves resumes. Preserve the source directory owner and mode on staging roots as well as copied contents. Keep each service and editor runtime in a separate subPath; never mount the PVC root over the editor cache.
 
 ## Work Guidance
 
