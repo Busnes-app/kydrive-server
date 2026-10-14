@@ -30,7 +30,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 
 ## Verification
 - Browser setup: build the frontend, run `go build -o .browser/server ./cmd/server` at the repo root, then `cd web && npx playwright install chromium && npm run test:browser`. CI also installs browser OS dependencies.
-- `make test-web` or `cd web && npm ci && npm test`, then `npm run build` (vitest with jsdom; `src/pages/Backup.test.tsx` renders the recovery screen against a stubbed status route; `src/pages/drive/client.test.ts` and `MoveDialog.test.tsx` cover the file-management client and dialog; `Leavers.test.tsx` the handover panel). `web/dist` and `dist-fonts/` are build output, not committed; the build restores `dist/.gitkeep` so `go:embed` compiles on a fresh clone.
+- `make test-web` or `cd web && npm ci && npm test`, then `npm run build` (vitest with jsdom; `src/pages/Backup.test.tsx` renders the recovery screen against a stubbed status route and saves the Document retention form; `src/pages/drive/client.test.ts` and `MoveDialog.test.tsx` cover the file-management client and dialog; `Leavers.test.tsx` the handover panel). `web/dist` and `dist-fonts/` are build output, not committed; the build restores `dist/.gitkeep` so `go:embed` compiles on a fresh clone.
 
 ## Shared browser UI
 

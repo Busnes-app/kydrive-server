@@ -249,6 +249,35 @@ func TestScheduleBounds(t *testing.T) {
 	}
 }
 
+func TestBulkRetentionBoundsAndReadBack(t *testing.T) {
+	srv, st, _ := setupSQLiteServer(t)
+	session := loginAs(t, srv, st, "alice", "admin")
+	if status := statusOf(t, srv, session); fmt.Sprint(status["bulk_retention"]) != "map[keep_daily:0 keep_monthly:0 keep_weekly:0]" {
+		t.Fatalf("default is not off: %v", status["bulk_retention"])
+	}
+	for _, tc := range []struct {
+		body any
+		want int
+	}{
+		{map[string]int{"keep_daily": -1}, 400},
+		{map[string]int{"keep_monthly": 1001}, 400},
+		{map[string]any{"keep_daily": 1.5}, 400},
+		{map[string]int{"keep_daily": 7, "keep_weekly": 4, "keep_monthly": 12}, 200},
+	} {
+		if w := adminDo(t, srv, session, "PUT", "/api/backup/bulk-retention", tc.body); w.Code != tc.want {
+			t.Errorf("%v: got %d, want %d: %s", tc.body, w.Code, tc.want, w.Body.String())
+		}
+	}
+	status := statusOf(t, srv, session)
+	if fmt.Sprint(status["bulk_retention"]) != "map[keep_daily:7 keep_monthly:12 keep_weekly:4]" || status["bulk_keep_last"] == nil {
+		t.Errorf("status policy: %v", status)
+	}
+	rows := auditRows(t, st, "admin.bulk_retention")
+	if len(rows) != 1 || rows[0].Details != "keep_daily=7 keep_weekly=4 keep_monthly=12" {
+		t.Errorf("retention audit: %+v", rows)
+	}
+}
+
 func TestStatusNeverCarriesToken(t *testing.T) {
 	srv, st, cfg := setupSQLiteServer(t)
 	priv, _ := recoverykey.Generate()

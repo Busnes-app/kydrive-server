@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Backup } from './Backup';
 
 function mockStatus(body: Record<string, unknown>) {
@@ -78,5 +78,36 @@ describe('Backup', () => {
     mockStatus({ ...PAIRED, key_in_data_dir: true });
     render(<Backup />);
     expect(await screen.findByText(/encryption key is stored in the data directory/)).toBeTruthy();
+  });
+
+  it('saves the document retention and shows the last prune', async () => {
+    const sent: unknown[] = [];
+    let status: Record<string, unknown> = {
+      ...PAIRED,
+      bulk_retention: { keep_daily: 0, keep_weekly: 0, keep_monthly: 0 },
+      bulk_keep_last: 7,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/api/backup/bulk-retention') && init?.method === 'PUT') {
+          const body = JSON.parse(String(init.body));
+          sent.push(body);
+          status = { ...status, bulk_retention: body, bulk_last_prune: { at: '2026-10-13T00:00:00Z', forgotten: 3 } };
+          return new Response(JSON.stringify(body), { status: 200 });
+        }
+        if (url.endsWith('/api/backup/status')) return new Response(JSON.stringify(status), { status: 200 });
+        throw new Error(`unexpected fetch ${url}`);
+      }),
+    );
+    render(<Backup />);
+    expect(await screen.findByText(/never removes the newest 7 deposit snapshots/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Daily snapshots'), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText('Monthly snapshots'), { target: { value: '12' } });
+    fireEvent.click(within(screen.getByLabelText('Daily snapshots').closest('form')!).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(/pruned after the next scheduled backup/)).toBeTruthy();
+    expect(sent).toEqual([{ keep_daily: 7, keep_weekly: 0, keep_monthly: 12 }]);
+    expect(await screen.findByText(/3 snapshots removed/)).toBeTruthy();
   });
 });

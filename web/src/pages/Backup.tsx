@@ -30,6 +30,12 @@ export interface LocalCopy {
   created_at: string;
 }
 
+export interface BulkRetention {
+  keep_daily: number;
+  keep_weekly: number;
+  keep_monthly: number;
+}
+
 export interface BackupStatus {
   paired: boolean;
   key_pinned: boolean;
@@ -52,6 +58,9 @@ export interface BackupStatus {
   interval_sec?: number;
   min_interval_sec?: number;
   next_run_at?: string;
+  bulk_retention?: BulkRetention;
+  bulk_keep_last?: number;
+  bulk_last_prune?: { at: string; forgotten: number; error?: string };
 }
 
 interface DrillCheck {
@@ -151,6 +160,11 @@ export const Backup: React.FC = () => {
   const [scheduleMessage, setScheduleMessage] = useState<string>('');
   const [scheduleError, setScheduleError] = useState<string>('');
 
+  const [retention, setRetention] = useState<BulkRetention>({ keep_daily: 0, keep_weekly: 0, keep_monthly: 0 });
+  const [retentionSaving, setRetentionSaving] = useState<boolean>(false);
+  const [retentionMessage, setRetentionMessage] = useState<string>('');
+  const [retentionError, setRetentionError] = useState<string>('');
+
   const [remoteUrl, setRemoteUrl] = useState<string>('');
   const [pairCode, setPairCode] = useState<string>('');
   const [pairing, setPairing] = useState<boolean>(false);
@@ -172,6 +186,7 @@ export const Backup: React.FC = () => {
       setStatus(data);
       if (data.recovery_url) setRemoteUrl(data.recovery_url);
       if (typeof data.interval_sec === 'number') setScheduleSec(data.interval_sec);
+      if (data.bulk_retention) setRetention(data.bulk_retention);
     } catch (err) {
       setStatusError(errorText(err, 'Could not load backup status'));
     } finally {
@@ -252,6 +267,27 @@ export const Backup: React.FC = () => {
       setScheduleError(errorText(err, 'Could not save the schedule'));
     } finally {
       setScheduleSaving(false);
+    }
+  };
+
+  const saveRetention = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRetentionSaving(true);
+    setRetentionMessage('');
+    setRetentionError('');
+    try {
+      const saved = await call<BulkRetention>(
+        '/api/backup/bulk-retention',
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(retention) },
+        'Could not save the document retention',
+      );
+      const off = saved.keep_daily + saved.keep_weekly + saved.keep_monthly === 0;
+      setRetentionMessage(off ? 'Document snapshots are never pruned.' : 'Document snapshots are pruned after the next scheduled backup.');
+      await fetchStatus();
+    } catch (err) {
+      setRetentionError(errorText(err, 'Could not save the document retention'));
+    } finally {
+      setRetentionSaving(false);
     }
   };
 
@@ -490,6 +526,50 @@ export const Backup: React.FC = () => {
         </p>
         {scheduleMessage && <Alert kind="success">{scheduleMessage}</Alert>}
         {scheduleError && <Alert kind="error">{scheduleError}</Alert>}
+      </div>
+
+      <div className="panel dr-section">
+        <div className="panel-header">
+          <h3>Document retention</h3>
+        </div>
+        <form onSubmit={saveRetention} className="dr-row">
+          {(
+            [
+              ['keep_daily', 'Daily snapshots'],
+              ['keep_weekly', 'Weekly snapshots'],
+              ['keep_monthly', 'Monthly snapshots'],
+            ] as const
+          ).map(([field, label]) => (
+            <label key={field} className="dr-field">
+              <span>{label}</span>
+              <input
+                type="number"
+                min={0}
+                max={1000}
+                value={retention[field]}
+                onChange={(e) => setRetention({ ...retention, [field]: Number(e.target.value) })}
+              />
+            </label>
+          ))}
+          <button type="submit" disabled={retentionSaving}>
+            {retentionSaving ? <Loader2 size={14} className="animate-spin" /> : <Clock size={14} />}
+            <span>Save</span>
+          </button>
+        </form>
+        <p className="dr-hint">
+          Off (all 0) by default: document snapshots are never removed. When set, the scheduled backup prunes at most once a day, and
+          never removes the newest {status?.bulk_keep_last ?? 'KY_BACKUP_KEEP'} deposit snapshots. Capsules KyRecovery holds for longer
+          than this policy may name removed snapshots, so keep it longer than KyRecovery&apos;s retention. An append-only or Object Lock
+          repository refuses pruning.
+        </p>
+        {status?.bulk_last_prune && (
+          <p className="dr-hint">
+            Last pruned {when(status.bulk_last_prune.at)}:{' '}
+            {status.bulk_last_prune.error ? `failed: ${status.bulk_last_prune.error}` : `${status.bulk_last_prune.forgotten} snapshots removed`}
+          </p>
+        )}
+        {retentionMessage && <Alert kind="success">{retentionMessage}</Alert>}
+        {retentionError && <Alert kind="error">{retentionError}</Alert>}
       </div>
 
       <div className="dr-two">

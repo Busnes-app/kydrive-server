@@ -5,7 +5,7 @@
 **Goal:** close the gaps that stop KyDrive replacing OneDrive/SharePoint for a small organisation, in the order a user hits them.
 
 **Decisions (user, 2026-10-07):**
-- Space reclamation: **opt-in retention policy** per workspace (empty trash after N days, keep N versions), off by default, admin-set, plus manual permanent delete by a workspace manager. This replaces the "no automatic destructive garbage collection" contract; Restic snapshots are still never pruned automatically.
+- Space reclamation: **opt-in retention policy** per workspace (empty trash after N days, keep N versions), off by default, admin-set, plus manual permanent delete by a workspace manager. This replaces the "no automatic destructive garbage collection" contract; Restic bulk pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 - Leavers: **admin hands over** a deactivated account's My files to a chosen shared workspace or a named colleague. Audited; no automatic access, no admin content browsing.
 - Sharing scope: **share with a person, per-folder permissions, organisation links, external guest links.** Guest links un-defer anonymous sharing.
 - Bulk backup: **offsite or cloud** Restic repository (S3-compatible or rest-server over HTTPS).
@@ -19,7 +19,7 @@
 - Administration never bypasses content grants. Retention settings and handover are configuration actions; they must not give the admin a way to read content.
 - Every state change writes a `drive_events` row. Every privileged route is wrapped in `requireAdmin` in `routes()`.
 - Domain code (`internal/drive`) stays HTTP-free; authorization is rechecked inside each mutation's transaction.
-- Retain Restic snapshots; no automatic pruning of the bulk repository.
+- Restic bulk pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 - Follow the DOX chain: `KyDrive-server/AGENTS.md` → `internal/drive`, `internal/api`, `web`, `internal/backup`, `docs` children. Each milestone updates the docs it changes.
 
 ## Milestones

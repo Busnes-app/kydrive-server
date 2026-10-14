@@ -21,8 +21,11 @@ func TestDrillLockProcess(t *testing.T) {
 	if os.Getenv("KY_DRILL_LOCK_HELPER") != "1" {
 		return
 	}
-	dir := os.Getenv("KY_DRILL_LOCK_DIR")
-	f, err := os.OpenFile(filepath.Join(dir, "drill.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	dir, name := os.Getenv("KY_DRILL_LOCK_DIR"), os.Getenv("KY_DRILL_LOCK_NAME")
+	if name == "" {
+		name = "drill.lock"
+	}
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +41,7 @@ func TestRunDrillSerializesProcessesAndReleasesAfterExit(t *testing.T) {
 	t.Setenv("KY_PORT", "8080")
 	t.Setenv("KY_DB_DRIVER", "sqlite")
 	cfg, _ := payloadConfig(t)
-	payload, err := backup.Collect(context.Background(), cfg, "test")
+	payload, err := backup.Collect(context.Background(), cfg, "test", backup.PurposeDeposit)
 	if err != nil {
 		t.Fatal(err)
 	}

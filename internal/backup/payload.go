@@ -32,8 +32,8 @@ var ErrNoDatabaseSnapshot = errors.New("backup: no consistent database snapshot 
 // Collect assembles the payload every sealing caller uses: the local application files
 // (SQLite database, configuration) plus the members that may only ever travel inside a
 // sealed capsule (the encryption key, the pinned recovery public key). Nothing that returns
-// from here may leave the process except through a Sealer.
-func Collect(ctx context.Context, cfg *config.Config, appVersion string) (recoveryclient.Payload, error) {
+// from here may leave the process except through a Sealer. purpose tags the bulk snapshot.
+func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose Purpose) (recoveryclient.Payload, error) {
 	if strings.ToLower(cfg.Database.Driver) != "sqlite" {
 		return recoveryclient.Payload{}, fmt.Errorf("%w: %s", ErrNoDatabaseSnapshot, cfg.Database.Driver)
 	}
@@ -73,7 +73,7 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string) (recove
 		files = append(files, recoveryclient.File{Path: recoveryPubPath, Data: pub, Mode: 0600})
 	}
 
-	bulk, err := CollectBulk(ctx, cfg.Database.DataDir, dbBytes, cfg.Security.EncryptionKey)
+	bulk, err := CollectBulk(ctx, cfg.Database.DataDir, dbBytes, cfg.Security.EncryptionKey, purpose)
 	if err != nil {
 		return recoveryclient.Payload{}, err
 	}
