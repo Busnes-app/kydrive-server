@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { secureFetch } from '../api';
 import { bytes, breadcrumb, change, file, folder, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { Leavers } from './drive/Leavers';
 import { MoveDialog } from './drive/MoveDialog';
 import type { Item, Mode } from './drive/MoveDialog';
 import type { DriveFile, Folder, Grant, Group, Version, Workspace } from './drive/client';
@@ -116,6 +117,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     {message && <p role="alert" className="panel">{message}</p>}
     {admin && <details className="panel"><summary>Operations &amp; audit</summary><p role="status">{operations}</p>{audit.map((e,i) => <p key={i}>{e}</p>)}</details>}
     {admin && <details className="panel drive-create-workspace"><summary>Create shared workspace</summary><form onSubmit={e => { e.preventDefault(); void run(async () => { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); setNewName(''); }); }}><h3>Create shared workspace</h3><label>Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label><label>Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label><button disabled={busy}>Create workspace</button></form></details>}
+    {admin && <Leavers workspaces={workspaces} onDone={() => void reload().catch(() => {})} />}
     <div className="drive-layout">
     <div className="drive-content">{current ? <><div className="panel drive-files-panel">
       <div className="drive-workspace-heading"><div><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>

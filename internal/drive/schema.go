@@ -25,6 +25,8 @@ ALTER TABLE drive_editor_sessions ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE drive_versions ADD COLUMN sealed INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX drive_versions_blob ON drive_versions(blob);
 CREATE TABLE drive_blob_retire(blob TEXT PRIMARY KEY);`,
+	`ALTER TABLE drive_personal_workspaces ADD COLUMN owner_name TEXT NOT NULL DEFAULT '';
+UPDATE drive_personal_workspaces SET owner_name=COALESCE((SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=owner),'');`,
 }
 
 func (s *Store) migrate(ctx context.Context) error {
