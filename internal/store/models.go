@@ -19,11 +19,26 @@ type User struct {
 	TOTPEnabled        bool       `json:"totp_enabled"`
 	TOTPLastCounter    int64      `json:"-"` // last RFC 6238 counter accepted; refuses replay inside the skew window
 	RecoveryCodesHash  string     `json:"-"` // JSON array of sha256 hashes
-	PushDeviceID       string     `json:"push_device_id,omitempty"`
 	MustChangePassword bool       `json:"must_change_password"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	LastLoginAt        *time.Time `json:"last_login_at,omitempty"`
+}
+
+// DirectoryUser is what a directory may assert about an account. It has no role: new accounts
+// are "user" and application administration is an operator grant (SetDirectoryRole).
+// ID empty creates a Provider ("scim" or "kysignon") account; otherwise it updates that
+// directory account. A nonzero EventTime (unix seconds) applies only when strictly newer than
+// the account's last applied event, else ErrStale.
+type DirectoryUser struct {
+	ID          string
+	Provider    string
+	Subject     string
+	Username    string
+	Email       string
+	DisplayName string
+	Active      bool
+	EventTime   int64
 }
 
 // Session represents an active authenticated user session.
@@ -40,21 +55,6 @@ type MFAChallenge struct {
 	TokenHash string
 	UserID    string
 	ExpiresAt time.Time
-}
-
-// DevicePairing represents a 90-second ephemeral session to link mobile/PWA wrappers.
-type DevicePairing struct {
-	// Code, Secret and PushToken never serialise: this record is reached by unauthenticated
-	// pair/verify and pair/poll callers. A handler that must return one needs its own type.
-	Code       string    `json:"-"` // 6-digit verification code
-	Secret     string    `json:"-"` // Ephemeral secret for exchange
-	UserID     string    `json:"user_id,omitempty"`
-	DeviceName string    `json:"device_name,omitempty"`
-	Platform   string    `json:"platform,omitempty"` // "android", "ios", "pwa", "desktop"
-	PushToken  string    `json:"-"`
-	Status     string    `json:"status"` // "pending", "approved", "consumed", "expired"
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
 }
 
 // Group represents a SCIM/RBAC user group.

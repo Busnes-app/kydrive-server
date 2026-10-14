@@ -1,9 +1,6 @@
 package sso
 
-import (
-	"errors"
-	"time"
-)
+import "errors"
 
 var (
 	ErrInvalidState     = errors.New("invalid or expired SSO state")
@@ -19,13 +16,4 @@ type IdentityClaims struct {
 	PreferredUsername string `json:"preferred_username"`
 	Role              string `json:"role,omitempty"`
 	Provider          string `json:"provider"` // "kysignon", "oidc", "saml"
-}
-
-// SSOState represents ephemeral state held during OAuth/OIDC authorization flow.
-type SSOState struct {
-	State        string    `json:"state"`
-	Verifier     string    `json:"verifier"`
-	Provider     string    `json:"provider"`
-	RedirectBack string    `json:"redirect_back"`
-	CreatedAt    time.Time `json:"created_at"`
 }

@@ -26,7 +26,7 @@ func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {
 func RetainFile(ctx context.Context, s *Store, id string, at time.Time) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) (err error) {
-		blobs, err = retainFile(ctx, tx, id, at.UTC().Format(time.RFC3339Nano))
+		blobs, err = retainFile(ctx, tx, id, at.UTC().Format(time.RFC3339Nano), 0)
 		return
 	})
 	return blobs, err
@@ -72,4 +72,26 @@ func QueryInt(ctx context.Context, s *Store, q string, args ...any) (n int, err 
 // RawNames returns the stored name and name_hmac of every row in table.
 func RawNames(ctx context.Context, s *Store, table string) ([]string, error) {
 	return column(ctx, s.db, `SELECT name||' '||name_hmac FROM `+table)
+}
+
+// UsedQuery is the per-workspace usage sum fits checks under every publish.
+const UsedQuery = usedBytes
+
+// QueryPlan returns the EXPLAIN QUERY PLAN details for q.
+func QueryPlan(ctx context.Context, s *Store, q string, args ...any) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err = rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			return nil, err
+		}
+		out = append(out, detail)
+	}
+	return out, rows.Err()
 }

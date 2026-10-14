@@ -51,7 +51,10 @@ func (s *SQLStore) ApplyInstaller(ctx context.Context, b applysetup.Common, chec
 	// Configuration records hold target-side file references, never credentials.
 	configBundle := applysetup.Common{Schema: b.Schema, Service: b.Service, SetupID: b.SetupID, SSO: b.SSO, Backup: b.Backup}
 	if b.SSO != nil || b.Backup != nil {
-		raw, _ := json.Marshal(configBundle)
+		raw, err := json.Marshal(configBundle)
+		if err != nil {
+			return r, err
+		}
 		existing, err := setting(InstallerConfigKey)
 		obj := applysetup.Object{Kind: "configuration", Name: "runtime"}
 		switch {
@@ -115,7 +118,10 @@ func (s *SQLStore) ApplyInstaller(ctx context.Context, b applysetup.Common, chec
 			if _, err = tx.ExecContext(ctx, s.rebind(`INSERT INTO users(id,username,email,display_name,role,status,sso_provider,sso_subject,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`), id, identity.Username, identity.Email, identity.Username, role, "active", "scim", identity.Subject, now, now); err != nil {
 				return r, err
 			}
-			owned, _ := json.Marshal(installerIdentity{b.SetupID, identity.Issuer, identity.Subject, id, role})
+			owned, err := json.Marshal(installerIdentity{b.SetupID, identity.Issuer, identity.Subject, id, role})
+			if err != nil {
+				return r, err
+			}
 			if err = put(key, string(owned), "installer.identity_created", id); err != nil {
 				return r, err
 			}

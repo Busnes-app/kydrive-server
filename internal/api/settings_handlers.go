@@ -2,8 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 	"strings"
+
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 type ThemeUpdateRequest struct {
@@ -11,7 +15,10 @@ type ThemeUpdateRequest struct {
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	theme, _ := s.store.Settings().GetSetting(r.Context(), "site_theme")
+	theme, err := s.store.Settings().GetSetting(r.Context(), "site_theme")
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		log.Printf("site theme unreadable, serving the default: %v", err)
+	}
 	if theme == "" {
 		theme = "patina"
 	}

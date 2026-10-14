@@ -42,98 +42,73 @@ func (k *KySignOnClient) ExchangeCode(ctx context.Context, code, verifier, redir
 	return claims, nil
 }
 
-// KySignOnSyncPayload defines the schema received during automatic directory replication webhooks.
+// KySignOnSyncPayload defines the schema received during automatic directory replication
+// webhooks. A role field, if sent, is ignored: application administration is an operator grant.
 type KySignOnSyncPayload struct {
 	Event       string `json:"event"` // "user.created", "user.updated", "user.deactivated", "user.deleted"
 	ID          string `json:"id"`
 	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
 	Status      string `json:"status"`
 	Timestamp   int64  `json:"timestamp"`
 }
 
-// HandleSyncWebhook processes inbound HMAC-SHA256 signed user updates from KySignOn server.
-func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, body []byte, signature string) error {
-	if k.config.KySignOnHMACSecret == "" {
-		return errors.New("webhook HMAC secret is not configured")
-	}
+// ErrWebhookUnauthorized is a missing secret, bad signature or out-of-window timestamp.
+var ErrWebhookUnauthorized = errors.New("webhook signature or timestamp rejected")
 
-	if !crypto.VerifyHMACSHA256(body, k.config.KySignOnHMACSecret, signature) {
-		return errors.New("invalid webhook signature")
+// ErrWebhookMalformed is a signed body that is not a usable event.
+var ErrWebhookMalformed = errors.New("malformed webhook payload")
+
+// HandleSyncWebhook processes inbound HMAC-SHA256 signed user updates from KySignOn server.
+// Events apply only when newer than the account's last applied event; a replay or an
+// out-of-order older event is acknowledged without effect.
+func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, body []byte, signature string) error {
+	if k.config.KySignOnHMACSecret == "" || !crypto.VerifyHMACSHA256(body, k.config.KySignOnHMACSecret, signature) {
+		return ErrWebhookUnauthorized
 	}
 
 	var payload KySignOnSyncPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return fmt.Errorf("invalid json payload: %w", err)
+		return fmt.Errorf("%w: %v", ErrWebhookMalformed, err)
 	}
-	if payload.Timestamp == 0 || time.Since(time.Unix(payload.Timestamp, 0)).Abs() > 5*time.Minute {
-		return errors.New("webhook timestamp is missing or expired")
+	if payload.Timestamp <= 0 || time.Since(time.Unix(payload.Timestamp, 0)).Abs() > 5*time.Minute {
+		return ErrWebhookUnauthorized
+	}
+	if payload.ID == "" {
+		return ErrWebhookMalformed
 	}
 
+	existing, err := store.DirectorySubject(ctx, k.store.Users(), payload.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
 	switch payload.Event {
-	case "user.created", "user.updated":
-		existing, err := k.store.Users().GetUserBySSO(ctx, "kysignon", payload.ID)
-		if err != nil && !errors.Is(err, store.ErrNotFound) {
-			return err
-		}
-
-		role := payload.Role
-		if role == "" {
-			role = "user"
-		}
-		status := payload.Status
-		if status == "" {
-			status = "active"
-		}
-
+	case "user.created", "user.updated", "user.deactivated":
+		d := &store.DirectoryUser{Provider: "kysignon", Subject: payload.ID, Username: payload.Username, Email: payload.Email, DisplayName: payload.DisplayName,
+			Active: payload.Event != "user.deactivated" && (payload.Status == "" || payload.Status == "active"), EventTime: payload.Timestamp}
 		if existing != nil {
-			privilegesChanged := existing.Role != role || existing.Status != status
-			existing.Username = payload.Username
-			existing.Email = payload.Email
-			existing.DisplayName = payload.DisplayName
-			existing.Role = role
-			existing.Status = status
-			if err := k.store.Users().UpdateUser(ctx, existing); err != nil {
-				return err
+			d.ID = existing.ID
+			if payload.Event == "user.deactivated" {
+				d.Username, d.Email, d.DisplayName = existing.Username, existing.Email, existing.DisplayName
 			}
-			if privilegesChanged {
-				return k.store.Sessions().DeleteUserSessions(ctx, existing.ID)
-			}
-			return nil
+		} else if payload.Event == "user.deactivated" {
+			return nil // nothing local to disable
 		}
-
-		newUser := &store.User{
-			ID:          fmt.Sprintf("usr_%s", crypto.RandomHex(12)),
-			Username:    payload.Username,
-			Email:       payload.Email,
-			DisplayName: payload.DisplayName,
-			Role:        role,
-			Status:      status,
-			SSOProvider: "kysignon",
-			SSOSubject:  payload.ID,
-		}
-		return k.store.Users().CreateUser(ctx, newUser)
-
-	case "user.deactivated":
-		existing, err := k.store.Users().GetUserBySSO(ctx, "kysignon", payload.ID)
-		if err != nil {
-			return nil // User might not exist locally
-		}
-		existing.Status = "inactive"
-		if err := k.store.Users().UpdateUser(ctx, existing); err != nil {
-			return err
-		}
-		return k.store.Sessions().DeleteUserSessions(ctx, existing.ID)
-
+		_, err = k.store.Users().ApplyDirectoryUser(ctx, d)
 	case "user.deleted":
-		existing, err := k.store.Users().GetUserBySSO(ctx, "kysignon", payload.ID)
-		if err != nil {
+		if existing == nil {
 			return nil
 		}
-		return k.store.Users().DeleteUser(ctx, existing.ID)
+		err = k.store.Users().DeleteDirectoryUser(ctx, existing.ID, payload.Timestamp)
+	default:
+		return nil // acknowledge events this version does not consume
 	}
-
-	return nil
+	if errors.Is(err, store.ErrStale) {
+		return nil
+	}
+	if errors.Is(err, store.ErrInvalidUsername) {
+		return fmt.Errorf("%w: %v", ErrWebhookMalformed, err)
+	}
+	return err
 }

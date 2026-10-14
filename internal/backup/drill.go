@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/Busnes-app/ky-primitives/capsule"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
@@ -20,6 +19,11 @@ import (
 // Checks validates the recipe from the capsule that was actually opened. A malformed
 // recipe is a failed drill, never permission to omit a required product check.
 func Checks(dir string, opened capsule.Manifest) []recoveryclient.Check {
+	return checks(context.Background(), dir, opened)
+}
+
+// checks is Checks with the drill's context, which bounds the bulk restore.
+func checks(ctx context.Context, dir string, opened capsule.Manifest) []recoveryclient.Check {
 	recipe, ok := opened.VerificationRecipe.(map[string]any)
 	if !ok {
 		return recipeFailure("Expected a recipe object")
@@ -93,8 +97,6 @@ func Checks(dir string, opened capsule.Manifest) []recoveryclient.Check {
 	}
 	if members[BulkManifestPath] {
 		repo := os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
 		target := filepath.Join(dir, "bulk-drill-restored")
 		err := RestoreBulk(ctx, dir, repo, target)
 		defer os.RemoveAll(target)
@@ -173,5 +175,10 @@ func drillPath(root, name string) (string, bool) {
 	return filepath.Join(root, name), true
 }
 
-// DrillRoot keeps opened instance data beneath the deployment's data directory.
-func DrillRoot(cfg *config.Config) string { return filepath.Join(cfg.Database.DataDir, "drill") }
+// DrillRoot is KY_DRILL_DIR, by default beneath the deployment's data directory.
+func DrillRoot(cfg *config.Config) string {
+	if cfg.Backup.DrillDir != "" {
+		return cfg.Backup.DrillDir
+	}
+	return filepath.Join(cfg.Database.DataDir, "drill")
+}

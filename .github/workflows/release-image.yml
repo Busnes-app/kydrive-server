@@ -45,8 +45,8 @@ jobs:
           ref: ${{ github.event.release.tag_name }}
           persist-credentials: false
 
-      # Both appVersion constants are written into every capsule manifest; the web
-      # bundle's version is checked so the artifact has one answer to "which version".
+      # api.AppVersion is written into every capsule manifest; the web bundle's
+      # version is checked so the artifact has one answer to "which version".
       - name: Require the tag and every version source to agree
         env:
           VERSION: ${{ steps.version.outputs.value }}
@@ -57,9 +57,7 @@ jobs:
             echo "$1: ${2:-<unparsed>}"
             [ "$2" = "$VERSION" ] || fail="$fail $1(${2:-unparsed})"
           }
-          appversion() { sed -n 's/^const appVersion = "\(.*\)"$/\1/p' "$1"; }
-          check cmd/server/main.go "$(appversion cmd/server/main.go)"
-          check internal/api/backup_handlers.go "$(appversion internal/api/backup_handlers.go)"
+          check internal/api/backup_handlers.go "$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/api/backup_handlers.go)"
           check web/package.json "$(jq -r .version web/package.json)"
           if [ -n "$fail" ]; then
             echo "::error::release $VERSION disagrees with:$fail" >&2

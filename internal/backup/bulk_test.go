@@ -19,6 +19,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
@@ -99,16 +100,37 @@ func (f *bulkFixture) collect(t *testing.T, purpose backup.Purpose) recoveryclie
 	return payload
 }
 
-// restic runs the real CLI against the fixture repository.
+// restic runs the real CLI against the fixture repository with the derived password.
 func (f *bulkFixture) restic(t *testing.T, args ...string) []byte {
 	t.Helper()
-	cmd := exec.Command("restic", append([]string{"--repo", f.repo, "--no-cache", "-q"}, args...)...)
-	cmd.Env = append(os.Environ(), "RESTIC_PASSWORD="+hex.EncodeToString(f.key))
-	out, err := cmd.Output()
+	out, err := f.resticAs(f.password(t), "", args...)
 	if err != nil {
 		t.Fatalf("restic %v: %v %s", args, err, out)
 	}
 	return out
+}
+
+func (f *bulkFixture) password(t *testing.T) []byte {
+	t.Helper()
+	pw, err := crypto.DeriveKey(f.key, "kydrive:restic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pw
+}
+
+// resticAs runs restic with an explicit password and stdin.
+func (f *bulkFixture) resticAs(password []byte, stdin string, args ...string) ([]byte, error) {
+	cmd := exec.Command("restic", append([]string{"--repo", f.repo, "--no-cache", "-q"}, args...)...)
+	cmd.Env = append(os.Environ(), "RESTIC_PASSWORD="+hex.EncodeToString(password))
+	cmd.Stdin = strings.NewReader(stdin)
+	return cmd.Output()
+}
+
+// opens reports whether password opens the fixture repository.
+func (f *bulkFixture) opens(password []byte) bool {
+	_, err := f.resticAs(password, "", "cat", "config")
+	return err == nil
 }
 
 // snapshots returns each snapshot's tags joined, newest last.
@@ -209,6 +231,52 @@ func TestBulkBackupRestoreAndMissingBytes(t *testing.T) {
 	os.Remove(filepath.Join(f.dir, "blobs", v.Blob))
 	if _, err = backup.Collect(context.Background(), f.cfg, "test", backup.PurposeDeposit); err == nil {
 		t.Fatal("missing live blob accepted as backup")
+	}
+}
+
+// A repository whose password is the raw deployment key, as before "kydrive:restic": restore
+// opens it unchanged, the next backup moves it to the derived password, and a capsule sealed
+// before the move still restores after it.
+func TestBulkRawKeyRepositoryIsMoved(t *testing.T) {
+	f := newBulkFixture(t)
+	_, v := f.publish(t, "old.txt", "old bytes")
+	old := f.collect(t, backup.PurposeDeposit)
+	// Put the repository back to the raw key alone.
+	if out, err := f.resticAs(f.password(t), hex.EncodeToString(f.key), "key", "add", "--new-password-file", "/dev/stdin"); err != nil {
+		t.Fatalf("key add: %v %s", err, out)
+	}
+	var keys []struct {
+		Current bool   `json:"current"`
+		ID      string `json:"id"`
+	}
+	out, err := f.resticAs(f.key, "", "key", "list", "--json")
+	if err != nil || json.Unmarshal(out, &keys) != nil || len(keys) != 2 {
+		t.Fatalf("key list: %v %s", err, out)
+	}
+	for _, k := range keys {
+		if !k.Current {
+			if out, err := f.resticAs(f.key, "", "key", "remove", k.ID); err != nil {
+				t.Fatalf("key remove: %v %s", err, out)
+			}
+		}
+	}
+	if f.opens(f.password(t)) || !f.opens(f.key) {
+		t.Fatal("fixture is not a raw-key repository")
+	}
+
+	if _, target, err := restoreInto(t, f, old); err != nil || f.read(t, target, v, true) != "old bytes" {
+		t.Fatalf("restore from a raw-key repository: %v", err)
+	}
+	if f.opens(f.password(t)) {
+		t.Fatal("restore changed the repository's keys")
+	}
+
+	f.collect(t, backup.PurposeDeposit)
+	if !f.opens(f.password(t)) || f.opens(f.key) {
+		t.Fatal("backup did not move the repository to the derived password")
+	}
+	if _, target, err := restoreInto(t, f, old); err != nil || f.read(t, target, v, true) != "old bytes" {
+		t.Fatalf("restore after the move: %v", err)
 	}
 }
 
@@ -483,5 +551,86 @@ func TestBulkLockContention(t *testing.T) {
 	result, err := backup.RunDrill(ctx, f.cfg, f.collect(t, backup.PurposeDrill))
 	if err != nil || !result.Passed || !slices.ContainsFunc(result.Checks, func(c recoveryclient.Check) bool { return c.Name == "Drive bulk restore" && c.Passed }) {
 		t.Fatalf("drill with bulk restore: %+v %v", result, err)
+	}
+}
+
+// Blobs are immutable: a second collection only size-checks a blob it verified before, and the
+// weekly full pass reads it again.
+func TestBulkUnchangedBlobsAreNotReverified(t *testing.T) {
+	f := newBulkFixture(t)
+	_, v := f.publish(t, "doc.txt", "verified once")
+	f.collect(t, backup.PurposeDeposit)
+	live := filepath.Join(f.dir, "blobs", v.Blob)
+	info, err := os.Stat(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-1] ^= 1
+	if err = os.Chmod(live, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(live, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chtimes(live, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	// Same size and mtime: the cached verification stands, so the flipped byte goes unread.
+	f.collect(t, backup.PurposeDeposit)
+	cache := filepath.Join(f.dir, "bulk-verified.json")
+	var c map[string]any
+	if raw, err = os.ReadFile(cache); err != nil || json.Unmarshal(raw, &c) != nil {
+		t.Fatalf("verification cache: %v", err)
+	}
+	c["full"] = time.Now().Add(-8 * 24 * time.Hour)
+	raw, _ = json.Marshal(c)
+	if err = os.WriteFile(cache, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = backup.Collect(context.Background(), f.cfg, "test", backup.PurposeDeposit); err == nil {
+		t.Fatal("weekly full verification missed a corrupted blob")
+	}
+}
+
+// A hung restic is killed when the collection timeout expires.
+func TestCollectTimeoutKillsHungRestic(t *testing.T) {
+	f := newBulkFixture(t)
+	f.publish(t, "doc.txt", "bytes")
+	fake := t.TempDir()
+	if err := os.WriteFile(filepath.Join(fake, "restic"), []byte("#!/bin/sh\nexec tail -f /dev/null\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+	f.cfg.Backup.CollectTimeout = time.Second
+	done := make(chan error, 1)
+	go func() {
+		_, err := backup.Collect(context.Background(), f.cfg, "test", backup.PurposeDeposit)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("hung restic reported success")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("collection timeout did not stop a hung restic")
+	}
+}
+
+func TestRestoreRefusesWithoutFreeSpace(t *testing.T) {
+	f := newBulkFixture(t)
+	f.publish(t, "doc.txt", "needs room")
+	var asked string
+	backup.SetFreeSpace(t, func(dir string) (uint64, error) { asked = dir; return 1 << 20, nil })
+	_, target, err := restoreInto(t, f, f.collect(t, backup.PurposeDeposit))
+	if err == nil || !strings.Contains(err.Error(), "free") || asked != filepath.Dir(target) {
+		t.Fatalf("restore with no room: %v (checked %q)", err, asked)
+	}
+	if _, err = os.Lstat(target); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("refused restore published a target")
 	}
 }

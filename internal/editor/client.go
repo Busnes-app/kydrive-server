@@ -80,6 +80,21 @@ func (c *Client) Verify(token string) (map[string]json.RawMessage, error) {
 	return claims, nil
 }
 
+// Download accepts a Document Server file request whose outbox token was signed for exactly url.
+func (c *Client) Download(token, url string) error {
+	claims, err := c.Verify(token)
+	if err != nil {
+		return err
+	}
+	var p struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal(claims["payload"], &p) != nil || p.URL != url {
+		return errors.New("download token is for another URL")
+	}
+	return nil
+}
+
 type Callback struct {
 	Key    string `json:"key"`
 	Status int    `json:"status"`
@@ -107,11 +122,11 @@ func (c *Client) Callback(token string) (Callback, error) {
 }
 func (c *Client) Fetch(ctx context.Context, raw string) (io.ReadCloser, error) {
 	u, err := url.Parse(raw)
-	base, _ := url.Parse(c.Origin)
-	if err != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.Fragment != "" || !strings.HasPrefix(u.Path, "/cache/") {
+	base, berr := url.Parse(c.Origin)
+	inside, ierr := url.Parse(c.InternalOrigin)
+	if errors.Join(err, berr, ierr) != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.Fragment != "" || !strings.HasPrefix(u.Path, "/cache/") {
 		return nil, errors.New("editor output URL rejected")
 	}
-	inside, _ := url.Parse(c.InternalOrigin)
 	u.Scheme = inside.Scheme
 	u.Host = inside.Host
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)

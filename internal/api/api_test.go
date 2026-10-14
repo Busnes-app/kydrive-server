@@ -125,18 +125,7 @@ func TestAuthAndSessionEndpoints(t *testing.T) {
 		t.Fatalf("settings expected 200 OK, got %d", w.Code)
 	}
 
-	// 4. /api/devices/pair/init
-	pairReq := httptest.NewRequest("POST", "/api/devices/pair/init", nil)
-	pairReq.AddCookie(sessionCookie)
-	pairReq.AddCookie(csrfCookie)
-	pairReq.Header.Set(auth.HeaderCSRF, csrfCookie.Value)
-	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, pairReq)
-	if w.Code != http.StatusOK {
-		t.Fatalf("pair init expected 200 OK, got %d", w.Code)
-	}
-
-	// 5. /api/backup/drill
+	// 4. /api/backup/drill
 	drillReq := httptest.NewRequest("POST", "/api/backup/drill", nil)
 	drillReq.AddCookie(sessionCookie)
 	drillReq.AddCookie(csrfCookie)
@@ -173,7 +162,9 @@ func TestInactiveAccountInvalidatesSession(t *testing.T) {
 	}
 	body, _ := json.Marshal(map[string]string{"username": user.Username, "password": "SuperSecretPass123!"})
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body)))
+	login := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	login.Header.Set("Content-Type", "application/json")
+	srv.ServeHTTP(w, login)
 	var session *http.Cookie
 	for _, cookie := range w.Result().Cookies() {
 		if cookie.Name == auth.SessionCookieName {
@@ -272,8 +263,7 @@ func TestPairRemoteStoresTheRecoveryKey(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	cookie := loginAs(t, srv, st, "alice", "admin")
 	req.AddCookie(cookie)
-	req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
@@ -334,8 +324,7 @@ func TestPairRemoteStoresTheRecoveryKey(t *testing.T) {
 	req2 := httptest.NewRequest("POST", "/api/backup/pair-remote", bytes.NewReader(body))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.AddCookie(cookie)
-	req2.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req2.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req2)
 	w2 := httptest.NewRecorder()
 	srv.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusConflict {
@@ -478,51 +467,6 @@ func TestMFALimiterKeyIsBounded(t *testing.T) {
 	}
 }
 
-// The poll route is unauthenticated: anyone holding a secret must not learn the code, the
-// user behind it, or the device's push token.
-func TestPairPollProjectsTheRecord(t *testing.T) {
-	srv, st, _ := setupTestServer(t)
-
-	pairing := &store.DevicePairing{
-		Code:       "424242",
-		Secret:     "s3cr3t-pairing-secret",
-		UserID:     "usr_alice",
-		DeviceName: "Alice Phone",
-		Platform:   "android",
-		PushToken:  "push-token-value",
-		Status:     "pending",
-		CreatedAt:  time.Now().UTC(),
-		ExpiresAt:  time.Now().UTC().Add(90 * time.Second),
-	}
-	if err := st.Devices().CreatePairing(context.Background(), pairing); err != nil {
-		t.Fatal(err)
-	}
-
-	req := httptest.NewRequest("GET", "/api/devices/pair/poll?secret="+pairing.Secret, nil)
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("poll expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	body := w.Body.String()
-	for _, leak := range []string{"secret", "push_token", "code", "user_id", pairing.Secret, pairing.Code, pairing.PushToken, pairing.UserID} {
-		if strings.Contains(body, leak) {
-			t.Errorf("poll response leaks %q: %s", leak, body)
-		}
-	}
-	var got map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got["status"] != "pending" || got["device_name"] != "Alice Phone" {
-		t.Errorf("poll response lost the fields the client needs: %v", got)
-	}
-	if _, ok := got["expires_at"]; !ok {
-		t.Errorf("poll response has no expires_at: %v", got)
-	}
-}
-
 // Eviction must not favour long windows. Login windows are a minute and MFA windows a minute,
 // but any caller that can mint keys at all would starve whichever window is shortest.
 func TestFullLimiterStillThrottlesLogin(t *testing.T) {
@@ -534,9 +478,10 @@ func TestFullLimiterStillThrottlesLogin(t *testing.T) {
 		api.AllowAttemptForTest(srv, "mfa:"+strconv.Itoa(i), 3, 5*time.Minute)
 	}
 
-	loginBody, _ := json.Marshal(map[string]string{"username": "nobody", "password": "WrongPass123!"})
 	throttled := false
 	for i := 1; i <= 25; i++ {
+		// A new username each time, so only the per-client window is under test.
+		loginBody, _ := json.Marshal(map[string]string{"username": "nobody" + strconv.Itoa(i), "password": "WrongPass123!"})
 		// A fresh MFA token before each login: under the old design this minted a new key and
 		// evicted login's window before it could ever count to its limit.
 		mfaBody, _ := json.Marshal(map[string]string{"mfa_token": "tok-" + strconv.Itoa(i), "code": "000000"})
@@ -757,8 +702,7 @@ func adminPost(t *testing.T, srv *api.Server, session *http.Cookie, path string)
 	t.Helper()
 	req := httptest.NewRequest("POST", path, nil)
 	req.AddCookie(session)
-	req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w
@@ -940,8 +884,7 @@ func TestDepositOutlivesTheRequest(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/backup/deposit", nil).WithContext(reqCtx)
 	req.AddCookie(loginAs(t, srv, st, "alice", "admin"))
-	req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 

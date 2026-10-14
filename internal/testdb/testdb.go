@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,13 +47,16 @@ func postgresConfig(t *testing.T, dsn string) config.DatabaseConfig {
 
 	schema := "t_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err := admin.ExecContext(context.Background(), "CREATE SCHEMA "+schema); err != nil {
-		_ = admin.Close()
-		t.Fatalf("testdb: create schema %s: %v", schema, err)
+		t.Fatalf("testdb: create schema %s: %v", schema, errors.Join(err, admin.Close()))
 	}
 
 	t.Cleanup(func() {
-		_, _ = admin.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
-		_ = admin.Close()
+		if _, err := admin.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Logf("testdb: drop schema %s: %v", schema, err)
+		}
+		if err := admin.Close(); err != nil {
+			t.Logf("testdb: close: %v", err)
+		}
 	})
 
 	sep := "?"

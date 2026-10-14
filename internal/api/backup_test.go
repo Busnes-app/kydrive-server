@@ -22,7 +22,6 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/ky-primitives/recoverykey"
 	"github.com/Busnes-app/kydrive-server/internal/api"
-	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -36,8 +35,7 @@ func adminDo(t *testing.T, srv *api.Server, session *http.Cookie, method, path s
 	req := httptest.NewRequest(method, path, bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(session)
-	req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w
@@ -546,8 +544,7 @@ func TestPairRemoteOutlivesTheRequest(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/backup/pair-remote", bytes.NewReader(body)).WithContext(reqCtx)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(session)
-	req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-	req.Header.Set(auth.HeaderCSRF, "test-csrf")
+	api.SignCSRFForTest(srv, req)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
@@ -610,8 +607,7 @@ func TestWaitDetachedBlocksUntilAPairingFinishes(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/backup/pair-remote", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(session)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 		srv.ServeHTTP(httptest.NewRecorder(), req)
 	}()
 	<-pairer.entered // the handler has detached and is inside the claim
@@ -662,8 +658,7 @@ func TestDetachedHandlerRegistersBeforeReadingItsBody(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/backup/pair-remote", body)
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(session)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 		srv.ServeHTTP(httptest.NewRecorder(), req)
 	}()
 	<-body.reading // inside the handler, stalled on the body
@@ -722,8 +717,7 @@ func TestDetachedRegistrationCoversTheAuthLookup(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/backup/pin-key", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(session)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 		stalled.ServeHTTP(httptest.NewRecorder(), req)
 	}()
 	<-blocked.entered // inside requireAdmin's store round-trip, before the handler
@@ -803,8 +797,7 @@ func TestDetachedTrackingCoversADepositInFlight(t *testing.T) {
 	go func() {
 		req := httptest.NewRequest("POST", "/api/backup/deposit", nil)
 		req.AddCookie(session)
-		req.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "test-csrf"})
-		req.Header.Set(auth.HeaderCSRF, "test-csrf")
+		api.SignCSRFForTest(srv, req)
 		srv.ServeHTTP(httptest.NewRecorder(), req)
 	}()
 	<-depositor.entered // the capsule is on its way to KyRecovery

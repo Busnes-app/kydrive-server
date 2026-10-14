@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
@@ -18,6 +20,15 @@ type LoginRequest struct {
 	Password     string `json:"password"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
+
+// dummyHash is verified for unknown accounts so their timing matches a real one.
+var dummyHash = sync.OnceValue(func() string {
+	h, err := password.Hash(crypto.RandomHex(16))
+	if err != nil {
+		panic(err)
+	}
+	return h
+})
 
 type MFARequest struct {
 	MFAToken string `json:"mfa_token"`
@@ -63,32 +74,35 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Verify PoW CAPTCHA if enabled
 	if s.config.Captcha.Provider == "pow" {
-		if req.CaptchaToken == "" || !auth.VerifyPoWSolution(req.CaptchaToken, s.config.Security.SessionSecret) {
+		if req.CaptchaToken == "" || !s.powSpent.Verify(req.CaptchaToken, s.config.Security.SessionSecret) {
 			s.writeError(w, http.StatusForbidden, "Security check failed. Please complete the CAPTCHA puzzle.")
 			return
 		}
 	}
 
+	accountKey := "login-user:" + strings.ToLower(req.Username)
+	if !s.allowAttempt(accountKey, 10, 15*time.Minute) {
+		s.writeError(w, http.StatusTooManyRequests, "Too many login attempts")
+		return
+	}
+
+	// Unknown, inactive and wrong-password logins cost the same hash and get the same answer;
+	// status is revealed only to a caller who proved the password.
 	user, err := s.store.Users().GetUserByUsername(r.Context(), req.Username)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			s.writeError(w, http.StatusUnauthorized, "Invalid credentials")
-			return
-		}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		s.writeError(w, http.StatusInternalServerError, "Authentication error")
 		return
 	}
-
-	if user.Status != "active" {
-		s.writeError(w, http.StatusForbidden, "Account is disabled or inactive")
-		return
+	hash := dummyHash()
+	if user != nil && user.PasswordHash != "" {
+		hash = user.PasswordHash
 	}
-
-	ok, err := password.Verify(req.Password, user.PasswordHash)
-	if err != nil || !ok {
+	ok, verr := password.Verify(req.Password, hash)
+	if user == nil || user.PasswordHash == "" || verr != nil || !ok || user.Status != "active" {
 		s.writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
+	s.resetAttempts(accountKey) // the account window counts guesses, not sign-ins
 
 	// Check if MFA is required
 	if user.TOTPEnabled {
@@ -116,7 +130,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.store.Audit().LogAudit(r.Context(), &store.AuditRecord{
+	s.audit(r.Context(), &store.AuditRecord{
 		UserID:   user.ID,
 		Action:   "auth.login",
 		Resource: "session",
@@ -168,13 +182,13 @@ func (s *Server) handleMFATOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secretBytes, err := crypto.DecryptAESGCM(user.TOTPSecretEnc, s.config.Security.EncryptionKey)
+	secret, err := s.totpSecret(r.Context(), user)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Failed to decrypt MFA secret")
 		return
 	}
 
-	counter, ok := auth.ValidateTOTP(string(secretBytes), req.Code)
+	counter, ok := auth.ValidateTOTP(secret, req.Code)
 	if !ok {
 		s.writeError(w, http.StatusUnauthorized, "Invalid TOTP verification code")
 		return
@@ -190,7 +204,7 @@ func (s *Server) handleMFATOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.store.Audit().LogAudit(r.Context(), &store.AuditRecord{
+	s.audit(r.Context(), &store.AuditRecord{
 		UserID:   user.ID,
 		Action:   "auth.mfa_totp",
 		Resource: "session",
@@ -259,7 +273,7 @@ func (s *Server) handleMFARecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.store.Audit().LogAudit(r.Context(), &store.AuditRecord{
+	s.audit(r.Context(), &store.AuditRecord{
 		UserID:   user.ID,
 		Action:   "auth.mfa_recovery_code",
 		Resource: "session",
@@ -276,16 +290,21 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
-	_ = s.sessions.RevokeSession(r.Context(), w, r)
+	if err := s.sessions.RevokeSession(r.Context(), w, r); err != nil {
+		log.Printf("sign-out: session not ended: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "Failed to sign out")
+		return
+	}
 	s.writeJSON(w, http.StatusOK, map[string]bool{"logged_out": true})
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	user, _, err := s.sessions.AuthenticateRequest(r)
+	user, sess, err := s.sessions.AuthenticateRequest(r)
 	if err != nil {
 		s.writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 		return
 	}
+	s.sessions.RefreshCSRF(w, r, sess)
 	newTab, err := s.store.Users().OpenInNewTab(r.Context(), user.ID)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Failed to load preferences")

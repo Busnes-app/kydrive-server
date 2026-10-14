@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,13 +57,11 @@ func openSQLite(ctx context.Context, dsn string, key []byte) (Store, error) {
 	db.SetMaxIdleConns(1)
 
 	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("failed to ping sqlite database: %w", err)
+		return nil, errors.Join(fmt.Errorf("failed to ping sqlite database: %w", err), db.Close())
 	}
 
 	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=FULL"); err != nil {
-		db.Close()
-		return nil, err
+		return nil, errors.Join(err, db.Close())
 	}
 	return newSQLStore(ctx, db, "sqlite", key)
 }
@@ -88,8 +87,7 @@ func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLife
 	db.SetConnMaxLifetime(maxLifetime)
 
 	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("failed to ping postgres database: %w", err)
+		return nil, errors.Join(fmt.Errorf("failed to ping postgres database: %w", err), db.Close())
 	}
 
 	return newSQLStore(ctx, db, "postgres", nil)

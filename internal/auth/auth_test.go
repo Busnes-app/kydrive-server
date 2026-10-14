@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Busnes-app/ky-primitives/totp"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
+	"github.com/Busnes-app/kydrive-server/internal/crypto"
 )
 
 func TestTOTPValidateReturnsCounter(t *testing.T) {
@@ -128,5 +130,52 @@ func TestPolicyValidation(t *testing.T) {
 	}
 	if err := auth.ValidateEmail("alice@busnes.app"); err != nil {
 		t.Errorf("expected valid email, got %v", err)
+	}
+}
+
+func TestPoWSpentRefusesReplay(t *testing.T) {
+	const secret = "test-signing-secret"
+	challenge, err := auth.GeneratePoWChallenge(200, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var token string
+	for i := 1; i <= challenge.MaxNumber && token == ""; i++ {
+		raw, _ := json.Marshal(auth.PoWSolution{Algorithm: challenge.Algorithm, Salt: challenge.Salt, Challenge: challenge.Challenge, Number: i, MaxNumber: challenge.MaxNumber, ExpiresAt: challenge.ExpiresAt, Signature: challenge.Signature})
+		if candidate := base64.StdEncoding.EncodeToString(raw); auth.VerifyPoWSolution(candidate, secret) {
+			token = candidate
+		}
+	}
+	var spent auth.PoWSpent
+	if spent.Verify("garbage", secret) {
+		t.Fatal("accepted garbage")
+	}
+	if !spent.Verify(token, secret) {
+		t.Fatal("rejected a fresh solution")
+	}
+	if spent.Verify(token, secret) {
+		t.Fatal("accepted a replayed solution")
+	}
+}
+
+func TestTOTPSecretSealing(t *testing.T) {
+	key := bytes.Repeat([]byte{0x01}, 32)
+	sealed, err := auth.SealTOTPSecret(key, "usr_a", "JBSWY3DPEHPK3PXP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, legacy, err := auth.OpenTOTPSecret(key, "usr_a", sealed); err != nil || legacy || got != "JBSWY3DPEHPK3PXP" {
+		t.Fatalf("round trip: %q %v %v", got, legacy, err)
+	}
+	// Copied to another user's row, or opened as the legacy raw-key form, it fails.
+	if _, _, err := auth.OpenTOTPSecret(key, "usr_b", sealed); err == nil {
+		t.Fatal("a secret sealed for usr_a opened for usr_b")
+	}
+	if _, err := crypto.DecryptAESGCM(sealed, key); err == nil {
+		t.Fatal("the derived form opened under the raw deployment key")
+	}
+	old, _ := crypto.EncryptAESGCM([]byte("JBSWY3DPEHPK3PXP"), key)
+	if got, legacy, err := auth.OpenTOTPSecret(key, "usr_a", old); err != nil || !legacy || got != "JBSWY3DPEHPK3PXP" {
+		t.Fatalf("legacy: %q %v %v", got, legacy, err)
 	}
 }

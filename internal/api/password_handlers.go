@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -69,6 +70,9 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "Failed to change password")
 		return
 	}
-	_ = s.sessions.RevokeSession(r.Context(), w, r)
+	// The change already deleted every session; this clears the cookies.
+	if err := s.sessions.RevokeSession(r.Context(), w, r); err != nil {
+		log.Printf("password change: %v", err)
+	}
 	s.writeJSON(w, http.StatusOK, map[string]bool{"password_changed": true, "login_required": true})
 }

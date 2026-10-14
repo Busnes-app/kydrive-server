@@ -1,14 +1,18 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Busnes-app/kydrive-server/internal/crypto"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 
 	"github.com/Busnes-app/kydrive-server/internal/store/migrations"
 )
@@ -20,7 +24,6 @@ type SQLStore struct {
 	driver   string
 	users    *userStore
 	sessions *sessionStore
-	devices  *deviceStore
 	groups   *groupStore
 	audit    *auditStore
 	settings *settingsStore
@@ -44,7 +47,6 @@ func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte) (*S
 
 	s.users = &userStore{store: s}
 	s.sessions = &sessionStore{store: s}
-	s.devices = &deviceStore{store: s}
 	s.groups = &groupStore{store: s}
 	s.audit = &auditStore{store: s}
 	s.settings = &settingsStore{store: s}
@@ -62,7 +64,6 @@ func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte) (*S
 func (s *SQLStore) Drive() *drive.Store     { return s.drive }
 func (s *SQLStore) Users() UserStore        { return s.users }
 func (s *SQLStore) Sessions() SessionStore  { return s.sessions }
-func (s *SQLStore) Devices() DeviceStore    { return s.devices }
 func (s *SQLStore) Groups() GroupStore      { return s.groups }
 func (s *SQLStore) Audit() AuditStore       { return s.audit }
 func (s *SQLStore) Settings() SettingsStore { return s.settings }
@@ -126,10 +127,8 @@ func (u *userStore) SetDirectoryRole(ctx context.Context, subject, role string) 
 	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET role=?,updated_at=? WHERE id=?`), role, now, id); err != nil {
 		return err
 	}
-	for _, table := range []string{"sessions", "mfa_challenges", "device_pairings"} {
-		if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM "+table+" WHERE user_id=?"), id); err != nil {
-			return err
-		}
+	if err = u.store.revokeGrants(ctx, tx, id); err != nil {
+		return err
 	}
 	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
 		return err
@@ -184,9 +183,9 @@ func (u *userStore) CreateUser(ctx context.Context, user *User) error {
 INSERT INTO users (
     id, username, email, display_name, password_hash, role, status,
     sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-    recovery_codes_hash, push_device_id, must_change_password,
+    recovery_codes_hash, must_change_password,
     created_at, updated_at, last_login_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `)
 
 	var lastLogin sql.NullTime
@@ -198,7 +197,7 @@ INSERT INTO users (
 		user.ID, user.Username, user.Email, user.DisplayName, user.PasswordHash,
 		user.Role, user.Status, user.SSOProvider, user.SSOSubject,
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
-		user.PushDeviceID, user.MustChangePassword,
+		user.MustChangePassword,
 		user.CreatedAt, user.UpdatedAt, lastLogin,
 	)
 	if err != nil {
@@ -218,7 +217,7 @@ func (u *userStore) scanUser(row interface{ Scan(...any) error }) (*User, error)
 		&user.ID, &user.Username, &user.Email, &user.DisplayName, &user.PasswordHash,
 		&user.Role, &user.Status, &user.SSOProvider, &user.SSOSubject,
 		&user.TOTPSecretEnc, &user.TOTPEnabled, &user.RecoveryCodesHash,
-		&user.PushDeviceID, &user.MustChangePassword, &user.TOTPLastCounter,
+		&user.MustChangePassword, &user.TOTPLastCounter,
 		&user.CreatedAt, &user.UpdatedAt, &lastLogin,
 	)
 	if err != nil {
@@ -237,7 +236,7 @@ func (u *userStore) GetUserByID(ctx context.Context, id string) (*User, error) {
 	q := u.store.rebind(`
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE id = ?
 `)
@@ -248,7 +247,7 @@ func (u *userStore) GetUserByUsername(ctx context.Context, username string) (*Us
 	q := u.store.rebind(`
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE LOWER(username) = LOWER(?)
 `)
@@ -259,7 +258,7 @@ func (u *userStore) GetUserByEmail(ctx context.Context, email string) (*User, er
 	q := u.store.rebind(`
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE LOWER(email) = LOWER(?)
 `)
@@ -270,7 +269,7 @@ func (u *userStore) GetUserBySSO(ctx context.Context, provider, subject string) 
 	q := u.store.rebind(`
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE sso_provider = ? AND sso_subject = ?
 `)
@@ -289,7 +288,7 @@ UPDATE users SET
     username = ?, email = ?, display_name = ?, password_hash = ?,
     role = ?, status = ?, sso_provider = ?, sso_subject = ?,
     totp_secret_enc = ?, totp_enabled = ?, recovery_codes_hash = ?,
-    push_device_id = ?, must_change_password = ?, updated_at = ?,
+    must_change_password = ?, updated_at = ?,
     last_login_at = ?
 WHERE id = ?
 `)
@@ -298,17 +297,115 @@ WHERE id = ?
 		user.Username, user.Email, user.DisplayName, user.PasswordHash,
 		user.Role, user.Status, user.SSOProvider, user.SSOSubject,
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
-		user.PushDeviceID, user.MustChangePassword, user.UpdatedAt,
+		user.MustChangePassword, user.UpdatedAt,
 		lastLogin, user.ID,
 	)
 	if err != nil {
 		return err
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
+}
+
+var directoryUsername = regexp.MustCompile(`^[A-Za-z0-9._@+\-]{1,128}$`)
+
+func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error) {
+	if !directoryUsername.MatchString(d.Username) {
+		return nil, ErrInvalidUsername
+	}
+	status := "inactive"
+	if d.Active {
+		status = "active"
+	}
+	now := time.Now().UTC()
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	id := d.ID
+	if id == "" {
+		if d.Provider != "scim" && d.Provider != "kysignon" {
+			return nil, fmt.Errorf("unknown directory provider %q", d.Provider)
+		}
+		id = "usr_" + crypto.RandomHex(12)
+		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_ts, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
+			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.EventTime, now, now)
+	} else {
+		q := `UPDATE users SET username = ?, email = ?, display_name = ?, status = ?, updated_at = ?, directory_ts = ? WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`
+		args := []any{d.Username, d.Email, d.DisplayName, status, now, d.EventTime, id}
+		if d.EventTime == 0 {
+			q = strings.Replace(q, "directory_ts = ?", "directory_ts = directory_ts", 1)
+			args = []any{d.Username, d.Email, d.DisplayName, status, now, id}
+		} else {
+			q += " AND directory_ts < ?"
+			args = append(args, d.EventTime)
+		}
+		var res sql.Result
+		if res, err = tx.ExecContext(ctx, u.store.rebind(q), args...); err == nil {
+			err = u.directoryRowMissing(ctx, tx, res, id, d.EventTime)
+		}
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate key") {
+			return nil, ErrAlreadyExists
+		}
+		return nil, err
+	}
+	if !d.Active {
+		if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return u.GetUserByID(ctx, id)
+}
+
+func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, eventTime int64) error {
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q, args := `DELETE FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`, []any{id}
+	if eventTime != 0 {
+		q, args = q+" AND directory_ts < ?", append(args, eventTime)
+	}
+	res, err := tx.ExecContext(ctx, u.store.rebind(q), args...)
+	if err != nil {
+		return err
+	}
+	if err := u.directoryRowMissing(ctx, tx, res, id, eventTime); err != nil {
+		return err
+	}
+	if err := u.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// directoryRowMissing explains a directory write that touched no row: stale or absent.
+func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql.Result, id string, eventTime int64) error {
+	n, err := res.RowsAffected()
+	if err != nil || n == 1 {
+		return err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(1) FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 1 && eventTime != 0 {
+		return ErrStale
+	}
+	return ErrNotFound
 }
 
 func (u *userStore) UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, newHashes string) error {
@@ -365,17 +462,73 @@ func (u *userStore) SpendTOTPCounter(ctx context.Context, userID string, counter
 	return nil
 }
 
-func (u *userStore) DeleteUser(ctx context.Context, id string) error {
-	q := u.store.rebind("DELETE FROM users WHERE id = ?")
-	res, err := u.store.db.ExecContext(ctx, q, id)
+func (u *userStore) SetTOTPSecret(ctx context.Context, userID, oldEnc, newEnc string, enabled bool) error {
+	q := u.store.rebind("UPDATE users SET totp_secret_enc = ?, updated_at = ? WHERE id = ? AND totp_secret_enc = ? AND totp_enabled = ?")
+	res, err := u.store.db.ExecContext(ctx, q, newEnc, time.Now().UTC(), userID, oldEnc, enabled)
 	if err != nil {
 		return err
 	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return ErrNotFound
+	if rows, err := res.RowsAffected(); err != nil {
+		return err
+	} else if rows != 1 {
+		return ErrAlreadyExists
 	}
 	return nil
+}
+
+func (u *userStore) EnableTOTP(ctx context.Context, userID, secretEnc, recoveryHashes, keepSession, ip string) error {
+	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_enabled",
+		"UPDATE users SET totp_enabled = ?, recovery_codes_hash = ?, updated_at = ? WHERE id = ? AND totp_enabled = ? AND totp_secret_enc = ? AND totp_secret_enc <> ''",
+		true, recoveryHashes, time.Now().UTC(), userID, false, secretEnc)
+}
+
+func (u *userStore) DisableTOTP(ctx context.Context, userID, keepSession, ip string) error {
+	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_disabled",
+		"UPDATE users SET totp_enabled = ?, totp_secret_enc = '', recovery_codes_hash = '[]', updated_at = ? WHERE id = ? AND totp_enabled = ?",
+		false, time.Now().UTC(), userID, true)
+}
+
+func (u *userStore) totpTransition(ctx context.Context, userID, keepSession, ip, action, update string, args ...any) error {
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, u.store.rebind(update), args...)
+	if err != nil {
+		return err
+	}
+	if rows, err := res.RowsAffected(); err != nil {
+		return err
+	} else if rows != 1 {
+		return ErrAlreadyExists
+	}
+	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?"), userID, keepSession); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM mfa_challenges WHERE user_id = ?"), userID); err != nil {
+		return err
+	}
+	if err = u.store.drive.RevokeUserEditors(ctx, tx, userID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, action, "user", "other sessions revoked", ip, time.Now().UTC()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (u *userStore) DeleteUser(ctx context.Context, id string) error {
+	return u.store.inTx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, u.store.rebind("DELETE FROM users WHERE id = ?"), id)
+		if err != nil {
+			return err
+		}
+		if rows, err := res.RowsAffected(); err != nil || rows == 0 {
+			return cmp.Or(err, ErrNotFound)
+		}
+		return u.store.drive.RevokeUserEditors(ctx, tx, id)
+	})
 }
 
 func (u *userStore) ListUsers(ctx context.Context, offset, limit int, search string) ([]*User, int, error) {
@@ -397,7 +550,7 @@ func (u *userStore) ListUsers(ctx context.Context, offset, limit int, search str
 		listQuery = `
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users
 WHERE LOWER(username) LIKE ? OR LOWER(display_name) LIKE ? OR LOWER(email) LIKE ?
@@ -408,7 +561,7 @@ ORDER BY created_at DESC LIMIT ? OFFSET ?`
 		listQuery = `
 SELECT id, username, email, display_name, password_hash, role, status,
        sso_provider, sso_subject, totp_secret_enc, totp_enabled,
-       recovery_codes_hash, push_device_id, must_change_password,
+       recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users
 ORDER BY created_at DESC LIMIT ? OFFSET ?`
@@ -436,6 +589,39 @@ ORDER BY created_at DESC LIMIT ? OFFSET ?`
 		users = append(users, user)
 	}
 
+	return users, total, rows.Err()
+}
+
+func (u *userStore) ListDirectoryUsers(ctx context.Context, offset, limit int) ([]*User, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var total int
+	if err := u.store.db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users WHERE sso_provider = 'scim'").Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := u.store.db.QueryContext(ctx, u.store.rebind(`
+SELECT id, username, email, display_name, password_hash, role, status,
+       sso_provider, sso_subject, totp_secret_enc, totp_enabled,
+       recovery_codes_hash, must_change_password,
+       totp_last_counter, created_at, updated_at, last_login_at
+FROM users WHERE sso_provider = 'scim'
+ORDER BY created_at, id LIMIT ? OFFSET ?`), limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var users []*User
+	for rows.Next() {
+		user, err := u.scanUser(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		users = append(users, user)
+	}
 	return users, total, rows.Err()
 }
 
@@ -476,6 +662,29 @@ func (s *SQLStore) withPassword(ctx context.Context, userID, expectedHash string
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s *SQLStore) inTx(ctx context.Context, apply func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := apply(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// revokeGrants ends every credential-derived grant of an account: sessions, MFA challenges
+// and editor sessions.
+func (s *SQLStore) revokeGrants(ctx context.Context, tx *sql.Tx, userID string) error {
+	for _, table := range []string{"sessions", "mfa_challenges"} {
+		if _, err := tx.ExecContext(ctx, s.rebind("DELETE FROM "+table+" WHERE user_id = ?"), userID); err != nil {
+			return err
+		}
+	}
+	return s.drive.RevokeUserEditors(ctx, tx, userID)
 }
 
 func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expectedPasswordHash string) error {
@@ -529,10 +738,8 @@ func (u *userStore) ResetAdminPassword(ctx context.Context, userID, newHash stri
 }
 
 func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID, details, ip string, now time.Time) error {
-	for _, table := range []string{"sessions", "mfa_challenges", "device_pairings"} {
-		if _, err := tx.ExecContext(ctx, u.store.rebind("DELETE FROM "+table+" WHERE user_id = ?"), userID); err != nil {
-			return err
-		}
+	if err := u.store.revokeGrants(ctx, tx, userID); err != nil {
+		return err
 	}
 	_, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, "auth.password_changed", "user", details, ip, now)
 	return err
@@ -555,8 +762,8 @@ FROM sessions WHERE token_hash = ?
 		return nil, err
 	}
 	if time.Now().UTC().After(sess.ExpiresAt) {
-		_ = s.DeleteSession(ctx, tokenHash)
-		return nil, ErrSessionExpired
+		// The hourly sweep removes a row this delete misses.
+		return nil, errors.Join(ErrSessionExpired, s.DeleteSession(ctx, tokenHash))
 	}
 	return &sess, nil
 }
@@ -567,15 +774,41 @@ func (s *sessionStore) DeleteSession(ctx context.Context, tokenHash string) erro
 	return err
 }
 
+// EndSession is sign-out: it deletes the session and revokes the account's editor sessions.
+func (s *sessionStore) EndSession(ctx context.Context, tokenHash string) error {
+	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		var userID string
+		err := tx.QueryRowContext(ctx, s.store.rebind("SELECT user_id FROM sessions WHERE token_hash = ?"), tokenHash).Scan(&userID)
+		if errorsIs(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, s.store.rebind("DELETE FROM sessions WHERE token_hash = ?"), tokenHash); err != nil {
+			return err
+		}
+		return s.store.drive.RevokeUserEditors(ctx, tx, userID)
+	})
+}
+
 func (s *sessionStore) DeleteUserSessions(ctx context.Context, userID string) error {
-	q := s.store.rebind("DELETE FROM sessions WHERE user_id = ?")
-	_, err := s.store.db.ExecContext(ctx, q, userID)
-	return err
+	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, s.store.rebind("DELETE FROM sessions WHERE user_id = ?"), userID); err != nil {
+			return err
+		}
+		return s.store.drive.RevokeUserEditors(ctx, tx, userID)
+	})
 }
 
 func (s *sessionStore) CleanExpiredSessions(ctx context.Context) error {
 	q := s.store.rebind("DELETE FROM sessions WHERE expires_at < ?")
 	_, err := s.store.db.ExecContext(ctx, q, time.Now().UTC())
+	return err
+}
+
+func (s *sessionStore) CleanExpiredMFAChallenges(ctx context.Context) error {
+	_, err := s.store.db.ExecContext(ctx, s.store.rebind("DELETE FROM mfa_challenges WHERE expires_at < ?"), time.Now().UTC())
 	return err
 }
 
@@ -617,90 +850,6 @@ func (s *sessionStore) ConsumeMFAChallenge(ctx context.Context, tokenHash string
 		return "", "", err
 	}
 	return userID, passwordHash, nil
-}
-
-// ---------------------------------------------------------------------
-// Device Pairing Store
-// ---------------------------------------------------------------------
-
-type deviceStore struct {
-	store *SQLStore
-}
-
-func (d *deviceStore) CreatePairing(ctx context.Context, p *DevicePairing) error {
-	now := time.Now().UTC()
-	if p.CreatedAt.IsZero() {
-		p.CreatedAt = now
-	}
-	if p.ExpiresAt.IsZero() {
-		p.ExpiresAt = now.Add(90 * time.Second) // 90-second ephemeral pairing standard
-	}
-
-	q := d.store.rebind(`
-INSERT INTO device_pairings (secret, code, user_id, device_name, platform, push_token, status, created_at, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-`)
-	_, err := d.store.db.ExecContext(ctx, q,
-		p.Secret, p.Code, p.UserID, p.DeviceName, p.Platform, p.PushToken,
-		p.Status, p.CreatedAt, p.ExpiresAt,
-	)
-	return err
-}
-
-func (d *deviceStore) GetPairingByCode(ctx context.Context, code string) (*DevicePairing, error) {
-	q := d.store.rebind(`
-SELECT secret, code, user_id, device_name, platform, push_token, status, created_at, expires_at
-FROM device_pairings WHERE code = ?
-`)
-	return d.scanPairing(d.store.db.QueryRowContext(ctx, q, code))
-}
-
-func (d *deviceStore) GetPairingBySecret(ctx context.Context, secret string) (*DevicePairing, error) {
-	q := d.store.rebind(`
-SELECT secret, code, user_id, device_name, platform, push_token, status, created_at, expires_at
-FROM device_pairings WHERE secret = ?
-`)
-	return d.scanPairing(d.store.db.QueryRowContext(ctx, q, secret))
-}
-
-func (d *deviceStore) scanPairing(row interface{ Scan(...any) error }) (*DevicePairing, error) {
-	var p DevicePairing
-	err := row.Scan(
-		&p.Secret, &p.Code, &p.UserID, &p.DeviceName, &p.Platform,
-		&p.PushToken, &p.Status, &p.CreatedAt, &p.ExpiresAt,
-	)
-	if err != nil {
-		if errorsIs(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if time.Now().UTC().After(p.ExpiresAt) {
-		return nil, ErrPairingExpired
-	}
-	return &p, nil
-}
-
-func (d *deviceStore) ConsumePairing(ctx context.Context, secret, deviceName, platform, pushToken string) error {
-	q := d.store.rebind(`
-UPDATE device_pairings SET status = 'consumed', device_name = ?, platform = ?, push_token = ?
-WHERE secret = ? AND status = 'pending' AND expires_at > ?
-`)
-	res, err := d.store.db.ExecContext(ctx, q, deviceName, platform, pushToken, secret, time.Now().UTC())
-	if err != nil {
-		return err
-	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (d *deviceStore) CleanExpiredPairings(ctx context.Context) error {
-	q := d.store.rebind("DELETE FROM device_pairings WHERE expires_at < ?")
-	_, err := d.store.db.ExecContext(ctx, q, time.Now().UTC())
-	return err
 }
 
 // ---------------------------------------------------------------------
@@ -782,9 +931,10 @@ func (g *groupStore) getMembers(ctx context.Context, groupID string) ([]string, 
 	var members []string
 	for rows.Next() {
 		var uid string
-		if err := rows.Scan(&uid); err == nil {
-			members = append(members, uid)
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
 		}
+		members = append(members, uid)
 	}
 	return members, rows.Err()
 }
@@ -796,7 +946,10 @@ func (g *groupStore) UpdateGroup(ctx context.Context, group *Group) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rows == 0 {
 		return ErrNotFound
 	}
@@ -809,7 +962,10 @@ func (g *groupStore) DeleteGroup(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 	if rows == 0 {
 		return ErrNotFound
 	}
@@ -851,8 +1007,9 @@ func (g *groupStore) ListGroups(ctx context.Context, offset, limit int) ([]*Grou
 	}
 	rows.Close()
 	for _, grp := range groups {
-		members, _ := g.getMembers(ctx, grp.ID)
-		grp.Members = members
+		if grp.Members, err = g.getMembers(ctx, grp.ID); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	return groups, count, rows.Err()
@@ -998,9 +1155,10 @@ func (s *settingsStore) GetAllSettings(ctx context.Context) (map[string]string, 
 	settings := make(map[string]string)
 	for rows.Next() {
 		var k, v string
-		if err := rows.Scan(&k, &v); err == nil {
-			settings[k] = v
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
 		}
+		settings[k] = v
 	}
 	return settings, rows.Err()
 }
@@ -1027,8 +1185,8 @@ func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool
 		var res sql.Result
 		res, err = tx.ExecContext(ctx, g.store.rebind("UPDATE groups SET display_name=?,updated_at=? WHERE id=? AND external_id=?"), group.DisplayName, now, group.ID, group.ExternalID)
 		if err == nil {
-			n, _ := res.RowsAffected()
-			if n != 1 {
+			var n int64
+			if n, err = res.RowsAffected(); err == nil && n != 1 {
 				return ErrNotFound
 			}
 		}

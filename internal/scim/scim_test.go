@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -134,5 +135,45 @@ func TestSCIMAuthEnforcement(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 Unauthorized for missing token, got %d", w.Code)
+	}
+}
+
+func TestSCIMReadsHideNonSCIMAccounts(t *testing.T) {
+	st, err := store.Open(context.Background(), testdb.Config(t), testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	for _, u := range []*store.User{
+		{ID: "local", Username: "breakglass", Role: "admin", Status: "active", SSOProvider: "local"},
+		{ID: "oidc", Username: "signon", Role: "user", Status: "active", SSOProvider: "kysignon", SSOSubject: "k1"},
+		{ID: "dir", Username: "provisioned", Role: "user", Status: "active", SSOProvider: "scim", SSOSubject: "s1"},
+	} {
+		if err := st.Users().CreateUser(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := scim.NewServer(st, config.SCIMConfig{Enabled: true, BearerToken: "tok"}, "http://localhost")
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	get := func(query string) string {
+		req := httptest.NewRequest("GET", "/scim/v2/Users"+query, nil)
+		req.Header.Set("Authorization", "Bearer tok")
+		w := httptest.NewRecorder()
+		srv.AuthMiddleware(mux).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", query, w.Code, w.Body)
+		}
+		return w.Body.String()
+	}
+	list := get("")
+	if !bytes.Contains([]byte(list), []byte("provisioned")) || bytes.Contains([]byte(list), []byte("breakglass")) || bytes.Contains([]byte(list), []byte("signon")) || !bytes.Contains([]byte(list), []byte(`"totalResults":1`)) {
+		t.Fatalf("list exposes non-SCIM accounts: %s", list)
+	}
+	for _, name := range []string{"breakglass", "BREAKGLASS", "signon"} {
+		if body := get("?filter=" + url.QueryEscape(`userName eq "`+name+`"`)); !bytes.Contains([]byte(body), []byte(`"totalResults":0`)) {
+			t.Fatalf("filter found %s: %s", name, body)
+		}
 	}
 }

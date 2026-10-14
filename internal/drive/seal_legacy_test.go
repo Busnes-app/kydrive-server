@@ -234,7 +234,7 @@ func TestSealLegacyBlobsConcurrentWithPurge(t *testing.T) {
 			}
 			kept = append(kept, id, c.ID)
 		}
-		blobs, err := d.ApplyRetention(ctx, time.Now())
+		blobs, err := d.ApplyRetention(ctx, time.Now(), 0)
 		if err != nil {
 			t.Error(err)
 		}

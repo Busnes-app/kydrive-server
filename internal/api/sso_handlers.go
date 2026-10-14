@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
+	"github.com/Busnes-app/kydrive-server/internal/sso"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"golang.org/x/oauth2"
 )
@@ -19,7 +21,8 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 	redirectURI := fmt.Sprintf("%s/api/sso/kysignon/callback", s.config.Server.AppURL)
 	authURL, err := s.kysignon.BuildAuthURL(r.Context(), redirectURI, state, verifier, nonce)
 	if err != nil {
-		s.writeError(w, http.StatusBadRequest, err.Error())
+		log.Printf("sso: authorization URL: %v", err)
+		s.writeError(w, http.StatusBadGateway, "Sign-on provider unavailable")
 		return
 	}
 
@@ -69,31 +72,29 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Upsert user
-	user, err := s.store.Users().GetUserBySSO(r.Context(), "kysignon", claims.Subject)
-	if errors.Is(err, store.ErrNotFound) {
-		user, err = s.store.Users().GetUserBySSO(r.Context(), "scim", claims.Subject)
-	}
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) && s.config.SSO.AutoProvision {
-			user = &store.User{
-				ID:          fmt.Sprintf("usr_%s", crypto.RandomHex(12)),
-				Username:    claims.PreferredUsername,
-				Email:       claims.Email,
-				DisplayName: claims.Name,
-				Role:        "user",
-				Status:      "active",
-				SSOProvider: "kysignon",
-				SSOSubject:  claims.Subject,
-			}
-			if err := s.store.Users().CreateUser(r.Context(), user); err != nil {
-				s.writeError(w, http.StatusInternalServerError, "Failed to provision SSO user")
-				return
-			}
-		} else {
+	user, err := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject)
+	if errors.Is(err, store.ErrNotFound) && s.config.SSO.AutoProvision {
+		user, err = s.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{
+			Provider: "kysignon", Subject: claims.Subject, Username: claims.PreferredUsername,
+			Email: claims.Email, DisplayName: claims.Name, Active: true,
+		})
+		if errors.Is(err, store.ErrInvalidUsername) || errors.Is(err, store.ErrAlreadyExists) {
 			s.writeError(w, http.StatusForbidden, "User account not provisioned")
 			return
 		}
+		if err != nil {
+			log.Printf("sso: auto-provision: %v", err)
+			s.writeError(w, http.StatusInternalServerError, "Failed to provision SSO user")
+			return
+		}
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		s.writeError(w, http.StatusForbidden, "User account not provisioned")
+		return
+	}
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Authentication error")
+		return
 	}
 
 	if user.Status != "active" {
@@ -126,15 +127,19 @@ func (s *Server) handleKySignOnSyncWebhook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// 401 only for authentication, so the sender retries outages (500) but not bad input (400).
 	if err := s.kysignon.HandleSyncWebhook(r.Context(), body, sig); err != nil {
-		s.writeError(w, http.StatusUnauthorized, err.Error())
+		switch {
+		case errors.Is(err, sso.ErrWebhookUnauthorized):
+			s.writeError(w, http.StatusUnauthorized, "Invalid webhook signature or timestamp")
+		case errors.Is(err, sso.ErrWebhookMalformed):
+			s.writeError(w, http.StatusBadRequest, "Malformed webhook payload")
+		default:
+			log.Printf("sso: directory webhook: %v", err)
+			s.writeError(w, http.StatusInternalServerError, "Directory sync failed")
+		}
 		return
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]bool{"synced": true})
-}
-
-func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/xml")
-	_, _ = w.Write([]byte(s.saml.GenerateMetadata()))
 }

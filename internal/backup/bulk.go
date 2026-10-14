@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,7 +18,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"golang.org/x/sys/unix"
 )
@@ -60,27 +63,104 @@ func bulkRepository(dataDir string) (string, error) {
 	}
 	return repo, nil
 }
-func restic(ctx context.Context, repo string, key []byte, dir string, args ...string) ([]byte, error) {
-	if len(key) != 32 {
-		return nil, errors.New("bulk backup requires a 32-byte deployment key")
-	}
+
+// errWrongPassword is restic's exit status 12: no key in the repository opens with the password.
+var errWrongPassword = errors.New("wrong repository password")
+
+// runRestic is the one exec seam; tests replace it.
+var runRestic = execRestic
+
+// restic runs one command; password is hex-encoded into RESTIC_PASSWORD.
+func restic(ctx context.Context, repo string, password []byte, dir string, args ...string) ([]byte, error) {
+	return runRestic(ctx, repo, password, dir, nil, args...)
+}
+
+func execRestic(ctx context.Context, repo string, password []byte, dir string, stdin io.Reader, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "restic", append([]string{"--repo", repo, "--no-cache"}, args...)...)
 	cmd.Dir = dir
+	cmd.Stdin = stdin
 	for _, e := range os.Environ() {
 		if !strings.HasPrefix(e, "RESTIC_") {
 			cmd.Env = append(cmd.Env, e)
 		}
 	}
-	cmd.Env = append(cmd.Env, "RESTIC_PASSWORD="+hex.EncodeToString(key))
+	cmd.Env = append(cmd.Env, "RESTIC_PASSWORD="+hex.EncodeToString(password))
 	// Commands never run through a shell. Restic owns authenticated encryption and deduplication.
 	var out limitedBuffer
 	var stderr tailBuffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 12 {
+			err = errWrongPassword
+		}
 		return nil, fmt.Errorf("restic %s failed: %w: %s", args[0], err, bytes.TrimSpace(stderr.b))
 	}
 	return out.Bytes(), nil
+}
+
+// resticPassword is the repository password: a "kydrive:restic" subkey, never the deployment
+// key itself. Repositories initialized before it used the raw key; see openRepository.
+func resticPassword(key []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, errors.New("bulk backup requires a 32-byte deployment key")
+	}
+	return crypto.DeriveKey(key, "kydrive:restic")
+}
+
+// openRepository returns the password for repo, first moving a raw-key repository to the
+// derived password: add the derived key while the raw key opens it, then remove the raw key
+// using the derived one. Each run redoes whichever step is left, so an interrupted move is
+// finished by the next backup or prune.
+func openRepository(ctx context.Context, repo string, key []byte) ([]byte, error) {
+	derived, err := resticPassword(key)
+	if err != nil {
+		return nil, err
+	}
+	_, err = currentKey(ctx, repo, derived)
+	if err != nil && !errors.Is(err, errWrongPassword) {
+		return nil, err
+	}
+	legacy, lerr := currentKey(ctx, repo, key)
+	if err == nil && errors.Is(lerr, errWrongPassword) {
+		return derived, nil
+	}
+	if lerr != nil {
+		return nil, lerr
+	}
+	if err != nil {
+		pw := strings.NewReader(hex.EncodeToString(derived))
+		if _, err = runRestic(ctx, repo, key, "", pw, "key", "add", "--new-password-file", "/dev/stdin"); err != nil {
+			return nil, err
+		}
+	}
+	// A raw key left behind is the pre-upgrade state, not a backup failure; the next run retries.
+	if _, err = restic(ctx, repo, derived, "", "key", "remove", legacy); err != nil {
+		log.Printf("bulk: raw-key password still opens %s: %v", repo, err)
+	}
+	return derived, nil
+}
+
+// currentKey returns the ID of the repository key that password opens.
+func currentKey(ctx context.Context, repo string, password []byte) (string, error) {
+	out, err := restic(ctx, repo, password, "", "key", "list", "--json")
+	if err != nil {
+		return "", err
+	}
+	var keys []struct {
+		Current bool   `json:"current"`
+		ID      string `json:"id"`
+	}
+	if err = json.Unmarshal(out, &keys); err != nil {
+		return "", err
+	}
+	for _, k := range keys {
+		if k.Current && shaPattern.MatchString(k.ID) {
+			return k.ID, nil
+		}
+	}
+	return "", errors.New("restic key list named no current key")
 }
 
 // tailBuffer keeps the last 2 KiB written, where restic puts the reason it failed.
@@ -107,7 +187,11 @@ func InitBulkRepository(ctx context.Context, dataDir string, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = restic(ctx, repo, key, "", "init")
+	password, err := resticPassword(key)
+	if err != nil {
+		return err
+	}
+	_, err = restic(ctx, repo, password, "", "init")
 	return err
 }
 
@@ -203,12 +287,14 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte, purpo
 			return nil, err
 		}
 	}
-	for _, f := range files {
-		if err = verifyBulkFile(filepath.Join(root, f.Blob), f, key); err != nil {
-			return nil, err
-		}
+	if err = verifyBulkFiles(ctx, dataDir, root, files, key, time.Now()); err != nil {
+		return nil, err
 	}
-	out, err := restic(ctx, repo, key, stage, "backup", "--json", "--tag", "kydrive,"+string(purpose), "blobs")
+	password, err := openRepository(ctx, repo, key)
+	if err != nil {
+		return nil, err
+	}
+	out, err := restic(ctx, repo, password, stage, "backup", "--json", "--tag", "kydrive,"+string(purpose), "blobs")
 	if err != nil {
 		return nil, err
 	}
@@ -232,14 +318,91 @@ func CollectBulk(ctx context.Context, dataDir string, dbBytes, key []byte, purpo
 	return json.Marshal(BulkManifest{Version: 2, Snapshot: snapshot, Root: "/blobs", Files: files})
 }
 
+// verifiedPath caches the blobs CollectBulk last verified: blobs are immutable, so one whose
+// row and file are unchanged is only size-checked. The whole set is re-read weekly.
+const verifiedPath = "bulk-verified.json"
+
+const fullVerifyEvery = 7 * 24 * time.Hour
+
+type verifiedBlob struct {
+	BulkFile
+	ModTime int64 `json:"mtime"`
+}
+
+type verifiedCache struct {
+	Full  time.Time               `json:"full"`
+	Files map[string]verifiedBlob `json:"files"`
+}
+
+// verifyBulkFiles checks every blob in root, decrypting and hashing only those not in the cache.
+func verifyBulkFiles(ctx context.Context, dataDir, root string, files []BulkFile, key []byte, now time.Time) error {
+	var old verifiedCache
+	raw, err := os.ReadFile(filepath.Join(dataDir, verifiedPath))
+	if err == nil {
+		err = json.Unmarshal(raw, &old)
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("bulk: re-verifying every blob, cache unreadable: %v", err)
+	}
+	if err != nil || now.Sub(old.Full) > fullVerifyEvery {
+		old = verifiedCache{Full: now}
+	}
+	next := verifiedCache{Full: old.Full, Files: make(map[string]verifiedBlob, len(files))}
+	for _, f := range files {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		path := filepath.Join(root, f.Blob)
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() != diskSize(f) {
+			return errors.New("bulk file missing or size differs")
+		}
+		entry := verifiedBlob{f, info.ModTime().UnixNano()}
+		if old.Files[f.Blob] != entry {
+			if err = verifyBulkFile(path, f, key); err != nil {
+				return err
+			}
+		}
+		next.Files[f.Blob] = entry
+	}
+	// A lost cache costs only a full verification next time.
+	if raw, err = json.Marshal(next); err == nil {
+		err = writeFileAtomic(filepath.Join(dataDir, verifiedPath), raw)
+	}
+	if err != nil {
+		log.Printf("bulk: verification cache not saved: %v", err)
+	}
+	return nil
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err = tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// diskSize is a blob's size on disk: sealed blobs carry their encryption overhead.
+func diskSize(f BulkFile) int64 {
+	if f.Sealed {
+		return drive.SealedSize(f.Size)
+	}
+	return f.Size
+}
+
 // verifyBulkFile checks a blob's size and plaintext digest, decrypting a sealed blob.
 func verifyBulkFile(path string, f BulkFile, key []byte) error {
-	size := f.Size
-	if f.Sealed {
-		size = drive.SealedSize(f.Size)
-	}
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() != size {
+	if err != nil || !info.Mode().IsRegular() || info.Size() != diskSize(f) {
 		return errors.New("bulk file missing or size differs")
 	}
 	file, err := drive.OpenBlob(path, key, f.Sealed, f.Size)
@@ -255,6 +418,15 @@ func verifyBulkFile(path string, f BulkFile, key []byte) error {
 		return errors.New("bulk file digest differs")
 	}
 	return nil
+}
+
+// freeSpace is the space an unprivileged writer may use on dir's filesystem; tests replace it.
+var freeSpace = func(dir string) (uint64, error) {
+	var st unix.Statfs_t
+	if err := unix.Statfs(dir, &st); err != nil {
+		return 0, err
+	}
+	return st.Bavail * uint64(st.Bsize), nil
 }
 
 // RestoreBulk accepts only a manifest from an opened, verified capsule. It checks every
@@ -304,12 +476,34 @@ func RestoreBulk(ctx context.Context, openedDir, repository, target string) erro
 	if err = os.MkdirAll(parent, 0700); err != nil {
 		return err
 	}
+	// Refuse before restic fills the volume (the drill's scratch shares the live data volume).
+	var need uint64
+	for _, f := range manifest.Files {
+		need += uint64(max(diskSize(f), 0))
+	}
+	need += need/10 + 64<<20
+	free, err := freeSpace(parent)
+	if err != nil {
+		return err
+	}
+	if free < need {
+		return fmt.Errorf("bulk restore needs %d MiB free in %s, %d MiB available", need>>20, parent, free>>20)
+	}
 	scratch, err := os.MkdirTemp(parent, ".bulk-restore-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(scratch)
-	if _, err = restic(ctx, repository, key, "", "restore", manifest.Snapshot+":"+filepath.ToSlash(manifest.Root), "--target", scratch, "--verify"); err != nil {
+	// Read-only: a repository from before the derived password still opens with the raw key.
+	password, err := resticPassword(key)
+	if err != nil {
+		return err
+	}
+	restore := []string{"restore", manifest.Snapshot + ":" + filepath.ToSlash(manifest.Root), "--target", scratch, "--verify"}
+	if _, err = restic(ctx, repository, password, "", restore...); errors.Is(err, errWrongPassword) {
+		_, err = restic(ctx, repository, key, "", restore...)
+	}
+	if err != nil {
 		return err
 	}
 	for _, f := range manifest.Files {
@@ -361,6 +555,10 @@ func PruneBulk(ctx context.Context, dataDir string, key []byte, policy BulkPolic
 	if err != nil {
 		return 0, err
 	}
+	password, err := openRepository(ctx, repo, key)
+	if err != nil {
+		return 0, err
+	}
 	last := strconv.Itoa(keepLast)
 	// keep-daily and friends count days that have snapshots, so a tag that stops receiving
 	// them (legacy, rare exports) never ages out under them; it ages out by date instead.
@@ -374,7 +572,7 @@ func PruneBulk(ctx context.Context, dataDir string, key []byte, policy BulkPolic
 	}
 	forgotten := 0
 	for _, pass := range passes {
-		out, err := restic(ctx, repo, key, "", append([]string{"forget", "--json", "--group-by", ""}, pass...)...)
+		out, err := restic(ctx, repo, password, "", append([]string{"forget", "--json", "--group-by", ""}, pass...)...)
 		if err != nil {
 			return forgotten, err
 		}
@@ -391,6 +589,6 @@ func PruneBulk(ctx context.Context, dataDir string, key []byte, policy BulkPolic
 			forgotten += len(g.Remove)
 		}
 	}
-	_, err = restic(ctx, repo, key, "", "prune")
+	_, err = restic(ctx, repo, password, "", "prune")
 	return forgotten, err
 }

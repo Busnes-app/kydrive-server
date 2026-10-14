@@ -90,7 +90,7 @@ func TestPurgeWaitsForEditorRevocation(t *testing.T) {
 	d, w, root := managerFixture(t)
 	ctx := context.Background()
 	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "a"), 0)
-	if _, err := d.EditorSession(ctx, "worker", f.ID, "token"); err != nil {
+	if _, err := d.EditorSession(ctx, "worker", f.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {
@@ -157,7 +157,7 @@ func TestPurgeBlockedByUndeliveredDropAfterExpiry(t *testing.T) {
 	d, w, root := managerFixture(t)
 	ctx := context.Background()
 	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "a"), 0)
-	if _, err := d.EditorSession(ctx, "worker", f.ID, "token"); err != nil {
+	if _, err := d.EditorSession(ctx, "worker", f.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetTrash(ctx, "worker", f.ID, 1, true); err != nil {

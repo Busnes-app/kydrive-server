@@ -176,3 +176,126 @@ func TestExcalidrawFontsDirMustExist(t *testing.T) {
 		t.Fatal("missing fonts directory accepted")
 	}
 }
+
+func TestUnparseableValuesAreRefusedByName(t *testing.T) {
+	for _, tc := range []struct{ key, value string }{
+		{"KY_PORT", "80a"},
+		{"KY_DB_MAX_OPEN_CONNS", "many"},
+		{"KY_CAPTCHA_POW_DIFFICULTY", "1e5"},
+		{"KY_BACKUP_KEEP", "seven"},
+		{"KY_COOKIE_SECURE", "ture"},
+		{"KY_SSO_AUTO_PROVISION", "enabled"},
+		{"KY_SCIM_ENABLED", "2"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			t.Setenv("KY_DATA_DIR", t.TempDir())
+			t.Setenv(tc.key, tc.value)
+			if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("%s=%q: %v", tc.key, tc.value, err)
+			}
+		})
+	}
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	t.Setenv("KY_COOKIE_SECURE", "off")
+	if cfg, err := config.LoadFromEnv(); err != nil || cfg.Security.CookieSecure {
+		t.Fatalf("explicit off: %v", err)
+	}
+}
+
+func TestEnvironmentMustBeKnown(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	for _, env := range []string{"prod", "Production", "staging"} {
+		t.Setenv("KY_ENV", env)
+		if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), "KY_ENV") {
+			t.Fatalf("KY_ENV=%s: %v", env, err)
+		}
+	}
+}
+
+func TestExamplePlaceholdersRefuseToStart(t *testing.T) {
+	for _, key := range []string{"KY_SESSION_SECRET", "KY_KYSIGNON_SECRET", "KY_SCIM_TOKEN", "KYDRIVE_EDITOR_SECRET", "KY_ADMIN_PASSWORD"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("KY_DATA_DIR", t.TempDir())
+			t.Setenv(key, "replace-with-long-random-value")
+			if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("%s placeholder accepted: %v", key, err)
+			}
+		})
+	}
+}
+
+func TestUnreadableDrillDirectoryFailsStartup(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KY_DATA_DIR", dir)
+	if err := os.WriteFile(filepath.Join(dir, "drill"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), "drill") {
+		t.Fatalf("unreadable drill directory ignored: %v", err)
+	}
+}
+
+func TestDrillAndCollectSettings(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("KY_DATA_DIR", data)
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Backup.DrillDir != filepath.Join(data, "drill") || cfg.Backup.DrillTimeout != 2*time.Hour || cfg.Backup.CollectTimeout != 2*time.Hour {
+		t.Fatalf("defaults: %+v", cfg.Backup)
+	}
+	drill := t.TempDir()
+	t.Setenv("KY_DRILL_DIR", drill)
+	t.Setenv("KY_DRILL_TIMEOUT", "6h")
+	t.Setenv("KY_BACKUP_COLLECT_TIMEOUT", "90m")
+	if cfg, err = config.LoadFromEnv(); err != nil || cfg.Backup.DrillDir != drill || cfg.Backup.DrillTimeout != 6*time.Hour || cfg.Backup.CollectTimeout != 90*time.Minute || cfg.Security.KeyInDataDir != true {
+		t.Fatalf("overrides: %+v %v", cfg, err)
+	}
+	// Residue of an interrupted drill in KY_DRILL_DIR carries the key too.
+	os.Remove(filepath.Join(data, "encryption.key"))
+	t.Setenv("KY_ENCRYPTION_KEY", strings.Repeat("ab", 32))
+	if cfg, err = config.LoadFromEnv(); err != nil || cfg.Security.KeyInDataDir {
+		t.Fatalf("empty drill dir: %v", err)
+	}
+	if err = os.Mkdir(filepath.Join(drill, "run"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = config.LoadFromEnv(); err != nil || !cfg.Security.KeyInDataDir {
+		t.Fatalf("drill residue in KY_DRILL_DIR not flagged: %v", err)
+	}
+	for key, value := range map[string]string{"KY_DRILL_DIR": "relative/drill", "KY_DRILL_TIMEOUT": "30s", "KY_BACKUP_COLLECT_TIMEOUT": "soon"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, value)
+			if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("%s=%q: %v", key, value, err)
+			}
+		})
+	}
+}
+
+// Operator commands on an existing deployment never mint a key or a database.
+func TestLoadExistingRefusesAMissingDeployment(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("KY_DATA_DIR", data)
+	key := filepath.Join(data, "encryption.key")
+	if _, err := config.LoadExisting(); err == nil || !strings.Contains(err.Error(), key) {
+		t.Fatalf("missing key: %v", err)
+	}
+	if _, err := os.Lstat(key); !os.IsNotExist(err) {
+		t.Fatal("LoadExisting created a key")
+	}
+	if _, err := config.LoadFromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	db := filepath.Join(data, "ky_server.db")
+	if _, err := config.LoadExisting(); err == nil || !strings.Contains(err.Error(), db) {
+		t.Fatalf("missing database: %v", err)
+	}
+	if err := os.WriteFile(db, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.LoadExisting(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -11,7 +11,9 @@ var (
 	ErrNotFound       = errors.New("record not found")
 	ErrAlreadyExists  = errors.New("record already exists")
 	ErrSessionExpired = errors.New("session expired")
-	ErrPairingExpired = errors.New("pairing session expired")
+	// ErrStale reports a directory event no newer than the last one applied to the account.
+	ErrStale           = errors.New("directory event is not newer than the applied state")
+	ErrInvalidUsername = errors.New("directory username must be 1-128 letters, digits or ._@+-")
 )
 
 // Store defines the unified storage contract implemented across SQLite, PostgreSQL, and MySQL.
@@ -19,7 +21,6 @@ type Store interface {
 	Drive() *drive.Store
 	Users() UserStore
 	Sessions() SessionStore
-	Devices() DeviceStore
 	Groups() GroupStore
 	Audit() AuditStore
 	Settings() SettingsStore
@@ -39,6 +40,10 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserBySSO(ctx context.Context, provider, subject string) (*User, error)
 	UpdateUser(ctx context.Context, u *User) error
+	// ApplyDirectoryUser is the one directory (SCIM, KySignOn) write path; see DirectoryUser.
+	ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error)
+	// DeleteDirectoryUser deletes a directory account; eventTime orders it like ApplyDirectoryUser.
+	DeleteDirectoryUser(ctx context.Context, id string, eventTime int64) error
 	ResetAdminPassword(ctx context.Context, userID, newHash string) error
 	RenameLocalAdmin(ctx context.Context, oldName, newName string) error
 	SetDirectoryRole(ctx context.Context, subject, role string) error
@@ -47,12 +52,23 @@ type UserStore interface {
 	// SpendTOTPCounter records counter as used. It returns ErrAlreadyExists when counter is
 	// not greater than the stored one, which is how a replayed code inside the skew window fails.
 	SpendTOTPCounter(ctx context.Context, userID string, counter int64) error
+	// SetTOTPSecret replaces the sealed secret oldEnc with newEnc while totp_enabled equals
+	// enabled: a pending enrolment (false) or resealing a legacy row. ErrAlreadyExists if
+	// either changed.
+	SetTOTPSecret(ctx context.Context, userID, oldEnc, newEnc string, enabled bool) error
+	// EnableTOTP turns on the pending secret secretEnc with recoveryHashes; DisableTOTP clears
+	// secret and codes. Both revoke every other session (keepSession is the caller's token
+	// hash) and all MFA challenges, audit, and return ErrAlreadyExists if the state changed.
+	EnableTOTP(ctx context.Context, userID, secretEnc, recoveryHashes, keepSession, ip string) error
+	DisableTOTP(ctx context.Context, userID, keepSession, ip string) error
 	DeleteUser(ctx context.Context, id string) error
 	// OpenInNewTab is the user's choice to open files in a new browser tab (default true).
 	// It lives outside User so profile and directory updates never overwrite it.
 	OpenInNewTab(ctx context.Context, userID string) (bool, error)
 	SetOpenInNewTab(ctx context.Context, userID string, v bool) error
 	ListUsers(ctx context.Context, offset, limit int, search string) ([]*User, int, error)
+	// ListDirectoryUsers pages SCIM-provisioned accounts only.
+	ListDirectoryUsers(ctx context.Context, offset, limit int) ([]*User, int, error)
 	CountUsers(ctx context.Context) (int, error)
 }
 
@@ -62,18 +78,11 @@ type SessionStore interface {
 	GetSession(ctx context.Context, tokenHash string) (*Session, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
 	DeleteUserSessions(ctx context.Context, userID string) error
+	EndSession(ctx context.Context, tokenHash string) error
 	CleanExpiredSessions(ctx context.Context) error
+	CleanExpiredMFAChallenges(ctx context.Context) error
 	CreateMFAChallenge(ctx context.Context, challenge *MFAChallenge, expectedPasswordHash string) error
 	ConsumeMFAChallenge(ctx context.Context, tokenHash string) (userID, passwordHash string, err error)
-}
-
-// DeviceStore handles 90s ephemeral QR pairing sessions and paired push clients.
-type DeviceStore interface {
-	CreatePairing(ctx context.Context, p *DevicePairing) error
-	GetPairingByCode(ctx context.Context, code string) (*DevicePairing, error)
-	GetPairingBySecret(ctx context.Context, secret string) (*DevicePairing, error)
-	ConsumePairing(ctx context.Context, secret, deviceName, platform, pushToken string) error
-	CleanExpiredPairings(ctx context.Context) error
 }
 
 // GroupStore defines repository operations for SCIM and RBAC groups.
@@ -103,4 +112,14 @@ type SettingsStore interface {
 	SetSetting(ctx context.Context, key, val string) error
 	DeleteSetting(ctx context.Context, key string) error
 	GetAllSettings(ctx context.Context) (map[string]string, error)
+}
+
+// DirectorySubject finds a directory account by OIDC subject / SCIM externalId: the KySignOn
+// row first, then the SCIM row, so sign-on and webhooks resolve the same account.
+func DirectorySubject(ctx context.Context, users UserStore, subject string) (*User, error) {
+	user, err := users.GetUserBySSO(ctx, "kysignon", subject)
+	if errors.Is(err, ErrNotFound) {
+		user, err = users.GetUserBySSO(ctx, "scim", subject)
+	}
+	return user, err
 }

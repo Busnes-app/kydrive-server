@@ -51,3 +51,34 @@ func TestSignedCallbacksAndRestrictedOutput(t *testing.T) {
 		t.Fatal("production HTTP origin accepted")
 	}
 }
+
+func TestDownloadTokenBindsTheExactURL(t *testing.T) {
+	t.Setenv("KYDRIVE_EDITOR_URL", "http://editor.test")
+	t.Setenv("KYDRIVE_EDITOR_SECRET", strings.Repeat("s", 32))
+	c, err := FromEnv("http://drive.test", "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "http://drive.test/api/editor/download/a"
+	sign := func(claims map[string]any) string {
+		token, err := c.Sign(claims)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token
+	}
+	if err = c.Download(sign(map[string]any{"payload": map[string]string{"url": url}, "exp": time.Now().Add(time.Minute).Unix()}), url); err != nil {
+		t.Fatal(err)
+	}
+	for name, token := range map[string]string{
+		"other session":   sign(map[string]any{"payload": map[string]string{"url": url + "b"}}),
+		"editor config":   sign(map[string]any{"document": map[string]string{"url": url}}),
+		"expired":         sign(map[string]any{"payload": map[string]string{"url": url}, "exp": time.Now().Add(-time.Minute).Unix()}),
+		"missing":         "",
+		"wrong signature": sign(map[string]any{"payload": map[string]string{"url": url}}) + "x",
+	} {
+		if c.Download(token, url) == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}

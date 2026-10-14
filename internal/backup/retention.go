@@ -59,7 +59,10 @@ func SetBulkPolicy(s recoveryclient.Settings, p BulkPolicy) error {
 	if err := p.validate(); err != nil {
 		return err
 	}
-	raw, _ := json.Marshal(p)
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
 	return s.Set(bulkPolicyKey, string(raw))
 }
 
@@ -90,9 +93,12 @@ func PruneBulkIfDue(ctx context.Context, cfg *config.Config, s recoveryclient.Se
 	if err != nil {
 		res.Error = recoveryclient.AuditSafe(err.Error())
 	}
-	raw, _ := json.Marshal(res)
-	if serr := s.Set(bulkLastPruneKey, string(raw)); err == nil {
-		err = serr
+	raw, merr := json.Marshal(res)
+	if merr == nil {
+		merr = s.Set(bulkLastPruneKey, string(raw))
+	}
+	if err == nil {
+		err = merr
 	}
 	return res, true, err
 }

@@ -5,7 +5,6 @@ import (
 	"embed"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -65,8 +64,7 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	file, err := s.store.Drive().Publish(r.Context(), user, drive.File{Workspace: workspace, Parent: in.Parent, Name: name}, version, 0)
 	if err != nil {
-		path, _ := drive.BlobPath(s.blobRoot(), version.Blob)
-		os.Remove(path)
+		s.discardBlob(version.Blob)
 		if errors.Is(err, drive.ErrConflict) {
 			s.writeError(w, http.StatusConflict, "A file with that name already exists; choose another name")
 			return

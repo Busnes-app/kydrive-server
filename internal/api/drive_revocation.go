@@ -28,6 +28,9 @@ func (s *Server) revokeEditors(ctx context.Context) {
 		cancel()
 		if err != nil {
 			log.Printf("editor revocation pending session=%s: %v", e.ID, err)
+			if err = s.store.Drive().DeferRevocation(ctx, e.ID); err != nil {
+				log.Printf("editor revocation backoff failed session=%s: %v", e.ID, err)
+			}
 			continue
 		}
 		if err = s.store.Drive().MarkDropped(ctx, e.ID); err != nil {

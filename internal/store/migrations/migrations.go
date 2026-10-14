@@ -3,6 +3,7 @@ package migrations
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ type Migration struct {
 	Name     string
 	SQLite   string
 	Postgres string
+	// Check runs in the migration transaction before the DDL and refuses unsafe data.
+	Check func(context.Context, *sql.Tx) error
 }
 
 var registry = []Migration{
@@ -223,10 +226,63 @@ ALTER TABLE mfa_challenges ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';`,
 		SQLite:   `ALTER TABLE users ADD COLUMN open_in_new_tab BOOLEAN NOT NULL DEFAULT 1;`,
 		Postgres: `ALTER TABLE users ADD COLUMN IF NOT EXISTS open_in_new_tab BOOLEAN NOT NULL DEFAULT TRUE;`,
 	},
+	{
+		Version: 6,
+		Name:    "drop_device_pairing",
+		SQLite: `DROP INDEX IF EXISTS idx_pairings_code;
+DROP INDEX IF EXISTS idx_pairings_expires;
+DROP TABLE IF EXISTS device_pairings;
+ALTER TABLE users DROP COLUMN push_device_id;`,
+		Postgres: `DROP INDEX IF EXISTS idx_pairings_code;
+DROP INDEX IF EXISTS idx_pairings_expires;
+DROP TABLE IF EXISTS device_pairings;
+ALTER TABLE users DROP COLUMN IF EXISTS push_device_id;`,
+	},
+	{
+		Version:  7,
+		Name:     "directory_event_time",
+		SQLite:   `ALTER TABLE users ADD COLUMN directory_ts INTEGER NOT NULL DEFAULT 0;`,
+		Postgres: `ALTER TABLE users ADD COLUMN IF NOT EXISTS directory_ts BIGINT NOT NULL DEFAULT 0;`,
+	},
+	{
+		Version:  8,
+		Name:     "username_case_insensitive_unique",
+		SQLite:   `CREATE UNIQUE INDEX idx_users_username_lower ON users(LOWER(username));`,
+		Postgres: `CREATE UNIQUE INDEX idx_users_username_lower ON users(LOWER(username));`,
+		Check:    refuseCaseDuplicateUsernames,
+	},
+}
+
+// refuseCaseDuplicateUsernames fails closed: which account keeps a name is an operator decision.
+func refuseCaseDuplicateUsernames(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT username FROM users WHERE LOWER(username) IN (SELECT LOWER(username) FROM users GROUP BY LOWER(username) HAVING COUNT(*) > 1) ORDER BY LOWER(username), username`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		names = append(names, fmt.Sprintf("%q", name))
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(names) > 0 {
+		return fmt.Errorf("usernames differ only by case: %s; rename all but one (rename-local-admin or the directory) before upgrading", strings.Join(names, ", "))
+	}
+	return nil
 }
 
 // Run executes all pending migrations for the specified database driver.
 func Run(ctx context.Context, db *sql.DB, driver string) error {
+	return run(ctx, db, driver, registry)
+}
+
+func run(ctx context.Context, db *sql.DB, driver string, registry []Migration) error {
 	driver = strings.ToLower(driver)
 	if driver == "postgresql" {
 		driver = "postgres"
@@ -253,49 +309,68 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 	}
 
 	for _, m := range registry {
-		var exists int
-		err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations WHERE version = $1", m.Version).Scan(&exists)
-		if err != nil {
-			// Try SQLite positional ? parameter if $1 failed
-			err = db.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations WHERE version = ?", m.Version).Scan(&exists)
-			if err != nil {
-				return fmt.Errorf("failed to check migration version %d: %w", m.Version, err)
-			}
-		}
-
-		if exists > 0 {
-			continue
-		}
-
-		ddl := m.SQLite
-		if driver == "postgres" {
-			ddl = m.Postgres
-		}
-
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("failed to begin migration tx for v%d: %w", m.Version, err)
-		}
-
-		if _, err := tx.ExecContext(ctx, ddl); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed executing migration v%d (%s): %w", m.Version, m.Name, err)
-		}
-
-		recordQuery := "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)"
-		if driver == "postgres" {
-			recordQuery = "INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, $3)"
-		}
-
-		if _, err := tx.ExecContext(ctx, recordQuery, m.Version, m.Name, time.Now().UTC()); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to record migration v%d: %w", m.Version, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("failed to commit migration v%d: %w", m.Version, err)
+		if err := apply(ctx, db, driver, m); err != nil {
+			return err
 		}
 	}
-
 	return nil
+}
+
+// migrationLock is the Postgres advisory lock key serializing concurrent runners.
+const migrationLock = 0x6b7964726976
+
+// apply runs m unless it is recorded. The check and the change share one transaction that
+// first excludes other runners, so two processes starting together apply m once.
+func apply(ctx context.Context, db *sql.DB, driver string, m Migration) (err error) {
+	lock := "DELETE FROM schema_migrations WHERE version < 0" // takes SQLite's write lock
+	applied := "SELECT COUNT(1) FROM schema_migrations WHERE version = ?"
+	record := "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)"
+	ddl := m.SQLite
+	if driver == "postgres" {
+		lock = fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", migrationLock)
+		applied = "SELECT COUNT(1) FROM schema_migrations WHERE version = $1"
+		record = "INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, $3)"
+		ddl = m.Postgres
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin migration tx for v%d: %w", m.Version, err)
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, ignoreDone(tx.Rollback()))
+		}
+	}()
+	if _, err = tx.ExecContext(ctx, lock); err != nil {
+		return fmt.Errorf("failed to lock migrations for v%d: %w", m.Version, err)
+	}
+	var exists int
+	if err = tx.QueryRowContext(ctx, applied, m.Version).Scan(&exists); err != nil {
+		return fmt.Errorf("failed to check migration version %d: %w", m.Version, err)
+	}
+	if exists > 0 {
+		return tx.Commit()
+	}
+	if m.Check != nil {
+		if err = m.Check(ctx, tx); err != nil {
+			return fmt.Errorf("migration v%d (%s) refused: %w", m.Version, m.Name, err)
+		}
+	}
+	if _, err = tx.ExecContext(ctx, ddl); err != nil {
+		return fmt.Errorf("failed executing migration v%d (%s): %w", m.Version, m.Name, err)
+	}
+	if _, err = tx.ExecContext(ctx, record, m.Version, m.Name, time.Now().UTC()); err != nil {
+		return fmt.Errorf("failed to record migration v%d: %w", m.Version, err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration v%d: %w", m.Version, err)
+	}
+	return nil
+}
+
+func ignoreDone(err error) error {
+	if errors.Is(err, sql.ErrTxDone) {
+		return nil
+	}
+	return err
 }

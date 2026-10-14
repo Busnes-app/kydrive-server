@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
@@ -35,7 +36,8 @@ type PoWSolution struct {
 	Signature string `json:"signature"`
 }
 
-// GeneratePoWChallenge creates a puzzle of given difficulty (e.g. 5000 to 50000 max iterations).
+// GeneratePoWChallenge creates a puzzle whose answer is uniform in [1, difficulty]; the client
+// searches linearly, so it costs difficulty/2 SHA-256 operations on average.
 func GeneratePoWChallenge(difficulty int, signingSecret string) (*PoWChallenge, error) {
 	if difficulty <= 0 {
 		difficulty = 20000
@@ -70,33 +72,72 @@ func GeneratePoWChallenge(difficulty int, signingSecret string) (*PoWChallenge, 
 	}, nil
 }
 
-// VerifyPoWSolution decodes and validates the client's base64-encoded JSON solution.
+// VerifyPoWSolution decodes and validates the client's base64-encoded JSON solution. It is
+// stateless; login uses PoWSpent.Verify, which also refuses a replayed solution.
 func VerifyPoWSolution(solutionBase64, signingSecret string) bool {
+	_, ok := verifyPoW(solutionBase64, signingSecret)
+	return ok
+}
+
+func verifyPoW(solutionBase64, signingSecret string) (*PoWSolution, bool) {
 	data, err := base64.StdEncoding.DecodeString(solutionBase64)
 	if err != nil {
 		data, err = base64.RawStdEncoding.DecodeString(solutionBase64)
 		if err != nil {
-			return false
+			return nil, false
 		}
 	}
 
 	var sol PoWSolution
 	if err := json.Unmarshal(data, &sol); err != nil {
-		return false
+		return nil, false
 	}
 
 	if sol.Algorithm != "SHA-256" || sol.Salt == "" || sol.Challenge == "" || sol.Signature == "" ||
 		sol.Number < 1 || sol.MaxNumber < 1 || sol.Number > sol.MaxNumber || sol.ExpiresAt < time.Now().Unix() {
-		return false
+		return nil, false
 	}
 	signaturePayload := sol.Salt + ":" + sol.Challenge + ":" + strconv.Itoa(sol.MaxNumber) + ":" + strconv.FormatInt(sol.ExpiresAt, 10)
 	if !crypto.VerifyHMACSHA256([]byte(signaturePayload), signingSecret, sol.Signature) {
-		return false
+		return nil, false
 	}
 
 	targetStr := fmt.Sprintf("%s%d", sol.Salt, sol.Number)
 	h := sha256.Sum256([]byte(targetStr))
-	actualChallenge := hex.EncodeToString(h[:])
+	return &sol, hex.EncodeToString(h[:]) == sol.Challenge
+}
 
-	return actualChallenge == sol.Challenge
+// PoWSpent remembers verified salts until their challenge expires, so each solution buys one
+// attempt. In memory, like the login limiter: valid for the single-instance server only.
+type PoWSpent struct {
+	mu    sync.Mutex
+	spent map[string]int64 // salt -> challenge expiry
+	prune int64
+}
+
+// Verify accepts a valid solution once.
+func (p *PoWSpent) Verify(solutionBase64, signingSecret string) bool {
+	sol, ok := verifyPoW(solutionBase64, signingSecret)
+	if !ok {
+		return false
+	}
+	now := time.Now().Unix()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.spent == nil {
+		p.spent = map[string]int64{}
+	}
+	if now >= p.prune {
+		for salt, exp := range p.spent {
+			if exp < now {
+				delete(p.spent, salt)
+			}
+		}
+		p.prune = now + 60
+	}
+	if _, used := p.spent[sol.Salt]; used {
+		return false
+	}
+	p.spent[sol.Salt] = sol.ExpiresAt
+	return true
 }
