@@ -209,31 +209,36 @@ func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (strin
 		return "", ErrDenied
 	}
 	var id string
-	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		var active int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active'`, user).Scan(&active); err != nil {
-			return err
-		}
-		if active != 1 {
-			return ErrDenied
-		}
-		err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_personal_workspaces WHERE owner=?`, user).Scan(&id)
-		if err == nil {
-			return nil
-		}
-		if err != sql.ErrNoRows {
-			return err
-		}
-		id = uuid.NewString()
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces VALUES(?,?)`, id, user); err != nil {
-			return err
-		}
-		return event(ctx, tx, user, "workspace.personal_created", id)
+	err := s.transaction(ctx, func(tx *sql.Tx) (err error) {
+		id, err = ensurePersonal(ctx, tx, user)
+		return
 	})
 	return id, err
+}
+
+// ensurePersonal records the owner's name so a deleted account's workspace stays labelled.
+func ensurePersonal(ctx context.Context, tx *sql.Tx, user string) (string, error) {
+	var name string
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=? AND status='active'`, user).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrDenied
+	}
+	if err != nil {
+		return "", err
+	}
+	var id string
+	err = tx.QueryRowContext(ctx, `SELECT workspace FROM drive_personal_workspaces WHERE owner=?`, user).Scan(&id)
+	if err != sql.ErrNoRows {
+		return id, err
+	}
+	id = uuid.NewString()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
+		return "", err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces(workspace,owner,owner_name) VALUES(?,?,?)`, id, user, name); err != nil {
+		return "", err
+	}
+	return id, event(ctx, tx, user, "workspace.personal_created", id)
 }
 
 func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota int64) (Workspace, error) {
