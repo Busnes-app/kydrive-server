@@ -51,9 +51,12 @@ export async function sendUpload(s: Session, f: File, onProgress: (done: number)
 export type Entry = { dirs: string[]; file: File };
 
 // fromDataTransfer must run inside the drop handler: the items are gone once it returns.
-export function fromDataTransfer(dt: DataTransfer): Promise<{ dirs: string[][]; files: Entry[] }> {
-  const roots = Array.from(dt.items).map(i => i.webkitGetAsEntry()).filter((e): e is FileSystemEntry => e !== null);
-  return walk(roots);
+// Without an entry (no directory support), a dropped item is taken as a plain file.
+export async function fromDataTransfer(dt: DataTransfer): Promise<{ dirs: string[][]; files: Entry[] }> {
+  const items = Array.from(dt.items).filter(i => i.kind === 'file').map(i => ({ entry: i.webkitGetAsEntry(), file: i.getAsFile() }));
+  const tree = await walk(items.flatMap(i => i.entry ? [i.entry] : []));
+  for (const i of items) if (!i.entry && i.file) tree.files.push({ dirs: [], file: i.file });
+  return tree;
 }
 
 export async function walk(roots: FileSystemEntry[]): Promise<{ dirs: string[][]; files: Entry[] }> {

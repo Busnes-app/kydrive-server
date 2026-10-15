@@ -83,6 +83,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   // A search result in another workspace opens its folder once that workspace is selected.
   const openAfterSwitch = useRef('');
   useEffect(() => { setParent(openAfterSwitch.current); openAfterSwitch.current = ''; setHistory(null); setView('files'); }, [selected]);
+  const canDrop = (dt: DataTransfer) => canEdit && !trash && view === 'files' && dt.types.includes('Files');
   function openHit(h: Hit) {
     const target = h.kind === 'folder' ? h.id : h.parent;
     setTrash(false);
@@ -134,9 +135,9 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     {admin && <Leavers workspaces={workspaces} onDone={() => void reload().catch(() => {})} />}
     <div className="drive-layout">
     <div className="drive-content">{current ? <><div className={dragging ? 'panel drive-files-panel drive-drop-active' : 'panel drive-files-panel'}
-      onDragOver={e => { if (canEdit && !trash && view === 'files' && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragOver={e => { if (canDrop(e.dataTransfer)) { e.preventDefault(); setDragging(true); } }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
-      onDrop={e => { if (!dragging) return; e.preventDefault(); setDragging(false); const tree = fromDataTransfer(e.dataTransfer); void run(async () => uploads.add(selected, parent, await tree, folders)); }}>
+      onDrop={e => { setDragging(false); if (!canDrop(e.dataTransfer)) return; e.preventDefault(); const tree = fromDataTransfer(e.dataTransfer); void run(async () => uploads.add(selected, parent, await tree, folders)); }}>
       <div className="drive-workspace-heading"><div><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>
       {view === 'files' && (current.role ? <>
         <div className="drive-toolbar">
