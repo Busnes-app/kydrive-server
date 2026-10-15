@@ -18,6 +18,8 @@ var (
 	ErrConflict = errors.New("revision conflict")
 	ErrQuota    = errors.New("workspace quota exceeded")
 	ErrInvalid  = errors.New("invalid drive input")
+	// ErrTooLarge is a body over the upload limit; it is also ErrQuota.
+	ErrTooLarge = fmt.Errorf("%w: upload limit", ErrQuota)
 )
 
 type Store struct {

@@ -59,7 +59,7 @@ func (s *statusWriter) WriteHeader(code int) {
 
 func status(err error, method string, ifMatch bool, fallback int) int {
 	switch {
-	case errors.As(err, new(*http.MaxBytesError)):
+	case errors.As(err, new(*http.MaxBytesError)), errors.Is(err, drive.ErrTooLarge):
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, drive.ErrQuota):
 		return http.StatusInsufficientStorage

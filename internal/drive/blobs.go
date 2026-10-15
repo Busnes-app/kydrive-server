@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -39,7 +38,7 @@ func WriteBlob(root string, key []byte, r io.Reader, limit int64) (Version, erro
 		return v, err
 	}
 	if n > limit {
-		return v, fmt.Errorf("%w: upload limit", ErrQuota)
+		return v, ErrTooLarge
 	}
 	if err = f.Sync(); err != nil {
 		return v, err

@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/webdav"
+
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -34,6 +36,7 @@ type recoveryClient interface {
 }
 
 type Server struct {
+	davLocks   webdav.LockSystem // one per server: WebDAV locks are single-instance
 	editor     *editor.Client
 	editorErr  error
 	revokeMu   sync.Mutex
@@ -147,6 +150,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	recovery := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 
 	s := &Server{
+		davLocks: webdav.NewMemLS(),
 		config:   cfg,
 		store:    st,
 		sessions: sessions,
@@ -177,6 +181,14 @@ func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool 
 	entry := bumpWindow(s.attempts[key], now, window)
 	s.attempts[key] = entry
 	return entry.count <= limit
+}
+
+// attemptsExceeded reports, without counting, whether key already reached limit in its window.
+func (s *Server) attemptsExceeded(key string, limit int) bool {
+	s.attemptsMu.Lock()
+	defer s.attemptsMu.Unlock()
+	w, ok := s.attempts[key]
+	return ok && time.Now().Before(w.reset) && w.count >= limit
 }
 
 func (s *Server) resetAttempts(key string) {
@@ -363,6 +375,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-KySignOn-Signature")
+
+	// WebDAV authenticates every request itself (app passwords, never cookies) and owns its
+	// OPTIONS, methods and body sizes.
+	if r.URL.Path == "/dav" || strings.HasPrefix(r.URL.Path, "/dav/") {
+		s.serveDAV(w, r)
+		return
+	}
 
 	if r.Method == http.MethodOptions {
 		if origin != "" && !sameOrigin(origin, s.config.Server.AppURL) {
