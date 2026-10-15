@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { secureFetch } from '../../api';
 import { change, list, person, record, response, share } from './client';
-import { link } from './links';
-import type { Link } from './links';
+import { guestLink, link } from './links';
+import type { GuestLink, Link } from './links';
+import { guestPolicy } from '../GuestLinkSettings';
+import type { GuestPolicy } from '../GuestLinkSettings';
 import type { Group, Person, Share } from './client';
 
 // ShareDialog shares one file or folder with people (found by name) or, where the user can see
@@ -16,6 +18,12 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
   const [linkRole, setLinkRole] = useState('reader');
   const [linkDays, setLinkDays] = useState('7');
   const [newLink, setNewLink] = useState('');
+  const [policy, setPolicy] = useState<GuestPolicy | null>(null);
+  const [guests, setGuests] = useState<GuestLink[]>([]);
+  const [guestDays, setGuestDays] = useState(7);
+  const [guestPassword, setGuestPassword] = useState('');
+  const [uploadOnly, setUploadOnly] = useState(false);
+  const [newGuest, setNewGuest] = useState('');
   const [q, setQ] = useState('');
   const [people, setPeople] = useState<Person[]>([]);
   const [group, setGroup] = useState('');
@@ -23,7 +31,13 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => { setShares(await list(base, share)); setLinks(await list(`${item}/links`, link)); }, [base, item]);
+  const load = useCallback(async () => {
+    setShares(await list(base, share));
+    setLinks(await list(`${item}/links`, link));
+    const p = await response(await fetch('/api/drive/guest-links-policy'));
+    if (guestPolicy(p)) { setPolicy(p); setGuestDays(d => Math.min(d, p.max_days)); }
+    if (guestPolicy(p) && p.enabled) setGuests(await list(`${item}/guest-links`, guestLink));
+  }, [base, item]);
   useEffect(() => { ref.current?.showModal(); void load().catch(e => setError(e instanceof Error ? e.message : 'Shares unavailable')); }, [load]);
   useEffect(() => {
     if ([...q.trim()].length < 2) { setPeople([]); return; }
@@ -44,7 +58,12 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
     if (!record(v) || typeof v.url !== 'string') throw new Error('Invalid link response');
     setNewLink(v.url);
   });
-  const revokeLink = (l: Link) => run(async () => { const r = await secureFetch(`/api/drive/links/${l.id}`, { method: 'DELETE' }); if (!r.ok) await response(r); });
+  const revokeLink = (l: { id: string }) => run(async () => { const r = await secureFetch(`/api/drive/links/${l.id}`, { method: 'DELETE' }); if (!r.ok) await response(r); });
+  const createGuest = () => run(async () => {
+    const v = await change(`${item}/guest-links`, 'POST', { days: guestDays, password: guestPassword, upload_only: uploadOnly });
+    if (!record(v) || typeof v.url !== 'string') throw new Error('Invalid link response');
+    setNewGuest(v.url); setGuestPassword('');
+  });
 
   return <dialog ref={ref} className="drive-document-dialog" aria-labelledby="share-title" onCancel={onClose}>
     <h2 id="share-title">Share {name}</h2>
@@ -67,6 +86,18 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
     </form>
     {newLink && <p role="status"><strong>Copy this link now; it is not shown again.</strong> <code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{newLink}</code></p>}
     {links.length > 0 && <ul aria-label="Links" className="drive-share-people">{links.map(l => <li key={l.id}><span>{l.role} link · {l.expires ? `expires ${new Date(l.expires * 1000).toLocaleDateString()}` : 'never expires'} · opened by {l.opened}</span><button type="button" className="btn-secondary" disabled={busy} onClick={() => void revokeLink(l)}>Revoke</button></li>)}</ul>}
+    {policy?.enabled && <>
+      <h3>Guest link</h3>
+      <p>For people without an account: {kind === 'folder' ? 'they can view and download what is in this folder, or, upload-only, send files into it without seeing it.' : 'they can view and download this file.'} The link expires and can need a password.</p>
+      <form className="drive-toolbar" onSubmit={e => { e.preventDefault(); void createGuest(); }}>
+        <label>Days<input type="number" min={1} max={policy.max_days} required value={guestDays} onChange={e => setGuestDays(e.target.valueAsNumber)} /></label>
+        <label>Password (optional)<input type="password" minLength={8} maxLength={1024} autoComplete="new-password" value={guestPassword} onChange={e => setGuestPassword(e.target.value)} /></label>
+        {kind === 'folder' && <label className="drive-setting-toggle"><input type="checkbox" checked={uploadOnly} onChange={e => setUploadOnly(e.target.checked)} /> Upload only</label>}
+        <button disabled={busy}>Create guest link</button>
+      </form>
+      {newGuest && <p role="status"><strong>Copy this link now; it is not shown again.</strong> Send any password separately. <code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{newGuest}</code></p>}
+      {guests.length > 0 && <ul aria-label="Guest links" className="drive-share-people">{guests.map(g => <li key={g.id}><span>{g.upload_only ? 'upload-only' : 'view'} guest link · expires {new Date(g.expires * 1000).toLocaleDateString()}{g.has_password ? ' · password' : ''}</span><button type="button" className="btn-secondary" disabled={busy} onClick={() => void revokeLink(g)}>Revoke</button></li>)}</ul>}
+    </>}
     {error && <p role="alert">{error}</p>}
     <div className="drive-dialog-actions"><button type="button" onClick={onClose}>Done</button></div>
   </dialog>;

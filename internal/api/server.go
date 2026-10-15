@@ -468,6 +468,11 @@ func (s *Server) sameSiteRequest(r *http.Request) bool {
 		return false
 	}
 	origin := r.Header.Get("Origin")
+	// Guest pages send no referrer, so their form posts carry Origin: null; the browser's own
+	// Sec-Fetch-Site still proves them same-origin. Sandboxed content reports cross-site.
+	if origin == "null" && guestPath(r.URL.Path) && r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+		return true
+	}
 	return origin == "" || sameOrigin(origin, s.config.Server.AppURL)
 }
 

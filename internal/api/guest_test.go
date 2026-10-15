@@ -121,6 +121,26 @@ func TestGuestLinkRoutes(t *testing.T) {
 		t.Fatalf("upload-only view %d %s", got.Code, got.Body.String())
 	}
 
+	// A guest page's form post arrives with Origin: null (no-referrer); only the browser's
+	// same-origin Sec-Fetch-Site lets it through, and only on guest routes.
+	origin := func(path, site string) int {
+		r := httptest.NewRequest("POST", path, strings.NewReader(`{"token":"`+drop+`"}`))
+		r.Header.Set("Origin", "null")
+		if site != "" {
+			r.Header.Set("Sec-Fetch-Site", site)
+		}
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, r)
+		return rec.Code
+	}
+	if got := origin("/api/public/links/view", "same-origin"); got != 200 {
+		t.Fatalf("guest page post with Origin null: %d", got)
+	}
+	for _, c := range []struct{ path, site string }{{"/api/public/links/view", ""}, {"/api/public/links/view", "cross-site"}, {"/api/drive/folders/" + folder.ID + "/links", "same-origin"}} {
+		if got := origin(c.path, c.site); got != 403 {
+			t.Errorf("Origin null to %s with Sec-Fetch-Site %q: %d", c.path, c.site, got)
+		}
+	}
 	expect(send(t, srv, "PUT", "/api/drive/guest-links-policy", `{"enabled":false,"max_days":14}`, admin, ""), 200, "admin turns guest links off")
 	expect(guestUploadReq(srv, drop, "late.pdf", "late"), http.StatusNotFound, "upload while off")
 }

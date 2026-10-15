@@ -2,6 +2,7 @@ import './theme';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { GuestPage } from './pages/GuestPage';
 
 // Keep registration in the bundled script so script-src 'self' permits it.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
@@ -12,6 +13,6 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    {/^\/g(\/|$)/.test(location.pathname) ? <GuestPage /> : <App />}
   </React.StrictMode>
 );

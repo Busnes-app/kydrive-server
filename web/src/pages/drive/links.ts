@@ -26,3 +26,8 @@ export type Link = { id: string; role: string; expires: number; created: string;
 export function link(v: unknown): v is Link {
   return record(v) && ['id', 'role', 'created', 'created_by'].every(k => typeof v[k] === 'string') && typeof v.expires === 'number' && typeof v.opened === 'number';
 }
+
+export type GuestLink = { id: string; expires: number; created: string; created_by: string; upload_only: boolean; has_password: boolean };
+export function guestLink(v: unknown): v is GuestLink {
+  return record(v) && ['id', 'created', 'created_by'].every(k => typeof v[k] === 'string') && typeof v.expires === 'number' && typeof v.upload_only === 'boolean' && typeof v.has_password === 'boolean';
+}

@@ -463,6 +463,8 @@ dialog.modal-window::backdrop {
 .drive-share-people li { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink-strong); }
 .drive-share-people small { color: var(--ink); margin-left: 6px; }
 .drive-setting-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--ink-strong); }
+.guest-page { max-width: 720px; margin: 48px auto; padding: 0 20px; display: grid; gap: 16px; color: var(--ink-strong); }
+.guest-note { color: var(--ink); font-size: 13px; }
 .drive-uploads { margin: 0 0 16px; }
 .drive-uploads ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
 .drive-uploads li { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto auto; align-items: center; gap: 12px; color: var(--ink); }
