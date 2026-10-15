@@ -11,9 +11,9 @@ import (
 )
 
 type tree struct {
-	a, b, c         drive.Folder // a/b and c at the root
-	inB, inA, inC   drive.File
-	root, rootFile  string
+	a, b, c        drive.Folder // a/b and c at the root
+	inB, inA, inC  drive.File
+	root, rootFile string
 }
 
 // layout builds a/b/inB.txt, a/inA.txt, c/inC.txt and root.txt in w as worker.
