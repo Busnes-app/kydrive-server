@@ -95,6 +95,12 @@ func TestResumableUploadRoutes(t *testing.T) {
 	if got := send(t, srv, "GET", "/api/drive/files/"+file.ID+"/download", "", user, ""); got.Body.String() != "abcdefghijklmno" {
 		t.Fatalf("download %d %q", got.Code, got.Body.String())
 	}
+	if got := send(t, srv, "GET", "/api/drive/search?q=BIG", "", other, ""); got.Code != 200 || !strings.Contains(got.Body.String(), `"name":"big.bin"`) || !strings.Contains(got.Body.String(), `"truncated":false`) {
+		t.Fatalf("search %d %s", got.Code, got.Body.String())
+	}
+	if got := send(t, srv, "GET", "/api/drive/search?q=b", "", other, ""); got.Code != 400 {
+		t.Fatalf("one-letter search %d", got.Code)
+	}
 
 	// Cancel, then an oversized chunk and an oversized session.
 	out = send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/upload-sessions", `{"name":"huge.bin","size":104857600}`, user, "")

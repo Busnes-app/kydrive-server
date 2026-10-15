@@ -3,6 +3,8 @@ package drive
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,26 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 }
 
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
+
+// SeedFiles inserts n live files named file-<i>.txt at the root of workspace in one transaction.
+func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		for i := range n {
+			id := fmt.Sprintf("seed-%d", i)
+			stored, mac, err := s.names.seal("drive_files", id, fmt.Sprintf("file-%d.txt", i))
+			if err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,name_hmac,revision) VALUES(?,?,'',?,?,1)`, id, workspace, stored, mac); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed) VALUES(?,1,?,?,0,?,1)`, id, id, strings.Repeat("0", 64), now()); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
 
 func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {
 	_, err := s.db.ExecContext(ctx, q, args...)

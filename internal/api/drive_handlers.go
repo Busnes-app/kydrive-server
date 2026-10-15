@@ -41,6 +41,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
+	s.mux.HandleFunc("GET /api/drive/search", s.requireAuthenticated(s.driveSearch))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
 	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
@@ -233,6 +234,14 @@ func (s *Server) driveFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, out)
+}
+func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
+	hits, truncated, err := s.store.Drive().Search(r.Context(), s.driveUser(r).ID, r.URL.Query().Get("q"), 200)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]any{"results": hits, "truncated": truncated})
 }
 func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
 
