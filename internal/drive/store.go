@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -397,24 +396,7 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=?`, workspace, trashed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Folder{}
-	for rows.Next() {
-		var f Folder
-		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
-			return nil, err
-		}
-		if f.Name, err = s.names.open("drive_folders", f.ID, f.Name); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	slices.SortStableFunc(out, func(a, b Folder) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return s.queryFolders(ctx, `workspace=? AND trashed=?`, workspace, trashed)
 }
 
 const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed`
@@ -442,21 +424,7 @@ func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool)
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.workspace=? AND f.trashed=?`, workspace, trashed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []File{}
-	for rows.Next() {
-		f, e := s.scanFile(rows)
-		if e != nil {
-			return nil, e
-		}
-		out = append(out, f)
-	}
-	slices.SortStableFunc(out, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return s.queryFiles(ctx, `f.workspace=? AND f.trashed=?`, workspace, trashed)
 }
 
 // Publish makes a durably stored immutable blob visible. Caller owns that blob until success.

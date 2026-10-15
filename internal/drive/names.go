@@ -61,9 +61,14 @@ func checkKey(ctx context.Context, db *sql.DB, key []byte) error {
 // Every write that sets a name must set both columns from here.
 func (n names) seal(table, id, name string) (string, string, error) {
 	ct, err := crypto.EncryptAESGCMAAD([]byte(name), n.enc, []byte(table+":"+id))
+	return ct, n.hmac(name), err
+}
+
+// hmac is the name_hmac of name: exact-match lookups use it, never the sealed name.
+func (n names) hmac(name string) string {
 	h := hmac.New(sha256.New, n.mac)
 	h.Write([]byte(name))
-	return ct, hex.EncodeToString(h.Sum(nil)), err
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (n names) open(table, id, stored string) (string, error) {
