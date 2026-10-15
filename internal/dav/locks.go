@@ -113,17 +113,21 @@ func capped(d time.Duration) time.Duration {
 	return d
 }
 
-// Create takes a LOCK only on an item inside a workspace the user can edit, for at most maxLock.
-// x/net also creates a lock for every write it confirms and releases it with the request;
-// those pass through, since the write itself is authorized by the store.
+// Create needs edit access to the lock's workspace, both for LOCK and for the lock x/net takes
+// around every write before the store sees it: otherwise a reader's slow request would block
+// editors. A LOCK must name an item inside a workspace and lasts at most maxLock.
 func (v *view) Create(now time.Time, d webdav.LockDetails) (string, error) {
+	parts := split(d.Root)
+	spaces, err := v.fs.spaces(v.ctx)
+	workspace := ""
+	if err == nil && len(parts) > 0 {
+		workspace = spaces[parts[0]]
+	}
+	if workspace == "" || (v.method == "LOCK" && len(parts) < 2) || v.fs.store.Authorize(v.ctx, v.fs.user, workspace, 2) != nil {
+		v.fs.Err = drive.ErrDenied // x/net answers any other Create error with 500
+		return "", webdav.ErrForbidden
+	}
 	if v.method == "LOCK" {
-		parts := split(d.Root)
-		spaces, err := v.fs.spaces(v.ctx)
-		if len(parts) < 2 || err != nil || spaces[parts[0]] == "" || v.fs.store.Authorize(v.ctx, v.fs.user, spaces[parts[0]], 2) != nil {
-			v.fs.Err = drive.ErrDenied // x/net answers any other Create error with 500
-			return "", webdav.ErrForbidden
-		}
 		d.Duration = capped(d.Duration)
 	}
 	d.Root = v.internal(d.Root)
@@ -131,7 +135,6 @@ func (v *view) Create(now time.Time, d webdav.LockDetails) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	workspace, _, _ := strings.Cut(strings.TrimPrefix(d.Root, "/"), "/")
 	return v.sign(token, workspace), nil
 }
 
@@ -154,15 +157,16 @@ func (v *view) Confirm(now time.Time, name0, name1 string, conditions ...webdav.
 	return v.ls.Confirm(now, name0, name1, conditions...)
 }
 
-// Refresh extends a lock only while its owner can still edit the workspace it covers.
+// Refresh extends a lock only while its owner can still edit the workspace it covers; a lock
+// whose owner lost that access is released at once (412), so it stops blocking editors.
 func (v *view) Refresh(now time.Time, signed string, d time.Duration) (webdav.LockDetails, error) {
 	token, workspace, ok := v.unsign(signed)
 	if !ok {
 		return webdav.LockDetails{}, webdav.ErrNoSuchLock
 	}
 	if workspace == "" || v.fs.store.Authorize(v.ctx, v.fs.user, workspace, 2) != nil {
-		v.fs.Err = drive.ErrDenied // x/net answers any other Refresh error with 500
-		return webdav.LockDetails{}, webdav.ErrForbidden
+		v.ls.Unlock(now, token)
+		return webdav.LockDetails{}, webdav.ErrNoSuchLock
 	}
 	ld, err := v.ls.Refresh(now, token, capped(d))
 	ld.Root = v.display(ld.Root)

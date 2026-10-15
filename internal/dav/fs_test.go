@@ -249,7 +249,8 @@ func TestProppatchIsAcceptedAndDropped(t *testing.T) {
 	}
 }
 
-// A lock owner who loses edit access cannot keep extending the lock over others' writes.
+// A lock owner who loses edit access cannot keep the lock over others' writes: the refresh fails
+// and releases it.
 func TestLockRefreshRechecksAccess(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -265,12 +266,42 @@ func TestLockRefreshRechecksAccess(t *testing.T) {
 	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "team", "reader"); err != nil {
 		t.Fatal(err)
 	}
-	got := refresh()
-	e.want(got, 403, "refresh after losing edit access")
-	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "team", "editor"); err != nil {
+	// The reader becomes the workspace's editor; the demoted lock owner's lock must not block it.
+	if err := e.st.Groups().ReplaceGroup(ctx, &store.Group{ID: "late", DisplayName: "Late", ExternalID: "x-late", Members: []string{"reader"}}, true); err != nil {
 		t.Fatal(err)
 	}
-	e.want(refresh(), 200, "refresh after edit access returns")
+	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "late", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	e.want(refresh(), 412, "refresh after losing edit access")
+	e.want(e.do("reader", "PUT", "/dav/Organization/shared.odt", strings.NewReader("editor's save")), 201, "editor write after the lock was released")
+}
+
+// x/net takes a lock around every write before the store authorizes it; a reader must not get
+// one, or a slow reader request would block editors' saves for as long as it lasts.
+func TestReadersTakeNoRequestLocks(t *testing.T) {
+	e := setup(t)
+	e.want(e.do("worker", "PUT", e.org()+"/doc.odt", strings.NewReader("x")), 201, "put")
+	body, slow := io.Pipe()
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- e.do("reader", "PROPPATCH", "/dav/Organization/doc.odt", body) }()
+	// Either the handler starts reading the body (x/net holds its lock by then) or it answers
+	// without reading, which is the fix.
+	reading := make(chan struct{})
+	go func() { slow.Write([]byte("<")); close(reading) }()
+	var reader *httptest.ResponseRecorder
+	select {
+	case <-reading:
+	case reader = <-done:
+	}
+	e.want(e.do("worker", "PUT", e.org()+"/doc.odt", strings.NewReader("editor's save")), 201, "editor write during a reader's slow request")
+	slow.Close()
+	if reader == nil {
+		reader = <-done
+	}
+	if reader.Code != 403 {
+		t.Fatalf("reader PROPPATCH: %d", reader.Code)
+	}
 }
 
 // An infinite-depth PROPFIND would walk every readable workspace in one request.
