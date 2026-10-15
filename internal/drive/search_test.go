@@ -138,8 +138,8 @@ func TestSearchRejectsBadQueries(t *testing.T) {
 
 // Names are decrypted to match, so cost grows with the corpus. Pin it at pilot scale.
 func TestSearchScale(t *testing.T) {
-	if testing.Short() {
-		t.Skip("seeds 50 000 files")
+	if testing.Short() || raceEnabled {
+		t.Skip("timing check; seeds 50 000 files and needs a build without -race")
 	}
 	st, w, _ := fixture(t)
 	d, ctx := st.Drive(), context.Background()
