@@ -4,7 +4,7 @@ import { Search } from './Search';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-const workspaces = [{ id: 'w1', name: 'Team', role: 'editor', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0 }];
+const workspaces = [{ id: 'w1', name: 'Team', role: 'editor', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0, editors_share: false }];
 const results = [{ kind: 'file', id: 'f1', workspace: 'w1', parent: 'd1', name: 'Q1 budget.xlsx', path: 'Reports' }];
 
 describe('Search', () => {

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
+import { SharedView } from './pages/drive/SharedView';
+import { SHARED_WITH_ME } from './pages/drive/client';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
@@ -140,7 +142,7 @@ export const App: React.FC = () => {
 
       <main className="app-main">
         {notice && <p role="alert" className="panel">{notice}</p>}
-        {activeTab === 'drive' && <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />}
+        {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}

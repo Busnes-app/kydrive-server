@@ -459,6 +459,10 @@ dialog.modal-window::backdrop {
 .drive-search-results li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .drive-search-results li span { color: var(--ink); font-size: .9rem; }
 .drive-drop-active { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.drive-share-people { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.drive-share-people li { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink-strong); }
+.drive-share-people small { color: var(--ink); margin-left: 6px; }
+.drive-setting-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--ink-strong); }
 .drive-uploads { margin: 0 0 16px; }
 .drive-uploads ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
 .drive-uploads li { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto auto; align-items: center; gap: 12px; color: var(--ink); }
