@@ -81,11 +81,11 @@ func (s *Store) Links(ctx context.Context, user, kind, id string) ([]Link, error
 	return out, rows.Err()
 }
 
-// RevokeLink ends a link and every access that came through it.
+// RevokeLink ends an organisation or guest link and every access that came through it.
 func (s *Store) RevokeLink(ctx context.Context, user, id string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		var kind, rid, role string
-		err := tx.QueryRowContext(ctx, `SELECT resource_kind,resource_id,role FROM drive_links WHERE id=? AND scope='org' AND revoked=0`, id).Scan(&kind, &rid, &role)
+		err := tx.QueryRowContext(ctx, `SELECT resource_kind,resource_id,role FROM drive_links WHERE id=? AND revoked=0`, id).Scan(&kind, &rid, &role)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrDenied
 		}
