@@ -318,3 +318,83 @@ func TestStagingIsSealed(t *testing.T) {
 		t.Fatalf("session name stored in clear: %v %v", names, err)
 	}
 }
+
+// A completion re-seals the whole file, so only one may run per session: a second one must be
+// refused before it writes anything, or concurrent completions multiply disk use past the limits.
+func TestUploadCompletionIsClaimed(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	// Another request holds the claim: this one is refused and writes no blob.
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("second completion: %v", err)
+	}
+	if entries, _ := os.ReadDir(blobs); len(entries) != 0 {
+		t.Fatalf("refused completion wrote %d blobs", len(entries))
+	}
+	// A claim left by a crashed request expires.
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Hour).Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); err != nil {
+		t.Fatalf("stale claim blocked completion: %v", err)
+	}
+}
+
+func TestConcurrentCompletionsPublishOnce(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errs := make(chan error, 4)
+	for range 4 {
+		wg.Go(func() { <-start; _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); errs <- err })
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	ok := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, drive.ErrConflict), errors.Is(err, drive.ErrDenied): // claimed, or already done
+		default:
+			t.Fatal(err)
+		}
+	}
+	entries, _ := os.ReadDir(blobs)
+	if ok != 1 || len(entries) != 1 {
+		t.Fatalf("successes=%d blobs=%d", ok, len(entries))
+	}
+}
+
+// A failed completion releases its claim so the owner can retry.
+func TestFailedCompletionReleasesClaim(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	// Fill the quota so Publish fails after the re-seal.
+	if _, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "filler"}, blob(t, blobs, strings.Repeat("x", 96)), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); !errors.Is(err, drive.ErrQuota) {
+		t.Fatalf("over quota: %v", err)
+	}
+	if n, err := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID); err != nil || n != 0 {
+		t.Fatalf("claim kept after failure: %d %v", n, err)
+	}
+}
