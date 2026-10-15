@@ -23,6 +23,8 @@ jobs:
       # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - run: go test -race ./... && go vet ./...
+      # Timing bounds skip under -race; run them once in a normal build.
+      - run: go test -count=1 -run 'TestSearchScale' ./internal/drive/
       - run: test -z "$(gofmt -l $(git ls-files '*.go'))" && go mod verify
       - run: go mod tidy && git diff --exit-code go.mod go.sum
       - run: go build -o .browser/server ./cmd/server && cd web && npx playwright install --with-deps chromium && npm run test:browser

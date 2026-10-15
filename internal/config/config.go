@@ -26,6 +26,13 @@ type Config struct {
 	SCIM     SCIMConfig     `json:"scim"`
 	Backup   BackupConfig   `json:"backup"`
 	Captcha  CaptchaConfig  `json:"captcha"`
+	Drive    DriveConfig    `json:"drive"`
+}
+
+// DriveConfig bounds resumable uploads and folder zip downloads, in bytes.
+type DriveConfig struct {
+	MaxFileSize int64 `json:"max_file_size"`
+	MaxZipSize  int64 `json:"max_zip_size"`
 }
 
 // ServerConfig defines HTTP and network settings.
@@ -247,6 +254,14 @@ func load(existing bool) (*Config, error) {
 	if err != nil || writeTimeout < 15*time.Second || writeTimeout > 15*time.Minute {
 		return nil, fmt.Errorf("KY_WRITE_TIMEOUT must be between 15s and 15m")
 	}
+	maxFile, err := getEnvSize("KYDRIVE_MAX_FILE_SIZE", 10<<30)
+	if err != nil {
+		return nil, err
+	}
+	maxZip, err := getEnvSize("KYDRIVE_MAX_ZIP_SIZE", 10<<30)
+	if err != nil {
+		return nil, err
+	}
 	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
 	if fontsDir != "" {
 		if info, err := os.Stat(fontsDir); err != nil || !info.IsDir() {
@@ -310,6 +325,7 @@ func load(existing bool) (*Config, error) {
 			SecretKey:     getEnv("KY_CAPTCHA_SECRET_KEY", ""),
 			DifficultyPoW: envInt("KY_CAPTCHA_POW_DIFFICULTY", 100000),
 		},
+		Drive: DriveConfig{MaxFileSize: maxFile, MaxZipSize: maxZip},
 	}
 
 	if len(invalid) > 0 {
@@ -381,6 +397,20 @@ func getEnvDuration(key string, defaultVal time.Duration) (time.Duration, error)
 		return 0, fmt.Errorf("%s is negative", val)
 	}
 	return d, nil
+}
+
+// getEnvSize parses a whole number of MiB, GiB or TiB between 1 MiB and 1 TiB.
+func getEnvSize(key string, defaultVal int64) (int64, error) {
+	val := getEnv(key, "")
+	if val == "" {
+		return defaultVal, nil
+	}
+	for unit, shift := range map[string]int{"MiB": 20, "GiB": 30, "TiB": 40} {
+		if n, err := strconv.ParseInt(strings.TrimSuffix(val, unit), 10, 64); err == nil && strings.HasSuffix(val, unit) && n >= 1 && n <= 1<<(40-shift) {
+			return n << shift, nil
+		}
+	}
+	return 0, fmt.Errorf("%s must be a whole number of MiB, GiB or TiB between 1MiB and 1TiB, got %q", key, val)
 }
 
 func generateRandomHex(n int) string {

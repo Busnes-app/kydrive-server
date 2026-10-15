@@ -52,7 +52,7 @@ func (s *Server) driveTrashRetention(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]int{"trash_days": days})
 }
 
-// RunRetention applies retention and sweeps orphaned blobs now and then hourly. Blobs are
+// RunRetention applies retention, sweeps orphaned blobs and expires upload sessions now and then hourly. Blobs are
 // removed after their metadata commits; a failed removal leaves an unreferenced file, never a
 // dangling version.
 func (s *Server) RunRetention(ctx context.Context) {
@@ -75,6 +75,11 @@ func (s *Server) RunRetention(ctx context.Context) {
 			log.Printf("orphan sweep: %v", err)
 		} else if n > 0 {
 			log.Printf("orphan sweep: removed %d files", n)
+		}
+		if n, err := s.store.Drive().ExpireUploads(ctx, s.stagingRoot()); err != nil && ctx.Err() == nil {
+			log.Printf("upload expiry: %v", err)
+		} else if n > 0 {
+			log.Printf("upload expiry: removed %d sessions", n)
 		}
 		select {
 		case <-ctx.Done():

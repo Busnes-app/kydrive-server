@@ -17,7 +17,7 @@ This directory owns test setup, disposable server launch and UI assertions. The 
 
 ## Work Guidance
 
-Prefer browser-native behavior and assertions over screenshot-only checks. `whiteboard.spec.mjs` round-trips an excalidraw.com-shaped scene (bent arrow, deleted element, image, text, background), checks self-hosted fonts, no external requests and conflict handling. `file-management.spec.mjs` covers rename, move, folder trash, restore and permanent delete; it reuses session cookies saved in `test-results/file-management-session.json` to stay under the server's 20 sign-ins per minute. A passing suite covers these workflows, not every page or a complete accessibility audit.
+Prefer browser-native behavior and assertions over screenshot-only checks. `whiteboard.spec.mjs` round-trips an excalidraw.com-shaped scene (bent arrow, deleted element, image, text, background), checks self-hosted fonts, no external requests and conflict handling. `file-management.spec.mjs` covers rename, move, folder trash, restore and permanent delete; `uploads.spec.mjs` uploads a folder tree through the folder picker, drops a file whose first chunk connection is reset (the upload resumes), searches and downloads the folder zip, sharing the same saved session; it reuses session cookies saved in `test-results/file-management-session.json` to stay under the server's 20 sign-ins per minute. A passing suite covers these workflows, not every page or a complete accessibility audit.
 
 ## Verification
 

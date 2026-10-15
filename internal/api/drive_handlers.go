@@ -41,6 +41,12 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
+	s.mux.HandleFunc("GET /api/drive/search", s.requireAuthenticated(s.driveSearch))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
+	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
+	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
+	s.mux.HandleFunc("POST /api/drive/upload-sessions/{sid}/complete", s.requireAuthenticated(s.driveCompleteUpload))
+	s.mux.HandleFunc("DELETE /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveCancelUpload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
@@ -52,6 +58,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("DELETE /api/drive/files/{id}/versions/{revision}", s.requireAuthenticated(s.drivePurgeVersion))
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/location", s.requireAuthenticated(s.driveMoveFolder))
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
+	s.mux.HandleFunc("GET /api/drive/folders/{id}/zip", s.requireAuthenticated(s.driveFolderZip))
 	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
 	s.mux.HandleFunc("GET /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
@@ -90,7 +97,7 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 	case errors.Is(err, drive.ErrConflict):
 		status = 409
 		message = err.Error()
-	case errors.Is(err, drive.ErrQuota):
+	case errors.Is(err, drive.ErrQuota), errors.As(err, new(*http.MaxBytesError)):
 		status = 413
 		message = "Upload or workspace quota exceeded"
 	}
@@ -228,6 +235,14 @@ func (s *Server) driveFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, out)
+}
+func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
+	hits, truncated, err := s.store.Drive().Search(r.Context(), s.driveUser(r).ID, r.URL.Query().Get("q"), 200)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]any{"results": hits, "truncated": truncated})
 }
 func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
 

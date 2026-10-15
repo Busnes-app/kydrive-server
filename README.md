@@ -14,7 +14,7 @@ make build
 KY_DATA_DIR=./data KY_DB_DRIVER=sqlite KY_APP_NAME=KyDrive ./kydrive-server
 ```
 
-Choose a random `KY_ADMIN_PASSWORD` in a private environment file before starting, or leave it empty: the first start then writes a generated password to `<KY_DATA_DIR>/initial-admin-password` (mode 0600, never logged); delete that file after the first sign-in. Bootstrap requires password replacement at first login. Startup refuses any secret still holding an example `replace-with` placeholder, an unparseable number or boolean, and a `KY_ENV` other than `production` or `development`. Use the configured OIDC provider for staff; SCIM never supplies passwords. Production uses `KY_ENV=production`, HTTPS, an explicit durable `KY_SESSION_SECRET` and explicitly configured integrations. Read/write timeouts default to 5m, configurable with `KY_READ_TIMEOUT`/`KY_WRITE_TIMEOUT` between 15s and 15m.
+Choose a random `KY_ADMIN_PASSWORD` in a private environment file before starting, or leave it empty: the first start then writes a generated password to `<KY_DATA_DIR>/initial-admin-password` (mode 0600, never logged); delete that file after the first sign-in. Bootstrap requires password replacement at first login. Startup refuses any secret still holding an example `replace-with` placeholder, an unparseable number or boolean, and a `KY_ENV` other than `production` or `development`. Use the configured OIDC provider for staff; SCIM never supplies passwords. Production uses `KY_ENV=production`, HTTPS, an explicit durable `KY_SESSION_SECRET` and explicitly configured integrations. Read/write timeouts default to 5m, configurable with `KY_READ_TIMEOUT`/`KY_WRITE_TIMEOUT` between 15s and 15m. `KYDRIVE_MAX_FILE_SIZE` caps one resumable upload and `KYDRIVE_MAX_ZIP_SIZE` one folder zip download; both default to `10GiB` and take whole `MiB`, `GiB` or `TiB` up to `1TiB`.
 
 ## NAS package
 
@@ -117,7 +117,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them. An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 

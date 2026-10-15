@@ -1,6 +1,6 @@
 # KyDrive OneDrive/SharePoint parity roadmap
 
-> **For agentic workers:** this is the milestone map. Each milestone gets its own task-level plan in this directory before work starts; only M1 has one so far (`2026-10-07-m1-file-management.md`). Do not start a milestone from this file alone.
+> **For agentic workers:** this is the milestone map. Each milestone gets its own task-level plan in this directory before work starts; M1 (`2026-10-07-m1-file-management.md`) and M2 (`2026-10-15-m2-uploads-search-zip.md`) have one. Do not start a milestone from this file alone.
 
 **Goal:** close the gaps that stop KyDrive replacing OneDrive/SharePoint for a small organisation, in the order a user hits them.
 
@@ -30,7 +30,7 @@ Rename, move (including My files → shared workspace), copy, folder trash/resto
 
 **Exit:** a manager can tidy a workspace, move a draft from My files into a team workspace while a colleague has it open (their editor is revoked if they lose access), empty trash, and set "empty trash after 30 days / keep 20 versions" and watch usage fall. Purging never leaves a version pointing at a deleted blob.
 
-### M2 — Large uploads, drag-and-drop, search, folder download
+### M2 — Large uploads, drag-and-drop, search, folder download (plan written, shipped on `feature/m2-large-uploads`)
 
 - **Resumable uploads.** Upload sessions: `POST /api/drive/workspaces/{id}/upload-sessions` returns an ID; `PUT .../upload-sessions/{sid}` with `Content-Range` appends to a per-session staging file under `<data>/staging/<sid>`; `POST .../complete` hashes, fsyncs, renames into `blobs/` and calls `Publish` with the expected revision. Per-file cap becomes `KYDRIVE_MAX_FILE_SIZE` (default 10 GiB) and is checked against quota at session creation and at completion. Abandoned sessions expire after 24h; staging files are not user data and may be deleted. Keep the single-request upload route for service tokens and small files.
 - **Drag-and-drop** of files and whole folders (`DataTransferItem.webkitGetAsEntry`) with per-file progress and resumable retry. Folder structure is created with `AddFolder` before files are uploaded.

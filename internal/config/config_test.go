@@ -299,3 +299,22 @@ func TestLoadExistingRefusesAMissingDeployment(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDriveSizeLimits(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	cfg, err := config.LoadFromEnv()
+	if err != nil || cfg.Drive.MaxFileSize != 10<<30 || cfg.Drive.MaxZipSize != 10<<30 {
+		t.Fatalf("defaults: cfg=%+v err=%v", cfg, err)
+	}
+	t.Setenv("KYDRIVE_MAX_FILE_SIZE", "512MiB")
+	t.Setenv("KYDRIVE_MAX_ZIP_SIZE", "2GiB")
+	if cfg, err = config.LoadFromEnv(); err != nil || cfg.Drive.MaxFileSize != 512<<20 || cfg.Drive.MaxZipSize != 2<<30 {
+		t.Fatalf("overrides: cfg=%+v err=%v", cfg, err)
+	}
+	for _, bad := range []string{"10", "1023KiB", "2TiB", "ten GiB", "-1GiB", "1.5GiB"} {
+		t.Setenv("KYDRIVE_MAX_FILE_SIZE", bad)
+		if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), "KYDRIVE_MAX_FILE_SIZE") {
+			t.Errorf("%q: want KYDRIVE_MAX_FILE_SIZE error, got %v", bad, err)
+		}
+	}
+}
