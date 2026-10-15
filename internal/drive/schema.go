@@ -41,6 +41,8 @@ CREATE INDEX drive_files_workspace ON drive_files(workspace);`,
 CREATE INDEX drive_upload_owner ON drive_upload_sessions(owner,expires);
 CREATE TABLE drive_upload_segments(session TEXT NOT NULL REFERENCES drive_upload_sessions(id),start INTEGER NOT NULL,path TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(session,start));`,
 	`ALTER TABLE drive_upload_sessions ADD COLUMN completing INTEGER NOT NULL DEFAULT 0;`,
+	`CREATE TABLE drive_app_passwords(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,hash TEXT NOT NULL UNIQUE,created TEXT NOT NULL,last_used INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX drive_app_passwords_user ON drive_app_passwords(user_id);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
