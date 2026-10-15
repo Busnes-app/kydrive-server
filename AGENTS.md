@@ -123,6 +123,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `internal/config/` — environment parsing, durable secrets and configuration validation.
 - `internal/store/` — base identity repositories, atomic group replacement and SQLite initialization.
 - `internal/drive/` — workspace/file domain, immutable blob publication, grants and editor/service sessions.
+- `internal/dav/` — WebDAV file system over the drive store for app-password clients.
 - `internal/editor/` — Euro-Office JWT, scoped output fetching and revocation commands.
 - `internal/crypto/` — inherited application encryption helpers over shared primitives.
 - `internal/auth/` — local/bootstrap authentication, MFA, sessions, CAPTCHA and CSRF.

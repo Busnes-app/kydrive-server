@@ -57,6 +57,7 @@ type File struct {
 	Digest    string `json:"digest"`
 	Blob      string `json:"-"`
 	Sealed    bool   `json:"-"`
+	Modified  string `json:"modified"` // when the current version was created
 }
 type Version struct {
 	FileID   string `json:"file_id"`
@@ -399,11 +400,11 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	return s.queryFolders(ctx, `workspace=? AND trashed=?`, workspace, trashed)
 }
 
-const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed`
+const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed,v.created`
 
 func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
-	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed)
+	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed, &f.Modified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrDenied
 	}
@@ -447,6 +448,7 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	f.Digest = v.Digest
 	f.Blob = v.Blob
 	f.Sealed = v.Sealed
+	f.Modified = v.Created
 	return f, nil
 }
 func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error) {
@@ -525,7 +527,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if err != nil {
 		return f, err
 	}
-	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed
+	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed, v.Created
 	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
