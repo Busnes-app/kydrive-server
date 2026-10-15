@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { secureFetch } from '../api';
 import { bytes, breadcrumb, change, file, folder, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { Leavers } from './drive/Leavers';
 import { MoveDialog } from './drive/MoveDialog';
+import { UploadList, useUploads } from './drive/Uploads';
+import { fromDataTransfer, fromFolderInput } from './drive/upload';
 import type { Item, Mode } from './drive/MoveDialog';
 import type { DriveFile, Folder, Grant, Group, Version, Workspace } from './drive/client';
 
@@ -23,6 +24,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const documentDialog = useRef<HTMLDialogElement>(null);
   const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const [view, setView] = useState<'files' | 'settings'>('files');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -73,6 +76,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     if (stale()) return;
     setFiles(fs); setFolders(ds); setGrants(gs);
   }, [admin, selected, trash, onWorkspacesChange, onSelectWorkspace]);
+  const uploads = useUploads(useCallback(() => { void reload().catch(e => setMessage(e instanceof Error ? e.message : 'Drive unavailable')); }, [reload]));
   useEffect(() => { setTrashDays(current?.trash_days ?? 0); setKeepVersions(current?.keep_versions ?? 0); }, [current?.id, current?.trash_days, current?.keep_versions]);
   useEffect(() => { setParent(''); setHistory(null); setView('files'); }, [selected]);
   useEffect(() => { void reload().catch(e => setMessage(e instanceof Error ? e.message : 'Drive unavailable')); }, [reload]);
@@ -117,7 +121,10 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     {admin && <details className="panel drive-create-workspace"><summary>Create shared workspace</summary><form onSubmit={e => { e.preventDefault(); void run(async () => { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); setNewName(''); }); }}><h3>Create shared workspace</h3><label>Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label><label>Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label><button disabled={busy}>Create workspace</button></form></details>}
     {admin && <Leavers workspaces={workspaces} onDone={() => void reload().catch(() => {})} />}
     <div className="drive-layout">
-    <div className="drive-content">{current ? <><div className="panel drive-files-panel">
+    <div className="drive-content">{current ? <><div className={dragging ? 'panel drive-files-panel drive-drop-active' : 'panel drive-files-panel'}
+      onDragOver={e => { if (canEdit && !trash && view === 'files' && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={e => { if (!dragging) return; e.preventDefault(); setDragging(false); const tree = fromDataTransfer(e.dataTransfer); void run(async () => uploads.add(selected, parent, await tree, folders)); }}>
       <div className="drive-workspace-heading"><div><p className="drive-storage">{bytes(current.used)} of {bytes(current.quota)} used</p></div>{canManage && <div className="drive-view-switch" aria-label="Workspace views"><button className={view === 'files' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'files'} onClick={() => setView('files')}>Files</button><button className={view === 'settings' ? 'btn-secondary active' : 'btn-secondary'} aria-pressed={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button></div>}</div>
       {view === 'files' && (current.role ? <>
         <div className="drive-toolbar">
@@ -130,10 +137,12 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
             {trash && canPurge && <button className="btn-secondary" disabled={busy} onClick={emptyTrash}>Empty trash</button>}
             <button className="btn-secondary" aria-pressed={trash} onClick={() => { setFiles([]); setFolders([]); setTrash(!trash); }}>{trash ? 'Back to files' : 'Trash'}</button>
             <button className="btn-secondary" disabled={busy} onClick={() => void run(reload)}>Refresh</button>
-            {canEdit && !trash && <><input ref={uploadInput} type="file" hidden aria-label="Choose file to upload" disabled={busy} onChange={e => { const f = e.target.files?.[0]; if (f) void run(() => responseAsyncUpload(selected, parent, f)); e.target.value = ''; }} /><button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}>Upload file</button>
+            {canEdit && !trash && <><input ref={uploadInput} type="file" multiple hidden aria-label="Choose files to upload" onChange={e => { const list = Array.from(e.target.files ?? []); e.target.value = ''; void run(() => uploads.add(selected, parent, { dirs: [], files: list.map(file => ({ dirs: [], file })) }, folders)); }} /><button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}>Upload files</button>
+              <input ref={folderInput} type="file" hidden aria-label="Choose folder to upload" {...{ webkitdirectory: '' }} onChange={e => { const list = e.target.files; if (list) { const tree = fromFolderInput(list); e.target.value = ''; void run(() => uploads.add(selected, parent, tree, folders)); } }} /><button className="btn-secondary" disabled={busy} onClick={() => folderInput.current?.click()}>Upload folder</button>
               <details className="drive-new-folder"><summary className="btn-secondary">New folder</summary><form className="drive-folder-form" onSubmit={e => { e.preventDefault(); void run(async () => { await change(`/api/drive/workspaces/${selected}/folders`, 'POST', { parent, name: newFolder }); setNewFolder(''); }); }}><label>Folder name<input required value={newFolder} onChange={e => setNewFolder(e.target.value)} /></label><button disabled={busy}>Create</button></form></details></>}
           </div>
         </div>
+        <UploadList {...uploads} />
         <div className="drive-table"><table><thead><tr><th>Name</th><th>Size</th><th>Version</th><th><span className="drive-actions-heading">Actions</span></th></tr></thead><tbody>{visibleFolders.map(d => <tr key={`folder-${d.id}`}><td>{trash ? d.name : <button className="drive-folder-name btn-link" onClick={() => setParent(d.id)}>{d.name}/</button>}</td><td>Folder</td><td>—</td><td>{trash ? <div className="drive-file-actions">{canEdit && <button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed: false }))}>Restore</button>}{canPurge && <button className="btn-secondary" disabled={busy} onClick={() => purge(`/api/drive/folders/${d.id}`, d.name)}>Delete permanently</button>}</div> : canEdit && <details className="drive-file-menu"><summary className="btn-secondary" aria-label={`Actions for folder ${d.name}`}>Actions</summary><div className="drive-file-actions"><button className="btn-secondary" disabled={busy} onClick={() => setDialog({ mode: 'rename', item: { kind: 'folder', folder: d } })}>Rename</button><button className="btn-secondary" disabled={busy} onClick={() => setDialog({ mode: 'move', item: { kind: 'folder', folder: d } })}>Move</button><button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed: true }))}>Move to trash</button></div></details>}</td></tr>)}{files.filter(f => trash || f.parent === parent).map(f => <tr key={f.id}><td>{!f.trashed ? <a className="drive-file-name" href={editorURL(f)} {...fileTarget}>{f.name}</a> : f.name}</td><td>{bytes(f.size)}</td><td>{f.revision}</td><td><details className="drive-file-menu"><summary className="btn-secondary" aria-label={`Actions for ${f.name}`}>Actions</summary><div className="drive-file-actions">{!f.trashed && <><a href={editorURL(f)} {...fileTarget}>Open editor</a><a href={`/api/drive/files/${f.id}/download`}>Download</a></>}{!f.trashed && <>{canEdit && <><button className="btn-secondary" disabled={busy} onClick={() => setDialog({ mode: 'rename', item: { kind: 'file', file: f } })}>Rename</button><button className="btn-secondary" disabled={busy} onClick={() => setDialog({ mode: 'move', item: { kind: 'file', file: f } })}>Move</button></>}<button className="btn-secondary" disabled={busy} onClick={() => setDialog({ mode: 'copy', item: { kind: 'file', file: f } })}>Copy</button></>}<button className="btn-secondary" disabled={busy} onClick={() => void run(async () => setHistory({ file: f, versions: await list(`/api/drive/files/${f.id}/versions`, version) }))}>Version history</button>{canEdit && <button className="btn-secondary" disabled={busy} onClick={() => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: !f.trashed }))}>{f.trashed ? 'Restore' : 'Move to trash'}</button>}{canPurge && f.trashed && <button className="btn-secondary" disabled={busy} onClick={() => purge(`/api/drive/files/${f.id}`, f.name)}>Delete permanently</button>}</div></details></td></tr>)}</tbody></table></div>
         {files.filter(f => trash || f.parent === parent).length + visibleFolders.length === 0 && <div className="drive-empty"><h3>{trash ? 'Trash is empty' : 'No files here yet'}</h3><p>{trash ? 'Deleted items appear here until restored or deleted permanently.' : canEdit ? 'Create a document or upload a file to get started.' : 'Files shared with this workspace will appear here.'}</p></div>}
       </> : <p className="drive-empty">Assign a group permission in Workspace settings to access files.</p>)}
@@ -148,4 +157,3 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
 </form>}</div>}</> : <div className="panel"><h2>Your shared drive</h2><p>Create a workspace and assign a KyIdentity group to start.</p></div>}</div></div>
   </section>;
 }
-async function responseAsyncUpload(workspace: string, parent: string, f: File) { const q = new URLSearchParams({ name: f.name, parent, revision: '0' }); return response(await secureFetch(`/api/drive/workspaces/${workspace}/uploads?${q}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f })); }

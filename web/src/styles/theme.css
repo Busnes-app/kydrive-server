@@ -453,6 +453,12 @@ dialog.modal-window::backdrop {
 .drive-view-switch .active { border-color: var(--accent); }
 .drive-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 20px 0; }
 .drive-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.drive-drop-active { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.drive-uploads { margin: 0 0 16px; }
+.drive-uploads ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.drive-uploads li { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto auto; align-items: center; gap: 12px; color: var(--ink); }
+.drive-uploads li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-strong); }
+.drive-uploads progress { width: 100%; accent-color: var(--accent); }
 .drive-page label { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; font-size: .85rem; }
 .drive-page .drive-folder-filter { flex-direction: row; align-items: center; gap: 10px; margin: 0; }
 .drive-folder-filter select { width: auto; max-width: 250px; }
