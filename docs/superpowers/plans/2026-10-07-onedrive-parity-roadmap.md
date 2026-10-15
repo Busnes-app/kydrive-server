@@ -39,7 +39,7 @@ Rename, move (including My files → shared workspace), copy, folder trash/resto
 
 **Exit:** a 5 GiB upload survives a dropped connection and resumes; a dragged folder tree arrives intact; search finds a file by partial name in a shared workspace and never shows one from a workspace the user cannot read.
 
-### M3 — Sharing (plan `2026-10-15-m3-sharing.md`; M3.1–M3.4 built, M3.5–M3.6 next)
+### M3 — Sharing (plan `2026-10-15-m3-sharing.md`; M3.1–M3.5 built, M3.6 next)
 
 Order matters; each step is its own task group.
 

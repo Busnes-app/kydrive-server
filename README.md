@@ -53,6 +53,8 @@ This preserves the directory account and revokes its existing sessions; sign in 
 
 Beyond workspace group grants, any folder or file can be shared with a person or a group as reader, editor or manager from its Actions menu. A folder share covers everything inside it. Shares only add access; they never take away what a workspace grant gives. Workspace managers share; editors can share up to editor access when a manager turns on "Editors may share" in Workspace settings. People who received a share cannot pass it on. The owner of My files can share from it too; those shares stop while the owner's account is deactivated and are dropped when an administrator hands the files over. Moving a file to another workspace drops its shares.
 
+An **organisation link** gives anyone signed in to KyDrive who opens it reader or editor access to one file or folder, until it expires (1, 7 or 30 days, or never) or is revoked; create and revoke links in the same Share dialog. The link is shown once. Its secret sits after the `#`, which browsers never send to a server, so it does not appear in proxy logs; every opening is audited.
+
 Items shared with you outside your own workspaces appear under **Shared with me**, where you can browse shared folders and open or download files. They are not yet listed over WebDAV, and the search box covers your workspaces only. Removing a share, or removing someone from a shared group, ends their open editor at once.
 
 ## Leavers
@@ -135,7 +137,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, sharing by link (organisation or guest links are planned), full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, guest links for people without an account (planned), full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 
