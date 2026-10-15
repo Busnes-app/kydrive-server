@@ -249,6 +249,30 @@ func TestProppatchIsAcceptedAndDropped(t *testing.T) {
 	}
 }
 
+// A lock owner who loses edit access cannot keep extending the lock over others' writes.
+func TestLockRefreshRechecksAccess(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	path := e.org() + "/shared.odt"
+	e.want(e.do("worker", "PUT", path, strings.NewReader("x")), 201, "put")
+	lock := e.do("worker", "LOCK", path, strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`), "Timeout", "Second-60")
+	e.want(lock, 200, "lock")
+	token := lock.Header().Get("Lock-Token")
+	refresh := func() *httptest.ResponseRecorder {
+		return e.do("worker", "LOCK", path, nil, "If", "("+token+")", "Timeout", "Second-600")
+	}
+	e.want(refresh(), 200, "refresh with edit access")
+	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "team", "reader"); err != nil {
+		t.Fatal(err)
+	}
+	got := refresh()
+	e.want(got, 403, "refresh after losing edit access")
+	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "team", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	e.want(refresh(), 200, "refresh after edit access returns")
+}
+
 // An infinite-depth PROPFIND would walk every readable workspace in one request.
 func TestPropfindNeedsFiniteDepth(t *testing.T) {
 	e := setup(t)

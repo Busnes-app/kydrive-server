@@ -72,21 +72,25 @@ func (v *view) display(name string) string {
 	return "/" + strings.Join(parts, "/")
 }
 
-// sign binds an internal token to the user: another user cannot present or guess it.
-func (v *view) sign(token string) string {
-	return "urn:kydrive:lock:" + token + ":" + v.mac(token)
+// sign binds an internal token to the user and the lock's workspace ("" for the root): another
+// user cannot present or guess it, and a refresh can recheck access to that workspace.
+func (v *view) sign(token, workspace string) string {
+	return "urn:kydrive:lock:" + token + ":" + workspace + ":" + v.mac(token, workspace)
 }
 
-func (v *view) mac(token string) string {
+func (v *view) mac(token, workspace string) string {
 	h := hmac.New(sha256.New, v.key)
-	h.Write([]byte(v.fs.user + "\x00" + token))
+	h.Write([]byte(v.fs.user + "\x00" + token + "\x00" + workspace))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func (v *view) unsign(signed string) (string, bool) {
-	rest, ok := strings.CutPrefix(signed, "urn:kydrive:lock:")
-	token, mac, found := strings.Cut(rest, ":")
-	return token, ok && found && hmac.Equal([]byte(mac), []byte(v.mac(token)))
+func (v *view) unsign(signed string) (token, workspace string, ok bool) {
+	rest, prefixed := strings.CutPrefix(signed, "urn:kydrive:lock:")
+	parts := strings.Split(rest, ":")
+	if !prefixed || len(parts) != 3 {
+		return "", "", false
+	}
+	return parts[0], parts[1], hmac.Equal([]byte(parts[2]), []byte(v.mac(parts[0], parts[1])))
 }
 
 // lockTimeout caps a Timeout header's first value at maxLock; "Infinite", absent or malformed
@@ -127,13 +131,14 @@ func (v *view) Create(now time.Time, d webdav.LockDetails) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return v.sign(token), nil
+	workspace, _, _ := strings.Cut(strings.TrimPrefix(d.Root, "/"), "/")
+	return v.sign(token, workspace), nil
 }
 
 func (v *view) Confirm(now time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
 	for i, c := range conditions {
 		if c.Token != "" {
-			if token, ok := v.unsign(c.Token); ok {
+			if token, _, ok := v.unsign(c.Token); ok {
 				conditions[i].Token = token
 			} else {
 				conditions[i].Token = "invalid" // matches no lock
@@ -149,10 +154,15 @@ func (v *view) Confirm(now time.Time, name0, name1 string, conditions ...webdav.
 	return v.ls.Confirm(now, name0, name1, conditions...)
 }
 
+// Refresh extends a lock only while its owner can still edit the workspace it covers.
 func (v *view) Refresh(now time.Time, signed string, d time.Duration) (webdav.LockDetails, error) {
-	token, ok := v.unsign(signed)
+	token, workspace, ok := v.unsign(signed)
 	if !ok {
 		return webdav.LockDetails{}, webdav.ErrNoSuchLock
+	}
+	if workspace == "" || v.fs.store.Authorize(v.ctx, v.fs.user, workspace, 2) != nil {
+		v.fs.Err = drive.ErrDenied // x/net answers any other Refresh error with 500
+		return webdav.LockDetails{}, webdav.ErrForbidden
 	}
 	ld, err := v.ls.Refresh(now, token, capped(d))
 	ld.Root = v.display(ld.Root)
@@ -160,7 +170,7 @@ func (v *view) Refresh(now time.Time, signed string, d time.Duration) (webdav.Lo
 }
 
 func (v *view) Unlock(now time.Time, signed string) error {
-	token, ok := v.unsign(signed)
+	token, _, ok := v.unsign(signed)
 	if !ok {
 		return webdav.ErrNoSuchLock
 	}
