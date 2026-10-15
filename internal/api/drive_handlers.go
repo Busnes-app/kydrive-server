@@ -58,6 +58,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("DELETE /api/drive/files/{id}/versions/{revision}", s.requireAuthenticated(s.drivePurgeVersion))
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/location", s.requireAuthenticated(s.driveMoveFolder))
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
+	s.mux.HandleFunc("GET /api/drive/folders/{id}/zip", s.requireAuthenticated(s.driveFolderZip))
 	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
 	s.mux.HandleFunc("GET /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
