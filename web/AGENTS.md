@@ -17,6 +17,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - A PoW solution buys one login attempt; `Login.tsx` remounts `CaptchaWidget` after every attempt.
 - Register the service worker from the production JS bundle; keep `script-src 'self'` intact.
 - Worker caching is limited to the same-origin public shell, manifest and assets. HTML is network-first with offline fallback so deployments refresh; dynamic/auth routes stay uncached. `vite.config.ts` stamps a build id (hash of the output file names) into `dist/sw.js` as the cache name, so `activate` evicts the previous deploy's hashed assets; the build fails if `public/sw.js` loses its single `__BUILD_ID__` placeholder.
+- The Account page also lists app passwords (`src/pages/AppPasswords.tsx`): create by device name, show the server URL, username and password once, list name, created and last use, revoke after `window.confirm`.
 - Every signed-in user has an Account page (`src/pages/TwoFactor.tsx`). Local accounts turn TOTP on (setup key plus an `otpauth://` link, no QR renderer or dependency), confirm with a code and see the recovery codes once with a save warning; turning it off takes the password and a TOTP or recovery code. Directory accounts are told their identity provider manages MFA.
 - KyDrive deployments use SQLite; inherited recovery UI still reports snapshot preconditions. The Recovery screen warns when `key_in_data_dir` is set.
 - The suite SSO button reads `Sign On with KyIdentity`; the login description identifies organization files and shared workspaces.

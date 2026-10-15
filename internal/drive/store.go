@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -19,6 +18,8 @@ var (
 	ErrConflict = errors.New("revision conflict")
 	ErrQuota    = errors.New("workspace quota exceeded")
 	ErrInvalid  = errors.New("invalid drive input")
+	// ErrTooLarge is a body over the upload limit; it is also ErrQuota.
+	ErrTooLarge = fmt.Errorf("%w: upload limit", ErrQuota)
 )
 
 type Store struct {
@@ -58,6 +59,7 @@ type File struct {
 	Digest    string `json:"digest"`
 	Blob      string `json:"-"`
 	Sealed    bool   `json:"-"`
+	Modified  string `json:"modified"` // when the current version was created
 }
 type Version struct {
 	FileID   string `json:"file_id"`
@@ -397,31 +399,14 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE workspace=? AND trashed=?`, workspace, trashed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Folder{}
-	for rows.Next() {
-		var f Folder
-		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
-			return nil, err
-		}
-		if f.Name, err = s.names.open("drive_folders", f.ID, f.Name); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	slices.SortStableFunc(out, func(a, b Folder) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return s.queryFolders(ctx, `workspace=? AND trashed=?`, workspace, trashed)
 }
 
-const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed`
+const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed,v.created`
 
 func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
-	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed)
+	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed, &f.Modified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrDenied
 	}
@@ -442,21 +427,7 @@ func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool)
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.workspace=? AND f.trashed=?`, workspace, trashed)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []File{}
-	for rows.Next() {
-		f, e := s.scanFile(rows)
-		if e != nil {
-			return nil, e
-		}
-		out = append(out, f)
-	}
-	slices.SortStableFunc(out, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return s.queryFiles(ctx, `f.workspace=? AND f.trashed=?`, workspace, trashed)
 }
 
 // Publish makes a durably stored immutable blob visible. Caller owns that blob until success.
@@ -479,6 +450,7 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	f.Digest = v.Digest
 	f.Blob = v.Blob
 	f.Sealed = v.Sealed
+	f.Modified = v.Created
 	return f, nil
 }
 func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error) {
@@ -557,7 +529,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if err != nil {
 		return f, err
 	}
-	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed
+	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed, v.Created
 	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {

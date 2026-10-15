@@ -12,6 +12,7 @@ Owns session issuance and verification, TOTP token generation/validation, recove
 - Passwords require at least 12 characters (`ValidatePassword`).
 - Expired sessions and MFA challenges are deleted hourly by `cmd/server` (`CleanExpiredSessions`, `CleanExpiredMFAChallenges`).
 - Active sessions are stored with SHA-256 hashed tokens and verified only from the secure HttpOnly / SameSite session cookie; a session token in an `Authorization` header authenticates nothing.
+- HTTP Basic credentials authenticate only `/dav/`, and only as an app password (`drive.AppPasswordUser`); nowhere else reads them.
 - Session authentication rejects inactive accounts and deletes their presented session.
 - PoW solutions must carry unexpired server-signed challenge metadata and are single-use: `PoWSpent` keeps verified salts in memory until their challenge expires (single-instance server, like the login limiter). `KY_CAPTCHA_POW_DIFFICULTY` (default 100000) is the challenge's `maxnumber`; the browser searches linearly with WebCrypto, about 50 000 SHA-256 calls on average, roughly 0.25-1 s.
 - The CSRF token is `HMAC-SHA256(KY_SESSION_SECRET, "ky-csrf:" + session token)`, set as a readable cookie at issuance and re-set by `/api/auth/me`; `ValidateCSRF` recomputes it from the session cookie and compares the header, so a planted CSRF cookie is worthless. With `CookieSecure` and no `KY_COOKIE_DOMAIN`, both cookies carry the `__Host-` prefix.

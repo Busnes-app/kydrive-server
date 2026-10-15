@@ -91,6 +91,9 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 	case errors.Is(err, drive.ErrDenied):
 		status = 403
 		message = "Document access denied"
+	case errors.Is(err, drive.ErrNotFound):
+		status = 404
+		message = "Not found"
 	case errors.Is(err, drive.ErrInvalid):
 		status = 400
 		message = "Invalid drive input"

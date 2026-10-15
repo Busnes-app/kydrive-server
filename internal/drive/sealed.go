@@ -57,12 +57,21 @@ func nonce(i int64, final bool) []byte {
 }
 
 // fill reads until b is full or the input ends; only real read errors are returned.
+// fill reads until b is full or r ends. Only io.EOF ends the data: an io.ErrUnexpectedEOF from
+// r is a failed read (net/http's truncated body), which io.ReadFull would make indistinguishable.
 func fill(r io.Reader, b []byte) (int, error) {
-	n, err := io.ReadFull(r, b)
-	if err == io.EOF || err == io.ErrUnexpectedEOF {
-		err = nil
+	n := 0
+	for n < len(b) {
+		m, err := r.Read(b[n:])
+		n += m
+		if err == io.EOF {
+			return n, nil
+		}
+		if err != nil {
+			return n, err
+		}
 	}
-	return n, err
+	return n, nil
 }
 
 // seal writes r sealed under key to w and returns the plaintext length.

@@ -54,7 +54,7 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** a folder-level grant gives exactly that subtree; removing a group from KyIdentity revokes an open editor on a folder-shared file within one revocation tick; an expired or revoked link returns 404; a guest link never reveals sibling files.
 
-### M4 — WebDAV
+### M4 — WebDAV (plan `2026-10-15-m4-webdav.md`, built on `feature/m4-webdav`)
 
 - `golang.org/x/net/webdav` with a custom `webdav.FileSystem` backed by the drive store (not the blob directory) and the in-memory `LockSystem` (single instance).
 - **Authentication:** users sign in with OIDC and have no password, so add per-user **app passwords** (generated once, shown once, hashed, named, revocable, last-used shown) used as HTTP Basic credentials over HTTPS only. They carry the user's own access, are refused by admin routes, and are revoked by deactivation.

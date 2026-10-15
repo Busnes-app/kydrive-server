@@ -18,6 +18,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/editor"
 	"github.com/Busnes-app/kydrive-server/internal/scim"
@@ -34,6 +35,7 @@ type recoveryClient interface {
 }
 
 type Server struct {
+	davLocks   *dav.Locks // one per server: WebDAV locks are single-instance
 	editor     *editor.Client
 	editorErr  error
 	revokeMu   sync.Mutex
@@ -147,6 +149,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	recovery := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 
 	s := &Server{
+		davLocks: dav.NewLocks(),
 		config:   cfg,
 		store:    st,
 		sessions: sessions,
@@ -177,6 +180,14 @@ func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool 
 	entry := bumpWindow(s.attempts[key], now, window)
 	s.attempts[key] = entry
 	return entry.count <= limit
+}
+
+// attemptsExceeded reports, without counting, whether key already reached limit in its window.
+func (s *Server) attemptsExceeded(key string, limit int) bool {
+	s.attemptsMu.Lock()
+	defer s.attemptsMu.Unlock()
+	w, ok := s.attempts[key]
+	return ok && time.Now().Before(w.reset) && w.count >= limit
 }
 
 func (s *Server) resetAttempts(key string) {
@@ -236,6 +247,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/mfa/enroll", s.requireAuthenticated(s.handleMFAEnroll))
 	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))
 	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
+	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
+	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.handleCreateAppPassword))
+	s.mux.HandleFunc("DELETE /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleRevokeAppPassword))
 
 	// SSO
 	s.mux.HandleFunc("/api/sso/kysignon/login", s.handleKySignOnLogin)
@@ -360,6 +374,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-KySignOn-Signature")
+
+	// WebDAV authenticates every request itself (app passwords, never cookies) and owns its
+	// OPTIONS, methods and body sizes.
+	if r.URL.Path == "/dav" || strings.HasPrefix(r.URL.Path, "/dav/") {
+		s.serveDAV(w, r)
+		return
+	}
 
 	if r.Method == http.MethodOptions {
 		if origin != "" && !sameOrigin(origin, s.config.Server.AppURL) {
