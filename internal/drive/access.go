@@ -24,7 +24,7 @@ END)`)
 // the file or on folder and its ancestors, to the active user directly or to one of their
 // groups. Shares only add. A personal workspace's shares lapse while its owner is not active.
 // folder is the item's own folder (for a folder) or its parent (for a file, "" at the root);
-// file is the file's ID or ”.
+// file is the file's ID, or empty for a folder.
 func itemRankSQL(user, workspace, folder, file string) string {
 	share := strings.NewReplacer("$U", user, "$W", workspace, "$D", folder, "$F", file).Replace(`COALESCE((SELECT MAX(CASE s.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_shares s
  WHERE s.workspace=$W
