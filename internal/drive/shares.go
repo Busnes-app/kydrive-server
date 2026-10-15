@@ -41,6 +41,8 @@ type Person struct {
 	Username string `json:"username"`
 }
 
+var roles = []string{"", "reader", "editor", "manager"}
+
 // resource loads a folder or file: its workspace, the folder/file pair the access definition
 // takes, and whether it is trashed. A missing item is ErrDenied, like an unreadable one.
 func resource(ctx context.Context, q queryer, kind, id string) (workspace, folder, file string, trashed bool, err error) {
@@ -197,18 +199,22 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
 		return nil, ErrDenied
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT s.resource_kind,s.resource_id,s.workspace,s.role,COALESCE(f.name,d.name),COALESCE(f.parent,d.parent),
+	// g: every grant reaching the user, by share or by an opened live organisation link.
+	rows, err := s.db.QueryContext(ctx, `SELECT g.kind,g.rid,g.workspace,g.role,COALESCE(f.name,d.name),COALESCE(f.parent,d.parent),
  CASE WHEN p.workspace IS NULL THEN w.name ELSE COALESCE((SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=p.owner),p.owner_name) END
- FROM (SELECT ? AS u) q, drive_shares s
- JOIN drive_workspaces w ON w.id=s.workspace
- LEFT JOIN drive_personal_workspaces p ON p.workspace=s.workspace
- LEFT JOIN drive_files f ON s.resource_kind='file' AND f.id=s.resource_id AND f.trashed=false
- LEFT JOIN drive_folders d ON s.resource_kind='folder' AND d.id=s.resource_id AND d.trashed=false
+ FROM (SELECT ? AS u) q
+ JOIN (SELECT s.resource_kind AS kind,s.resource_id AS rid,s.workspace,s.role,s.principal_kind AS pk,s.principal_id AS pid,'' AS link FROM drive_shares s WHERE s.principal_kind!='link'
+  UNION ALL
+  SELECT l.resource_kind,l.resource_id,l.workspace,l.role,'link','',l.id FROM drive_links l WHERE l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>CAST(strftime('%s','now') AS INTEGER))) g
+  ON (g.pk='user' AND g.pid=q.u) OR (g.pk='group' AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.pid AND m.user_id=q.u)) OR (g.pk='link' AND EXISTS(SELECT 1 FROM drive_link_users lu WHERE lu.link=g.link AND lu.user_id=q.u))
+ JOIN drive_workspaces w ON w.id=g.workspace
+ LEFT JOIN drive_personal_workspaces p ON p.workspace=g.workspace
+ LEFT JOIN drive_files f ON g.kind='file' AND f.id=g.rid AND f.trashed=false
+ LEFT JOIN drive_folders d ON g.kind='folder' AND d.id=g.rid AND d.trashed=false
  WHERE (f.id IS NOT NULL OR d.id IS NOT NULL)
- AND ((s.principal_kind='user' AND s.principal_id=q.u) OR (s.principal_kind='group' AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=s.principal_id AND m.user_id=q.u)))
  AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active')
  AND (p.workspace IS NULL OR EXISTS(SELECT 1 FROM users WHERE id=p.owner AND status='active'))
- AND `+rankSQL("q.u", "s.workspace")+`=0`, user)
+ AND `+rankSQL("q.u", "g.workspace")+`=0`, user)
 	if err != nil {
 		return nil, err
 	}
