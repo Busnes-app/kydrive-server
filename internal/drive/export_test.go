@@ -19,6 +19,12 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
+// MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:
+// the race between MoveFile's first read and its transaction, made deterministic.
+func MoveFileFrom(ctx context.Context, s *Store, user string, f File, expected int64, to Location) (File, error) {
+	return s.moveFile(ctx, user, f, expected, to)
+}
+
 // SeedFiles inserts n live files named file-<i>.txt at the root of workspace in one transaction.
 func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {

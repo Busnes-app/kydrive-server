@@ -61,19 +61,25 @@ func resource(ctx context.Context, q queryer, kind, id string) (workspace, folde
 }
 
 // mayShare decides whether user may grant role on an item (and change or remove a share that
-// grants role). A manager of the item may; a workspace editor may up to their own rank when the
-// workspace's editors_share is on. Share holders who are not workspace members never re-share.
+// grants role). A workspace manager (or a personal workspace's owner) may; a workspace editor
+// may up to their rank on the item when the workspace's editors_share is on. Share holders who
+// are not workspace members never re-share, whatever their share's role.
 func mayShare(ctx context.Context, q queryer, user, workspace, folder, file, role string) error {
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
 		return ErrDenied
 	}
-	item, err := itemRank(ctx, q, user, workspace, folder, file)
-	if err != nil || item >= 3 {
-		return err
-	}
+	// Sharing is decided by workspace rank: shares, even manager ones, never let their holder
+	// pass the item on.
 	var member int
 	var editorsShare bool
-	if err = q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "w.id")+`,w.editors_share FROM (SELECT ? AS u) q, drive_workspaces w WHERE w.id=?`, user, workspace).Scan(&member, &editorsShare); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "w.id")+`,w.editors_share FROM (SELECT ? AS u) q, drive_workspaces w WHERE w.id=?`, user, workspace).Scan(&member, &editorsShare); err != nil {
+		return err
+	}
+	if member >= 3 {
+		return nil
+	}
+	item, err := itemRank(ctx, q, user, workspace, folder, file)
+	if err != nil {
 		return err
 	}
 	if editorsShare && member >= 2 && Rank(role) <= item {

@@ -24,7 +24,22 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 	if err != nil {
 		return f, err
 	}
-	err = s.transaction(ctx, func(tx *sql.Tx) error {
+	return s.moveFile(ctx, user, f, expected, to)
+}
+
+// moveFile moves f, which the caller loaded before. Its workspace and parent are read again
+// inside the transaction, authorized as they are now, and the update requires them unchanged:
+// a file moved meanwhile out of what authorized the caller cannot be taken back.
+func (s *Store) moveFile(ctx context.Context, user string, f File, expected int64, to Location) (File, error) {
+	id := f.ID
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `SELECT workspace,parent FROM drive_files WHERE id=? AND trashed=false`, id).Scan(&f.Workspace, &f.Parent)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDenied
+		}
+		if err != nil {
+			return err
+		}
 		need := 2
 		if to.Workspace != f.Workspace {
 			need = 3 // taking a file out of its workspace is a manager's call
@@ -55,7 +70,7 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 		if err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=?,name_hmac=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, stored, mac, id, f.Workspace, expected)
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=?,name_hmac=? WHERE id=? AND workspace=? AND parent=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, stored, mac, id, f.Workspace, f.Parent, expected)
 		if uniqueViolation(err) {
 			return fmt.Errorf("%w: name exists", ErrConflict)
 		}
