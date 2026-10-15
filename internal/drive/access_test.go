@@ -64,7 +64,7 @@ func TestAccessDefinitionPinsCurrentRules(t *testing.T) {
 		{"reader", w.ID, 1},
 		{"boss", w.ID, 3},
 		{"stranger", w.ID, 0},
-		{"gone", w.ID, 0}, // inactive member
+		{"gone", w.ID, 0},  // inactive member
 		{"admin", w.ID, 0}, // administration never grants content
 		{"worker", personal, 3},
 		{"boss", personal, 0}, // the grant on a personal workspace is ignored
