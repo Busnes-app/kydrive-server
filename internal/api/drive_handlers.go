@@ -43,6 +43,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
 	s.mux.HandleFunc("GET /api/drive/search", s.requireAuthenticated(s.driveSearch))
 	s.shareRoutes()
+	s.guestRoutes()
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
 	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
@@ -95,6 +96,9 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 	case errors.Is(err, drive.ErrNotFound):
 		status = 404
 		message = "Not found"
+	case errors.Is(err, drive.ErrPassword):
+		status = 401
+		message = "Password required"
 	case errors.Is(err, drive.ErrInvalid):
 		status = 400
 		message = "Invalid drive input"

@@ -361,6 +361,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	if guestPath(r.URL.Path) {
+		// Guest pages and their API never pass a referrer, are never indexed or cached.
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 	if s.config.Security.CookieSecure {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -412,6 +418,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/drive/workspaces/") && strings.HasSuffix(r.URL.Path, "/uploads") {
 			limit = uploadLimit + 1
 		}
+		if r.Method == "POST" && r.URL.Path == "/api/public/links/upload" {
+			limit = uploadLimit + 1
+		}
 		if r.Method == "PUT" && path.Dir(r.URL.Path) == "/api/drive/upload-sessions" {
 			limit = chunkLimit + 1
 		}
@@ -437,8 +446,14 @@ func credentialRoute(path string) bool {
 	return path == "/api/auth/login" || path == "/api/auth/mfa/totp" || path == "/api/auth/mfa/recovery-code"
 }
 
+// guestPath is a guest link page (/g/) or its public API.
+func guestPath(p string) bool {
+	return p == "/g" || strings.HasPrefix(p, "/g/") || strings.HasPrefix(p, "/api/public/")
+}
+
+// csrfExempt routes never act on a session; /api/public/ still gets the same-site check.
 func csrfExempt(path string) bool {
-	return credentialRoute(path) || path == "/api/sso/kysignon/sync"
+	return credentialRoute(path) || path == "/api/sso/kysignon/sync" || strings.HasPrefix(path, "/api/public/")
 }
 
 func isJSON(r *http.Request) bool {
