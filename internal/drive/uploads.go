@@ -84,6 +84,16 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 		if err != nil {
 			return err
 		}
+		if u.File == "" {
+			// Refuse a taken name before the bytes are sent; Publish still decides.
+			var taken int
+			if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_files WHERE workspace=? AND parent=? AND name_hmac=? AND trashed=false`, u.Workspace, u.Parent, mac).Scan(&taken); err != nil {
+				return err
+			}
+			if taken > 0 {
+				return fmt.Errorf("%w: name or file exists", ErrConflict)
+			}
+		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_sessions(id,owner,workspace,parent,name,name_hmac,file,expected,size,expires) VALUES(?,?,?,?,?,?,?,?,?,?)`,
 			u.ID, user, u.Workspace, u.Parent, stored, mac, u.File, u.Expected, u.Size, u.Expires); err != nil {
 			return err
