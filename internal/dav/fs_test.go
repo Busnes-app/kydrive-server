@@ -249,6 +249,26 @@ func TestProppatchIsAcceptedAndDropped(t *testing.T) {
 	}
 }
 
+// An infinite-depth PROPFIND would walk every readable workspace in one request.
+func TestPropfindNeedsFiniteDepth(t *testing.T) {
+	e := setup(t)
+	for _, target := range []string{"/dav/", e.org() + "/"} {
+		for _, depth := range []string{"", "infinity", "Infinity"} {
+			var got = e.do("worker", "PROPFIND", target, nil)
+			if depth != "" {
+				got = e.do("worker", "PROPFIND", target, nil, "Depth", depth)
+			}
+			e.want(got, 403, "PROPFIND "+target+" depth "+depth)
+			if !strings.Contains(got.Body.String(), "propfind-finite-depth") {
+				t.Fatalf("no RFC 4918 precondition: %s", got.Body.String())
+			}
+		}
+		for _, depth := range []string{"0", "1"} {
+			e.want(e.do("worker", "PROPFIND", target, nil, "Depth", depth), 207, "PROPFIND "+target+" depth "+depth)
+		}
+	}
+}
+
 // Stored files are user content on the app's origin: a browser must download them, never run them.
 func TestGetNeverRendersContent(t *testing.T) {
 	e := setup(t)

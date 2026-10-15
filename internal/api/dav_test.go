@@ -66,8 +66,8 @@ func TestDAVAuthentication(t *testing.T) {
 		t.Fatalf("workspace not listed:\n%s", ok.Body.String())
 	}
 	expect(davRequest(srv, "PUT", "/dav/Team/a.txt", "davuser", secret, strings.NewReader("hello")), 201, "put")
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", "wrong-password", nil), 401, "wrong password")
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davadmin", secret, nil), 401, "another user's name")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", "wrong-password", nil, "Depth", "0"), 401, "wrong password")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davadmin", secret, nil, "Depth", "0"), 401, "another user's name")
 
 	// A browser session cookie is not a WebDAV credential, and an app password is not an API one.
 	cookieOnly := httptest.NewRequest("PROPFIND", "/dav/", nil)
@@ -87,11 +87,11 @@ func TestDAVAuthentication(t *testing.T) {
 
 	// Production refuses plain HTTP unless a trusted proxy says the client used HTTPS.
 	cfg.Server.Environment = "production"
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil), 403, "plain http in production")
-	expect(davRequest(srv, "PROPFIND", "https://drive.example/dav/", "davuser", secret, nil), 207, "tls in production")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "Depth", "0"), 403, "plain http in production")
+	expect(davRequest(srv, "PROPFIND", "https://drive.example/dav/", "davuser", secret, nil, "Depth", "0"), 207, "tls in production")
 	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "X-Forwarded-Proto", "https"), 403, "untrusted forwarded proto")
 	cfg.Security.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")} // httptest's peer
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "X-Forwarded-Proto", "https"), 207, "trusted proxy https")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "X-Forwarded-Proto", "https", "Depth", "0"), 207, "trusted proxy https")
 	cfg.Security.TrustedProxies = nil
 	cfg.Server.Environment = "development"
 
@@ -104,16 +104,16 @@ func TestDAVAuthentication(t *testing.T) {
 	if err = st.Users().UpdateUser(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil), 401, "deactivated user")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "Depth", "0"), 401, "deactivated user")
 	u.Status = "active"
 	if err = st.Users().UpdateUser(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil), 207, "reactivated user")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "Depth", "0"), 207, "reactivated user")
 	if err = st.Drive().RevokeAppPassword(ctx, "usr_davuser", p.ID); err != nil {
 		t.Fatal(err)
 	}
-	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil), 401, "revoked password")
+	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "Depth", "0"), 401, "revoked password")
 }
 
 // Failed sign-ins are limited per username; a correct password does not get through once the
@@ -130,16 +130,16 @@ func TestDAVSignInLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 50 {
-		if got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil); got.Code != 207 {
+		if got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil, "Depth", "0"); got.Code != 207 {
 			t.Fatalf("good request refused: %d", got.Code)
 		}
 	}
 	for range 10 {
-		if got := davRequest(srv, "PROPFIND", "/dav/", "limited", "guess", nil); got.Code != 401 {
+		if got := davRequest(srv, "PROPFIND", "/dav/", "limited", "guess", nil, "Depth", "0"); got.Code != 401 {
 			t.Fatalf("bad guess: %d", got.Code)
 		}
 	}
-	got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil)
+	got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil, "Depth", "0")
 	if got.Code != http.StatusTooManyRequests || got.Header().Get("Retry-After") == "" {
 		t.Fatalf("after 10 failures: %d", got.Code)
 	}

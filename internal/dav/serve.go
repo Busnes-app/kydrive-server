@@ -19,6 +19,13 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		w.Header().Set("Content-Disposition", "attachment")
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}
+	if d := r.Header.Get("Depth"); r.Method == "PROPFIND" && d != "0" && d != "1" {
+		// A missing or infinite Depth would walk every readable workspace (RFC 4918 9.1).
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>`))
+		return
+	}
 	if r.Method == "LOCK" {
 		// x/net reports the timeout it parsed, so cap the request itself (view.Create caps too).
 		r.Header.Set("Timeout", lockTimeout(r.Header.Get("Timeout")))
