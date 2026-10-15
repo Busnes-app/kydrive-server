@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -389,6 +390,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		limit := int64(1 << 20)
 		if r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/drive/workspaces/") && strings.HasSuffix(r.URL.Path, "/uploads") {
 			limit = uploadLimit + 1
+		}
+		if r.Method == "PUT" && path.Dir(r.URL.Path) == "/api/drive/upload-sessions" {
+			limit = chunkLimit + 1
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 	}

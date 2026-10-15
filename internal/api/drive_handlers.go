@@ -41,6 +41,11 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
+	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
+	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
+	s.mux.HandleFunc("POST /api/drive/upload-sessions/{sid}/complete", s.requireAuthenticated(s.driveCompleteUpload))
+	s.mux.HandleFunc("DELETE /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveCancelUpload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
@@ -90,7 +95,7 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 	case errors.Is(err, drive.ErrConflict):
 		status = 409
 		message = err.Error()
-	case errors.Is(err, drive.ErrQuota):
+	case errors.Is(err, drive.ErrQuota), errors.As(err, new(*http.MaxBytesError)):
 		status = 413
 		message = "Upload or workspace quota exceeded"
 	}
