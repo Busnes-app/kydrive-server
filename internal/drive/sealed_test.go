@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/iotest"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -31,6 +32,21 @@ func sealBytes(t *testing.T, p []byte) (string, drive.Version) {
 		t.Fatal(err)
 	}
 	return filepath.Join(root, v.Blob), v
+}
+
+// net/http reports a body cut short of its Content-Length as io.ErrUnexpectedEOF. That is a
+// failed upload, not the end of the data, at every chunk boundary.
+func TestWriteBlobRefusesTruncatedBody(t *testing.T) {
+	for _, n := range []int{0, 5, chunk - 1, chunk, chunk + 5} {
+		r := io.MultiReader(bytes.NewReader(plaintext(n)), iotest.ErrReader(io.ErrUnexpectedEOF))
+		root := t.TempDir()
+		if _, err := drive.WriteBlob(root, testKey, r, 1<<20); err == nil {
+			t.Fatalf("%d bytes then a cut connection: blob published", n)
+		}
+		if entries, _ := os.ReadDir(root); len(entries) != 0 {
+			t.Fatalf("%d bytes: left %d files", n, len(entries))
+		}
+	}
 }
 
 func TestSealedBlobRoundTrip(t *testing.T) {
