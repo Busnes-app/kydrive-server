@@ -138,14 +138,22 @@ func (v *view) Create(now time.Time, d webdav.LockDetails) (string, error) {
 	return v.sign(token, workspace), nil
 }
 
+// Confirm honours a presented token only while its owner can still edit the lock's workspace;
+// otherwise the lock is released and the token matches nothing, so the request fails (412)
+// before its body is read and editors are not held up.
 func (v *view) Confirm(now time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
 	for i, c := range conditions {
-		if c.Token != "" {
-			if token, _, ok := v.unsign(c.Token); ok {
-				conditions[i].Token = token
-			} else {
-				conditions[i].Token = "invalid" // matches no lock
-			}
+		if c.Token == "" {
+			continue
+		}
+		token, workspace, ok := v.unsign(c.Token)
+		if ok && v.fs.store.Authorize(v.ctx, v.fs.user, workspace, 2) != nil {
+			v.ls.Unlock(now, token)
+			ok = false
+		}
+		conditions[i].Token = "invalid" // matches no lock
+		if ok {
+			conditions[i].Token = token
 		}
 	}
 	if name0 != "" {

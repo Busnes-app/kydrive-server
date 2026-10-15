@@ -277,6 +277,44 @@ func TestLockRefreshRechecksAccess(t *testing.T) {
 	e.want(e.do("reader", "PUT", "/dav/Organization/shared.odt", strings.NewReader("editor's save")), 201, "editor write after the lock was released")
 }
 
+// A demoted owner presenting their lock token on a slow request must not keep holding the lock.
+func TestConfirmRechecksAccess(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	path := e.org() + "/held.odt"
+	e.want(e.do("worker", "PUT", path, strings.NewReader("x")), 201, "put")
+	lock := e.do("worker", "LOCK", path, strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`), "Timeout", "Second-60")
+	e.want(lock, 200, "lock")
+	token := lock.Header().Get("Lock-Token")
+	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "team", "reader"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Groups().ReplaceGroup(ctx, &store.Group{ID: "late", DisplayName: "Late", ExternalID: "x-late", Members: []string{"reader"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Drive().Grant(ctx, "admin", e.team.ID, "late", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	body, slow := io.Pipe()
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- e.do("worker", "PROPPATCH", path, body, "If", "("+token+")") }()
+	reading := make(chan struct{})
+	go func() { slow.Write([]byte("<")); close(reading) }()
+	var owner *httptest.ResponseRecorder
+	select {
+	case <-reading:
+	case owner = <-done:
+	}
+	e.want(e.do("reader", "PUT", "/dav/Organization/held.odt", strings.NewReader("editor's save")), 201, "editor write while the demoted owner's request is open")
+	slow.Close()
+	if owner == nil {
+		owner = <-done
+	}
+	if owner.Code != 412 {
+		t.Fatalf("demoted owner's token-bearing PROPPATCH: %d", owner.Code)
+	}
+}
+
 // x/net takes a lock around every write before the store authorizes it; a reader must not get
 // one, or a slow reader request would block editors' saves for as long as it lasts.
 func TestReadersTakeNoRequestLocks(t *testing.T) {
