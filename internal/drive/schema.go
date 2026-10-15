@@ -37,6 +37,9 @@ ALTER TABLE drive_editor_sessions ADD COLUMN next_attempt INTEGER NOT NULL DEFAU
 CREATE INDEX drive_editor_pending ON drive_editor_sessions(next_attempt) WHERE revoked=true AND drop_done=false;
 CREATE INDEX drive_editor_users ON drive_editor_sessions(user_id) WHERE revoked=false;
 CREATE INDEX drive_files_workspace ON drive_files(workspace);`,
+	`CREATE TABLE drive_upload_sessions(id TEXT PRIMARY KEY,owner TEXT NOT NULL,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),parent TEXT NOT NULL,name TEXT NOT NULL,name_hmac TEXT NOT NULL,file TEXT NOT NULL,expected INTEGER NOT NULL,size INTEGER NOT NULL CHECK(size>=0),received INTEGER NOT NULL DEFAULT 0,expires INTEGER NOT NULL);
+CREATE INDEX drive_upload_owner ON drive_upload_sessions(owner,expires);
+CREATE TABLE drive_upload_segments(session TEXT NOT NULL REFERENCES drive_upload_sessions(id),start INTEGER NOT NULL,path TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(session,start));`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
