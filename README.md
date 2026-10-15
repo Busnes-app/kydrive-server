@@ -63,6 +63,18 @@ A deactivated or deleted account's My files stay until an administrator hands th
 
 Trashed items are permanently deleted after 90 days by default, in every workspace including My files. An administrator changes that age, or turns it off with 0, under Settings > Trash. A manager of a workspace (or the owner of a personal one) can permanently delete trashed files and folders, delete a non-current version, or empty the trash; each action is audited and confirmed in the UI. A file with an open or undelivered editor session cannot be purged. An administrator can set per-workspace retention on shared workspaces: `trash_days` (purge items trashed longer than N days, overriding the drive-wide age; 0 follows it) and `keep_versions` (keep only the newest N versions; 0 is off). An hourly worker applies the policies as actor `system` and logs how many items it skipped. Files trashed before trash timestamps existed count from that upgrade; anything trashed longer ago than the drive-wide age is purged on the first run after upgrading to it. The same worker removes upload staging files and blobs no version names once they are an hour old. Backups still hold purged bytes until their own snapshots are retired. Known limitation: if a purge removes a blob during the hard-link pass that follows a bulk backup's database snapshot, that run fails loudly and is retried at the next interval.
 
+## WebDAV
+
+Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** on their Account page; it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account stops all of its app passwords on the next request.
+
+- **Windows:** File Explorer → *Map network drive* → `https://drive.example.com/dav/`. Windows refuses downloads over 50 MB by default; raise `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes` (up to `4294967295`) and restart the WebClient service.
+- **macOS:** Finder → *Go* → *Connect to Server* → `https://drive.example.com/dav/`.
+- **Linux:** `davs://drive.example.com/dav/` in Files (GNOME) or `webdavs://drive.example.com/dav/` in Dolphin (KDE).
+
+The top level lists your workspaces by name; two with the same name show as `Name` and `Name (2)`. Workspaces cannot be created, renamed or deleted over WebDAV. Deleting a file or folder moves it to the trash. Saving over a file creates a new version; with `If-Match` a stale save is refused (412), otherwise the last save wins and the earlier one stays in the history. Uploads are capped at `KYDRIVE_MAX_FILE_SIZE` and one `PUT` must finish within `KY_READ_TIMEOUT`.
+
+WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating proxy, list the proxy in `KY_TRUSTED_PROXIES` so its `X-Forwarded-Proto` is believed, and let it pass request bodies up to `KYDRIVE_MAX_FILE_SIZE`. Failed WebDAV sign-ins are limited to 20 a minute per client and 10 per 15 minutes per username. Locks are held in memory and lost on restart; clients take them again.
+
 ## Editor
 
 Set `KYDRIVE_EDITOR_URL` to the browser-visible HTTPS Euro-Office origin and `KYDRIVE_EDITOR_SECRET` to the same JWT secret supplied to Euro-Office. `KYDRIVE_EDITOR_DRIVE_URL` defaults to `KY_APP_URL`; the editor must resolve and reach it for authorized downloads and signed callbacks. Optional `KYDRIVE_EDITOR_INTERNAL_URL` changes server-to-editor transport, while output URLs must still name the configured public origin. No redirects are followed. HTTP origins are accepted only with `KY_ENV=development` for local testing.
@@ -117,7 +129,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No WebDAV, SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 
