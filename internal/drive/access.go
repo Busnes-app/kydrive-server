@@ -42,8 +42,7 @@ func authorizeItem(ctx context.Context, q queryer, user, workspace, folder, file
 	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok {
 		return authorize(ctx, q, user, workspace, need)
 	}
-	var rank int
-	err := q.QueryRowContext(ctx, `SELECT `+itemRankSQL("q.u", "q.w", "q.d", "q.f")+` FROM (SELECT ? AS u, ? AS w, ? AS d, ? AS f) q`, user, workspace, folder, file).Scan(&rank)
+	rank, err := itemRank(ctx, q, user, workspace, folder, file)
 	if err != nil {
 		return err
 	}
@@ -51,6 +50,12 @@ func authorizeItem(ctx context.Context, q queryer, user, workspace, folder, file
 		return ErrDenied
 	}
 	return nil
+}
+
+func itemRank(ctx context.Context, q queryer, user, workspace, folder, file string) (int, error) {
+	var rank int
+	err := q.QueryRowContext(ctx, `SELECT `+itemRankSQL("q.u", "q.w", "q.d", "q.f")+` FROM (SELECT ? AS u, ? AS w, ? AS d, ? AS f) q`, user, workspace, folder, file).Scan(&rank)
+	return rank, err
 }
 
 // AuthorizeItem is authorizeItem for callers outside the package.
