@@ -48,7 +48,7 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, workspace := s.driveUser(r).ID, r.PathValue("id")
-	if err := s.store.Drive().Authorize(r.Context(), user, workspace, 2); err != nil {
+	if err := s.store.Drive().AuthorizeItem(r.Context(), user, workspace, in.Parent, "", 2); err != nil {
 		s.driveError(w, err)
 		return
 	}

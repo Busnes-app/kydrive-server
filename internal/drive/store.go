@@ -378,7 +378,7 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		return f, ErrInvalid
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 2); err != nil {
 			return err
 		}
 		if err := parentOK(ctx, tx, workspace, parent); err != nil {
@@ -420,7 +420,7 @@ func (s *Store) File(ctx context.Context, user, id string, need int) (File, erro
 	if err != nil {
 		return f, err
 	}
-	err = authorize(ctx, s.db, user, f.Workspace, need)
+	err = authorizeItem(ctx, s.db, user, f.Workspace, f.Parent, f.ID, need)
 	return f, err
 }
 func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool) ([]File, error) {
@@ -487,7 +487,14 @@ func (s *Store) SetTrash(ctx context.Context, user, id string, expected int64, t
 
 // setTrash changes the file only while it is still in the workspace just authorized.
 func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expected int64, trash bool) error {
-	if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+	var parent string
+	if err := tx.QueryRowContext(ctx, `SELECT parent FROM drive_files WHERE id=?`, id).Scan(&parent); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDenied
+		}
+		return err
+	}
+	if err := authorizeItem(ctx, tx, user, workspace, parent, id, 2); err != nil {
 		return err
 	}
 	query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`
@@ -553,7 +560,7 @@ func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 }
 
 func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, expected int64) error {
-	if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+	if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 2); err != nil {
 		return err
 	}
 	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
@@ -574,7 +581,7 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 			return err
 		}
 	} else {
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET revision=revision+1 WHERE id=? AND workspace=? AND revision=? AND trashed=false`, f.ID, f.Workspace, expected)
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET revision=revision+1 WHERE id=? AND workspace=? AND parent=? AND revision=? AND trashed=false`, f.ID, f.Workspace, f.Parent, expected)
 		if err != nil {
 			return err
 		}

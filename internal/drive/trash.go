@@ -48,7 +48,7 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 			}
 			return err
 		}
-		if err := authorize(ctx, tx, user, workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, workspace, id, "", 2); err != nil {
 			return err
 		}
 		if trashed == trash {

@@ -20,7 +20,7 @@ type Item struct {
 // Lookup finds the live folder or file named name under parent by name_hmac, so it never
 // decrypts siblings. A folder wins when both exist.
 func (s *Store) Lookup(ctx context.Context, user, workspace, parent, name string) (Item, error) {
-	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
+	if err := authorizeItem(ctx, s.db, user, workspace, parent, "", 1); err != nil {
 		return Item{}, err
 	}
 	if !ValidName(name) {
@@ -43,7 +43,7 @@ func (s *Store) Lookup(ctx context.Context, user, workspace, parent, name string
 
 // Children lists the live folders and files directly under parent, sorted by name.
 func (s *Store) Children(ctx context.Context, user, workspace, parent string) ([]Folder, []File, error) {
-	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
+	if err := authorizeItem(ctx, s.db, user, workspace, parent, "", 1); err != nil {
 		return nil, nil, err
 	}
 	folders, err := s.queryFolders(ctx, `workspace=? AND parent=? AND trashed=false`, workspace, parent)

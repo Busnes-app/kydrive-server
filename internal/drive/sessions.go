@@ -66,9 +66,9 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 		return EditorSession{}, ErrDenied
 	}
 	e := EditorSession{ID: uuid.NewString(), FileID: id, User: user, Revision: f.Revision, Expires: time.Now().Add(12 * time.Hour).Unix()}
-	editable := s.Authorize(ctx, user, f.Workspace, 2) == nil
+	editable := s.AuthorizeItem(ctx, user, f.Workspace, f.Parent, f.ID, 2) == nil
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 1); err != nil {
+		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 1); err != nil {
 			return err
 		}
 		var epoch int64
@@ -158,7 +158,7 @@ func (s *Store) RevokeUserEditors(ctx context.Context, tx *sql.Tx, user string) 
 func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error) {
 	// Query live memberships at the boundary. No stale role snapshots authorize edits.
 	at := time.Now()
-	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+rankSQL("drive_editor_sessions.user_id", "f.workspace")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END))`, at.Unix(), at.Add(-editorGrace).Unix())
+	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+itemRankSQL("drive_editor_sessions.user_id", "f.workspace", "f.parent", "f.id")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END))`, at.Unix(), at.Add(-editorGrace).Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (s *Store) DeferRevocation(ctx context.Context, id string) error {
 func (s *Store) PublishEditor(ctx context.Context, user string, f File, v Version, key string, final bool) (bool, error) {
 	duplicate := false
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 2); err != nil {
 			return err
 		}
 		var revision int64

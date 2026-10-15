@@ -274,7 +274,7 @@ func (f *FS) create(ctx context.Context, name string) (webdav.File, error) {
 	case !errors.Is(err, drive.ErrNotFound):
 		return nil, f.fail("create", name, err)
 	}
-	if err = f.store.Authorize(ctx, f.user, dir.workspace, 2); err != nil {
+	if err = f.store.AuthorizeItem(ctx, f.user, dir.workspace, dir.folder, target.ID, 2); err != nil {
 		return nil, f.fail("create", name, err)
 	}
 	pr, pw := io.Pipe()

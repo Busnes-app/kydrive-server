@@ -92,15 +92,16 @@ func purgeVersion(ctx context.Context, tx *sql.Tx, id string, revision, current 
 func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		var workspace string
+		var workspace, parent string
+		file := id
 		var trashed bool
-		if err := tx.QueryRowContext(ctx, `SELECT workspace,trashed FROM drive_files WHERE id=?`, id).Scan(&workspace, &trashed); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &trashed); err != nil {
 			if err == sql.ErrNoRows {
 				return ErrDenied
 			}
 			return err
 		}
-		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
+		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
 			return err
 		}
 		if !trashed {
@@ -123,13 +124,14 @@ func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, err
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace string
 		var trashed bool
+		parent, file := id, "" // a folder is checked on itself
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &trashed); err != nil {
 			if err == sql.ErrNoRows {
 				return ErrDenied
 			}
 			return err
 		}
-		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
+		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
 			return err
 		}
 		if !trashed {
@@ -173,15 +175,16 @@ func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, err
 func (s *Store) PurgeVersion(ctx context.Context, user, id string, revision int64) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		var workspace string
+		var workspace, parent string
+		file := id
 		var current int64
-		if err := tx.QueryRowContext(ctx, `SELECT workspace,revision FROM drive_files WHERE id=?`, id).Scan(&workspace, &current); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,revision FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &current); err != nil {
 			if err == sql.ErrNoRows {
 				return ErrDenied
 			}
 			return err
 		}
-		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
+		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
 			return err
 		}
 		var err error

@@ -25,15 +25,14 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 		return f, err
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		need := 2
+		if to.Workspace != f.Workspace {
+			need = 3 // taking a file out of its workspace is a manager's call
+		}
+		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, need); err != nil {
 			return err
 		}
-		if to.Workspace != f.Workspace {
-			if err := authorize(ctx, tx, user, f.Workspace, 3); err != nil {
-				return err
-			}
-		}
-		if err := authorize(ctx, tx, user, to.Workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, to.Workspace, to.Parent, "", 2); err != nil {
 			return err
 		}
 		if err := parentOK(ctx, tx, to.Workspace, to.Parent); err != nil {
@@ -97,7 +96,7 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 		if err != nil {
 			return err
 		}
-		if err = authorize(ctx, tx, user, src.Workspace, 1); err != nil {
+		if err = authorizeItem(ctx, tx, user, src.Workspace, src.Parent, src.ID, 1); err != nil {
 			return err
 		}
 		out.Size, out.Digest, out.Blob, out.Sealed = src.Size, src.Digest, src.Blob, src.Sealed
@@ -120,7 +119,10 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 		if err != nil {
 			return err
 		}
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, f.Workspace, id, "", 2); err != nil {
+			return err
+		}
+		if err := authorizeItem(ctx, tx, user, f.Workspace, parent, "", 2); err != nil {
 			return err
 		}
 		if err := parentOK(ctx, tx, f.Workspace, parent); err != nil {
