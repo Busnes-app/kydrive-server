@@ -151,7 +151,6 @@ func (s *Store) OpenLink(ctx context.Context, user, token string) (SharedItem, e
 	return s.describe(ctx, item)
 }
 
-
 // describe fills in an item's name, parent and workspace name for the user's view.
 func (s *Store) describe(ctx context.Context, item SharedItem) (SharedItem, error) {
 	table := map[string]string{"file": "drive_files", "folder": "drive_folders"}[item.Kind]
