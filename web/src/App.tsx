@@ -8,6 +8,7 @@ import { Backup } from './pages/Backup';
 
 import { Settings } from './pages/Settings';
 import { TwoFactor } from './pages/TwoFactor';
+import { AppPasswords } from './pages/AppPasswords';
 import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
@@ -143,7 +144,7 @@ export const App: React.FC = () => {
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}
-        {activeTab === 'account' && <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />}
+        {activeTab === 'account' && <><TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} /><AppPasswords /></>}
       </main>
     </div>
   );
