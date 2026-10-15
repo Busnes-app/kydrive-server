@@ -124,14 +124,16 @@ func (s *Server) driveCreateGuestLink(w http.ResponseWriter, r *http.Request) {
 }
 
 // guestGate refuses everything while guest links are off, and limits failed attempts: 20 per
-// minute per client, and 5 wrong passwords per 15 minutes per link.
-func (s *Server) guestGate(w http.ResponseWriter, r *http.Request, token string) bool {
+// minute per client, and 5 password guesses per 15 minutes per link. Each request reserves its
+// attempt before any check and guestSettle refunds it unless it failed, so requests sent at once
+// cannot all pass a count that only rises afterwards.
+func (s *Server) guestGate(w http.ResponseWriter, r *http.Request, token, secret string) bool {
 	on, _, err := s.guestPolicy(r.Context())
 	if err != nil || !on {
 		http.NotFound(w, r)
 		return false
 	}
-	if s.attemptsExceeded("guest:"+s.requestIP(r), 20) || s.attemptsExceeded("guest-pw:"+drive.LinkID(token), 5) {
+	if !s.allowAttempt("guest:"+s.requestIP(r), 20, time.Minute) || (secret != "" && !s.allowAttempt("guest-pw:"+drive.LinkID(token), 5, 15*time.Minute)) {
 		w.Header().Set("Retry-After", "60")
 		s.writeError(w, http.StatusTooManyRequests, "Too many attempts")
 		return false
@@ -139,15 +141,15 @@ func (s *Server) guestGate(w http.ResponseWriter, r *http.Request, token string)
 	return true
 }
 
-// guestFailed counts a failed attempt and answers it.
-func (s *Server) guestFailed(w http.ResponseWriter, r *http.Request, token string, err error) {
-	if errors.Is(err, drive.ErrNotFound) || errors.Is(err, drive.ErrPassword) {
-		s.allowAttempt("guest:"+s.requestIP(r), 20, time.Minute)
+// guestSettle refunds what guestGate reserved and err did not spend: an unusable link spends
+// the client's attempt, a wrong password the link's as well.
+func (s *Server) guestSettle(r *http.Request, token, secret string, err error) {
+	if !errors.Is(err, drive.ErrNotFound) && !errors.Is(err, drive.ErrPassword) {
+		s.refundAttempt("guest:" + s.requestIP(r))
 	}
-	if errors.Is(err, drive.ErrPassword) {
-		s.allowAttempt("guest-pw:"+drive.LinkID(token), 5, 15*time.Minute)
+	if secret != "" && !errors.Is(err, drive.ErrPassword) {
+		s.refundAttempt("guest-pw:" + drive.LinkID(token))
 	}
-	s.driveError(w, err)
 }
 
 func (s *Server) guestView(w http.ResponseWriter, r *http.Request) {
@@ -160,12 +162,13 @@ func (s *Server) guestView(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	if !s.guestGate(w, r, in.Token) {
+	if !s.guestGate(w, r, in.Token, in.Password) {
 		return
 	}
 	out, err := s.store.Drive().GuestView(r.Context(), in.Token, in.Password, in.Folder)
+	s.guestSettle(r, in.Token, in.Password, err)
 	if err != nil {
-		s.guestFailed(w, r, in.Token, err)
+		s.driveError(w, err)
 		return
 	}
 	s.writeJSON(w, 200, out)
@@ -177,13 +180,14 @@ func (s *Server) guestDownload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	token := r.PostForm.Get("token")
-	if !s.guestGate(w, r, token) {
+	token, secret := r.PostForm.Get("token"), r.PostForm.Get("password")
+	if !s.guestGate(w, r, token, secret) {
 		return
 	}
-	f, err := s.store.Drive().GuestFile(r.Context(), token, r.PostForm.Get("password"), r.PostForm.Get("file"))
+	f, err := s.store.Drive().GuestFile(r.Context(), token, secret, r.PostForm.Get("file"))
+	s.guestSettle(r, token, secret, err)
 	if err != nil {
-		s.guestFailed(w, r, token, err)
+		s.driveError(w, err)
 		return
 	}
 	s.serveFile(w, r, f)
@@ -192,7 +196,17 @@ func (s *Server) guestDownload(w http.ResponseWriter, r *http.Request) {
 // guestUpload takes a raw body like the signed-in upload, with the token and password in headers.
 func (s *Server) guestUpload(w http.ResponseWriter, r *http.Request) {
 	token, secret := r.Header.Get("X-Link-Token"), r.Header.Get("X-Link-Password")
-	if !s.guestGate(w, r, token) {
+	if !s.guestGate(w, r, token, secret) {
+		return
+	}
+	// Check the link before taking the bytes; GuestUpload checks it again in its transaction.
+	view, err := s.store.Drive().GuestView(r.Context(), token, secret, "")
+	if err == nil && !view.UploadOnly {
+		err = drive.ErrNotFound
+	}
+	s.guestSettle(r, token, secret, err)
+	if err != nil {
+		s.driveError(w, err)
 		return
 	}
 	if !s.allowAttempt("guest-upload:"+s.requestIP(r), 60, time.Hour) {
@@ -204,25 +218,16 @@ func (s *Server) guestUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	// Check the link before taking the bytes; GuestUpload checks it again in its transaction.
-	view, err := s.store.Drive().GuestView(r.Context(), token, secret, "")
-	if err == nil && !view.UploadOnly {
-		err = drive.ErrNotFound
-	}
-	if err != nil {
-		s.guestFailed(w, r, token, err)
-		return
-	}
 	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, r.Body, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return
 	}
-	f, err := s.store.Drive().GuestUpload(r.Context(), token, secret, name, v)
-	if err != nil {
+	if _, err = s.store.Drive().GuestUpload(r.Context(), token, secret, name, v); err != nil {
 		s.discardBlob(v.Blob)
-		s.guestFailed(w, r, token, err)
+		s.driveError(w, err)
 		return
 	}
-	s.writeJSON(w, 201, map[string]string{"name": f.Name})
+	// Not the stored name: a numbered one would tell the guest the folder already held theirs.
+	w.WriteHeader(http.StatusCreated)
 }

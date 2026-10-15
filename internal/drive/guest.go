@@ -6,6 +6,9 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
@@ -188,15 +191,8 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 	if err != nil {
 		return out, err
 	}
-	byID := map[string]Folder{}
-	for _, f := range chain {
-		byID[f.ID] = f
-	}
-	for at := folder; ; at = byID[at].Parent {
-		out.Path = append([]GuestItem{{Kind: "folder", ID: at, Name: byID[at].Name}}, out.Path...)
-		if at == g.root {
-			break
-		}
+	if out.Path, err = guestPath(chain, folder, g.root); err != nil {
+		return out, err
 	}
 	out.Name = out.Path[0].Name
 	if g.uploadOnly {
@@ -218,6 +214,27 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 		out.Items = append(out.Items, GuestItem{Kind: "file", ID: f.ID, Name: f.Name, Size: f.Size})
 	}
 	return out, nil
+}
+
+// guestPath walks chain, folder's ancestors, from folder up to root. A folder moved off the link
+// after the scope check leaves a chain that never reaches root: that is ErrNotFound.
+func guestPath(chain []Folder, folder, root string) ([]GuestItem, error) {
+	byID := map[string]Folder{}
+	for _, f := range chain {
+		byID[f.ID] = f
+	}
+	var crumbs []GuestItem
+	for at := folder; len(crumbs) < len(chain); at = byID[at].Parent {
+		f, ok := byID[at]
+		if !ok {
+			break
+		}
+		crumbs = append([]GuestItem{{Kind: "folder", ID: at, Name: f.Name}}, crumbs...)
+		if at == root {
+			return crumbs, nil
+		}
+	}
+	return nil, ErrNotFound
 }
 
 // cmpErr turns "nothing there" into ErrNotFound and passes real errors through.
@@ -255,9 +272,11 @@ func (s *Store) GuestFile(ctx context.Context, token, secret, id string) (File, 
 	})
 }
 
-// GuestUpload publishes a blob into an upload-only link's folder on its creator's authority.
+// GuestUpload publishes a blob into an upload-only link's folder on its creator's authority. A
+// taken name is numbered rather than refused, so a guest cannot learn what the folder holds.
 func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v Version) (File, error) {
-	if !ValidName(name) {
+	// Every numbering must fit, or a long name would be refused only when taken.
+	if !ValidName(name) || !ValidName(numbered(name, 100)) {
 		return File{}, ErrInvalid
 	}
 	g, err := s.guest(ctx, token, secret)
@@ -270,11 +289,27 @@ func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v V
 	f := File{ID: uuid.NewString(), Workspace: g.workspace, Parent: g.root, Name: name}
 	v.FileID, v.Revision, v.Created = f.ID, 1, now()
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := s.publishTX(ctx, tx, g.creator, f, v, 0); err != nil {
-			return err
+		for n := 2; ; n++ {
+			err := s.publishTX(ctx, tx, g.creator, f, v, 0)
+			if err == nil {
+				break
+			}
+			if !errors.Is(err, ErrConflict) || n > 100 {
+				return err
+			}
+			f.Name = numbered(name, n)
 		}
 		return event(ctx, tx, "guest-link:"+g.link, "guest_link.uploaded", f.ID)
 	})
 	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified = 1, v.Size, v.Digest, v.Blob, v.Sealed, v.Created
 	return f, err
+}
+
+// numbered is name with " (n)" before its extension.
+func numbered(name string, n int) string {
+	ext := path.Ext(name)
+	if ext == name {
+		ext = "" // .bashrc is all base
+	}
+	return fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, ext), n, ext)
 }

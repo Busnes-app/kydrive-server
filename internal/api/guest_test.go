@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
@@ -103,11 +104,12 @@ func TestGuestLinkRoutes(t *testing.T) {
 	srv.ServeHTTP(rec, cookied)
 	expect(rec, 200, "view with a session cookie and no CSRF header")
 
-	// Wrong passwords lock the link after five.
-	for range 4 {
-		send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"guess"}`, nil, "")
+	// Wrong passwords lock the link after five; asking without one is not a guess.
+	for range 5 {
+		expect(send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"guess"}`, nil, ""), 401, "wrong password")
 	}
-	expect(send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"guess"}`, nil, ""), 429, "fifth wrong password")
+	expect(send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"guess"}`, nil, ""), 429, "sixth wrong password")
+	expect(send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"correct horse"}`, nil, ""), 429, "right password once locked")
 
 	// Upload-only: files go in, nothing comes out.
 	created = send(t, srv, "POST", "/api/drive/folders/"+folder.ID+"/guest-links", `{"days":3,"upload_only":true}`, owner, "")
@@ -115,7 +117,13 @@ func TestGuestLinkRoutes(t *testing.T) {
 		t.Fatalf("create upload-only %d %s", created.Code, created.Body.String())
 	}
 	drop := link.URL[strings.Index(link.URL, "#")+1:]
-	expect(guestUploadReq(srv, drop, "invoice.pdf", "invoice"), 201, "guest upload")
+	first := guestUploadReq(srv, drop, "invoice.pdf", "invoice")
+	expect(first, 201, "guest upload")
+	second := guestUploadReq(srv, drop, "invoice.pdf", "invoice again")
+	expect(second, 201, "guest upload of a taken name")
+	if first.Body.String() != second.Body.String() {
+		t.Fatalf("a taken name shows: %q then %q", first.Body.String(), second.Body.String())
+	}
 	expect(guestForm(srv, url.Values{"token": {drop}, "file": {report}}), 404, "download through upload-only")
 	if got := send(t, srv, "POST", "/api/public/links/view", `{"token":"`+drop+`"}`, nil, ""); got.Code != 200 || strings.Contains(got.Body.String(), "report.pdf") {
 		t.Fatalf("upload-only view %d %s", got.Code, got.Body.String())
@@ -143,4 +151,51 @@ func TestGuestLinkRoutes(t *testing.T) {
 	}
 	expect(send(t, srv, "PUT", "/api/drive/guest-links-policy", `{"enabled":false,"max_days":14}`, admin, ""), 200, "admin turns guest links off")
 	expect(guestUploadReq(srv, drop, "late.pdf", "late"), http.StatusNotFound, "upload while off")
+}
+
+// Guesses sent at once must not all slip past a limit that is still under five.
+func TestGuestPasswordLimitHoldsInParallel(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	admin := loginAs(t, srv, st, "guestadmin", "admin")
+	owner := loginAs(t, srv, st, "guestowner", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "gowners", DisplayName: "Owners", Members: []string{"usr_guestowner"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_guestadmin", "Clients", 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_guestadmin", w.ID, "gowners", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	folder, err := st.Drive().AddFolder(ctx, "usr_guestowner", w.ID, "", "Deliverables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, srv, "PUT", "/api/drive/guest-links-policy", `{"enabled":true,"max_days":14}`, admin, "")
+	created := send(t, srv, "POST", "/api/drive/folders/"+folder.ID+"/guest-links", `{"days":7,"password":"correct horse"}`, owner, "")
+	var link struct{ URL string }
+	if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &link) != nil {
+		t.Fatalf("create %d %s", created.Code, created.Body.String())
+	}
+	token := link.URL[strings.Index(link.URL, "#")+1:]
+	codes := make([]int, 50)
+	var wg sync.WaitGroup
+	for i := range codes {
+		wg.Go(func() {
+			codes[i] = send(t, srv, "POST", "/api/public/links/view", `{"token":"`+token+`","password":"guess"}`, nil, "").Code
+		})
+	}
+	wg.Wait()
+	counts := map[int]int{}
+	for _, c := range codes {
+		counts[c]++
+	}
+	if counts[401] > 5 || counts[401]+counts[429] != len(codes) {
+		t.Fatalf("parallel guesses: %v", counts)
+	}
 }

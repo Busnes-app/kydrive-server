@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,13 +184,42 @@ func TestGuestUploadOnly(t *testing.T) {
 	if got, err := d.File(ctx, "worker", f.ID, 1); err != nil || got.Name != "invoice.pdf" {
 		t.Fatalf("uploaded file %+v %v", got, err)
 	}
-	if _, err = d.GuestUpload(ctx, token, "", "invoice.pdf", blob(t, blobs, "again")); !errors.Is(err, drive.ErrConflict) {
-		t.Fatalf("duplicate name: %v", err)
+	// A taken name must not show: the second upload lands beside the first under a free name.
+	again, err := d.GuestUpload(ctx, token, "", "invoice.pdf", blob(t, blobs, "again"))
+	if err != nil || again.ID == f.ID || again.Name != "invoice (2).pdf" {
+		t.Fatalf("duplicate name %+v %v", again, err)
+	}
+	for range 2 {
+		again, err = d.GuestUpload(ctx, token, "", ".env", blob(t, blobs, "env"))
+	}
+	if err != nil || again.Name != ".env (2)" {
+		t.Fatalf("duplicate dotfile %+v %v", again, err)
+	}
+	// A name too long to number is refused whether or not it is taken.
+	if _, err = d.GuestUpload(ctx, token, "", strings.Repeat("x", 250), blob(t, blobs, "long")); !errors.Is(err, drive.ErrInvalid) {
+		t.Fatalf("long name: %v", err)
 	}
 	if _, err = d.GuestUpload(ctx, token, "", "../x", blob(t, blobs, "x")); !errors.Is(err, drive.ErrInvalid) {
 		t.Fatalf("bad name: %v", err)
 	}
 	if n, _ := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_events WHERE action='guest_link.uploaded' AND resource=?`, f.ID); n != 1 {
 		t.Fatal("upload not audited")
+	}
+}
+
+// A folder moved out from under the link between GuestView's scope check and its ancestor query
+// leaves a chain that never reaches the link's folder; the walk must end, not spin.
+func TestGuestPathEndsOffTheLink(t *testing.T) {
+	path, err := drive.GuestPath([]drive.Folder{{ID: "b", Parent: "a", Name: "B"}, {ID: "a", Name: "A"}}, "b", "a")
+	if err != nil || guestNames(path) != "[folder:A folder:B]" {
+		t.Fatalf("path %v %v", path, err)
+	}
+	for name, chain := range map[string][]drive.Folder{
+		"moved away": {{ID: "b", Parent: "c"}, {ID: "c"}},
+		"cycle":      {{ID: "b", Parent: "c"}, {ID: "c", Parent: "b"}},
+	} {
+		if _, err := drive.GuestPath(chain, "b", "a"); !errors.Is(err, drive.ErrNotFound) {
+			t.Fatalf("%s: %v", name, err)
+		}
 	}
 }

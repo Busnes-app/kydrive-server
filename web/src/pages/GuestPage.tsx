@@ -44,7 +44,7 @@ export function GuestPage() {
     const sent: string[] = [];
     for (const f of Array.from(files)) {
       const r = await fetch(`/api/public/links/upload?name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-Link-Token': token, 'X-Link-Password': password, 'Content-Type': 'application/octet-stream' }, body: f }).catch(() => null);
-      if (!r?.ok) { setMessage(r?.status === 409 ? `${f.name}: a file with this name was already sent.` : `${f.name} was not sent.`); break; }
+      if (!r?.ok) { setMessage(`${f.name} was not sent.`); break; }
       sent.push(f.name);
     }
     if (sent.length) setMessage(`Sent: ${sent.join(', ')}`);

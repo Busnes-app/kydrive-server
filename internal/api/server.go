@@ -190,6 +190,16 @@ func (s *Server) attemptsExceeded(key string, limit int) bool {
 	return ok && time.Now().Before(w.reset) && w.count >= limit
 }
 
+// refundAttempt returns one attempt allowAttempt counted that the request did not spend.
+func (s *Server) refundAttempt(key string) {
+	s.attemptsMu.Lock()
+	defer s.attemptsMu.Unlock()
+	if w, ok := s.attempts[key]; ok && w.count > 0 {
+		w.count--
+		s.attempts[key] = w
+	}
+}
+
 func (s *Server) resetAttempts(key string) {
 	s.attemptsMu.Lock()
 	delete(s.attempts, key)
