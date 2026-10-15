@@ -151,6 +151,25 @@ func TestShareRolesAndWhoCanShare(t *testing.T) {
 	if _, err := d.Share(ctx, "stranger", "file", tr.inA.ID, "group", "team", "reader"); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("share holder re-shared: %v", err)
 	}
+	// Not even with a manager share: managing the item is not passing it on.
+	if err := d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Share(ctx, "worker", "file", tr.inB.ID, "user", "stranger", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Share(ctx, "stranger", "file", tr.inB.ID, "user", "worker", "reader"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("manager share holder re-shared: %v", err)
+	}
+	if _, err := d.Shares(ctx, "stranger", "file", tr.inB.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("manager share holder listed shares: %v", err)
+	}
+	if _, err := d.File(ctx, "stranger", tr.inB.ID, 3); err != nil {
+		t.Fatalf("manager share holder lost manager rights on the item: %v", err)
+	}
+	if err := d.Grant(ctx, "admin", w.ID, "team", "editor"); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct{ kind, id, pkind, pid, role string }{
 		{"file", tr.inA.ID, "user", "gone", "reader"},     // inactive person
 		{"file", tr.inA.ID, "user", "missing", "reader"},  // no such person
@@ -355,5 +374,30 @@ func TestSharesEndWhenItemsLeave(t *testing.T) {
 	}
 	if n, _ := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_events WHERE resource LIKE '%shares_dropped=1'`); n != 1 {
 		t.Fatalf("handover audit lacks the dropped share count")
+	}
+}
+
+// A share holder's move, loaded while the file sat in their shared folder, fails once a member
+// has moved the file out of it: the move is authorized against where the file is now.
+func TestMoveAuthorizesTheCurrentParent(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	tr := layout(t, d, w, blobs)
+	if _, err := d.Share(ctx, "worker", "folder", tr.a.ID, "user", "stranger", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := d.File(ctx, "stranger", tr.inA.ID, 2) // what the share holder's MoveFile read first
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", tr.inA.ID, stale.Revision, drive.Location{Workspace: w.ID, Parent: tr.c.ID, Name: "inA.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = drive.MoveFileFrom(ctx, d, "stranger", stale, stale.Revision, drive.Location{Workspace: w.ID, Parent: tr.b.ID, Name: "inA.txt"}); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("share holder took the file back after it left their folder: %v", err)
+	}
+	if now, _ := d.File(ctx, "worker", tr.inA.ID, 1); now.Parent != tr.c.ID {
+		t.Fatalf("file moved to %s", now.Parent)
 	}
 }
