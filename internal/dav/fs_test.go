@@ -9,8 +9,6 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"golang.org/x/net/webdav"
-
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -21,7 +19,7 @@ type env struct {
 	t      *testing.T
 	st     store.Store
 	blobs  string
-	locks  webdav.LockSystem
+	locks  *dav.Locks
 	team   drive.Workspace
 	shared drive.Workspace // another workspace also named "Organization"
 }
@@ -47,7 +45,7 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
-	e := &env{t: t, st: st, blobs: t.TempDir(), locks: webdav.NewMemLS()}
+	e := &env{t: t, st: st, blobs: t.TempDir(), locks: dav.NewLocks()}
 	for _, w := range []*drive.Workspace{&e.team, &e.shared} {
 		if *w, err = st.Drive().CreateWorkspace(ctx, "admin", "Organization", 1<<20); err != nil {
 			t.Fatal(err)
@@ -136,7 +134,7 @@ func TestPutGetAndVersions(t *testing.T) {
 	}
 	get := e.do("worker", "GET", path, nil)
 	e.want(get, 200, "get")
-	if get.Body.String() != "first draft" || get.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+	if get.Body.String() != "first draft" || get.Header().Get("Content-Type") != "application/octet-stream" {
 		t.Fatalf("get %q %q", get.Body.String(), get.Header().Get("Content-Type"))
 	}
 	ranged := e.do("worker", "GET", path, nil, "Range", "bytes=6-10")
@@ -249,4 +247,55 @@ func TestProppatchIsAcceptedAndDropped(t *testing.T) {
 	if !strings.Contains(got.Body.String(), "200 OK") {
 		t.Fatalf("proppatch refused:\n%s", got.Body.String())
 	}
+}
+
+// Stored files are user content on the app's origin: a browser must download them, never run them.
+func TestGetNeverRendersContent(t *testing.T) {
+	e := setup(t)
+	for name, body := range map[string]string{"page.html": "<script>alert(1)</script>", "image.svg": `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>`} {
+		e.want(e.do("worker", "PUT", e.org()+"/"+name, strings.NewReader(body)), 201, "put "+name)
+		for _, method := range []string{"GET", "HEAD"} {
+			got := e.do("worker", method, e.org()+"/"+name, nil)
+			e.want(got, 200, method+" "+name)
+			h := got.Header()
+			if !strings.Contains(h.Get("Content-Security-Policy"), "sandbox") || !strings.HasPrefix(h.Get("Content-Disposition"), "attachment") || h.Get("Content-Type") != "application/octet-stream" {
+				t.Fatalf("%s %s served as active content: %v", method, name, h)
+			}
+		}
+	}
+}
+
+// Locks are scoped to the real workspace and need edit rights; tokens are bound to their user.
+func TestLocksAreScopedAndAuthorized(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	for _, u := range []string{"worker", "reader"} {
+		if _, err := e.st.Drive().EnsurePersonalWorkspace(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lockBody := func() io.Reader {
+		return strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`)
+	}
+	// Both users have their own "My files"; the worker's lock must not block the reader.
+	lock := e.do("worker", "LOCK", "/dav/My%20files/x.odt", lockBody(), "Timeout", "Infinite")
+	e.want(lock, 201, "lock in own My files")
+	if got := lock.Body.String(); !strings.Contains(got, "Second-3600") {
+		t.Fatalf("infinite lock not capped:\n%s", got)
+	}
+	token := lock.Header().Get("Lock-Token")
+	e.want(e.do("reader", "PUT", "/dav/My%20files/x.odt", strings.NewReader("mine")), 201, "other user's same-named file")
+	e.want(e.do("worker", "PUT", "/dav/My%20files/x.odt", strings.NewReader("no token")), 423, "own locked file without token")
+
+	// Another user cannot use or release the token.
+	e.want(e.do("reader", "UNLOCK", "/dav/My%20files/x.odt", nil, "Lock-Token", token), 409, "unlock with another user's token")
+	e.want(e.do("worker", "UNLOCK", "/dav/My%20files/x.odt", nil, "Lock-Token", strings.Replace(token, "lock:", "lock:1", 1)), 409, "guessed token")
+
+	// No locks on the root, on workspace roots, or without edit rights.
+	e.want(e.do("worker", "LOCK", "/dav/", lockBody()), 403, "lock root")
+	e.want(e.do("worker", "LOCK", "/dav/My%20files/", lockBody()), 403, "lock workspace root")
+	e.want(e.do("worker", "PUT", "/dav/Organization/shared.txt", strings.NewReader("x")), 201, "put shared")
+	e.want(e.do("reader", "LOCK", "/dav/Organization/shared.txt", lockBody()), 403, "reader lock")
+	e.want(e.do("worker", "PUT", "/dav/Organization/shared.txt", strings.NewReader("still writable")), 201, "write after refused lock")
+	e.want(e.do("worker", "UNLOCK", "/dav/My%20files/x.odt", nil, "Lock-Token", token), 204, "owner unlocks")
 }

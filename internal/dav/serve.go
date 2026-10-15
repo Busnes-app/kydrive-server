@@ -12,7 +12,17 @@ import (
 
 // Serve answers one WebDAV request under prefix with f, the requesting user's file system.
 // Callers authenticate first; f carries the user.
-func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks webdav.LockSystem) {
+func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *Locks) {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		// Stored files are user content on the app's origin: never render or run them.
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+		w.Header().Set("Content-Disposition", "attachment")
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+	if r.Method == "LOCK" {
+		// x/net reports the timeout it parsed, so cap the request itself (view.Create caps too).
+		r.Header.Set("Timeout", lockTimeout(r.Header.Get("Timeout")))
+	}
 	if r.Body != nil {
 		r.Body = f.Body(r.Body)
 	}
@@ -23,7 +33,7 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks w
 		}
 		f.IfMatch = true
 	}
-	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks}
+	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks.view(r.Context(), f, r.Method)}
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)
 }
 

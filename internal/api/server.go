@@ -15,11 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/webdav"
-
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/editor"
 	"github.com/Busnes-app/kydrive-server/internal/scim"
@@ -36,7 +35,7 @@ type recoveryClient interface {
 }
 
 type Server struct {
-	davLocks   webdav.LockSystem // one per server: WebDAV locks are single-instance
+	davLocks   *dav.Locks // one per server: WebDAV locks are single-instance
 	editor     *editor.Client
 	editorErr  error
 	revokeMu   sync.Mutex
@@ -150,7 +149,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	recovery := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
 
 	s := &Server{
-		davLocks: webdav.NewMemLS(),
+		davLocks: dav.NewLocks(),
 		config:   cfg,
 		store:    st,
 		sessions: sessions,
