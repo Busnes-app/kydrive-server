@@ -453,6 +453,11 @@ dialog.modal-window::backdrop {
 .drive-view-switch .active { border-color: var(--accent); }
 .drive-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 20px 0; }
 .drive-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.drive-search { margin: 0 0 16px; }
+.drive-search label { display: grid; gap: 6px; max-width: 480px; }
+.drive-search-results ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+.drive-search-results li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.drive-search-results li span { color: var(--ink); font-size: .9rem; }
 .drive-drop-active { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .drive-uploads { margin: 0 0 16px; }
 .drive-uploads ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
