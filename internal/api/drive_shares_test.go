@@ -82,4 +82,32 @@ func TestShareRoutes(t *testing.T) {
 	expect(send(t, srv, "DELETE", "/api/drive/shares/"+sh.ID, "", guest, "").Code, 403, "share holder removes share")
 	expect(send(t, srv, "DELETE", "/api/drive/shares/"+sh.ID, "", owner, "").Code, 204, "owner removes share")
 	expect(send(t, srv, "GET", "/api/drive/folders/"+folder.ID+"/children", "", guest, "").Code, 403, "children after unsharing")
+
+	// An organisation link: the token travels only in the URL fragment and the open request body.
+	created := send(t, srv, "POST", "/api/drive/folders/"+folder.ID+"/links", `{"role":"reader"}`, owner, "")
+	var link struct {
+		Link struct{ ID string }
+		URL  string
+	}
+	if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &link) != nil || !strings.Contains(link.URL, "/l/#") {
+		t.Fatalf("create link %d %s", created.Code, created.Body.String())
+	}
+	token := link.URL[strings.Index(link.URL, "#")+1:]
+	expect(send(t, srv, "POST", "/api/drive/folders/"+folder.ID+"/links", `{"role":"reader"}`, guest, "").Code, 403, "outsider creates a link")
+	opened := send(t, srv, "POST", "/api/drive/links/open", `{"token":"`+token+`"}`, guest, "")
+	if opened.Code != 200 || !strings.Contains(opened.Body.String(), `"name":"Proposal"`) {
+		t.Fatalf("open %d %s", opened.Code, opened.Body.String())
+	}
+	expect(send(t, srv, "GET", "/api/drive/files/"+file.ID+"/download", "", guest, "").Code, 200, "download through a link")
+	listed := send(t, srv, "GET", "/api/drive/folders/"+folder.ID+"/links", "", owner, "")
+	if listed.Code != 200 || strings.Contains(listed.Body.String(), token) || !strings.Contains(listed.Body.String(), `"opened":1`) {
+		t.Fatalf("links %d %s", listed.Code, listed.Body.String())
+	}
+	expect(send(t, srv, "DELETE", "/api/drive/links/"+link.Link.ID, "", owner, "").Code, 204, "revoke link")
+	expect(send(t, srv, "GET", "/api/drive/files/"+file.ID+"/download", "", guest, "").Code, 403, "download after revoke")
+	expect(send(t, srv, "POST", "/api/drive/links/open", `{"token":"`+token+`"}`, guest, "").Code, 404, "revoked link")
+	for range 29 {
+		send(t, srv, "POST", "/api/drive/links/open", `{"token":"guess"}`, guest, "")
+	}
+	expect(send(t, srv, "POST", "/api/drive/links/open", `{"token":"guess"}`, guest, "").Code, 429, "guessing links")
 }

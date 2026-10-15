@@ -1,8 +1,10 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -11,7 +13,11 @@ func (s *Server) shareRoutes() {
 	for _, kind := range []string{"files", "folders"} {
 		s.mux.HandleFunc("GET /api/drive/"+kind+"/{id}/shares", s.requireAuthenticated(s.driveShares))
 		s.mux.HandleFunc("PUT /api/drive/"+kind+"/{id}/shares", s.requireAuthenticated(s.driveShare))
+		s.mux.HandleFunc("GET /api/drive/"+kind+"/{id}/links", s.requireAuthenticated(s.driveLinks))
+		s.mux.HandleFunc("POST /api/drive/"+kind+"/{id}/links", s.requireAuthenticated(s.driveCreateLink))
 	}
+	s.mux.HandleFunc("DELETE /api/drive/links/{id}", s.requireAuthenticated(s.driveRevokeLink))
+	s.mux.HandleFunc("POST /api/drive/links/open", s.requireAuthenticated(s.driveOpenLink))
 	s.mux.HandleFunc("DELETE /api/drive/shares/{id}", s.requireAuthenticated(s.driveUnshare))
 	s.mux.HandleFunc("GET /api/drive/shared-with-me", s.requireAuthenticated(s.driveSharedWithMe))
 	s.mux.HandleFunc("GET /api/drive/people", s.requireAuthenticated(s.drivePeople))
@@ -111,4 +117,69 @@ func (s *Server) driveSharing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, map[string]bool{"editors_share": *in.EditorsShare})
+}
+
+func (s *Server) driveLinks(w http.ResponseWriter, r *http.Request) {
+	out, err := s.store.Drive().Links(r.Context(), s.driveUser(r).ID, resourceKind(r), r.PathValue("id"))
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, out)
+}
+
+// driveCreateLink returns the token once, as the fragment of the link's URL: browsers never
+// send a fragment to the server, so opening the link cannot leave it in an access log.
+func (s *Server) driveCreateLink(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Role    string `json:"role"`
+		Expires int64  `json:"expires"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	link, token, err := s.store.Drive().CreateLink(r.Context(), s.driveUser(r).ID, resourceKind(r), r.PathValue("id"), in.Role, in.Expires)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 201, map[string]any{"link": link, "url": s.config.Server.AppURL + "/l/#" + token})
+}
+
+func (s *Server) driveRevokeLink(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Drive().RevokeLink(r.Context(), s.driveUser(r).ID, r.PathValue("id")); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	if _, err := s.store.Drive().PendingRevocations(r.Context()); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// driveOpenLink takes the token in the body, never the URL. Failed opens are limited per client.
+func (s *Server) driveOpenLink(w http.ResponseWriter, r *http.Request) {
+	key := "link-open:" + s.requestIP(r)
+	if s.attemptsExceeded(key, 30) {
+		s.writeError(w, http.StatusTooManyRequests, "Too many invalid links")
+		return
+	}
+	var in struct {
+		Token string `json:"token"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	item, err := s.store.Drive().OpenLink(r.Context(), s.driveUser(r).ID, in.Token)
+	if errors.Is(err, drive.ErrNotFound) {
+		s.allowAttempt(key, 30, time.Minute)
+	}
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, item)
 }
