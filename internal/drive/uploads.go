@@ -20,6 +20,8 @@ import (
 const (
 	uploadTTL      = 24 * time.Hour
 	uploadsPerUser = 8
+	// completionClaim outlives the longest request (KY_WRITE_TIMEOUT is at most 15m).
+	completionClaim = 30 * time.Minute
 )
 
 type UploadSession struct {
@@ -193,9 +195,22 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 	if err != nil {
 		return File{}, err
 	}
-	if u.Received != u.Size {
-		return File{}, ErrConflict
+	// Claim the session before the file-sized re-seal so concurrent completions cannot each
+	// write a full copy. A crashed request's claim expires; a failure releases it.
+	claim := time.Now().Unix()
+	res, err := s.db.ExecContext(ctx, `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND owner=? AND received=size AND completing<?`, claim, id, user, claim-int64(completionClaim/time.Second))
+	if err != nil {
+		return File{}, err
 	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return File{}, cmp.Or(err, fmt.Errorf("%w: upload incomplete or already completing", ErrConflict))
+	}
+	done := false
+	defer func() {
+		if !done {
+			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
+		}
+	}()
 	pr, pw := io.Pipe()
 	go func() { pw.CloseWithError(s.readSegments(ctx, pw, staging, key, id)) }()
 	v, err := WriteBlob(blobs, key, pr, max(u.Size, 1))
@@ -212,6 +227,7 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 		RemoveBlobs(blobs, []string{v.Blob})
 		return f, err
 	}
+	done = true
 	return f, s.dropUpload(ctx, staging, id, nil)
 }
 
