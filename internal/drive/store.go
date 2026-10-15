@@ -35,6 +35,7 @@ type Workspace struct {
 	Role         string `json:"role"`
 	TrashDays    int    `json:"trash_days"`
 	KeepVersions int    `json:"keep_versions"`
+	EditorsShare bool   `json:"editors_share"`
 }
 type Grant struct {
 	GroupID string `json:"group_id"`
@@ -194,7 +195,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.Kind, &w.Used, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.EditorsShare, &w.Kind, &w.Used, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]

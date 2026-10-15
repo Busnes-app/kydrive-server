@@ -46,6 +46,10 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 			if err := fits(ctx, tx, to.Workspace, size); err != nil {
 				return err
 			}
+			// Shares were granted within the source; they would revive if the file came back.
+			if _, err := tx.ExecContext(ctx, `DELETE FROM drive_shares WHERE resource_kind='file' AND resource_id=?`, id); err != nil {
+				return err
+			}
 		}
 		stored, mac, err := s.names.seal("drive_files", id, to.Name)
 		if err != nil {

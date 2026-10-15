@@ -300,3 +300,60 @@ func TestPeopleSearch(t *testing.T) {
 		t.Fatalf("service token searched people: %v", err)
 	}
 }
+
+// Shares end when their item leaves the workspace, so they cannot revive if it returns.
+func TestSharesEndWhenItemsLeave(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	mine, err := d.EnsurePersonalWorkspace(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, blobs, "x"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Share(ctx, "worker", "file", f.ID, "user", "stranger", "reader"); err != nil {
+		t.Fatal(err)
+	}
+	for _, to := range []string{mine, w.ID} {
+		if f, err = d.MoveFile(ctx, "worker", f.ID, f.Revision, drive.Location{Workspace: to, Name: "plan.txt"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = d.File(ctx, "stranger", f.ID, 1); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("share revived after a round trip: %v", err)
+	}
+
+	// A leaver's handover drops the shares on their files.
+	if err = st.Users().CreateUser(ctx, &store.User{ID: "leaver", Username: "leaver", Email: "leaver@local.test", Role: "user", Status: "active", SSOProvider: "scim"}); err != nil {
+		t.Fatal(err)
+	}
+	src, err := d.EnsurePersonalWorkspace(ctx, "leaver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := d.Publish(ctx, "leaver", drive.File{Workspace: src, Name: "draft.txt"}, blob(t, blobs, "x"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Share(ctx, "leaver", "file", draft.ID, "user", "stranger", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.ExecSQL(ctx, d, `UPDATE users SET status='inactive' WHERE id='leaver'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Handover(ctx, "admin", src, drive.Target{Workspace: w.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_shares WHERE resource_id=?`, draft.ID); n != 0 {
+		t.Fatalf("handover kept %d shares", n)
+	}
+	if _, err = d.File(ctx, "stranger", draft.ID, 1); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("leaver's share survived handover: %v", err)
+	}
+	if n, _ := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_events WHERE resource LIKE '%shares_dropped=1'`); n != 1 {
+		t.Fatalf("handover audit lacks the dropped share count")
+	}
+}

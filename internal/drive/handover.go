@@ -142,9 +142,15 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		if err = handoverFolder(ctx, tx, s.names, folder, target, owner); err != nil {
 			return err
 		}
-		// Sessions and tokens were authorized for the source; as in MoveFile, closed documents
-		// fence callbacks in flight and the new epoch gives later sessions fresh keys.
+		// Sessions, tokens and shares were authorized for the source; as in MoveFile, closed
+		// documents fence callbacks in flight and the new epoch gives later sessions fresh keys.
+		// The leaver's shares end here: the recipient decides who sees the files next.
+		var shares int
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_shares WHERE workspace=?`, source).Scan(&shares); err != nil {
+			return err
+		}
 		for _, q := range []string{
+			`DELETE FROM drive_shares WHERE workspace=?`,
 			`UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (SELECT id FROM drive_files WHERE workspace=?)`,
 			`UPDATE drive_editor_documents SET closed=true WHERE file_id IN (SELECT id FROM drive_files WHERE workspace=?)`,
 			`UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE workspace=?`,
@@ -161,7 +167,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 				return err
 			}
 		}
-		resource := fmt.Sprintf("%s->%s:%s files=%d folders=%d bytes=%d", source, target, folder, files, folders, size)
+		resource := fmt.Sprintf("%s->%s:%s files=%d folders=%d bytes=%d shares_dropped=%d", source, target, folder, files, folders, size, shares)
 		if operator {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`, user, "drive.handover", source, resource, "operator-cli", time.Now().UTC()); err != nil {
 				return err
