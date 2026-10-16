@@ -30,7 +30,11 @@ func TestAppPasswords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range []struct{ user, secret string }{{"worker", otherSecret}, {"stranger", secret}, {"worker", secret[:len(secret)-1] + "a"}, {"worker", ""}, {"", secret}} {
+	wrong := "a" // a last character the secret does not end with
+	if strings.HasSuffix(secret, "a") {
+		wrong = "b"
+	}
+	for _, c := range []struct{ user, secret string }{{"worker", otherSecret}, {"stranger", secret}, {"worker", secret[:len(secret)-1] + wrong}, {"worker", ""}, {"", secret}} {
 		if _, err := d.AppPasswordUser(ctx, c.user, c.secret); !errors.Is(err, drive.ErrDenied) {
 			t.Errorf("%+v: %v", c, err)
 		}

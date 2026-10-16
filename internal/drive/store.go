@@ -146,7 +146,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 		return ErrDenied
 	}
 	var rank int
-	err := q.QueryRowContext(ctx, `SELECT CASE WHEN EXISTS(SELECT 1 FROM drive_personal_workspaces p JOIN users u ON u.id=p.owner WHERE p.workspace=? AND p.owner=? AND u.status='active') THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id JOIN users u ON u.id=m.user_id WHERE g.workspace=? AND u.id=? AND u.status='active' AND NOT EXISTS(SELECT 1 FROM drive_personal_workspaces WHERE workspace=g.workspace)),0) END`, workspace, user, workspace, user).Scan(&rank)
+	err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "q.w")+` FROM (SELECT ? AS u, ? AS w) q`, user, workspace).Scan(&rank)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),CASE WHEN p.owner=? THEN 3 ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members m ON m.group_id=g.group_id WHERE g.workspace=w.id AND m.user_id=? AND p.workspace IS NULL),0) END FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=?) AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY w.name`, user, user, user, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
