@@ -54,6 +54,8 @@ The browser suite opens a password guest link in a cookie-less Chromium context 
 
 - **Previews render for the allowlist; HTML and SVG never render:** `TestPreviewServesOnlyTheAllowlist` sniffs PNG, PDF, text and MP4 as previewable and refuses HTML, an HTML file named `.png`, XML-declared SVG, UTF-16 text and binary (415). Markup without an HTML or XML signature, such as a bare SVG, is served as `text/plain` and shown as source.
 - **In a real browser:** `previews.spec.mjs` (4 viewports) decodes an image, shows text with its markup inert, frames a PDF and offers only Download for HTML, whose script does not run.
+- **A decompression-bomb PNG is refused without a large allocation:** `TestThumbnailRefusesBombs` feeds PNGs whose kilobyte of compressed data claims 100 000 × 100 000, a 17 000 px side, or 8000 × 6000 at 16 bits, and a 5000 × 5000 progressive JPEG; each is refused with under 4 MiB allocated. With the budget check removed, the 16-bit PNG allocated 384 MB and the test failed.
+- **Thumbnails stay encrypted:** `TestThumbnailCacheIsSealed` and `TestPreviewServesOnlyTheAllowlist` find no PNG signature in the cache, a wrong key refused, and the orphan sweep removing a purged blob's thumbnail.
 - **PDF under the sandbox:** probed by hand in Chromium 2026-10-16: its viewer renders a PDF served with `CSP: sandbox`, both as the page and in a same-origin iframe. Firefox is unverified (its Playwright browser is not installed here).
 
 ## Boundaries

@@ -52,6 +52,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/preview", s.requireAuthenticated(s.drivePreview))
+	s.mux.HandleFunc("GET /api/drive/files/{id}/thumbnail", s.requireAuthenticated(s.driveThumbnail))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
 	s.mux.HandleFunc("PUT /api/drive/files/{id}/trash", s.requireAuthenticated(s.driveTrash))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/restore", s.requireAuthenticated(s.driveRestore))

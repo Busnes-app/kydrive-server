@@ -525,6 +525,9 @@ dialog.modal-window::backdrop {
 .drive-document-dialog h2 { font-size: 1.2rem; margin-bottom: 8px; }
 .drive-document-dialog p { color: var(--ink); margin-bottom: 20px; }
 .drive-dialog-actions { display: flex; justify-content: end; gap: 8px; margin-top: 24px; }
+.drive-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.drive-file-icon { flex: none; width: 28px; height: 28px; padding: 3px; color: var(--ink-muted); }
+.drive-thumbnail { padding: 0; object-fit: cover; border-radius: 4px; background: var(--line); }
 .drive-preview-dialog { margin: auto; width: min(1100px, calc(100vw - 32px)); height: min(860px, calc(100vh - 32px)); padding: 16px; background: var(--panel); color: var(--ink-strong); border: 1px solid var(--line); border-radius: 10px; }
 .drive-preview-dialog[open] { display: flex; flex-direction: column; gap: 12px; }
 .drive-preview-dialog::backdrop { background: #000b; }

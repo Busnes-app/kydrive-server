@@ -37,6 +37,12 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
   await put(`page ${tag}.html`, Buffer.from('<!DOCTYPE html><script>document.title="ran"</script>'));
   await page.goto('/');
 
+  // The list shows the image's thumbnail and type icons for the rest.
+  const thumb = page.getByRole('row', { name: new RegExp(`dot ${tag}\\.png`) }).locator('img.drive-thumbnail');
+  await expect.poll(() => thumb.evaluate(i => i.complete && i.naturalWidth)).toBe(1);
+  await expect(page.getByRole('row', { name: new RegExp(`paper ${tag}\\.pdf`) }).locator('svg.drive-file-icon')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('list.png') });
+
   await page.getByRole('button', { name: `dot ${tag}.png` }).click();
   const dialog = page.getByRole('dialog', { name: `dot ${tag}.png` });
   const img = dialog.getByRole('img', { name: `dot ${tag}.png` });
