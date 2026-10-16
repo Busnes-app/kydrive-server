@@ -21,7 +21,7 @@ import (
 
 // AppVersion is this build's release version; capsule manifests record it. The release
 // workflow requires it to match the tag and web/package.json.
-const AppVersion = "0.4.1"
+const AppVersion = "0.4.2"
 
 // errRecoveryKeyMismatch answers a swapped recovery.pub: the pin in the database and the key
 // on disk disagree, so refuse rather than seal a capsule nobody's custodians can open.
