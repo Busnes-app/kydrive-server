@@ -71,7 +71,7 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** previews render for the allowlist; an HTML or SVG upload downloads instead of rendering; a decompression-bomb PNG is refused without a large allocation.
 
-### M6 — Leaver handover and offsite bulk backup
+### M6 — Leaver handover and offsite bulk backup (handover shipped in #22; offsite plan `2026-10-16-m6-offsite-backup.md`, built)
 
 **Handover.**
 - Admin-only screen listing deactivated or deleted accounts that still own a personal workspace, with its size.

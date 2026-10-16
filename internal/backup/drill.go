@@ -96,11 +96,18 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 		checks = append(checks, recoveryclient.Check{Name: "Environment: " + name, Passed: found, Message: message})
 	}
 	if members[BulkManifestPath] {
-		repo := os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY")
+		// The capsule's own repository and credentials, so a pass proves a fresh host needs
+		// nothing else; capsules sealed before they carried them use this host's setting.
+		repo, ok, err := CapsuleRepository(dir)
+		if err == nil && !ok {
+			repo = Repository{URL: os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY")}
+		}
 		target := filepath.Join(dir, "bulk-drill-restored")
-		err := RestoreBulk(ctx, dir, repo, target)
+		if err == nil {
+			err = RestoreBulk(ctx, dir, repo, target)
+		}
 		defer os.RemoveAll(target)
-		check := recoveryclient.Check{Name: "Drive bulk restore", Passed: err == nil, Message: "All referenced blobs restored and verified"}
+		check := recoveryclient.Check{Name: "Drive bulk restore", Passed: err == nil, Message: "All referenced blobs restored and verified from " + repo.URL}
 		if err != nil {
 			check.Message = err.Error()
 		}

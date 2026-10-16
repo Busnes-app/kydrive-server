@@ -80,6 +80,21 @@ describe('Backup', () => {
     expect(await screen.findByText(/encryption key is stored in the data directory/)).toBeTruthy();
   });
 
+  it('shows the offsite repository and its integrity check', async () => {
+    mockStatus({ ...PAIRED, bulk_repository: 'rest:https://backup.example/kydrive', bulk_last_check: { at: '2026-10-13T00:00:00Z' } });
+    render(<Backup />);
+    expect(await screen.findByText('rest:https://backup.example/kydrive')).toBeTruthy();
+    expect(screen.getByText(/Integrity check passed/)).toBeTruthy();
+    cleanup();
+    mockStatus({ ...PAIRED, bulk_repository: '/app/bulk', bulk_last_check: { at: '2026-10-13T00:00:00Z', error: 'Fatal: repository contains errors' } });
+    render(<Backup />);
+    expect((await screen.findByText(/Integrity check .* failed: Fatal: repository contains errors/)).closest('[role="alert"]')).toBeTruthy();
+    cleanup();
+    mockStatus({ ...PAIRED, bulk_repository_error: 'bulk repository must use rest:https://' });
+    render(<Backup />);
+    expect(await screen.findByText(/must use rest:https/)).toBeTruthy();
+  });
+
   it('saves the document retention and shows the last prune', async () => {
     const sent: unknown[] = [];
     let status: Record<string, unknown> = {

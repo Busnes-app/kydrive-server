@@ -61,6 +61,9 @@ export interface BackupStatus {
   bulk_retention?: BulkRetention;
   bulk_keep_last?: number;
   bulk_last_prune?: { at: string; forgotten: number; error?: string };
+  bulk_last_check?: { at: string; error?: string };
+  bulk_repository?: string;
+  bulk_repository_error?: string;
 }
 
 interface DrillCheck {
@@ -568,6 +571,13 @@ export const Backup: React.FC = () => {
             {status.bulk_last_prune.error ? `failed: ${status.bulk_last_prune.error}` : `${status.bulk_last_prune.forgotten} snapshots removed`}
           </p>
         )}
+        {status?.bulk_repository && <p className="dr-hint">Document repository: <code>{status.bulk_repository}</code></p>}
+        {status?.bulk_repository_error && <Alert kind="error">Document repository: {status.bulk_repository_error}</Alert>}
+        {status?.bulk_last_check ? (
+          status.bulk_last_check.error
+            ? <Alert kind="error">Integrity check {when(status.bulk_last_check.at)} failed: {status.bulk_last_check.error}</Alert>
+            : <p className="dr-hint">Integrity check passed {when(status.bulk_last_check.at)}: a random 5% of the repository read back and verified. It runs weekly after a scheduled backup.</p>
+        ) : status?.bulk_repository && <p className="dr-hint">No integrity check yet: one runs after the next scheduled backup, then weekly.</p>}
         {retentionMessage && <Alert kind="success">{retentionMessage}</Alert>}
         {retentionError && <Alert kind="error">{retentionError}</Alert>}
       </div>

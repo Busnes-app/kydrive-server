@@ -64,6 +64,14 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 	for _, name := range []string{"KYDRIVE_EDITOR_URL", "KYDRIVE_EDITOR_INTERNAL_URL", "KYDRIVE_EDITOR_DRIVE_URL", "KYDRIVE_EDITOR_SECRET", "KYDRIVE_IDENTITY_URL"} {
 		integrations[name] = os.Getenv(name)
 	}
+	if os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY") != "" {
+		repo, err := bulkRepository(cfg.Database.DataDir)
+		if err != nil {
+			return recoveryclient.Payload{}, err
+		}
+		integrations[capsuleRepositoryKey] = repo.URL
+		integrations[capsuleCredentialsKey] = strings.Join(repo.Env, "\n")
+	}
 	sealedConfig, err := json.Marshal(integrations)
 	if err != nil {
 		return recoveryclient.Payload{}, err

@@ -42,28 +42,6 @@ type BulkManifest struct {
 
 var shaPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
-// Local repositories are deliberately outside the primary data directory. A production
-// operator mounts this path from an independent destination; local tests use a second tree.
-func bulkRepository(dataDir string) (string, error) {
-	raw := os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY")
-	if raw == "" {
-		return "", errors.New("KYDRIVE_BULK_BACKUP_REPOSITORY is required for document backups")
-	}
-	repo, err := filepath.Abs(raw)
-	if err != nil {
-		return "", err
-	}
-	data, err := filepath.Abs(dataDir)
-	if err != nil {
-		return "", err
-	}
-	rel, err := filepath.Rel(data, repo)
-	if err != nil || rel == "." || filepath.IsLocal(rel) {
-		return "", errors.New("bulk repository must be outside primary data directory")
-	}
-	return repo, nil
-}
-
 // errWrongPassword means no key in the repository opens with the password: exit status 12 from
 // restic 0.17 on, exit 1 with this message before it.
 var errWrongPassword = errors.New("wrong repository password")
@@ -75,20 +53,12 @@ var keyIDPattern = regexp.MustCompile(`^[a-f0-9]{8,64}$`)
 var runRestic = execRestic
 
 // restic runs one command; password is hex-encoded into RESTIC_PASSWORD.
-func restic(ctx context.Context, repo string, password []byte, dir string, args ...string) ([]byte, error) {
+func restic(ctx context.Context, repo Repository, password []byte, dir string, args ...string) ([]byte, error) {
 	return runRestic(ctx, repo, password, dir, nil, args...)
 }
 
-func execRestic(ctx context.Context, repo string, password []byte, dir string, stdin io.Reader, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "restic", append([]string{"--repo", repo, "--no-cache"}, args...)...)
-	cmd.Dir = dir
-	cmd.Stdin = stdin
-	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "RESTIC_") {
-			cmd.Env = append(cmd.Env, e)
-		}
-	}
-	cmd.Env = append(cmd.Env, "RESTIC_PASSWORD="+hex.EncodeToString(password))
+func execRestic(ctx context.Context, repo Repository, password []byte, dir string, stdin io.Reader, args ...string) ([]byte, error) {
+	cmd := resticCommand(ctx, repo, password, dir, stdin, args...)
 	// Commands never run through a shell. Restic owns authenticated encryption and deduplication.
 	var out limitedBuffer
 	var stderr tailBuffer
@@ -99,7 +69,7 @@ func execRestic(ctx context.Context, repo string, password []byte, dir string, s
 		if errors.As(err, &exit) && (exit.ExitCode() == 12 || bytes.Contains(stderr.b, []byte("wrong password or no key found"))) {
 			err = errWrongPassword
 		}
-		return nil, fmt.Errorf("restic %s failed: %w: %s", args[0], err, bytes.TrimSpace(stderr.b))
+		return nil, fmt.Errorf("restic %s failed: %w: %s", args[0], err, bytes.TrimSpace(redact(stderr.b, repo)))
 	}
 	return out.Bytes(), nil
 }
@@ -117,7 +87,7 @@ func resticPassword(key []byte) ([]byte, error) {
 // derived password: add the derived key while the raw key opens it, then remove the raw key
 // using the derived one. Each run redoes whichever step is left, so an interrupted move is
 // finished by the next backup or prune.
-func openRepository(ctx context.Context, repo string, key []byte) ([]byte, error) {
+func openRepository(ctx context.Context, repo Repository, key []byte) ([]byte, error) {
 	derived, err := resticPassword(key)
 	if err != nil {
 		return nil, err
@@ -147,7 +117,7 @@ func openRepository(ctx context.Context, repo string, key []byte) ([]byte, error
 }
 
 // currentKey returns the ID of the repository key that password opens.
-func currentKey(ctx context.Context, repo string, password []byte) (string, error) {
+func currentKey(ctx context.Context, repo Repository, password []byte) (string, error) {
 	out, err := restic(ctx, repo, password, "", "key", "list", "--json")
 	if err != nil {
 		return "", err
@@ -435,7 +405,7 @@ var freeSpace = func(dir string) (uint64, error) {
 
 // RestoreBulk accepts only a manifest from an opened, verified capsule. It checks every
 // referenced blob before publishing the restored directory; absence never becomes success.
-func RestoreBulk(ctx context.Context, openedDir, repository, target string) error {
+func RestoreBulk(ctx context.Context, openedDir string, repository Repository, target string) error {
 	raw, err := os.ReadFile(filepath.Join(openedDir, BulkManifestPath))
 	if err != nil {
 		return err
@@ -595,4 +565,35 @@ func PruneBulk(ctx context.Context, dataDir string, key []byte, policy BulkPolic
 	}
 	_, err = restic(ctx, repo, password, "", "prune")
 	return forgotten, err
+}
+
+// CheckBulk verifies the repository's structure and reads back a random 5% of its data, so a
+// destination that silently loses or corrupts packs shows within a few weekly runs. Another
+// bulk operation holding the lock returns ErrBulkBusy.
+func CheckBulk(ctx context.Context, dataDir string, key []byte) error {
+	lock, err := lockFile(dataDir, bulkLock, false)
+	if errors.Is(err, unix.EWOULDBLOCK) {
+		return ErrBulkBusy
+	}
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	repo, err := bulkRepository(dataDir)
+	if err != nil {
+		return err
+	}
+	password, err := openRepository(ctx, repo, key)
+	if err != nil {
+		return err
+	}
+	_, err = restic(ctx, repo, password, "", "check", "--read-data-subset=5%")
+	return err
+}
+
+// BulkLocation is the configured repository as the Recovery screen shows it: credentials never
+// appear in it, since they cannot be part of an accepted location.
+func BulkLocation(dataDir string) (string, error) {
+	repo, err := bulkRepository(dataDir)
+	return repo.URL, err
 }
