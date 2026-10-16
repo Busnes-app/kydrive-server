@@ -52,7 +52,7 @@ test('upload a folder tree, resume a dropped chunk, search and download the fold
       dt.items.add(new File([body], name));
       for (const type of ['dragover', 'drop']) panel.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
     }, { name: `dropped-${tag}.bin`, body });
-    await expect(page.getByRole('link', { name: `dropped-${tag}.bin` })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: `dropped-${tag}.bin` })).toBeVisible({ timeout: 15000 });
     expect(dropped).toBe(true);
     await page.unroute('**/api/drive/upload-sessions/*');
     const spaces = await (await page.request.get('/api/drive/workspaces')).json();

@@ -51,6 +51,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("DELETE /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveCancelUpload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))
+	s.mux.HandleFunc("GET /api/drive/files/{id}/preview", s.requireAuthenticated(s.drivePreview))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/versions", s.requireAuthenticated(s.driveVersions))
 	s.mux.HandleFunc("PUT /api/drive/files/{id}/trash", s.requireAuthenticated(s.driveTrash))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/restore", s.requireAuthenticated(s.driveRestore))
@@ -311,16 +312,26 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	s.writeJSON(w, 201, out)
 }
-func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File) {
+
+// openFile opens f's current bytes, answering the request itself when it cannot.
+func (s *Server) openFile(w http.ResponseWriter, f drive.File) (io.ReadSeekCloser, bool) {
 	path, err := drive.BlobPath(s.blobRoot(), f.Blob)
 	if err != nil {
 		s.driveError(w, err)
-		return
+		return nil, false
 	}
 	file, err := drive.OpenBlob(path, s.config.Security.EncryptionKey, f.Sealed, f.Size)
 	if err != nil {
 		log.Printf("serve blob %s: %v", f.Blob, err)
 		s.writeError(w, 503, "Document bytes unavailable")
+		return nil, false
+	}
+	return file, true
+}
+
+func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File) {
+	file, ok := s.openFile(w, f)
+	if !ok {
 		return
 	}
 	defer file.Close()
