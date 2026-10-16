@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -8,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -53,12 +55,7 @@ func (s *Server) driveThumbnail(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, fs.ErrNotExist) {
 			log.Printf("thumbnail %s unreadable, regenerating: %v", f.Blob, err)
 		}
-		file, ok := s.openFile(w, f)
-		if !ok {
-			return
-		}
-		thumb, err = drive.Thumbnail(r.Context(), file, f.Size)
-		file.Close()
+		thumb, err = s.makeThumbnail(r.Context(), f)
 		if errors.Is(err, drive.ErrNoThumbnail) {
 			s.writeError(w, http.StatusUnsupportedMediaType, "No thumbnail for this file")
 			return
@@ -73,6 +70,21 @@ func (s *Server) driveThumbnail(w http.ResponseWriter, r *http.Request) {
 	}
 	previewHeaders(w, "image/png", f.Name+".png")
 	w.Write(thumb)
+}
+
+// makeThumbnail renders f's thumbnail: in-process for raster images, through the Document
+// Server's converter for Office documents and PDFs when Euro-Office is configured.
+func (s *Server) makeThumbnail(ctx context.Context, f drive.File) ([]byte, error) {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(f.Name), "."))
+	if s.editor != nil && convertible[ext] {
+		return s.officeThumbnail(ctx, f, ext)
+	}
+	file, err := s.openBlob(f)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return drive.Thumbnail(ctx, file, f.Size)
 }
 
 // drivePreview serves a file's current bytes inline when they sniff as an allowlisted type.

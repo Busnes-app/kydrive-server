@@ -14,8 +14,8 @@ describe('FileIcon', () => {
     expect(container.querySelector('svg.drive-file-icon')).not.toBeNull();
   });
 
-  it('never asks for a thumbnail of a non-image', () => {
-    for (const name of ['report.docx', 'paper.pdf', 'logo.svg', 'README']) {
+  it('never asks for a thumbnail the server cannot make', () => {
+    for (const name of ['notes.md', 'page.html', 'logo.svg', 'README']) {
       const { container } = render(<FileIcon file={{ id: 'x', name }} />);
       expect(container.querySelector('img')).toBeNull();
       expect(container.querySelector('svg.drive-file-icon')).not.toBeNull();

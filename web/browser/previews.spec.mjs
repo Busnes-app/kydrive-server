@@ -25,7 +25,7 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
   const headers = await signIn(page);
   expect((await page.request.post('/api/drive/personal-workspace', { headers, data: {} })).ok()).toBe(true);
   const mine = (await (await page.request.get('/api/drive/workspaces')).json()).find(w => w.kind === 'personal');
-  const tag = testInfo.project.name.replace(/\W/g, '');
+  const tag = testInfo.project.name.replace(/\W/g, '') + (testInfo.repeatEachIndex || '');
   const put = async (name, body) => {
     const r = await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${encodeURIComponent(name)}&parent=&revision=0`, { headers, data: body });
     expect(r.status(), name).toBe(201);
@@ -40,7 +40,12 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
   // The list shows the image's thumbnail and type icons for the rest.
   const thumb = page.getByRole('row', { name: new RegExp(`dot ${tag}\\.png`) }).locator('img.drive-thumbnail');
   await expect.poll(() => thumb.evaluate(i => i.complete && i.naturalWidth)).toBe(1);
-  await expect(page.getByRole('row', { name: new RegExp(`paper ${tag}\\.pdf`) }).locator('svg.drive-file-icon')).toBeVisible();
+  // Without Euro-Office the PDF's thumbnail is refused and its icon stays; the lazy thumbnail is
+  // only asked for once the row is on screen.
+  const pdfRow = page.getByRole('row', { name: new RegExp(`paper ${tag}\\.pdf`) });
+  await pdfRow.scrollIntoViewIfNeeded();
+  await expect(pdfRow.locator('svg.drive-file-icon')).toBeVisible();
+  await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('list.png') });
 
   await page.getByRole('button', { name: `dot ${tag}.png` }).click();

@@ -63,7 +63,7 @@ Items shared with you outside your own workspaces appear under **Shared with me*
 
 Clicking a file that has no editor (images, PDFs, audio, video, plain text) opens a quick look in the browser; every file's menu also has Preview. What the file actually contains decides whether it renders, never its name: PNG, JPEG, GIF, WebP, PDF, MP3, WAV, Ogg, MP4, WebM and UTF-8 text are shown, and everything else, HTML and SVG included, offers Download instead. Text shows its first 256 KiB as plain text. Previews are served sandboxed (`Content-Security-Policy: sandbox`, `nosniff`), so nothing in a file runs as KyDrive, and need the same access as a download.
 
-The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GIF and WebP images. Thumbnails are made on the server once per version, encrypted on disk like the files themselves under `<KY_DATA_DIR>/thumbs`, left out of backups, and safe to delete. Images over 64 MiB, over 16384 pixels a side or too large to decode in 256 MiB keep their icon.
+The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GIF and WebP images and, when Euro-Office is configured, for the first page of Office documents (DOCX, ODT, RTF, XLSX, ODS, CSV, PPTX, ODP) and PDFs. Documents are rendered by the Document Server from a one-time link to that file alone, and its picture is checked like an upload. Thumbnails are made on the server once per version, encrypted on disk like the files themselves under `<KY_DATA_DIR>/thumbs`, left out of backups, and safe to delete. Images over 64 MiB, over 16384 pixels a side or too large to decode in 256 MiB keep their icon.
 
 ## Leavers
 
