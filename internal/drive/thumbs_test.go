@@ -104,7 +104,7 @@ func pngChunk(out []byte, kind string, data []byte) []byte {
 
 // pngBomb is a PNG claiming w x h at the given bit depth and color type, whose pixel data is a
 // megabyte of zeros compressed to about a kilobyte: a decoder that trusts it allocates it all.
-func pngBomb(w, h uint32, depth, colorType byte) []byte {
+func pngBomb(w, h uint32, depth, colorType byte, extra ...[]byte) []byte {
 	ihdr := binary.BigEndian.AppendUint32(nil, w)
 	ihdr = binary.BigEndian.AppendUint32(ihdr, h)
 	var z bytes.Buffer
@@ -112,7 +112,17 @@ func pngBomb(w, h uint32, depth, colorType byte) []byte {
 	zw.Write(make([]byte, 1<<20))
 	zw.Close()
 	out := pngChunk([]byte("\x89PNG\r\n\x1a\n"), "IHDR", append(ihdr, depth, colorType, 0, 0, 0))
+	for _, c := range extra { // whole chunks: type then data
+		out = pngChunk(out, string(c[:4]), c[4:])
+	}
 	return pngChunk(pngChunk(out, "IDAT", z.Bytes()), "IEND", nil)
+}
+
+// adam7 marks a PNG from pngBomb interlaced: the IHDR interlace byte, then its CRC.
+func adam7(p []byte) []byte {
+	p[28] = 1
+	binary.BigEndian.PutUint32(p[29:], crc32.ChecksumIEEE(p[12:29]))
+	return p
 }
 
 // jpegHeader is a JPEG start and a frame header claiming w x h with three components.
@@ -133,8 +143,12 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 		"100000 square png":      pngBomb(100000, 100000, 8, 6),
 		"side over 16384":        pngBomb(17000, 10, 8, 6),
 		"16-bit png over budget": pngBomb(8000, 6000, 16, 6),
-		"progressive jpeg":       jpegHeader(5000, 5000, true),
-		"zero width":             pngBomb(0, 10, 8, 6),
+		// Grayscale reports 2 bytes a pixel, but transparency makes it decode as 8-byte NRGBA64.
+		"16-bit gray with transparency": pngBomb(6000, 6000, 16, 0, []byte("tRNS\x00\x00")),
+		// Interlacing decodes every pass into its own buffer as well as the image.
+		"interlaced png":   adam7(pngBomb(7000, 7000, 8, 6)),
+		"progressive jpeg": jpegHeader(5000, 5000, true),
+		"zero width":       pngBomb(0, 10, 8, 6),
 	} {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
