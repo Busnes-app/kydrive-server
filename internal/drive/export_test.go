@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"image"
 	"io"
 	"strings"
 	"time"
@@ -29,6 +30,16 @@ func MoveFileFrom(ctx context.Context, s *Store, user string, f File, expected i
 // GuestPath is the breadcrumb walk GuestView runs over the ancestors it loaded.
 func GuestPath(chain []Folder, folder, root string) ([]GuestItem, error) {
 	return guestPath(chain, folder, root)
+}
+
+// DecodeCost is what Thumbnail budgets for decoding the image in r, in bytes a pixel, and
+// the decoder it would use.
+func DecodeCost(r io.ReadSeeker) (int64, func(io.Reader) (image.Image, error), error) {
+	f, _, perPixel, _, err := inspect(r)
+	if err != nil {
+		return 0, nil, err
+	}
+	return perPixel, f.decode, nil
 }
 
 // JPEGFrame returns a JPEG's frame marker (0 when none) and EXIF orientation.

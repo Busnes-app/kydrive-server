@@ -33,31 +33,41 @@ var ErrNoThumbnail = errors.New("no thumbnail for this file")
 
 var decoding = make(chan struct{}, 1)
 
-// jpegCost is what image/jpeg holds at its peak, in bytes a pixel, by the color model
-// DecodeConfig reports. Every frame decodes into component planes; RGB and CMYK are then
-// converted into a new image while the planes are still held, and a progressive frame keeps 4
-// bytes of coefficients a component until its last scan. Each includes decoder padding.
-var jpegCost = map[color.Model]struct{ baseline, progressive int64 }{
-	color.GrayModel:  {4, 16},
-	color.YCbCrModel: {4, 16},
-	color.RGBAModel:  {8, 20}, // planes, then an RGBA image
-	color.CMYKModel:  {8, 24}, // planes and a black plane, then a CMYK image
+// Decoder footprints, in bytes a pixel, are the allocations each decode path was measured to
+// make (TestDecoderCostsHold pins them) rounded up: PNG 4, 8 at 16 bits, doubled when
+// interlaced; GIF 4, first frame only; WebP 12, lossy with palette-coded alpha being the
+// largest at 9.3; JPEG by jpegCost.
+const webpCost = 12
+
+// jpegCost is image/jpeg's footprint for a baseline and a progressive frame. Every frame
+// decodes into component planes; RGB and CMYK are converted into a new image while the planes
+// are held, and a progressive frame keeps 4 bytes of coefficients a component until its last
+// scan. Whether three components are RGB is decided by markers DecodeConfig may not have read,
+// so three components always cost as RGB.
+func jpegCost(m color.Model) (baseline, progressive int64) {
+	switch m {
+	case color.GrayModel:
+		return 4, 16
+	case color.CMYKModel:
+		return 9, 25
+	}
+	return 8, 20
 }
 
 type raster struct {
-	jpeg   bool
+	kind   string
 	magic  func([]byte) bool
 	config func(io.Reader) (image.Config, error)
 	decode func(io.Reader) (image.Image, error)
 }
 
 var rasters = []raster{
-	{false, func(b []byte) bool { return bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")) }, png.DecodeConfig, png.Decode},
-	{true, func(b []byte) bool { return bytes.HasPrefix(b, []byte("\xff\xd8\xff")) }, jpeg.DecodeConfig, jpeg.Decode},
-	{false, func(b []byte) bool {
+	{"png", func(b []byte) bool { return bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")) }, png.DecodeConfig, png.Decode},
+	{"jpeg", func(b []byte) bool { return bytes.HasPrefix(b, []byte("\xff\xd8\xff")) }, jpeg.DecodeConfig, jpeg.Decode},
+	{"gif", func(b []byte) bool {
 		return bytes.HasPrefix(b, []byte("GIF87a")) || bytes.HasPrefix(b, []byte("GIF89a"))
 	}, gif.DecodeConfig, gif.Decode},
-	{false, func(b []byte) bool { return len(b) >= 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP" }, webp.DecodeConfig, webp.Decode},
+	{"webp", func(b []byte) bool { return len(b) >= 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP" }, webp.DecodeConfig, webp.Decode},
 }
 
 // Thumbnail returns a PNG thumbnail of the raster image in r, which holds size bytes.
@@ -65,48 +75,9 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 	if size > ThumbnailMaxFile {
 		return nil, ErrNoThumbnail
 	}
-	head := make([]byte, 29) // through a PNG's IHDR interlace byte
-	n, _ := io.ReadFull(r, head)
-	var f *raster
-	for i := range rasters {
-		if rasters[i].magic(head[:n]) {
-			f = &rasters[i]
-		}
-	}
-	if f == nil {
-		return nil, ErrNoThumbnail
-	}
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	}
-	cfg, err := f.config(r)
+	f, cfg, perPixel, orientation, err := inspect(r)
 	if err != nil {
-		return nil, ErrNoThumbnail
-	}
-	perPixel, orientation := int64(4), 1
-	switch cfg.ColorModel {
-	case color.RGBA64Model, color.NRGBA64Model, color.Gray16Model: // 16-bit gray with tRNS decodes as NRGBA64
-		perPixel = 8
-	}
-	if bytes.HasPrefix(head[:n], []byte("\x89PNG")) && n == len(head) && head[28] != 0 {
-		perPixel *= 2 // Adam7 decodes each pass into its own buffer too
-	}
-	if f.jpeg {
-		if _, err = r.Seek(0, io.SeekStart); err != nil {
-			return nil, err
-		}
-		var sof byte
-		sof, orientation = jpegFrame(r)
-		// A frame that is not plainly baseline, or not found, is budgeted as progressive.
-		cost, ok := jpegCost[cfg.ColorModel]
-		if !ok {
-			cost = jpegCost[color.YCbCrModel]
-		}
-		if sof == 0xc0 || sof == 0xc1 {
-			perPixel = cost.baseline
-		} else {
-			perPixel = cost.progressive
-		}
+		return nil, err
 	}
 	w, h := cfg.Width, cfg.Height
 	if w < 1 || h < 1 || w > thumbMaxSide || h > thumbMaxSide || int64(w)*int64(h)*perPixel > thumbBudget {
@@ -138,6 +109,52 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+// inspect reads an image's format and header, never its pixels, and returns what decoding it
+// would cost in bytes a pixel, and its EXIF orientation.
+func inspect(r io.ReadSeeker) (f *raster, cfg image.Config, perPixel int64, orientation int, err error) {
+	head := make([]byte, 29) // through a PNG's IHDR interlace byte
+	n, _ := io.ReadFull(r, head)
+	for i := range rasters {
+		if rasters[i].magic(head[:n]) {
+			f = &rasters[i]
+		}
+	}
+	if f == nil {
+		return nil, cfg, 0, 0, ErrNoThumbnail
+	}
+	if _, err = r.Seek(0, io.SeekStart); err != nil {
+		return
+	}
+	if cfg, err = f.config(r); err != nil {
+		return nil, cfg, 0, 0, ErrNoThumbnail
+	}
+	perPixel, orientation = 4, 1
+	switch f.kind {
+	case "png":
+		switch cfg.ColorModel {
+		case color.RGBA64Model, color.NRGBA64Model, color.Gray16Model: // 16-bit gray with tRNS decodes as NRGBA64
+			perPixel = 8
+		}
+		if n == len(head) && head[28] != 0 {
+			perPixel *= 2 // Adam7 decodes each pass into its own buffer too
+		}
+	case "webp":
+		perPixel = webpCost
+	case "jpeg":
+		if _, err = r.Seek(0, io.SeekStart); err != nil {
+			return
+		}
+		var sof byte
+		sof, orientation = jpegFrame(r)
+		// A frame that is not plainly baseline, or not found, is budgeted as progressive.
+		baseline, progressive := jpegCost(cfg.ColorModel)
+		if perPixel = progressive; sof == 0xc0 || sof == 0xc1 {
+			perPixel = baseline
+		}
+	}
+	return
 }
 
 // fit scales w x h down to fit ThumbnailSize square, keeping its shape; it never enlarges.

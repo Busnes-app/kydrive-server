@@ -192,6 +192,11 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 5000 × 4600 lossy WebP whose alpha is palette-coded: 9.3 bytes a pixel measured.
+	webpAlpha, err := os.ReadFile("testdata/webp-alpha-over-budget.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, body := range map[string][]byte{
 		"progressive jpeg":             prog,
 		"progressive past 65 comments": append(padded, prog[2:]...),
@@ -200,6 +205,8 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 		"progressive cmyk":             cmykProg,
 		"baseline rgb":                 rgb,
 		"progressive rgb":              rgbProg,
+		"rgb hidden from DecodeConfig": lateAdobe(t, rgb),
+		"webp with palette alpha":      webpAlpha,
 	} {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
@@ -287,5 +294,118 @@ func TestThumbnailCacheIsSealed(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(root, gone)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("orphan thumbnail kept")
+	}
+}
+
+// zeroPNG is a valid w x h PNG whose pixels are all zero, with an optional tRNS chunk.
+func zeroPNG(w, h int, depth, colorType byte, interlaced bool, trns []byte) []byte {
+	bpp := map[byte]int{0: 1, 2: 3, 4: 2, 6: 4}[colorType] * int(depth) / 8
+	size := 0
+	passes := [][4]int{{0, 0, 1, 1}}
+	if interlaced {
+		passes = [][4]int{{0, 0, 8, 8}, {4, 0, 8, 8}, {0, 4, 4, 8}, {2, 0, 4, 4}, {0, 2, 2, 4}, {1, 0, 2, 2}, {0, 1, 1, 2}}
+	}
+	for _, p := range passes {
+		if pw, ph := (w-p[0]+p[2]-1)/p[2], (h-p[1]+p[3]-1)/p[3]; pw > 0 && ph > 0 {
+			size += ph * (1 + pw*bpp)
+		}
+	}
+	var z bytes.Buffer
+	zw := zlib.NewWriter(&z)
+	zw.Write(make([]byte, size))
+	zw.Close()
+	ihdr := binary.BigEndian.AppendUint32(nil, uint32(w))
+	ihdr = binary.BigEndian.AppendUint32(ihdr, uint32(h))
+	ihdr = append(ihdr, depth, colorType, 0, 0, 0)
+	if interlaced {
+		ihdr[12] = 1
+	}
+	out := pngChunk([]byte("\x89PNG\r\n\x1a\n"), "IHDR", ihdr)
+	if trns != nil {
+		out = pngChunk(out, "tRNS", trns)
+	}
+	return pngChunk(pngChunk(out, "IDAT", z.Bytes()), "IEND", nil)
+}
+
+// lateAdobe rewrites a baseline RGB JPEG from Pillow so DecodeConfig sees YCbCr while Decode
+// returns RGB: components numbered 1-3 instead of R, G, B, and the Adobe marker saying "RGB"
+// moved after the scan. DecodeConfig stops at the first scan; a full decode reads on to the end.
+func lateAdobe(t *testing.T, b []byte) []byte {
+	t.Helper()
+	out := []byte{0xff, 0xd8}
+	var adobe []byte
+	for i := 2; ; {
+		marker, n := b[i+1], int(binary.BigEndian.Uint16(b[i+2:]))
+		seg := append([]byte(nil), b[i:i+2+n]...)
+		switch marker {
+		case 0xee:
+			adobe = seg
+			seg = nil
+		case 0xc0:
+			for c := range int(seg[9]) {
+				seg[10+3*c] = byte(c + 1)
+			}
+		case 0xda:
+			if adobe == nil || !bytes.HasSuffix(b, []byte{0xff, 0xd9}) {
+				t.Fatal("expected an Adobe marker before the scan and EOI at the end")
+			}
+			for c := range int(seg[4]) {
+				seg[5+2*c] = byte(c + 1)
+			}
+			out = append(append(out, seg...), b[i+2+n:len(b)-2]...)
+			return append(append(out, adobe...), 0xff, 0xd9)
+		}
+		out = append(out, seg...)
+		i += 2 + n
+	}
+}
+
+// Every decode path allocates no more than Thumbnail budgets for it. The costs were set from
+// these measurements; a decoder that grows past one fails here.
+func TestDecoderCostsHold(t *testing.T) {
+	paths := map[string][]byte{
+		"png 8-bit":               zeroPNG(512, 512, 8, 6, false, nil),
+		"png 16-bit":              zeroPNG(512, 512, 16, 6, false, nil),
+		"png 16-bit gray tRNS":    zeroPNG(512, 512, 16, 0, false, []byte{0, 0}),
+		"png interlaced":          zeroPNG(512, 512, 8, 6, true, nil),
+		"png 16-bit interlaced":   zeroPNG(512, 512, 16, 6, true, nil),
+		"png gray tRNS interlace": zeroPNG(512, 512, 16, 0, true, []byte{0, 0}),
+		"gif":                     encoded(t, 512, 512, func(b *bytes.Buffer, i image.Image) error { return gif.Encode(b, i, nil) }),
+		"jpeg baseline":           encoded(t, 512, 512, func(b *bytes.Buffer, i image.Image) error { return jpeg.Encode(b, i, nil) }),
+	}
+	files, err := filepath.Glob("testdata/path-*")
+	if err != nil || len(files) < 10 {
+		t.Fatalf("decoder fixtures %v %v", files, err)
+	}
+	for _, f := range append(files, "testdata/lossy.webp", "testdata/gradient.webp") {
+		if paths[f], err = os.ReadFile(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paths["jpeg rgb, adobe after frame"] = lateAdobe(t, paths["testdata/path-rgb.jpg"])
+	for name, body := range paths {
+		cost, decode, err := drive.DecodeCost(bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		img, err := decode(bytes.NewReader(body))
+		runtime.ReadMemStats(&after)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		px := int64(img.Bounds().Dx() * img.Bounds().Dy())
+		if used := int64(after.TotalAlloc - before.TotalAlloc); used > cost*px+256<<10 {
+			t.Errorf("%s allocated %.2f bytes a pixel, budgeted %d", name, float64(used)/float64(px), cost)
+		}
+	}
+	// The rewritten JPEG really hides its RGB output from DecodeConfig.
+	late := paths["jpeg rgb, adobe after frame"]
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(late))
+	img, derr := jpeg.Decode(bytes.NewReader(late))
+	if _, rgb := img.(*image.RGBA); err != nil || derr != nil || cfg.ColorModel != color.YCbCrModel || !rgb {
+		t.Fatalf("late Adobe JPEG: config YCbCr %v RGBA %v, decoded %T, %v %v", cfg.ColorModel == color.YCbCrModel, cfg.ColorModel == color.RGBAModel, img, err, derr)
 	}
 }
