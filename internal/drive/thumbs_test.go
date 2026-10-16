@@ -182,12 +182,24 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A JPEG stored as RGB keeps its component planes while converting into a new RGBA image:
+	// 8200 × 4096 baseline and 4000 × 3500 progressive, each just over its budget.
+	rgb, err := os.ReadFile("testdata/rgb.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rgbProg, err := os.ReadFile("testdata/rgb-progressive.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, body := range map[string][]byte{
 		"progressive jpeg":             prog,
 		"progressive past 65 comments": append(padded, prog[2:]...),
 		"progressive behind fill byte": append([]byte{0xff, 0xd8, 0xff}, prog[2:]...),
 		"baseline cmyk":                cmyk,
 		"progressive cmyk":             cmykProg,
+		"baseline rgb":                 rgb,
+		"progressive rgb":              rgbProg,
 	} {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
