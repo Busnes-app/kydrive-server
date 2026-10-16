@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -80,9 +81,11 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 		if _, err = r.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
-		var progressive bool
-		if progressive, orientation = jpegFrame(r); progressive {
-			perPixel = 16 // coefficients for every component are held until the last scan
+		var sof byte
+		// A progressive JPEG holds coefficients for every component until its last scan; a
+		// frame that is not plainly baseline, or not found, is budgeted the same way.
+		if sof, orientation = jpegFrame(r); sof != 0xc0 && sof != 0xc1 {
+			perPixel = 16
 		}
 	}
 	w, h := cfg.Width, cfg.Height
@@ -128,40 +131,58 @@ func fit(w, h int) (int, int) {
 	return max(1, w*ThumbnailSize/h), ThumbnailSize
 }
 
-// jpegFrame walks a JPEG's segments up to its frame header and reports whether it is
-// progressive and its EXIF orientation (1 when absent or unreadable).
-func jpegFrame(r io.Reader) (progressive bool, orientation int) {
+// jpegFrame walks a JPEG's segments up to its frame header and returns the frame marker (0 when
+// none is found) and the EXIF orientation (1 when absent or unreadable). It is as lenient as
+// image/jpeg, skipping stray and fill bytes and length-less markers, so a file the decoder
+// accepts cannot hide its frame type; the caller treats anything but baseline as progressive.
+func jpegFrame(r io.Reader) (sof byte, orientation int) {
 	orientation = 1
-	var b [4]byte
-	if _, err := io.ReadFull(r, b[:2]); err != nil {
+	br := bufio.NewReader(r)
+	if _, err := br.Discard(2); err != nil {
 		return
 	}
-	for range 64 {
-		if _, err := io.ReadFull(r, b[:4]); err != nil || b[0] != 0xff {
+	for {
+		c, err := br.ReadByte()
+		if err != nil {
 			return
 		}
-		marker, length := b[1], int(binary.BigEndian.Uint16(b[2:]))-2
-		if length < 0 {
+		if c != 0xff {
+			continue
+		}
+		marker := byte(0xff)
+		for marker == 0xff && err == nil {
+			marker, err = br.ReadByte()
+		}
+		if err != nil {
 			return
 		}
+		if marker == 0x00 || marker == 0x01 || (marker >= 0xd0 && marker <= 0xd8) {
+			continue // stuffed byte, TEM, RSTn, SOI: no length
+		}
+		var b [2]byte
+		if _, err = io.ReadFull(br, b[:]); err != nil {
+			return
+		}
+		length := int(binary.BigEndian.Uint16(b[:])) - 2
 		switch {
+		case length < 0 || marker == 0xd9 || marker == 0xda:
+			return // malformed, or the image ends or its scan starts before any frame
 		case marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc:
-			return marker == 0xc2 || marker == 0xc6 || marker == 0xca || marker == 0xce, orientation
+			return marker, orientation
 		case marker == 0xe1:
 			seg := make([]byte, length)
-			if _, err := io.ReadFull(r, seg); err != nil {
+			if _, err = io.ReadFull(br, seg); err != nil {
 				return
 			}
 			if o := exifOrientation(seg); o != 0 {
 				orientation = o
 			}
 		default:
-			if _, err := io.CopyN(io.Discard, r, int64(length)); err != nil {
+			if _, err = br.Discard(length); err != nil {
 				return
 			}
 		}
 	}
-	return
 }
 
 // exifOrientation reads tag 0x0112 from an APP1 segment's first IFD, or returns 0.

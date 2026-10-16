@@ -147,12 +147,51 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 			t.Fatalf("%s allocated %d bytes before refusing", name, grew)
 		}
 	}
-	// A progressive JPEG is budgeted at 16 bytes a pixel, a baseline one at 4.
-	if p, _ := drive.JPEGFrame(bytes.NewReader(jpegHeader(10, 10, true))); !p {
-		t.Fatal("progressive frame not recognised")
+	// A real 5000 × 5000 progressive JPEG, also hidden from a frame walker that gives up early:
+	// past 64 empty comments, and behind a fill byte the standard decoder skips. Each must be
+	// budgeted as progressive and refused before its coefficients are allocated.
+	prog, err := os.ReadFile("testdata/progressive.jpg")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if p, _ := drive.JPEGFrame(bytes.NewReader(jpegHeader(10, 10, false))); p {
-		t.Fatal("baseline frame taken for progressive")
+	padded := []byte{0xff, 0xd8}
+	for range 65 {
+		padded = append(padded, 0xff, 0xfe, 0, 2)
+	}
+	for name, body := range map[string][]byte{
+		"progressive jpeg":             prog,
+		"progressive past 65 comments": append(padded, prog[2:]...),
+		"progressive behind fill byte": append([]byte{0xff, 0xd8, 0xff}, prog[2:]...),
+	} {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		_, err := drive.Thumbnail(context.Background(), bytes.NewReader(body), int64(len(body)))
+		runtime.ReadMemStats(&after)
+		if !errors.Is(err, drive.ErrNoThumbnail) {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if grew := after.TotalAlloc - before.TotalAlloc; grew > 4<<20 {
+			t.Fatalf("%s allocated %d bytes before refusing", name, grew)
+		}
+	}
+	// A progressive JPEG is budgeted at 16 bytes a pixel, a baseline one at 4.
+	// The frame walk is as lenient as the decoder: fill bytes, stray bytes and length-less
+	// markers do not hide the frame, and a frame never found reads as 0.
+	base := jpegHeader(10, 10, false)
+	for name, c := range map[string]struct {
+		body []byte
+		sof  byte
+	}{
+		"progressive":       {jpegHeader(10, 10, true), 0xc2},
+		"baseline":          {base, 0xc0},
+		"fill bytes":        {append([]byte{0xff, 0xd8, 0xff, 0xff}, base[2:]...), 0xc0},
+		"stray byte, RST0":  {append([]byte{0xff, 0xd8, 0x00, 0xff, 0xd0}, base[2:]...), 0xc0},
+		"scan before frame": {[]byte{0xff, 0xd8, 0xff, 0xda, 0, 2}, 0},
+		"truncated":         {[]byte{0xff, 0xd8, 0xff}, 0},
+	} {
+		if sof, _ := drive.JPEGFrame(bytes.NewReader(c.body)); sof != c.sof {
+			t.Fatalf("%s: frame %#x, want %#x", name, sof, c.sof)
+		}
 	}
 	// The same frame as a baseline JPEG is within budget: only its missing data stops it.
 	if _, err := drive.Thumbnail(context.Background(), bytes.NewReader(jpegHeader(5000, 5000, false)), 30); !errors.Is(err, drive.ErrNoThumbnail) {

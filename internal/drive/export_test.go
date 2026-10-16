@@ -31,8 +31,8 @@ func GuestPath(chain []Folder, folder, root string) ([]GuestItem, error) {
 	return guestPath(chain, folder, root)
 }
 
-// JPEGFrame reports whether a JPEG is progressive and its EXIF orientation.
-func JPEGFrame(r io.Reader) (bool, int) { return jpegFrame(r) }
+// JPEGFrame returns a JPEG's frame marker (0 when none) and EXIF orientation.
+func JPEGFrame(r io.Reader) (byte, int) { return jpegFrame(r) }
 
 // SeedFiles inserts n live files named file-<i>.txt at the root of workspace in one transaction.
 func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {
