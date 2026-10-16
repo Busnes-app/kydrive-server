@@ -63,6 +63,8 @@ Items shared with you outside your own workspaces appear under **Shared with me*
 
 Clicking a file that has no editor (images, PDFs, audio, video, plain text) opens a quick look in the browser; every file's menu also has Preview. What the file actually contains decides whether it renders, never its name: PNG, JPEG, GIF, WebP, PDF, MP3, WAV, Ogg, MP4, WebM and UTF-8 text are shown, and everything else, HTML and SVG included, offers Download instead. Text shows its first 256 KiB as plain text. Previews are served sandboxed (`Content-Security-Policy: sandbox`, `nosniff`), so nothing in a file runs as KyDrive, and need the same access as a download.
 
+The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GIF and WebP images. Thumbnails are made on the server once per version, encrypted on disk like the files themselves under `<KY_DATA_DIR>/thumbs`, left out of backups, and safe to delete. Images over 64 MiB, over 16384 pixels a side or too large to decode in 256 MiB keep their icon.
+
 ## Leavers
 
 A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:

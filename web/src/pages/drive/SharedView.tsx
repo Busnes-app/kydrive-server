@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bytes, editorURL, file, folder, hasEditor, list, opensInEditor, record, response, sharedItem } from './client';
 import { QuickLook } from './QuickLook';
+import { FileIcon } from './FileIcon';
 import type { DriveFile, Folder, SharedItem } from './client';
 
 // SharedView lists what others shared with the user outside their own workspaces and browses
@@ -26,8 +27,8 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
     return () => { active = false; };
   }, [at]);
 
-  const fileRow = (f: { id: string; name: string }, detail: string) => <tr key={f.id}>
-    <td>{opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...target}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}</td><td>{detail}</td>
+  const fileRow = (f: { id: string; name: string; revision?: number }, detail: string) => <tr key={f.id}>
+    <td><span className="drive-name-cell"><FileIcon file={f} />{opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...target}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}</span></td><td>{detail}</td>
     <td><div className="drive-file-actions"><button className="btn-secondary" onClick={() => setPreview(f)}>Preview</button>{hasEditor(f.name) && <a href={editorURL(f)} {...target}>Open editor</a>}<a href={`/api/drive/files/${f.id}/download`}>Download</a></div></td>
   </tr>;
   const open = (id: string, name: string) => { setError(''); setPath([...path, { id, name }]); };

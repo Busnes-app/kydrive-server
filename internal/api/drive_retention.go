@@ -76,6 +76,9 @@ func (s *Server) RunRetention(ctx context.Context) {
 		} else if n > 0 {
 			log.Printf("orphan sweep: removed %d files", n)
 		}
+		if _, err := s.store.Drive().SweepOrphans(ctx, s.thumbRoot(), time.Hour); err != nil && ctx.Err() == nil {
+			log.Printf("thumbnail sweep: %v", err)
+		}
 		if n, err := s.store.Drive().ExpireUploads(ctx, s.stagingRoot()); err != nil && ctx.Err() == nil {
 			log.Printf("upload expiry: %v", err)
 		} else if n > 0 {

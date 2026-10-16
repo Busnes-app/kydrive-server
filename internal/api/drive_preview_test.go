@@ -1,10 +1,15 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,7 +18,7 @@ import (
 )
 
 func TestPreviewServesOnlyTheAllowlist(t *testing.T) {
-	srv, st, _ := setupTestServer(t)
+	srv, st, cfg := setupTestServer(t)
 	if st.Drive() == nil {
 		t.Skip("SQLite drive")
 	}
@@ -40,10 +45,10 @@ func TestPreviewServesOnlyTheAllowlist(t *testing.T) {
 		}
 		return f.ID
 	}
-	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 64)
+	pngHead := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 64)
 	text := strings.Repeat("plain words <b>not markup</b>\n", 4000)
 	served := map[string]struct{ name, body, kind string }{
-		"png":     {"photo.png", png, "image/png"},
+		"png":     {"photo.png", pngHead, "image/png"},
 		"pdf":     {"paper.pdf", "%PDF-1.4\n%%EOF\n", "application/pdf"},
 		"text":    {"notes.txt", text, "text/plain; charset=utf-8"},
 		"mp4":     {"clip.mp4", "\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom", "video/mp4"},
@@ -94,6 +99,33 @@ func TestPreviewServesOnlyTheAllowlist(t *testing.T) {
 	head := send(t, srv, "HEAD", "/api/drive/files/"+id+"/preview", "", owner, "")
 	if head.Code != 200 || head.Header().Get("Content-Type") != "text/plain; charset=utf-8" || head.Body.Len() != 0 {
 		t.Fatalf("head %d %q", head.Code, head.Header().Get("Content-Type"))
+	}
+
+	// Thumbnails: a raster image shrinks into 256 square, sealed in the cache; anything else is 415.
+	var wide bytes.Buffer
+	if err = png.Encode(&wide, image.NewRGBA(image.Rect(0, 0, 600, 300))); err != nil {
+		t.Fatal(err)
+	}
+	photo := upload("wide.png", wide.String())
+	for range 2 { // generated, then read from the cache
+		got := send(t, srv, "GET", "/api/drive/files/"+photo+"/thumbnail", "", owner, "")
+		img, err := png.Decode(got.Body)
+		if got.Code != 200 || got.Header().Get("Content-Type") != "image/png" || !strings.HasPrefix(got.Header().Get("Content-Security-Policy"), "sandbox;") || err != nil || img.Bounds().Dx() != 256 || img.Bounds().Dy() != 128 {
+			t.Fatalf("thumbnail %d %v %v", got.Code, got.Header(), err)
+		}
+	}
+	cached, err := filepath.Glob(filepath.Join(cfg.Database.DataDir, "thumbs", "*"))
+	if err != nil || len(cached) != 1 {
+		t.Fatalf("thumbnail cache %v %v", cached, err)
+	}
+	if raw, _ := os.ReadFile(cached[0]); bytes.Contains(raw, []byte("\x89PNG")) {
+		t.Fatal("cached thumbnail is plaintext")
+	}
+	if got := send(t, srv, "GET", "/api/drive/files/"+id+"/thumbnail", "", owner, ""); got.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("text thumbnail: %d", got.Code)
+	}
+	if got := send(t, srv, "GET", "/api/drive/files/"+photo+"/thumbnail", "", outsider, ""); got.Code != http.StatusForbidden {
+		t.Fatalf("outsider thumbnail: %d", got.Code)
 	}
 
 	if got := send(t, srv, "GET", "/api/drive/files/"+id+"/preview", "", outsider, ""); got.Code != http.StatusForbidden {

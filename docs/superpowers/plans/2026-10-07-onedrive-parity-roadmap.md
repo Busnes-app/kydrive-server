@@ -63,7 +63,7 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** a workspace mounts in all three desktop OSes; save from LibreOffice over WebDAV creates a version; a deactivated user's app password stops working immediately.
 
-### M5 — Previews and thumbnails (plan `2026-10-16-m5-previews.md`; preview built)
+### M5 — Previews and thumbnails (plan `2026-10-16-m5-previews.md`; preview and image thumbnails built)
 
 - In-browser preview for a fixed MIME allowlist only: raster images (not SVG), PDF, audio/video (with `http.ServeContent` range support), plain text. Served `Content-Disposition: inline` with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`. Everything else downloads.
 - Thumbnails: raster images decoded in-process with a dimension cap checked by `image.DecodeConfig` before decoding; Office/PDF first pages via Euro-Office's conversion service using the existing JWT client. Cache under `<data>/thumbs/<digest>-<size>.png`: derived data, outside backups, safe to delete.

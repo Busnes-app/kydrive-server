@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"image"
+	"io"
 	"strings"
 	"time"
 )
@@ -29,6 +31,19 @@ func MoveFileFrom(ctx context.Context, s *Store, user string, f File, expected i
 func GuestPath(chain []Folder, folder, root string) ([]GuestItem, error) {
 	return guestPath(chain, folder, root)
 }
+
+// DecodeCost is what Thumbnail budgets for decoding the image in r, in bytes a pixel, and
+// the decoder it would use.
+func DecodeCost(r io.ReadSeeker) (int64, func(io.Reader) (image.Image, error), error) {
+	f, _, perPixel, _, err := inspect(r)
+	if err != nil {
+		return 0, nil, err
+	}
+	return perPixel, f.decode, nil
+}
+
+// JPEGFrame returns a JPEG's frame marker (0 when none) and EXIF orientation.
+func JPEGFrame(r io.Reader) (byte, int) { return jpegFrame(r) }
 
 // SeedFiles inserts n live files named file-<i>.txt at the root of workspace in one transaction.
 func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {

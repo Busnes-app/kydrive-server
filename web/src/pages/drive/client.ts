@@ -32,7 +32,7 @@ export function breadcrumb(folders: Folder[], id: string): Folder[] {
 export const SHARED_WITH_ME = 'shared-with-me';
 
 const editorFormats = new Set(['docx', 'odt', 'txt', 'rtf', 'md', 'xlsx', 'ods', 'csv', 'pptx', 'odp', 'pdf', 'excalidraw']);
-const extension = (name: string) => { const dot = name.lastIndexOf('.'); return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''; };
+export const extension = (name: string) => { const dot = name.lastIndexOf('.'); return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''; };
 
 // hasEditor reports whether Euro-Office or the whiteboard can open a file.
 export function hasEditor(name: string): boolean { return editorFormats.has(extension(name)); }
