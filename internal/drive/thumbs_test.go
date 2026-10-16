@@ -172,10 +172,22 @@ func TestThumbnailRefusesBombs(t *testing.T) {
 	for range 65 {
 		padded = append(padded, 0xff, 0xfe, 0, 2)
 	}
+	// CMYK decodes to YCbCr plus a black plane, then converts to a new image: 8200 × 4096
+	// baseline and 4000 × 3000 progressive are each just over budget only at their real size.
+	cmyk, err := os.ReadFile("testdata/cmyk.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmykProg, err := os.ReadFile("testdata/cmyk-progressive.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, body := range map[string][]byte{
 		"progressive jpeg":             prog,
 		"progressive past 65 comments": append(padded, prog[2:]...),
 		"progressive behind fill byte": append([]byte{0xff, 0xd8, 0xff}, prog[2:]...),
+		"baseline cmyk":                cmyk,
+		"progressive cmyk":             cmykProg,
 	} {
 		var before, after runtime.MemStats
 		runtime.ReadMemStats(&before)
