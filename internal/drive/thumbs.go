@@ -85,9 +85,17 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 			return nil, err
 		}
 		var sof byte
+		sof, orientation = jpegFrame(r)
 		// A progressive JPEG holds coefficients for every component until its last scan; a
-		// frame that is not plainly baseline, or not found, is budgeted the same way.
-		if sof, orientation = jpegFrame(r); sof != 0xc0 && sof != 0xc1 {
+		// frame that is not plainly baseline, or not found, is budgeted the same way. CMYK
+		// decodes to YCbCr and a black plane, then converts both into a new CMYK image.
+		baseline, cmyk := sof == 0xc0 || sof == 0xc1, cfg.ColorModel == color.CMYKModel
+		switch {
+		case baseline && cmyk:
+			perPixel = 8
+		case cmyk:
+			perPixel = 24
+		case !baseline:
 			perPixel = 16
 		}
 	}
