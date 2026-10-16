@@ -49,6 +49,10 @@ CREATE INDEX drive_app_passwords_user ON drive_app_passwords(user_id);`,
 CREATE INDEX drive_shares_resource ON drive_shares(resource_id);
 CREATE INDEX drive_shares_principal ON drive_shares(principal_kind,principal_id);
 ALTER TABLE drive_workspaces ADD COLUMN editors_share INTEGER NOT NULL DEFAULT 0;`,
+	// One table for organisation and (later) guest links; guest columns are unused by 'org'.
+	`CREATE TABLE drive_links(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),resource_kind TEXT NOT NULL CHECK(resource_kind IN ('folder','file')),resource_id TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('reader','editor')),scope TEXT NOT NULL CHECK(scope IN ('org','guest')),token_hash TEXT NOT NULL UNIQUE,expires INTEGER NOT NULL DEFAULT 0,password_hash TEXT NOT NULL DEFAULT '',upload_only INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created TEXT NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX drive_links_resource ON drive_links(resource_id);
+CREATE TABLE drive_link_users(link TEXT NOT NULL REFERENCES drive_links(id),user_id TEXT NOT NULL,opened TEXT NOT NULL,PRIMARY KEY(link,user_id));`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

@@ -151,6 +151,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		}
 		for _, q := range []string{
 			`DELETE FROM drive_shares WHERE workspace=?`,
+			`UPDATE drive_links SET revoked=1 WHERE workspace=?`,
 			`UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (SELECT id FROM drive_files WHERE workspace=?)`,
 			`UPDATE drive_editor_documents SET closed=true WHERE file_id IN (SELECT id FROM drive_files WHERE workspace=?)`,
 			`UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE workspace=?`,

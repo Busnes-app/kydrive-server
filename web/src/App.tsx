@@ -3,7 +3,8 @@ import { AppHeader } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
 import { SharedView } from './pages/drive/SharedView';
-import { SHARED_WITH_ME } from './pages/drive/client';
+import { SHARED_WITH_ME, editorURL } from './pages/drive/client';
+import { openPendingLink, takeLinkFromURL } from './pages/drive/links';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
@@ -27,6 +28,7 @@ export const App: React.FC = () => {
   const [openInNewTab, setOpenInNewTab] = useState(true);
 
   useEffect(() => {
+    takeLinkFromURL();
     const checkAuth = async () => {
       try {
         const authResp = await fetch('/api/auth/me');
@@ -53,6 +55,16 @@ export const App: React.FC = () => {
 
     checkAuth();
   }, []);
+
+  // A link opened before signing in waits until there is a user.
+  useEffect(() => {
+    if (!user || user.must_change_password) return;
+    void openPendingLink().then(item => {
+      if (!item) return;
+      if (item.kind === 'file') { location.assign(editorURL(item)); return; }
+      setSelectedWorkspace(SHARED_WITH_ME); setActiveTab('drive');
+    }, () => setNotice('This link is no longer valid. Ask whoever sent it for a new one.'));
+  }, [user]);
 
   // /api/settings returns more fields once authenticated, so re-read it after login.
   const loadSettings = async () => {
