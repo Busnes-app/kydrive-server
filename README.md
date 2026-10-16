@@ -49,6 +49,12 @@ To make an installation owner an application administrator, run the audited oper
 
 This preserves the directory account and revokes its existing sessions; sign in with KyIdentity again. Use `-role user` to remove the grant. SCIM roles do not assign application administration, and offboarding still disables administrators. The distinct local `recovery-admin` account is for recovery; deployment credentials belong in an operator-controlled secret location.
 
+## Sharing
+
+Beyond workspace group grants, any folder or file can be shared with a person or a group as reader, editor or manager from its Actions menu. A folder share covers everything inside it. Shares only add access; they never take away what a workspace grant gives. Workspace managers share; editors can share up to editor access when a manager turns on "Editors may share" in Workspace settings. People who received a share, even as manager, cannot pass it on. The owner of My files can share from it too; those shares stop while the owner's account is deactivated and are dropped when an administrator hands the files over. Moving a file to another workspace drops its shares.
+
+Items shared with you outside your own workspaces appear under **Shared with me**, where you can browse shared folders and open or download files. They are not yet listed over WebDAV, and the search box covers your workspaces only. Removing a share, or removing someone from a shared group, ends their open editor at once.
+
 ## Leavers
 
 A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:
@@ -129,7 +135,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, anonymous sharing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, sharing by link (organisation or guest links are planned), full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 

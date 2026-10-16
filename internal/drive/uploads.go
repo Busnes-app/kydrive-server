@@ -48,13 +48,10 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 		return u, fmt.Errorf("%w: file is larger than the upload limit", ErrQuota)
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, u.Workspace, 2); err != nil {
-			return err
-		}
+		var stored string
+		var revision int64
 		if u.File != "" {
 			// A new version keeps the file's place and name.
-			var stored string
-			var revision int64
 			err := tx.QueryRowContext(ctx, `SELECT parent,name,revision FROM drive_files WHERE id=? AND workspace=? AND trashed=false`, u.File, u.Workspace).Scan(&u.Parent, &stored, &revision)
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrDenied
@@ -62,6 +59,12 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 			if err != nil {
 				return err
 			}
+		}
+		if err := authorizeItem(ctx, tx, user, u.Workspace, u.Parent, u.File, 2); err != nil {
+			return err
+		}
+		if u.File != "" {
+			var err error
 			if revision != u.Expected {
 				return ErrConflict
 			}
@@ -120,7 +123,7 @@ func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, err
 	if u.Name, err = s.names.open("drive_upload_sessions", id, stored); err != nil {
 		return u, err
 	}
-	return u, authorize(ctx, s.db, user, u.Workspace, 2)
+	return u, authorizeItem(ctx, s.db, user, u.Workspace, u.Parent, u.File, 2)
 }
 
 // AppendUpload seals exactly length bytes of r as the segment starting at start, which must be

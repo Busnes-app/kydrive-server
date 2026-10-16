@@ -24,16 +24,30 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 	if err != nil {
 		return f, err
 	}
-	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+	return s.moveFile(ctx, user, f, expected, to)
+}
+
+// moveFile moves f, which the caller loaded before. Its workspace and parent are read again
+// inside the transaction, authorized as they are now, and the update requires them unchanged:
+// a file moved meanwhile out of what authorized the caller cannot be taken back.
+func (s *Store) moveFile(ctx context.Context, user string, f File, expected int64, to Location) (File, error) {
+	id := f.ID
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		err := tx.QueryRowContext(ctx, `SELECT workspace,parent FROM drive_files WHERE id=? AND trashed=false`, id).Scan(&f.Workspace, &f.Parent)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDenied
+		}
+		if err != nil {
 			return err
 		}
+		need := 2
 		if to.Workspace != f.Workspace {
-			if err := authorize(ctx, tx, user, f.Workspace, 3); err != nil {
-				return err
-			}
+			need = 3 // taking a file out of its workspace is a manager's call
 		}
-		if err := authorize(ctx, tx, user, to.Workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, need); err != nil {
+			return err
+		}
+		if err := authorizeItem(ctx, tx, user, to.Workspace, to.Parent, "", 2); err != nil {
 			return err
 		}
 		if err := parentOK(ctx, tx, to.Workspace, to.Parent); err != nil {
@@ -47,12 +61,16 @@ func (s *Store) MoveFile(ctx context.Context, user, id string, expected int64, t
 			if err := fits(ctx, tx, to.Workspace, size); err != nil {
 				return err
 			}
+			// Shares were granted within the source; they would revive if the file came back.
+			if _, err := tx.ExecContext(ctx, `DELETE FROM drive_shares WHERE resource_kind='file' AND resource_id=?`, id); err != nil {
+				return err
+			}
 		}
 		stored, mac, err := s.names.seal("drive_files", id, to.Name)
 		if err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=?,name_hmac=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, stored, mac, id, f.Workspace, expected)
+		res, err := tx.ExecContext(ctx, `UPDATE drive_files SET workspace=?,parent=?,name=?,name_hmac=? WHERE id=? AND workspace=? AND parent=? AND revision=? AND trashed=false`, to.Workspace, to.Parent, stored, mac, id, f.Workspace, f.Parent, expected)
 		if uniqueViolation(err) {
 			return fmt.Errorf("%w: name exists", ErrConflict)
 		}
@@ -97,7 +115,7 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 		if err != nil {
 			return err
 		}
-		if err = authorize(ctx, tx, user, src.Workspace, 1); err != nil {
+		if err = authorizeItem(ctx, tx, user, src.Workspace, src.Parent, src.ID, 1); err != nil {
 			return err
 		}
 		out.Size, out.Digest, out.Blob, out.Sealed = src.Size, src.Digest, src.Blob, src.Sealed
@@ -120,7 +138,10 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 		if err != nil {
 			return err
 		}
-		if err := authorize(ctx, tx, user, f.Workspace, 2); err != nil {
+		if err := authorizeItem(ctx, tx, user, f.Workspace, id, "", 2); err != nil {
+			return err
+		}
+		if err := authorizeItem(ctx, tx, user, f.Workspace, parent, "", 2); err != nil {
 			return err
 		}
 		if err := parentOK(ctx, tx, f.Workspace, parent); err != nil {

@@ -20,6 +20,6 @@ describe('workspace guard', () => {
   it('requires retention fields', () => {
     const base = { id: 'w', name: 'W', role: 'manager', kind: 'shared', quota: 1, used: 0 };
     expect(workspace(base)).toBe(false);
-    expect(workspace({ ...base, trash_days: 0, keep_versions: 0 })).toBe(true);
+    expect(workspace({ ...base, trash_days: 0, keep_versions: 0, editors_share: false })).toBe(true);
   });
 });

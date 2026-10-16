@@ -3,9 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MoveDialog } from './MoveDialog';
 
 const workspaces = [
-  { id: 'w1', name: 'My files', role: 'manager', kind: 'personal' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0 },
-  { id: 'w2', name: 'Team', role: 'editor', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0 },
-  { id: 'w3', name: 'Readonly', role: 'reader', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0 },
+  { id: 'w1', name: 'My files', role: 'manager', kind: 'personal' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0, editors_share: false },
+  { id: 'w2', name: 'Team', role: 'editor', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0, editors_share: false },
+  { id: 'w3', name: 'Readonly', role: 'reader', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0, editors_share: false },
 ];
 const file = { id: 'f1', name: 'a.docx', parent: '', revision: 3, size: 1, trashed: false };
 

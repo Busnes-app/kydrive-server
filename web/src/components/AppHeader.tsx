@@ -1,5 +1,6 @@
 import React from 'react';
-import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users } from 'lucide-react';
+import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
@@ -37,6 +38,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
           <nav className="app-nav" aria-label="Workspaces">
             <h2 className="app-nav-label">Personal</h2>
             {workspaces.filter(w => w.kind === 'personal').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>My files</span></button>)}
+            <button className={activeTab === 'drive' && selectedWorkspace === SHARED_WITH_ME ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === SHARED_WITH_ME ? 'page' : undefined} onClick={() => onWorkspaceSelect(SHARED_WITH_ME)}><Users size={16} /><span>Shared with me</span></button>
             <h2 className="app-nav-label">Shared workspaces</h2>
             {workspaces.filter(w => w.kind === 'shared').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>{workspace.name}</span></button>)}
             {!workspaces.some(w => w.kind === 'shared') && <p className="app-nav-empty">No shared workspaces assigned</p>}

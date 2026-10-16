@@ -1,13 +1,13 @@
 import { secureFetch } from '../../api';
 
-export type Workspace = { id: string; name: string; role: string; kind: 'personal' | 'shared'; quota: number; used: number; trash_days: number; keep_versions: number };
+export type Workspace = { id: string; name: string; role: string; kind: 'personal' | 'shared'; quota: number; used: number; trash_days: number; keep_versions: number; editors_share: boolean };
 export type DriveFile = { id: string; name: string; parent: string; revision: number; size: number; trashed: boolean };
 export type Folder = { id: string; name: string; parent: string; trashed: boolean };
 export type Grant = { group_id: string; name: string; role: string };
 export type Group = { id: string; display_name: string };
 export type Version = { revision: number; size: number; created: string };
 export function record(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
-export function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && (v.kind === 'personal' || v.kind === 'shared') && typeof v.quota === 'number' && typeof v.used === 'number' && typeof v.trash_days === 'number' && typeof v.keep_versions === 'number'; }
+export function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && (v.kind === 'personal' || v.kind === 'shared') && typeof v.quota === 'number' && typeof v.used === 'number' && typeof v.trash_days === 'number' && typeof v.keep_versions === 'number' && typeof v.editors_share === 'boolean'; }
 export function file(v: unknown): v is DriveFile { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.trashed === 'boolean'; }
 export function folder(v: unknown): v is Folder { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.trashed === 'boolean'; }
 export function grant(v: unknown): v is Grant { return record(v) && typeof v.group_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
@@ -27,3 +27,18 @@ export function breadcrumb(folders: Folder[], id: string): Folder[] {
   for (let at = byID.get(id); at && !seen.has(at.id); at = byID.get(at.parent)) { seen.add(at.id); out.unshift(at); }
   return out;
 }
+
+// SHARED_WITH_ME is the sidebar selection for items shared with the user; never a workspace ID.
+export const SHARED_WITH_ME = 'shared-with-me';
+
+export function editorURL(f: { id: string; name: string }): string {
+  if (f.name.toLowerCase().endsWith('.excalidraw')) return `/whiteboard.html?file=${encodeURIComponent(f.id)}`;
+  return `/editor.html?file=${encodeURIComponent(f.id)}`;
+}
+
+export type Share = { id: string; principal_kind: 'user' | 'group'; principal_id: string; name: string; role: string };
+export type SharedItem = { kind: 'file' | 'folder'; id: string; workspace: string; workspace_name: string; parent: string; name: string; role: string };
+export type Person = { id: string; name: string; username: string };
+export function share(v: unknown): v is Share { return record(v) && typeof v.id === 'string' && (v.principal_kind === 'user' || v.principal_kind === 'group') && typeof v.principal_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
+export function sharedItem(v: unknown): v is SharedItem { return record(v) && (v.kind === 'file' || v.kind === 'folder') && ['id', 'workspace', 'workspace_name', 'parent', 'name', 'role'].every(k => typeof v[k] === 'string'); }
+export function person(v: unknown): v is Person { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.username === 'string'; }

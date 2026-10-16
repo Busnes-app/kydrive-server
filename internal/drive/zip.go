@@ -33,7 +33,7 @@ func (s *Store) FolderTree(ctx context.Context, user, folder string) (string, []
 		if err != nil {
 			return err
 		}
-		if err = authorize(ctx, tx, user, workspace, 1); err != nil {
+		if err = authorizeItem(ctx, tx, user, workspace, folder, "", 1); err != nil {
 			return err
 		}
 		if name, err = s.names.open("drive_folders", folder, stored); err != nil {

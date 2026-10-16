@@ -51,7 +51,7 @@ INSERT INTO drive_files VALUES('f','w','d','old.txt',1,true);`)
  (SELECT COUNT(*) FROM drive_files WHERE id='f' AND trashed_at!='' AND julianday('now')-julianday(trashed_at)<1),
  (SELECT MAX(version) FROM drive_schema),
  (SELECT trash_days FROM drive_workspaces WHERE id='w')`).Scan(&folders, &stamped, &version, &days)
-	if err != nil || folders != 1 || stamped != 1 || version != 9 || days != 0 {
+	if err != nil || folders != 1 || stamped != 1 || version != 10 || days != 0 {
 		t.Fatalf("upgrade: err=%v folders=%d stamped=%d version=%d days=%d", err, folders, stamped, version, days)
 	}
 	if _, err = db.ExecContext(ctx, `UPDATE drive_folders SET trashed=true WHERE id='d'; INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) SELECT 'd2',workspace,parent,name,name_hmac FROM drive_folders WHERE id='d'`); err != nil {

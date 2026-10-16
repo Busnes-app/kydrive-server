@@ -42,6 +42,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
 	s.mux.HandleFunc("GET /api/drive/search", s.requireAuthenticated(s.driveSearch))
+	s.shareRoutes()
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
 	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
@@ -273,7 +274,11 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	if err = s.store.Drive().Authorize(r.Context(), user, f.Workspace, 2); err != nil {
+	// Check before writing the blob; Publish checks again. A new version is checked on its file.
+	if f.ID == "" {
+		err = s.store.Drive().AuthorizeItem(r.Context(), user, f.Workspace, f.Parent, "", 2)
+	}
+	if err != nil {
 		s.driveError(w, err)
 		return
 	}
@@ -328,7 +333,7 @@ func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrDenied)
 		return
 	}
-	canEdit := s.store.Drive().Authorize(r.Context(), user, f.Workspace, 2) == nil
+	canEdit := s.store.Drive().AuthorizeItem(r.Context(), user, f.Workspace, f.Parent, f.ID, 2) == nil
 	s.writeJSON(w, 200, map[string]any{
 		"id":        f.ID,
 		"workspace": f.Workspace,
@@ -423,7 +428,7 @@ func (s *Server) driveEditor(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	editable := s.store.Drive().Authorize(r.Context(), user.ID, f.Workspace, 2) == nil
+	editable := s.store.Drive().AuthorizeItem(r.Context(), user.ID, f.Workspace, f.Parent, f.ID, 2) == nil
 	mode := "view"
 	if editable {
 		mode = "edit"

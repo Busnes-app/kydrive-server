@@ -43,6 +43,12 @@ CREATE TABLE drive_upload_segments(session TEXT NOT NULL REFERENCES drive_upload
 	`ALTER TABLE drive_upload_sessions ADD COLUMN completing INTEGER NOT NULL DEFAULT 0;`,
 	`CREATE TABLE drive_app_passwords(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,hash TEXT NOT NULL UNIQUE,created TEXT NOT NULL,last_used INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX drive_app_passwords_user ON drive_app_passwords(user_id);`,
+	// 'link' principals arrive with organisation links; the check allows them now because SQLite
+	// cannot alter a CHECK later.
+	`CREATE TABLE drive_shares(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),resource_kind TEXT NOT NULL CHECK(resource_kind IN ('folder','file')),resource_id TEXT NOT NULL,principal_kind TEXT NOT NULL CHECK(principal_kind IN ('group','user','link')),principal_id TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('reader','editor','manager')),created_by TEXT NOT NULL,created TEXT NOT NULL,UNIQUE(resource_kind,resource_id,principal_kind,principal_id));
+CREATE INDEX drive_shares_resource ON drive_shares(resource_id);
+CREATE INDEX drive_shares_principal ON drive_shares(principal_kind,principal_id);
+ALTER TABLE drive_workspaces ADD COLUMN editors_share INTEGER NOT NULL DEFAULT 0;`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
