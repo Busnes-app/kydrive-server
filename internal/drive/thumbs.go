@@ -33,6 +33,17 @@ var ErrNoThumbnail = errors.New("no thumbnail for this file")
 
 var decoding = make(chan struct{}, 1)
 
+// jpegCost is what image/jpeg holds at its peak, in bytes a pixel, by the color model
+// DecodeConfig reports. Every frame decodes into component planes; RGB and CMYK are then
+// converted into a new image while the planes are still held, and a progressive frame keeps 4
+// bytes of coefficients a component until its last scan. Each includes decoder padding.
+var jpegCost = map[color.Model]struct{ baseline, progressive int64 }{
+	color.GrayModel:  {4, 16},
+	color.YCbCrModel: {4, 16},
+	color.RGBAModel:  {8, 20}, // planes, then an RGBA image
+	color.CMYKModel:  {8, 24}, // planes and a black plane, then a CMYK image
+}
+
 type raster struct {
 	jpeg   bool
 	magic  func([]byte) bool
@@ -86,17 +97,15 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 		}
 		var sof byte
 		sof, orientation = jpegFrame(r)
-		// A progressive JPEG holds coefficients for every component until its last scan; a
-		// frame that is not plainly baseline, or not found, is budgeted the same way. CMYK
-		// decodes to YCbCr and a black plane, then converts both into a new CMYK image.
-		baseline, cmyk := sof == 0xc0 || sof == 0xc1, cfg.ColorModel == color.CMYKModel
-		switch {
-		case baseline && cmyk:
-			perPixel = 8
-		case cmyk:
-			perPixel = 24
-		case !baseline:
-			perPixel = 16
+		// A frame that is not plainly baseline, or not found, is budgeted as progressive.
+		cost, ok := jpegCost[cfg.ColorModel]
+		if !ok {
+			cost = jpegCost[color.YCbCrModel]
+		}
+		if sof == 0xc0 || sof == 0xc1 {
+			perPixel = cost.baseline
+		} else {
+			perPixel = cost.progressive
 		}
 	}
 	w, h := cfg.Width, cfg.Height
