@@ -72,6 +72,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/files/{id}/editor", s.requireAuthenticated(s.driveEditor))
 	// Only editor-scoped credentials reach these routes; browser sessions grant no access here.
 	s.mux.HandleFunc("GET /api/editor/download/{id}", s.editorDownload)
+	s.mux.HandleFunc("GET /api/editor/convert/{ticket}", s.editorConvertSource)
 	s.mux.HandleFunc("POST /api/editor/callback", s.editorCallback)
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.store.Ping(r.Context()); err != nil {
@@ -314,14 +315,18 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 201, out)
 }
 
-// openFile opens f's current bytes, answering the request itself when it cannot.
-func (s *Server) openFile(w http.ResponseWriter, f drive.File) (io.ReadSeekCloser, bool) {
+// openBlob opens f's current bytes.
+func (s *Server) openBlob(f drive.File) (io.ReadSeekCloser, error) {
 	path, err := drive.BlobPath(s.blobRoot(), f.Blob)
 	if err != nil {
-		s.driveError(w, err)
-		return nil, false
+		return nil, err
 	}
-	file, err := drive.OpenBlob(path, s.config.Security.EncryptionKey, f.Sealed, f.Size)
+	return drive.OpenBlob(path, s.config.Security.EncryptionKey, f.Sealed, f.Size)
+}
+
+// openFile opens f's current bytes, answering the request itself when it cannot.
+func (s *Server) openFile(w http.ResponseWriter, f drive.File) (io.ReadSeekCloser, bool) {
+	file, err := s.openBlob(f)
 	if err != nil {
 		log.Printf("serve blob %s: %v", f.Blob, err)
 		s.writeError(w, 503, "Document bytes unavailable")

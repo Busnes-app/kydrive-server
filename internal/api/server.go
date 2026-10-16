@@ -47,6 +47,8 @@ type Server struct {
 	recovery   recoveryClient
 	mux        *http.ServeMux
 	attemptsMu sync.Mutex
+	ticketsMu  sync.Mutex
+	tickets    map[string]convertTicket // Document Server fetches for thumbnails
 	attempts   map[string]attemptWindow
 	powSpent   auth.PoWSpent
 	// detached counts the requests running on a context deliberately separated from their
@@ -158,6 +160,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 		recovery: recovery,
 		mux:      http.NewServeMux(),
 		attempts: make(map[string]attemptWindow),
+		tickets:  make(map[string]convertTicket),
 	}
 	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
 

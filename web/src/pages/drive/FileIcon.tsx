@@ -13,8 +13,9 @@ const kinds: [LucideIcon, string[]][] = [
   [FileVideo, ['mp4', 'webm', 'mov', 'mkv', 'ogv']],
 ];
 
-// The server thumbnails these; it checks the bytes, so a misnamed file just keeps its icon.
-const thumbnailed = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+// The server thumbnails these: images itself, documents through Euro-Office when it is
+// configured. A refusal (a misnamed file, no Euro-Office) just keeps the icon.
+const thumbnailed = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'docx', 'odt', 'rtf', 'xlsx', 'ods', 'csv', 'pptx', 'odp']);
 
 // FileIcon shows a file's type icon, or its thumbnail once one loads. The revision in the URL
 // fetches a new thumbnail after a new version.

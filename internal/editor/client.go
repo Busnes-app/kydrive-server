@@ -120,12 +120,22 @@ func (c *Client) Callback(token string) (Callback, error) {
 	}
 	return cb, err
 }
-func (c *Client) Fetch(ctx context.Context, raw string) (io.ReadCloser, error) {
+
+// output parses an editor output URL, which must name the public editor origin's /cache/.
+func (c *Client) output(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	base, berr := url.Parse(c.Origin)
-	inside, ierr := url.Parse(c.InternalOrigin)
-	if errors.Join(err, berr, ierr) != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.Fragment != "" || !strings.HasPrefix(u.Path, "/cache/") {
+	if errors.Join(err, berr) != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.Fragment != "" || !strings.HasPrefix(u.Path, "/cache/") {
 		return nil, errors.New("editor output URL rejected")
+	}
+	return u, nil
+}
+
+func (c *Client) Fetch(ctx context.Context, raw string) (io.ReadCloser, error) {
+	u, err := c.output(raw)
+	inside, ierr := url.Parse(c.InternalOrigin)
+	if err = errors.Join(err, ierr); err != nil {
+		return nil, err
 	}
 	u.Scheme = inside.Scheme
 	u.Host = inside.Host
@@ -180,4 +190,49 @@ func (c *Client) Drop(ctx context.Context, key, user string) error {
 		return fmt.Errorf("editor command error %d", *result.Error)
 	}
 	return nil
+}
+
+// Convert asks the Document Server to render the first page of the document at source, a
+// fileType file the server fetches with its own signed request, as a PNG inside size square.
+// It returns the output URL for Fetch.
+func (c *Client) Convert(ctx context.Context, key, fileType, source string, size int) (string, error) {
+	payload := map[string]any{"async": false, "filetype": fileType, "key": key, "outputtype": "png", "url": source, "thumbnail": map[string]any{"aspect": 1, "first": true, "width": size, "height": size}}
+	token, err := c.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+	payload["token"] = token
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.InternalOrigin+"/converter", strings.NewReader(string(b)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("editor conversion status %d", resp.StatusCode)
+	}
+	var result struct {
+		EndConvert bool   `json:"endConvert"`
+		FileURL    string `json:"fileUrl"`
+		Error      int    `json:"error"`
+	}
+	if err = json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&result); err != nil {
+		return "", err
+	}
+	if result.Error != 0 || !result.EndConvert {
+		return "", fmt.Errorf("editor conversion error %d", result.Error)
+	}
+	if _, err = c.output(result.FileURL); err != nil {
+		return "", err
+	}
+	return result.FileURL, nil
 }

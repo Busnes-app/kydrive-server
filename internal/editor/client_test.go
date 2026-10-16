@@ -2,6 +2,7 @@ package editor
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -78,6 +79,50 @@ func TestDownloadTokenBindsTheExactURL(t *testing.T) {
 		"wrong signature": sign(map[string]any{"payload": map[string]string{"url": url}}) + "x",
 	} {
 		if c.Download(token, url) == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
+
+func TestConvertSignsTheRequestAndReturnsTheOutput(t *testing.T) {
+	var got map[string]any
+	var answer string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/converter" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(answer))
+	}))
+	defer server.Close()
+	t.Setenv("KYDRIVE_EDITOR_URL", server.URL)
+	t.Setenv("KYDRIVE_EDITOR_SECRET", strings.Repeat("s", 32))
+	c, err := FromEnv("http://drive.test", "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer = `{"endConvert":true,"fileType":"png","fileUrl":"` + server.URL + `/cache/files/data/thumb/output.png","percent":100}`
+	out, err := c.Convert(context.Background(), "thumb-1", "docx", "http://drive.test/api/editor/convert/t1", 256)
+	if err != nil || out != server.URL+"/cache/files/data/thumb/output.png" {
+		t.Fatalf("convert %q %v", out, err)
+	}
+	if got["filetype"] != "docx" || got["outputtype"] != "png" || got["url"] != "http://drive.test/api/editor/convert/t1" || got["key"] != "thumb-1" || got["async"] != false {
+		t.Fatalf("request %v", got)
+	}
+	claims, err := c.Verify(got["token"].(string))
+	if err != nil || !strings.Contains(string(claims["url"]), "/api/editor/convert/t1") || !strings.Contains(string(claims["thumbnail"]), `"first":true`) {
+		t.Fatalf("token %v %v", claims, err)
+	}
+	for name, body := range map[string]string{
+		"error":      `{"error":-4}`,
+		"unfinished": `{"endConvert":false,"percent":40}`,
+		"no url":     `{"endConvert":true}`,
+		"not json":   `<html>`,
+		"other host": `{"endConvert":true,"fileUrl":"http://elsewhere.test/cache/x.png"}`,
+	} {
+		answer = body
+		if _, err := c.Convert(context.Background(), "thumb-1", "docx", "http://drive.test/x", 256); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
