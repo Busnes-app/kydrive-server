@@ -50,6 +50,12 @@ The roadmap's exit criteria are covered by tests against the real store:
 
 The browser suite opens a password guest link in a cookie-less Chromium context and downloads the file natively (`guest.spec.mjs`, 4 viewports). The two-user share and organisation-link flows run through the HTTP API with two real accounts (`TestShareRoutes`) rather than in the browser, because the browser harness has one local account.
 
+## M5 previews — 2026-10-16
+
+- **Previews render for the allowlist; HTML and SVG never render:** `TestPreviewServesOnlyTheAllowlist` sniffs PNG, PDF, text and MP4 as previewable and refuses HTML, an HTML file named `.png`, XML-declared SVG, UTF-16 text and binary (415). Markup without an HTML or XML signature, such as a bare SVG, is served as `text/plain` and shown as source.
+- **In a real browser:** `previews.spec.mjs` (4 viewports) decodes an image, shows text with its markup inert, frames a PDF and offers only Download for HTML, whose script does not run.
+- **PDF under the sandbox:** probed by hand in Chromium 2026-10-16: its viewer renders a PDF served with `CSP: sandbox`, both as the page and in a same-origin iframe. Firefox is unverified (its Playwright browser is not installed here).
+
 ## Boundaries
 
 Single writer/instance; no HA. No desktop sync, SMB, full-text search (filename search only). Restic pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design. Blobs are removed only by manager purge or an opt-in workspace retention policy; trash and versions otherwise stay and consume quota. Standard Euro-Office editing exposes plaintext to the editor service; this is not CryptPad-style end-to-end encryption. Its error logs may include scoped document URLs; treat editor logs as sensitive and configure access/retention before production.

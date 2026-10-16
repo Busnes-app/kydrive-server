@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { bytes, editorURL, file, folder, list, record, response, sharedItem } from './client';
+import { bytes, editorURL, file, folder, hasEditor, list, opensInEditor, record, response, sharedItem } from './client';
+import { QuickLook } from './QuickLook';
 import type { DriveFile, Folder, SharedItem } from './client';
 
 // SharedView lists what others shared with the user outside their own workspaces and browses
@@ -10,6 +11,7 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   const [path, setPath] = useState<{ id: string; name: string }[]>([]);
   const [contents, setContents] = useState<{ folders: Folder[]; files: DriveFile[] }>({ folders: [], files: [] });
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState<{ id: string; name: string } | null>(null);
   const at = path[path.length - 1];
 
   useEffect(() => { void list('/api/drive/shared-with-me', sharedItem).then(setItems, e => setError(e instanceof Error ? e.message : 'Shared items unavailable')); }, []);
@@ -25,8 +27,8 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   }, [at]);
 
   const fileRow = (f: { id: string; name: string }, detail: string) => <tr key={f.id}>
-    <td><a className="drive-file-name" href={editorURL(f)} {...target}>{f.name}</a></td><td>{detail}</td>
-    <td><div className="drive-file-actions"><a href={editorURL(f)} {...target}>Open editor</a><a href={`/api/drive/files/${f.id}/download`}>Download</a></div></td>
+    <td>{opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...target}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}</td><td>{detail}</td>
+    <td><div className="drive-file-actions"><button className="btn-secondary" onClick={() => setPreview(f)}>Preview</button>{hasEditor(f.name) && <a href={editorURL(f)} {...target}>Open editor</a>}<a href={`/api/drive/files/${f.id}/download`}>Download</a></div></td>
   </tr>;
   const open = (id: string, name: string) => { setError(''); setPath([...path, { id, name }]); };
 
@@ -48,5 +50,6 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
       </tbody></table></div>
       {!at && items.length === 0 && !error && <div className="drive-empty"><h3>Nothing shared with you yet</h3><p>When someone shares a file or folder with you, it appears here.</p></div>}
     </div>
+    {preview && <QuickLook key={preview.id} file={preview} onClose={() => setPreview(null)} />}
   </section>;
 }
