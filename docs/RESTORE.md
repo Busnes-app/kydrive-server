@@ -15,9 +15,10 @@ A complete restore requires a sealed KyDrive `.kycap`, its independent Restic re
 4. Restore the exact bulk snapshot named in the verified capsule. The destination `blobs` directory must not exist. Missing blobs, wrong keys, hash differences and an incomplete database/manifest binding fail the command.
 
    ```sh
-   kydrive-server bulk-restore -opened /private/opened \
-     -repo /independent/restic-repository -to /new-drive/data/blobs
+   kydrive-server bulk-restore -opened /private/opened -to /new-drive/data/blobs
    ```
+
+   Without `-repo`, the command uses the repository and credentials the capsule sealed in `config/integrations.json` (`KYDRIVE_BULK_BACKUP_REPOSITORY`, `KYDRIVE_BULK_BACKUP_CREDENTIALS`), checked as a credentials file is: an offsite `s3:https://` or `rest:https://` repository needs only network access from the new host. Pass `-repo /path` to read a copy elsewhere, such as a local mirror of the offsite repository; `-repo` uses no credentials. Capsules sealed before they carried the repository require `-repo`.
 
    The Restic password is derived from the capsule's deployment key (`kydrive:restic`); a repository from before that derivation still opens with the raw key, and `bulk-restore` tries both without changing the repository's keys. The next backup moves it to the derived password.
 
@@ -29,4 +30,4 @@ A complete restore requires a sealed KyDrive `.kycap`, its independent Restic re
 
 For an upgrade, stop the only writer, take a successful complete backup, retain the previous image, then start the new image against the persistent mounts. For rollback, restore the matched database/blob checkpoint and its integration secrets together; do not assume an older binary understands a newer schema. This package has no HA or destructive migrations.
 
-Retain every Restic snapshot referenced by a retained capsule. Bulk pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design. With it off, purged and retention-expired files remain in older snapshots until those snapshots are retired. A capsule naming a forgotten snapshot fails the bulk restore; restore from a newer capsule. Backup retention, independent destination and recovery objectives must be chosen for the actual deployment; the local fixture establishes mechanics, not a representative production restore-time objective.
+Retain every Restic snapshot referenced by a retained capsule. Bulk pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design; prune it from a trusted machine with credentials that may delete, never from the drive host. With pruning off, purged and retention-expired files remain in older snapshots until those snapshots are retired. A capsule naming a forgotten snapshot fails the bulk restore; restore from a newer capsule. Backup retention, independent destination and recovery objectives must be chosen for the actual deployment; the local fixture establishes mechanics, not a representative production restore-time objective.

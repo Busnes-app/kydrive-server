@@ -23,7 +23,7 @@ type fakeRepo struct {
 	calls    []string
 }
 
-func (f *fakeRepo) run(_ context.Context, _ string, password []byte, _ string, stdin io.Reader, args ...string) ([]byte, error) {
+func (f *fakeRepo) run(_ context.Context, _ Repository, password []byte, _ string, stdin io.Reader, args ...string) ([]byte, error) {
 	pw := hex.EncodeToString(password)
 	verb := strings.Join(args[:min(2, len(args))], " ")
 	f.calls = append(f.calls, verb)
@@ -96,14 +96,14 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 
 	t.Run("raw key repository is moved", func(t *testing.T) {
 		f := fakeRepoWith(t, key)
-		if pw, err := openRepository(ctx, "repo", key); err != nil || !bytes.Equal(pw, derived) {
+		if pw, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil || !bytes.Equal(pw, derived) {
 			t.Fatalf("open: %v", err)
 		}
 		if got := f.passwords(); !slices.Equal(got, want) {
 			t.Fatalf("keys after move: %v", got)
 		}
 		f.calls = nil
-		if _, err := openRepository(ctx, "repo", key); err != nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil {
 			t.Fatal(err)
 		}
 		if slices.Contains(f.calls, "key add") || slices.Contains(f.calls, "key remove") {
@@ -114,13 +114,13 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 	t.Run("interrupted after add is finished by the next run", func(t *testing.T) {
 		f := fakeRepoWith(t, key)
 		f.failNext = "remove"
-		if _, err := openRepository(ctx, "repo", key); err != nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil {
 			t.Fatalf("a failed raw-key removal must not fail the backup: %v", err)
 		}
 		if len(f.keys) != 2 {
 			t.Fatalf("want both keys after the interrupted run, got %v", f.passwords())
 		}
-		if _, err := openRepository(ctx, "repo", key); err != nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil {
 			t.Fatal(err)
 		}
 		if got := f.passwords(); !slices.Equal(got, want) {
@@ -131,10 +131,10 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 	t.Run("interrupted during add retries the add", func(t *testing.T) {
 		f := fakeRepoWith(t, key)
 		f.failNext = "add"
-		if _, err := openRepository(ctx, "repo", key); err == nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err == nil {
 			t.Fatal("a failed add must fail: the derived password opens nothing yet")
 		}
-		if _, err := openRepository(ctx, "repo", key); err != nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil {
 			t.Fatal(err)
 		}
 		if got := f.passwords(); !slices.Equal(got, want) {
@@ -145,7 +145,7 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 	t.Run("operator keys are left alone", func(t *testing.T) {
 		operator := bytes.Repeat([]byte{0x02}, 32)
 		f := fakeRepoWith(t, key, operator)
-		if _, err := openRepository(ctx, "repo", key); err != nil {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); err != nil {
 			t.Fatal(err)
 		}
 		if got := f.passwords(); !slices.Contains(got, hex.EncodeToString(operator)) || slices.Contains(got, hex.EncodeToString(key)) {
@@ -155,7 +155,7 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 
 	t.Run("foreign repository is refused unchanged", func(t *testing.T) {
 		f := fakeRepoWith(t, bytes.Repeat([]byte{0x03}, 32))
-		if _, err := openRepository(ctx, "repo", key); !errors.Is(err, errWrongPassword) {
+		if _, err := openRepository(ctx, Repository{URL: "repo"}, key); !errors.Is(err, errWrongPassword) {
 			t.Fatalf("got %v, want errWrongPassword", err)
 		}
 		if len(f.keys) != 1 {

@@ -196,7 +196,8 @@ func (f *bulkFixture) read(t *testing.T, dir string, v drive.Version, sealed boo
 	return string(got)
 }
 
-func restoreInto(t *testing.T, f *bulkFixture, payload recoveryclient.Payload) (string, string, error) {
+// openCapsule writes a payload's files as a custodian-opened capsule would leave them.
+func openCapsule(t *testing.T, payload recoveryclient.Payload) string {
 	t.Helper()
 	opened := t.TempDir()
 	for _, file := range payload.Files {
@@ -206,8 +207,14 @@ func restoreInto(t *testing.T, f *bulkFixture, payload recoveryclient.Payload) (
 			t.Fatal(err)
 		}
 	}
+	return opened
+}
+
+func restoreInto(t *testing.T, f *bulkFixture, payload recoveryclient.Payload) (string, string, error) {
+	t.Helper()
+	opened := openCapsule(t, payload)
 	target := filepath.Join(t.TempDir(), "restored")
-	return opened, target, backup.RestoreBulk(context.Background(), opened, f.repo, target)
+	return opened, target, backup.RestoreBulk(context.Background(), opened, backup.Repository{URL: f.repo}, target)
 }
 
 func TestBulkBackupRestoreAndMissingBytes(t *testing.T) {
@@ -225,7 +232,7 @@ func TestBulkBackupRestoreAndMissingBytes(t *testing.T) {
 	}
 	// Wrong restored key and missing repository must each fail before publishing files.
 	os.WriteFile(filepath.Join(opened, "data/encryption.key"), []byte(hex.EncodeToString(make([]byte, 32))), 0600)
-	if err = backup.RestoreBulk(context.Background(), opened, f.repo, filepath.Join(t.TempDir(), "bad")); err == nil {
+	if err = backup.RestoreBulk(context.Background(), opened, backup.Repository{URL: f.repo}, filepath.Join(t.TempDir(), "bad")); err == nil {
 		t.Fatal("wrong key accepted")
 	}
 	os.Remove(filepath.Join(f.dir, "blobs", v.Blob))
@@ -319,7 +326,7 @@ func TestBulkManifestVersionsAndSealedBlobs(t *testing.T) {
 	}
 	setVersion(opened, m, 1)
 	target := filepath.Join(t.TempDir(), "restored-v1")
-	if err = backup.RestoreBulk(ctx, opened, f.repo, target); err != nil {
+	if err = backup.RestoreBulk(ctx, opened, backup.Repository{URL: f.repo}, target); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.read(t, target, legacy, false); got != body {
@@ -345,7 +352,7 @@ func TestBulkManifestVersionsAndSealedBlobs(t *testing.T) {
 		t.Fatalf("legacy restore: %q", got)
 	}
 	setVersion(opened, m, 1)
-	if err = backup.RestoreBulk(ctx, opened, f.repo, filepath.Join(t.TempDir(), "v1-sealed")); err == nil {
+	if err = backup.RestoreBulk(ctx, opened, backup.Repository{URL: f.repo}, filepath.Join(t.TempDir(), "v1-sealed")); err == nil {
 		t.Fatal("version 1 manifest with sealed blobs accepted")
 	}
 	live := filepath.Join(f.dir, "blobs", v.Blob)
@@ -632,5 +639,77 @@ func TestRestoreRefusesWithoutFreeSpace(t *testing.T) {
 	}
 	if _, err = os.Lstat(target); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("refused restore published a target")
+	}
+}
+
+// A fresh host restores from the opened capsule alone: with no repository or credentials
+// configured, the capsule names both and every blob comes back verified. It uses the local
+// fixture repository, or the offsite one KYDRIVE_LIVE_BULK_REPOSITORY names (with
+// KYDRIVE_LIVE_BULK_CREDENTIALS_FILE), which scripts/accept-offsite-backup.sh starts.
+func TestRestoreFromTheCapsuleAlone(t *testing.T) {
+	f := newBulkFixture(t)
+	ctx := context.Background()
+	if live := os.Getenv("KYDRIVE_LIVE_BULK_REPOSITORY"); live != "" {
+		t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", live)
+		t.Setenv("KYDRIVE_BULK_BACKUP_CREDENTIALS_FILE", os.Getenv("KYDRIVE_LIVE_BULK_CREDENTIALS_FILE"))
+		if err := backup.InitBulkRepository(ctx, f.dir, f.key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configured := os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY")
+	_, v := f.publish(t, "far.txt", "kept far away")
+	opened := openCapsule(t, f.collect(t, backup.PurposeDeposit))
+	if err := backup.CheckBulk(ctx, f.dir, f.key); err != nil {
+		t.Fatalf("integrity check: %v", err)
+	}
+
+	t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", "")
+	t.Setenv("KYDRIVE_BULK_BACKUP_CREDENTIALS_FILE", "")
+	repo, ok, err := backup.CapsuleRepository(opened)
+	if err != nil || !ok || repo.URL != configured {
+		t.Fatalf("capsule names %q (%v %v), want %q", repo.URL, ok, err, configured)
+	}
+	target := filepath.Join(t.TempDir(), "blobs")
+	if err = backup.RestoreBulk(ctx, opened, repo, target); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.read(t, target, v, true); got != "kept far away" {
+		t.Fatalf("restored %q", got)
+	}
+}
+
+// The weekly check passes on a sound repository, runs at most weekly, and records a repository
+// whose packs were damaged.
+func TestCheckBulkIfDue(t *testing.T) {
+	f := newBulkFixture(t)
+	ctx := context.Background()
+	settings := backup.Settings(ctx, f.st.Settings())
+	f.publish(t, "a.txt", "alpha")
+	f.collect(t, backup.PurposeDeposit)
+	now := time.Now()
+	res, ran, err := backup.CheckBulkIfDue(ctx, f.cfg, settings, now)
+	if !ran || err != nil || res.Error != "" {
+		t.Fatalf("sound repository: %+v %v %v", res, ran, err)
+	}
+	if _, ran, _ = backup.CheckBulkIfDue(ctx, f.cfg, settings, now.Add(6*24*time.Hour)); ran {
+		t.Fatal("checked again within the week")
+	}
+	// Damage every pack, so the 5% sample cannot miss one.
+	packs, _ := filepath.Glob(filepath.Join(f.repo, "data", "*", "*"))
+	if len(packs) == 0 {
+		t.Fatal("no packs in the repository")
+	}
+	for _, p := range packs {
+		os.Chmod(p, 0o600)
+		if err = os.WriteFile(p, []byte("corrupted"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, ran, err = backup.CheckBulkIfDue(ctx, f.cfg, settings, now.Add(8*24*time.Hour))
+	if !ran || err == nil || res.Error == "" {
+		t.Fatalf("damaged repository passed: %+v %v %v", res, ran, err)
+	}
+	if last, ok, _ := backup.LastBulkCheck(settings); !ok || last.Error != res.Error {
+		t.Fatalf("last check %+v", last)
 	}
 }

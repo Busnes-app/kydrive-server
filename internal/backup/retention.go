@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
@@ -112,4 +113,47 @@ func getJSON(s recoveryclient.Settings, key string, v any) (bool, error) {
 		return false, err
 	}
 	return true, json.Unmarshal([]byte(raw), v)
+}
+
+// BulkCheck records the last integrity check, failed or not.
+type BulkCheck struct {
+	At    time.Time `json:"at"`
+	Error string    `json:"error,omitempty"`
+}
+
+const bulkLastCheckKey = "bulk_last_check"
+
+func LastBulkCheck(s recoveryclient.Settings) (BulkCheck, bool, error) {
+	var last BulkCheck
+	ok, err := getJSON(s, bulkLastCheckKey, &last)
+	return last, ok, err
+}
+
+// CheckBulkIfDue runs CheckBulk at most once a week and records the attempt. It does not run
+// (false) without a bulk repository, within a week of the last attempt, or while another bulk
+// operation holds the lock (ErrBulkBusy; tried again after the next deposit).
+func CheckBulkIfDue(ctx context.Context, cfg *config.Config, s recoveryclient.Settings, now time.Time) (BulkCheck, bool, error) {
+	if os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY") == "" {
+		return BulkCheck{}, false, nil
+	}
+	last, ok, err := LastBulkCheck(s)
+	if err != nil || ok && now.Sub(last.At) < 7*24*time.Hour {
+		return BulkCheck{}, false, err
+	}
+	err = CheckBulk(ctx, cfg.Database.DataDir, cfg.Security.EncryptionKey)
+	if errors.Is(err, ErrBulkBusy) {
+		return BulkCheck{}, false, err
+	}
+	res := BulkCheck{At: now.UTC()}
+	if err != nil {
+		res.Error = recoveryclient.AuditSafe(err.Error())
+	}
+	raw, merr := json.Marshal(res)
+	if merr == nil {
+		merr = s.Set(bulkLastCheckKey, string(raw))
+	}
+	if err == nil {
+		err = merr
+	}
+	return res, true, err
 }

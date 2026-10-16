@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -559,6 +560,18 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 		unreadable("last bulk prune", err)
 	} else if ok {
 		out["bulk_last_prune"] = last
+	}
+	if last, ok, err := backup.LastBulkCheck(settings); err != nil {
+		unreadable("last bulk check", err)
+	} else if ok {
+		out["bulk_last_check"] = last
+	}
+	if os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY") != "" {
+		if loc, err := backup.BulkLocation(s.config.Database.DataDir); err != nil {
+			out["bulk_repository_error"] = recoveryclient.AuditSafe(err.Error())
+		} else {
+			out["bulk_repository"] = loc
+		}
 	}
 	if s.config.Backup.Dir != "" {
 		out["local_dir"] = s.config.Backup.Dir

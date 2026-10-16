@@ -45,13 +45,21 @@ func main() {
 		case "bulk-restore":
 			fs := flag.NewFlagSet("bulk-restore", flag.ExitOnError)
 			opened := fs.String("opened", "", "verified capsule restore directory")
-			repo := fs.String("repo", "", "restic repository directory")
+			repo := fs.String("repo", "", "restic repository (default: the one the capsule names, with its credentials)")
 			to := fs.String("to", "", "nonexistent blobs destination")
 			fs.Parse(os.Args[2:])
-			if *opened == "" || *repo == "" || *to == "" {
-				log.Fatal("bulk-restore requires -opened, -repo, -to")
+			if *opened == "" || *to == "" {
+				log.Fatal("bulk-restore requires -opened and -to")
 			}
-			if err := backup.RestoreBulk(context.Background(), *opened, *repo, *to); err != nil {
+			repository := backup.Repository{URL: *repo}
+			if *repo == "" {
+				r, ok, err := backup.CapsuleRepository(*opened)
+				if err != nil || !ok {
+					log.Fatalf("bulk-restore: the capsule names no repository (sealed before it carried one); pass -repo: %v", err)
+				}
+				repository = r
+			}
+			if err := backup.RestoreBulk(context.Background(), *opened, repository, *to); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -437,7 +445,27 @@ func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done ch
 		if err == nil {
 			// Cancellable: restic leaves a repository consistent when killed mid-prune.
 			pruneBulk(ctx, runCtx, cfg, st)
+			checkBulk(ctx, runCtx, cfg, st)
 		}
+	}
+}
+
+// checkBulk reads back part of the bulk repository, at most weekly, and audits each run as system.
+func checkBulk(ctx, runCtx context.Context, cfg *config.Config, st store.Store) {
+	res, ran, err := backup.CheckBulkIfDue(ctx, cfg, backup.Settings(runCtx, st.Settings()), time.Now())
+	if !ran {
+		if err != nil {
+			log.Printf("[BACKUP] bulk check skipped: %s", recoveryclient.AuditSafe(err.Error()))
+		}
+		return
+	}
+	details := map[string]any{"outcome": "success"}
+	if err != nil {
+		details["outcome"], details["error"] = "failure", res.Error
+		log.Printf("[BACKUP] bulk check: %s", res.Error)
+	}
+	if err := st.Audit().LogAudit(runCtx, &store.AuditRecord{UserID: "system", Action: "backup.bulk_check", Details: api.AuditDetails(details)}); err != nil {
+		log.Printf("[BACKUP] audit backup.bulk_check not recorded: %v", err)
 	}
 }
 

@@ -7,7 +7,7 @@ The user authorized the next deployment pilot. Prior local acceptance is in `ACC
 
 K80 SSH and its kubernetes-admin context are available; both amd64 nodes are Ready. The cluster has no StorageClass or IngressClass, so deployment follows existing Retain local storage and source-restricted Nginx routing. Direct NAS SSH at 192.168.1.90:22 is refused; use the existing KyYard endpoint rather than mistaking the proxy hostname for the NAS. GitHub is authenticated. Editor resources, the NAS drive runtime and proxy routes are deployed.
 
-Do not claim production readiness from local tests. Preserve existing services, keys and user data. Keep generated credentials and private manifests outside the workspace. Editor source/build correspondence is verified below; independent bulk storage is explicitly deferred and live integration gates remain open.
+Do not claim production readiness from local tests. Preserve existing services, keys and user data. Keep generated credentials and private manifests outside the workspace. Editor source/build correspondence is verified below; independent bulk storage is not yet configured for the pilot (KyDrive supports offsite S3 and append-only rest-server repositories since M6) and live integration gates remain open.
 
 ## Verified preparation
 
@@ -54,6 +54,6 @@ Blob encryption protects the NAS data directory only when the deployment key is 
 
 ## Remaining pilot gates
 
-Live collaboration and offboarding, full editor pod restart/rollback and custodian-led recovery remain open. All three named storage helpers were removed through audited commands; each completed successfully. The user's independent bulk destination deferral remains explicit: NAS-local Restic copies do not protect against losing the NAS. First-start renderer fixes were committed and pushed as `ae45aa4`; they do not change the running drive binary.
+Live collaboration and offboarding, full editor pod restart/rollback and custodian-led recovery remain open. All three named storage helpers were removed through audited commands; each completed successfully. An independent bulk destination remains a pilot gate: NAS-local Restic copies do not protect against losing the NAS. KyDrive now accepts an offsite `s3:https://` or `rest:https://` repository (README, Recovery); configure one, preferably append-only rest-server or S3 with Object Lock, run `bulk-init` and a drill, and record the result here before closing the gate. First-start renderer fixes were committed and pushed as `ae45aa4`; they do not change the running drive binary.
 
 Browser attachment matters: old tabs in another session can appear signed out while the user's visible tab is authenticated. New native previews from the active profile resolved that mismatch. Do not bypass native authentication or edit authorization databases.
