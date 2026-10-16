@@ -54,7 +54,7 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 	if size > ThumbnailMaxFile {
 		return nil, ErrNoThumbnail
 	}
-	head := make([]byte, 12)
+	head := make([]byte, 29) // through a PNG's IHDR interlace byte
 	n, _ := io.ReadFull(r, head)
 	var f *raster
 	for i := range rasters {
@@ -74,8 +74,11 @@ func Thumbnail(ctx context.Context, r io.ReadSeeker, size int64) ([]byte, error)
 	}
 	perPixel, orientation := int64(4), 1
 	switch cfg.ColorModel {
-	case color.RGBA64Model, color.NRGBA64Model:
+	case color.RGBA64Model, color.NRGBA64Model, color.Gray16Model: // 16-bit gray with tRNS decodes as NRGBA64
 		perPixel = 8
+	}
+	if bytes.HasPrefix(head[:n], []byte("\x89PNG")) && n == len(head) && head[28] != 0 {
+		perPixel *= 2 // Adam7 decodes each pass into its own buffer too
 	}
 	if f.jpeg {
 		if _, err = r.Seek(0, io.SeekStart); err != nil {
