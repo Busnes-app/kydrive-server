@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Settings as SettingsIcon, Database, Palette, Trash2 } from 'lucide-react';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { change, record, response } from './drive/client';
+import { GuestLinkSettings } from './GuestLinkSettings';
 
 const trashURL = '/api/drive/trash-retention';
 
@@ -131,6 +132,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings }) => {
         </div>
 
         <TrashRetention />
+        <GuestLinkSettings />
       </div>
     </div>
   );

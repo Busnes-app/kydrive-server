@@ -40,6 +40,16 @@ Local SCIM identities received test-only password hashes directly in the disposa
 
 `scripts/accept-webdav.sh` ran against the compiled server with an app password created through the API. curl: no-credential challenge, PROPFIND, MKCOL, PUT, overwrite to revision 2, stale `If-Match` refused (412), MOVE, and DELETE leaving the file in the trash at revision 2, all passed. KDE KIO (`kioclient`) copied a file in, read it back and listed it. Not run on this host: GNOME GVfs (`gvfsd-dav` not installed), rclone and litmus (not installed); the script reports each as SKIP. Not yet verified: mounting in Windows Explorer and macOS Finder, a LibreOffice save creating a version, and a deactivated user's mount failing (covered in Go tests: `TestDAVAuthentication`).
 
+## M3 sharing — 2026-10-15
+
+The roadmap's exit criteria are covered by tests against the real store:
+- **A folder grant gives exactly that subtree:** `TestFolderShareScope`, `TestGuestLinkScope`.
+- **Leaving a shared group revokes an open editor in one revocation pass:** `TestShareRevocationRevokesEditor`, and `TestLinkRevocationRevokesEditor` for links.
+- **An expired or revoked link returns 404:** `TestOrganisationLinks`, `TestGuestLinkEnds`, `TestGuestLinkRoutes`.
+- **A guest link never reveals sibling files:** `TestGuestLinkScope`, `TestGuestLinkRoutes`.
+
+The browser suite opens a password guest link in a cookie-less Chromium context and downloads the file natively (`guest.spec.mjs`, 4 viewports). The two-user share and organisation-link flows run through the HTTP API with two real accounts (`TestShareRoutes`) rather than in the browser, because the browser harness has one local account.
+
 ## Boundaries
 
 Single writer/instance; no HA. No desktop sync, SMB, full-text search (filename search only). Restic pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design. Blobs are removed only by manager purge or an opt-in workspace retention policy; trash and versions otherwise stay and consume quota. Standard Euro-Office editing exposes plaintext to the editor service; this is not CryptPad-style end-to-end encryption. Its error logs may include scoped document URLs; treat editor logs as sensitive and configure access/retention before production.

@@ -25,6 +25,11 @@ func MoveFileFrom(ctx context.Context, s *Store, user string, f File, expected i
 	return s.moveFile(ctx, user, f, expected, to)
 }
 
+// GuestPath is the breadcrumb walk GuestView runs over the ancestors it loaded.
+func GuestPath(chain []Folder, folder, root string) ([]GuestItem, error) {
+	return guestPath(chain, folder, root)
+}
+
 // SeedFiles inserts n live files named file-<i>.txt at the root of workspace in one transaction.
 func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
