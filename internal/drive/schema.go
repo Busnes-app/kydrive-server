@@ -56,6 +56,10 @@ CREATE TABLE drive_link_users(link TEXT NOT NULL REFERENCES drive_links(id),user
 	// Client mtime; '' falls back to the version's creation time.
 	`ALTER TABLE drive_versions ADD COLUMN mtime TEXT NOT NULL DEFAULT '';
 ALTER TABLE drive_upload_sessions ADD COLUMN mtime TEXT NOT NULL DEFAULT '';`,
+	// drive_change_floor is the highest pruned seq per workspace: a cursor below it missed rows.
+	`CREATE TABLE drive_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT,workspace TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('file','folder')),item TEXT NOT NULL,created INTEGER NOT NULL);
+CREATE INDEX drive_changes_ws ON drive_changes(workspace,seq);
+CREATE TABLE drive_change_floor(workspace TEXT PRIMARY KEY,seq INTEGER NOT NULL);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
