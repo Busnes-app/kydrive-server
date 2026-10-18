@@ -50,6 +50,9 @@ func (s *Store) ServiceToken(ctx context.Context, token string) (string, Service
 	return user, a, nil
 }
 func (s *Store) RevokeServiceToken(ctx context.Context, user, id string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace string
 		if err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_service_tokens WHERE id=?`, id).Scan(&workspace); err != nil {

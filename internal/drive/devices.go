@@ -48,8 +48,10 @@ func (ErrDeviceRevoked) Is(target error) bool { return target == ErrDenied }
 
 type deviceKey struct{}
 
-// WithDevice marks ctx as acting through a device token: the user's own access, never
-// administration and never a further credential.
+// WithDevice marks ctx as acting through a device token, which syncs files and nothing more:
+// every method that creates or changes access, or mints a session or credential, refuses it
+// (admin() included), so revoking a device leaves nothing of it behind.
+// devices_access_test.go classifies every exported Store method.
 func WithDevice(ctx context.Context) context.Context {
 	return context.WithValue(ctx, deviceKey{}, true)
 }
@@ -192,6 +194,9 @@ func (s *Store) Devices(ctx context.Context, user string) ([]Device, error) {
 // RevokeDevice stops one of the user's devices at once; the token keeps answering with wipe
 // for 30 days.
 func (s *Store) RevokeDevice(ctx context.Context, user, id string, wipe bool) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `UPDATE drive_devices SET revoked_at=?,wipe=? WHERE id=? AND user_id=? AND revoked_at=0`, time.Now().Unix(), wipe, id, user)
 		if err != nil {

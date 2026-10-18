@@ -267,6 +267,59 @@ func TestDeviceToken(t *testing.T) {
 	expect(got, 429, "DAV bearer guessing")
 }
 
+// A device token syncs files; it never opens an editor session or creates a share or link, so
+// revoking it leaves nothing that still works.
+func TestDeviceTokenCreatesNoAccess(t *testing.T) {
+	t.Setenv("KYDRIVE_EDITOR_URL", "http://editor.test")
+	t.Setenv("KYDRIVE_EDITOR_DRIVE_URL", "http://drive.test")
+	t.Setenv("KYDRIVE_EDITOR_SECRET", strings.Repeat("s", 32))
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	admin := loginAs(t, srv, st, "accadmin", "admin")
+	user := loginAs(t, srv, st, "accuser", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "accgroup", DisplayName: "Acc", Members: []string{"usr_accuser"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_accadmin", "Team", 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_accadmin", w.ID, "accgroup", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	if got := send(t, srv, "PUT", "/api/drive/guest-links-policy", `{"enabled":true,"max_days":30}`, admin, ""); got.Code != 200 {
+		t.Fatalf("guest policy %d", got.Code)
+	}
+	expect := func(got *httptest.ResponseRecorder, code int, what string) {
+		t.Helper()
+		if got.Code != code {
+			t.Fatalf("%s: %d, want %d: %s", what, got.Code, code, got.Body.String())
+		}
+	}
+	token := linkDevice(t, srv, user)
+
+	up := send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=plan.docx&revision=0", "hello", nil, token)
+	expect(up, 201, "device upload")
+	var f struct{ ID string }
+	if json.Unmarshal(up.Body.Bytes(), &f) != nil || f.ID == "" {
+		t.Fatalf("upload body %s", up.Body.String())
+	}
+	files := "/api/drive/files/" + f.ID
+	expect(send(t, srv, "POST", files+"/editor", "", nil, token), 403, "device editor session")
+	expect(send(t, srv, "PUT", files+"/shares", `{"principal_kind":"group","principal_id":"accgroup","role":"reader"}`, nil, token), 403, "device share")
+	expect(send(t, srv, "POST", files+"/links", `{"role":"reader","expires":0}`, nil, token), 403, "device org link")
+	expect(send(t, srv, "POST", files+"/guest-links", `{"days":7}`, nil, token), 403, "device guest link")
+	expect(send(t, srv, "PUT", "/api/drive/workspaces/"+w.ID+"/sharing", `{"editors_share":true}`, nil, token), 403, "device editors_share")
+	expect(send(t, srv, "PUT", "/api/drive/workspaces/"+w.ID+"/grants/accgroup", `{"role":"manager"}`, nil, token), 403, "device grant change")
+
+	// The same requests from the user's session succeed, so the device is what is refused.
+	expect(send(t, srv, "POST", files+"/editor", "", user, ""), 200, "session editor session")
+	expect(send(t, srv, "POST", files+"/guest-links", `{"days":7}`, user, ""), 201, "session guest link")
+}
+
 func TestDeviceSelfUnlink(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
 	if st.Drive() == nil {
