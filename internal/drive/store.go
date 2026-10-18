@@ -407,6 +407,9 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES(?,?,?,?,?)`, f.ID, workspace, parent, stored, mac); err != nil {
 			return restoreErr(err)
 		}
+		if err := change(ctx, tx, workspace, "folder", f.ID); err != nil {
+			return err
+		}
 		return event(ctx, tx, user, "folder.created", f.ID)
 	})
 	return f, err
@@ -536,6 +539,9 @@ func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expec
 	if err != nil || n != 1 {
 		return cmp.Or(err, ErrConflict)
 	}
+	if err := change(ctx, tx, workspace, "file", id); err != nil {
+		return err
+	}
 	return event(ctx, tx, user, "file.trash_changed", id)
 }
 func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, expected int64) (File, error) {
@@ -615,6 +621,9 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed,mtime) VALUES(?,?,?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created, v.Sealed, v.Mtime); err != nil {
+		return err
+	}
+	if err := change(ctx, tx, f.Workspace, "file", f.ID); err != nil {
 		return err
 	}
 	return event(ctx, tx, user, "file.version_created", f.ID)

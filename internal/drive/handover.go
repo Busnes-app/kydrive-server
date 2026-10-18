@@ -161,6 +161,21 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 				return err
 			}
 		}
+		// The source loses its top-level items, the target gains one folder.
+		for _, kind := range []string{"folder", "file"} {
+			ids, err := column(ctx, tx, `SELECT id FROM drive_`+kind+`s WHERE workspace=? AND parent=''`, source)
+			if err != nil {
+				return err
+			}
+			for _, id := range ids {
+				if err = change(ctx, tx, source, kind, id); err != nil {
+					return err
+				}
+			}
+		}
+		if err = change(ctx, tx, target, "folder", folder); err != nil {
+			return err
+		}
 		// Trashed items stay trashed, restarting their clock so the target's retention cannot purge them at once.
 		stamp := now()
 		for _, table := range []string{"drive_folders", "drive_files"} {
