@@ -3,6 +3,7 @@ import { Settings as SettingsIcon, Database, Palette, Trash2 } from 'lucide-reac
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { change, record, response } from './drive/client';
 import { GuestLinkSettings } from './GuestLinkSettings';
+import { DevicePolicySettings } from './Devices';
 
 const trashURL = '/api/drive/trash-retention';
 
@@ -133,6 +134,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings }) => {
 
         <TrashRetention />
         <GuestLinkSettings />
+        <DevicePolicySettings />
       </div>
     </div>
   );
