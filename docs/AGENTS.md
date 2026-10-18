@@ -5,7 +5,7 @@ Own restore instructions, local acceptance evidence and captured product UI asse
 
 ## Ownership
 `INSTALLER-SETUP.md` owns the container-local setup schema, runtime activation and adapter limitations.
-`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans; its roadmap file records milestone decisions. `desktop-sync-options.md` is the desktop sync research note (options, server gaps, recommendation); its "What a Ky client looks like" section is the M7 design. Root README owns configuration; root STATUS owns handoff.
+`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans; its roadmap file records milestone decisions. `desktop-sync-options.md` is the desktop sync research note (options, server gaps, recommendation); its "What a Ky client looks like" section is the M7 design. `DESKTOP-ACCESS.md` is the user guide for desktop WebDAV clients (rclone, Cyberduck) and `KyDrive.cyberduckprofile` its connection profile. Root README owns configuration; root STATUS owns handoff.
 
 ## Local Contracts
 - Document exact verified behavior; local fixtures do not establish live suite integration or production readiness.
