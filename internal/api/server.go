@@ -472,9 +472,11 @@ func guestPath(p string) bool {
 }
 
 // csrfExempt routes never act on a session; /api/public/ and the device token exchange still
-// get the same-site check.
+// get the same-site check. /api/devices/self takes only a Bearer device token, which a browser
+// never sends on its own, so a forged request carries no credential; a stray session cookie
+// gets its 401 rather than a CSRF 403.
 func csrfExempt(path string) bool {
-	return credentialRoute(path) || path == "/api/sso/kysignon/sync" || strings.HasPrefix(path, "/api/public/") || path == "/api/devices/token"
+	return credentialRoute(path) || path == "/api/sso/kysignon/sync" || strings.HasPrefix(path, "/api/public/") || path == "/api/devices/token" || path == "/api/devices/self"
 }
 
 func isJSON(r *http.Request) bool {

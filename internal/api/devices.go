@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -26,6 +27,7 @@ func (s *Server) deviceRoutes() {
 	s.mux.HandleFunc("POST /api/devices/token", s.handleDeviceToken)
 	s.mux.HandleFunc("GET /api/devices", s.requireAuthenticated(s.handleDevices))
 	s.mux.HandleFunc("DELETE /api/devices/{id}", s.requireAuthenticated(s.handleRevokeDevice))
+	s.mux.HandleFunc("DELETE /api/devices/self", s.handleUnlinkDevice)
 	s.mux.HandleFunc("GET /api/drive/device-policy", s.requireAuthenticated(s.driveDevicePolicy))
 	s.mux.HandleFunc("PUT /api/drive/device-policy", s.requireAdmin(s.driveSetDevicePolicy))
 }
@@ -112,6 +114,26 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, map[string]bool{"wipe": wipe})
+}
+
+// handleUnlinkDevice lets a desktop client revoke itself with its own device token, never a
+// session or any other credential. The user unlinked on that computer, so it is never told to
+// wipe, whatever the request says; a second call gets deviceUser's device_revoked answer.
+func (s *Server) handleUnlinkDevice(w http.ResponseWriter, r *http.Request) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || !strings.HasPrefix(token, drive.DevicePrefix) {
+		s.writeError(w, 401, "Device credential required")
+		return
+	}
+	user, ok := s.deviceUser(w, r, token)
+	if !ok {
+		return
+	}
+	if err := s.store.Drive().UnlinkDevice(r.Context(), user.ID, token); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // devicePolicy is the drive-wide wipe default (unset: true) and whether it is locked (unset: false).

@@ -327,3 +327,27 @@ func TestDeviceToken(t *testing.T) {
 		t.Fatalf("device listing: %v", err)
 	}
 }
+
+func TestUnlinkDevice(t *testing.T) {
+	st, _, _ := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	mine, other := link(t, d, "worker"), link(t, d, "worker")
+	if err := d.UnlinkDevice(ctx, "worker", mine); err != nil {
+		t.Fatal(err)
+	}
+	var revoked drive.ErrDeviceRevoked
+	if _, err := d.DeviceUser(ctx, mine); !errors.As(err, &revoked) || revoked.Wipe {
+		t.Fatalf("unlinked: %v %+v", err, revoked)
+	}
+	if _, err := d.DeviceUser(ctx, other); err != nil {
+		t.Fatalf("other device: %v", err)
+	}
+	if n, _ := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_events WHERE action='device.revoked' AND user_id='worker'`); n != 1 {
+		t.Fatalf("device.revoked events: %d", n)
+	}
+	for _, c := range []struct{ user, token string }{{"worker", mine}, {"stranger", other}, {"worker", "kyd_unknown"}} {
+		if err := d.UnlinkDevice(ctx, c.user, c.token); !errors.Is(err, drive.ErrDenied) {
+			t.Errorf("%+v: %v", c, err)
+		}
+	}
+}

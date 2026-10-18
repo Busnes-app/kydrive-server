@@ -204,6 +204,22 @@ func (s *Store) RevokeDevice(ctx context.Context, user, id string, wipe bool) er
 	})
 }
 
+// UnlinkDevice revokes the device that token belongs to, without wipe: the user unlinked it
+// from the computer itself, which keeps its files.
+func (s *Store) UnlinkDevice(ctx context.Context, user, token string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		var id string
+		err := tx.QueryRowContext(ctx, `UPDATE drive_devices SET revoked_at=?,wipe=0 WHERE hash=? AND user_id=? AND revoked_at=0 RETURNING id`, time.Now().Unix(), tokenHash(token), user).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDenied
+		}
+		if err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "device.revoked", id+" wipe=false")
+	})
+}
+
 // PruneDevices deletes devices revoked 30 days before at or idle for 90, and expired codes.
 func (s *Store) PruneDevices(ctx context.Context, at time.Time) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM drive_devices WHERE (revoked_at>0 AND revoked_at<?) OR (revoked_at=0 AND last_used<?)`, at.Add(-deviceRevokedKeep).Unix(), at.Add(-deviceIdle).Unix()); err != nil {

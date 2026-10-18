@@ -266,3 +266,52 @@ func TestDeviceToken(t *testing.T) {
 	}
 	expect(got, 429, "DAV bearer guessing")
 }
+
+func TestDeviceSelfUnlink(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "unlinker", "user")
+	expect := func(got *httptest.ResponseRecorder, code int, what string) {
+		t.Helper()
+		if got.Code != code {
+			t.Fatalf("%s: %d, want %d: %s", what, got.Code, code, got.Body.String())
+		}
+	}
+	mine, other := linkDevice(t, srv, user), linkDevice(t, srv, user)
+	_, secret, err := st.Drive().CreateAppPassword(context.Background(), "usr_unlinker", "Laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the device's own Bearer token unlinks it: a session, a service token or an app password cannot.
+	expect(send(t, srv, "DELETE", "/api/devices/self", "", user, ""), 401, "session")
+	expect(send(t, srv, "DELETE", "/api/devices/self", "", nil, "0123456789abcdef0123456789abcdef"), 401, "service-style token")
+	expect(davRequest(srv, "DELETE", "/api/devices/self", "unlinker", secret, nil), 401, "app password")
+	expect(send(t, srv, "DELETE", "/api/devices/self", "", nil, ""), 401, "no credential")
+	crossSite := httptest.NewRequest("DELETE", "/api/devices/self", nil)
+	crossSite.Header.Set("Authorization", "Bearer "+mine)
+	crossSite.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, crossSite)
+	expect(rec, 403, "cross-site")
+
+	// The presenting device is revoked without wipe whatever the request asks; the other keeps working.
+	expect(send(t, srv, "DELETE", "/api/devices/self?wipe=true", "", nil, mine), 204, "self unlink")
+	if got := send(t, srv, "GET", "/api/drive/workspaces", "", nil, mine); got.Code != 401 || strings.TrimSpace(got.Body.String()) != `{"error":"device_revoked","wipe":false}` {
+		t.Fatalf("unlinked token: %d %s", got.Code, got.Body.String())
+	}
+	expect(send(t, srv, "GET", "/api/drive/workspaces", "", nil, other), 200, "other device")
+	var devices []struct{ ID string }
+	if list := send(t, srv, "GET", "/api/devices", "", user, ""); json.Unmarshal(list.Body.Bytes(), &devices) != nil || len(devices) != 1 {
+		t.Fatalf("devices after unlink: %s", list.Body.String())
+	}
+
+	// A second call answers like any revoked token.
+	got := send(t, srv, "DELETE", "/api/devices/self", "", nil, mine)
+	if got.Code != 401 || strings.TrimSpace(got.Body.String()) != `{"error":"device_revoked","wipe":false}` {
+		t.Fatalf("second unlink: %d %s", got.Code, got.Body.String())
+	}
+	expect(send(t, srv, "DELETE", "/api/devices/self", "", nil, "kyd_unknown"), 401, "unknown token")
+}
