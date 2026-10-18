@@ -34,6 +34,7 @@ type UploadSession struct {
 	Size      int64  `json:"size"`
 	Received  int64  `json:"received"`
 	Expires   int64  `json:"expires"`
+	Mtime     string `json:"mtime"` // applied to the published version
 }
 
 // StartUpload opens a session for a new file (File empty, Expected 0) or a new version of
@@ -47,7 +48,11 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 	if u.Size > max {
 		return u, fmt.Errorf("%w: file is larger than the upload limit", ErrQuota)
 	}
-	err := s.transaction(ctx, func(tx *sql.Tx) error {
+	var err error
+	if u.Mtime, err = Mtime(u.Mtime); err != nil {
+		return u, err
+	}
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		var stored string
 		var revision int64
 		if u.File != "" {
@@ -99,8 +104,8 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 				return fmt.Errorf("%w: name or file exists", ErrConflict)
 			}
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_sessions(id,owner,workspace,parent,name,name_hmac,file,expected,size,expires) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-			u.ID, user, u.Workspace, u.Parent, stored, mac, u.File, u.Expected, u.Size, u.Expires); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_sessions(id,owner,workspace,parent,name,name_hmac,file,expected,size,expires,mtime) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+			u.ID, user, u.Workspace, u.Parent, stored, mac, u.File, u.Expected, u.Size, u.Expires, u.Mtime); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "upload.started", u.ID)
@@ -112,8 +117,8 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, error) {
 	u := UploadSession{ID: id}
 	var stored string
-	err := s.db.QueryRowContext(ctx, `SELECT workspace,parent,name,file,expected,size,received,expires FROM drive_upload_sessions WHERE id=? AND owner=? AND expires>?`, id, user, time.Now().Unix()).
-		Scan(&u.Workspace, &u.Parent, &stored, &u.File, &u.Expected, &u.Size, &u.Received, &u.Expires)
+	err := s.db.QueryRowContext(ctx, `SELECT workspace,parent,name,file,expected,size,received,expires,mtime FROM drive_upload_sessions WHERE id=? AND owner=? AND expires>?`, id, user, time.Now().Unix()).
+		Scan(&u.Workspace, &u.Parent, &stored, &u.File, &u.Expected, &u.Size, &u.Received, &u.Expires, &u.Mtime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, ErrDenied
 	}
@@ -225,6 +230,7 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 	if err != nil {
 		return File{}, err
 	}
+	v.Mtime = u.Mtime
 	f, err := s.Publish(ctx, user, File{ID: u.File, Workspace: u.Workspace, Parent: u.Parent, Name: u.Name}, v, u.Expected)
 	if err != nil {
 		RemoveBlobs(blobs, []string{v.Blob})

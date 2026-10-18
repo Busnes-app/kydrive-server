@@ -61,6 +61,7 @@ type File struct {
 	Blob      string `json:"-"`
 	Sealed    bool   `json:"-"`
 	Modified  string `json:"modified"` // when the current version was created
+	Mtime     string `json:"mtime"`    // the client's modification time, else Modified
 }
 type Version struct {
 	FileID   string `json:"file_id"`
@@ -69,6 +70,7 @@ type Version struct {
 	Digest   string `json:"digest"`
 	Size     int64  `json:"size"`
 	Created  string `json:"created"`
+	Mtime    string `json:"mtime"` // optional client modification time, RFC 3339
 	Sealed   bool   `json:"-"`
 }
 type Event struct {
@@ -125,6 +127,19 @@ func ValidName(name string) bool {
 		}
 	}
 	return true
+}
+
+// Mtime normalizes an RFC 3339 client mtime to UTC. "" stays "" (absent). Times before 1970 or
+// more than a day ahead are ErrInvalid.
+func Mtime(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil || t.Before(time.Unix(0, 0)) || t.After(time.Now().Add(24*time.Hour)) {
+		return "", fmt.Errorf("%w: mtime", ErrInvalid)
+	}
+	return t.UTC().Format(time.RFC3339Nano), nil
 }
 func Rank(role string) int {
 	switch role {
@@ -403,11 +418,14 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	return s.queryFolders(ctx, `workspace=? AND trashed=?`, workspace, trashed)
 }
 
-const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed,v.created`
+const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed,v.created,` + versionMtime
+
+// versionMtime reads a version's mtime, falling back to its creation time.
+const versionMtime = `CASE v.mtime WHEN '' THEN v.created ELSE v.mtime END`
 
 func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
-	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed, &f.Modified)
+	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed, &f.Modified, &f.Mtime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrDenied
 	}
@@ -436,13 +454,17 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	if !ValidName(f.Name) || v.Size < 0 || len(v.Digest) != 64 || v.Blob == "" {
 		return f, ErrInvalid
 	}
+	var err error
+	if v.Mtime, err = Mtime(v.Mtime); err != nil {
+		return f, err
+	}
 	if f.ID == "" {
 		f.ID = uuid.NewString()
 	}
 	v.FileID = f.ID
 	v.Revision = expected + 1
 	v.Created = time.Now().UTC().Format(time.RFC3339Nano)
-	err := s.transaction(ctx, func(tx *sql.Tx) error { return s.publishTX(ctx, tx, user, f, v, expected) })
+	err = s.transaction(ctx, func(tx *sql.Tx) error { return s.publishTX(ctx, tx, user, f, v, expected) })
 	if err != nil {
 		return f, err
 	}
@@ -452,13 +474,14 @@ func (s *Store) Publish(ctx context.Context, user string, f File, v Version, exp
 	f.Blob = v.Blob
 	f.Sealed = v.Sealed
 	f.Modified = v.Created
+	f.Mtime = cmp.Or(v.Mtime, v.Created)
 	return f, nil
 }
 func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error) {
 	if _, err := s.File(ctx, user, id, 1); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT file_id,revision,blob,digest,size,created,sealed FROM drive_versions WHERE file_id=? ORDER BY revision DESC`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT file_id,revision,blob,digest,size,created,sealed,`+versionMtime+` FROM drive_versions v WHERE file_id=? ORDER BY revision DESC`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +489,7 @@ func (s *Store) Versions(ctx context.Context, user, id string) ([]Version, error
 	out := []Version{}
 	for rows.Next() {
 		var v Version
-		if err = rows.Scan(&v.FileID, &v.Revision, &v.Blob, &v.Digest, &v.Size, &v.Created, &v.Sealed); err != nil {
+		if err = rows.Scan(&v.FileID, &v.Revision, &v.Blob, &v.Digest, &v.Size, &v.Created, &v.Sealed, &v.Mtime); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -537,7 +560,7 @@ func (s *Store) RestoreVersion(ctx context.Context, user, id string, revision, e
 	if err != nil {
 		return f, err
 	}
-	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed, v.Created
+	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified, f.Mtime = v.Revision, v.Size, v.Digest, v.Blob, v.Sealed, v.Created, v.Created
 	return f, nil
 }
 func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
@@ -591,7 +614,7 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 			return cmp.Or(err, ErrConflict)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed) VALUES(?,?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created, v.Sealed); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_versions(file_id,revision,blob,digest,size,created,sealed,mtime) VALUES(?,?,?,?,?,?,?,?)`, v.FileID, v.Revision, v.Blob, v.Digest, v.Size, v.Created, v.Sealed, v.Mtime); err != nil {
 		return err
 	}
 	return event(ctx, tx, user, "file.version_created", f.ID)

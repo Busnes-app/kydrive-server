@@ -301,7 +301,7 @@ func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v V
 		}
 		return event(ctx, tx, "guest-link:"+g.link, "guest_link.uploaded", f.ID)
 	})
-	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified = 1, v.Size, v.Digest, v.Blob, v.Sealed, v.Created
+	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified, f.Mtime = 1, v.Size, v.Digest, v.Blob, v.Sealed, v.Created, v.Created
 	return f, err
 }
 

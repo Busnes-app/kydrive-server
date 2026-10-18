@@ -21,6 +21,9 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
+// SchemaVersion is the newest drive schema version.
+var SchemaVersion = len(schema)
+
 // MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:
 // the race between MoveFile's first read and its transaction, made deterministic.
 func MoveFileFrom(ctx context.Context, s *Store, user string, f File, expected int64, to Location) (File, error) {

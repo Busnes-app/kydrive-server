@@ -71,6 +71,9 @@ func (s *statusWriter) WriteHeader(code int) {
 	if s.fs.Err != nil && code >= 400 {
 		code = status(s.fs.Err, s.method, s.fs.IfMatch, code)
 	}
+	if s.fs.mtimeSaved && code < 300 {
+		s.Header().Set("X-OC-Mtime", "accepted") // rclone's owncloud vendor checks this
+	}
 	s.ResponseWriter.WriteHeader(code)
 }
 

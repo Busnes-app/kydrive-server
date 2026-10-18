@@ -66,6 +66,12 @@ func TestDAVAuthentication(t *testing.T) {
 		t.Fatalf("workspace not listed:\n%s", ok.Body.String())
 	}
 	expect(davRequest(srv, "PUT", "/dav/Team/a.txt", "davuser", secret, strings.NewReader("hello")), 201, "put")
+	dated := davRequest(srv, "PUT", "/dav/Team/a.txt", "davuser", secret, strings.NewReader("hello"), "X-OC-Mtime", "1577934245")
+	expect(dated, 201, "put with mtime")
+	if dated.Header().Get("X-OC-Mtime") != "accepted" {
+		t.Fatalf("mtime not accepted: %q", dated.Header().Get("X-OC-Mtime"))
+	}
+	expect(davRequest(srv, "PUT", "/dav/Team/a.txt", "davuser", secret, strings.NewReader("hello"), "X-OC-Mtime", "soon"), 400, "bad mtime")
 	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", "wrong-password", nil, "Depth", "0"), 401, "wrong password")
 	expect(davRequest(srv, "PROPFIND", "/dav/", "davadmin", secret, nil, "Depth", "0"), 401, "another user's name")
 
