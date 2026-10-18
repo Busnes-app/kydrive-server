@@ -173,7 +173,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 	return nil
 }
 func admin(ctx context.Context, q queryer, user string) error {
-	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok {
+	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || isDevice(ctx) {
 		return ErrDenied
 	}
 	var n int

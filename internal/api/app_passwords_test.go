@@ -41,7 +41,7 @@ func TestAppPasswordRoutes(t *testing.T) {
 	if err = st.Drive().Grant(ctx, "usr_apadmin", w.ID, "apgroup", "manager"); err != nil {
 		t.Fatal(err)
 	}
-	const token = "kyd_app_password_route_test_token_0123456789"
+	const token = "svc_app_password_route_test_token_0123456789"
 	if _, err = st.Drive().CreateServiceToken(ctx, "usr_appuser", w.ID, "Robot", "editor", token); err != nil {
 		t.Fatal(err)
 	}

@@ -334,7 +334,14 @@ func (s *Server) requireAdmin(h http.HandlerFunc) http.HandlerFunc {
 func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/drive/") && strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") && s.store.Drive() != nil {
-			id, access, err := s.store.Drive().ServiceToken(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+			token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if strings.HasPrefix(token, drive.DevicePrefix) {
+				if user, ok := s.deviceUser(w, r, token); ok {
+					h(w, r.WithContext(context.WithValue(drive.WithDevice(r.Context()), driveUserKey{}, user)))
+				}
+				return
+			}
+			id, access, err := s.store.Drive().ServiceToken(r.Context(), token)
 			if err != nil {
 				s.writeError(w, 401, "Invalid service credential")
 				return
@@ -464,9 +471,10 @@ func guestPath(p string) bool {
 	return p == "/g" || strings.HasPrefix(p, "/g/") || strings.HasPrefix(p, "/api/public/")
 }
 
-// csrfExempt routes never act on a session; /api/public/ still gets the same-site check.
+// csrfExempt routes never act on a session; /api/public/ and the device token exchange still
+// get the same-site check.
 func csrfExempt(path string) bool {
-	return credentialRoute(path) || path == "/api/sso/kysignon/sync" || strings.HasPrefix(path, "/api/public/")
+	return credentialRoute(path) || path == "/api/sso/kysignon/sync" || strings.HasPrefix(path, "/api/public/") || path == "/api/devices/token"
 }
 
 func isJSON(r *http.Request) bool {

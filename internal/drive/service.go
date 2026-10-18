@@ -20,6 +20,9 @@ func (s *Store) CreateServiceToken(ctx context.Context, user, workspace, name, r
 	if !ValidName(name) || Rank(role) < 1 || Rank(role) > 2 {
 		return "", ErrInvalid
 	}
+	if isDevice(ctx) {
+		return "", ErrDenied
+	}
 	id := uuid.NewString()
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
