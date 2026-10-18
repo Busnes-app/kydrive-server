@@ -90,9 +90,9 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** a fresh host restores from the offsite repository plus a custodian-opened capsule with every blob verified; a handed-over tree is browsable by the recipient and absent from the leaver's workspace.
 
-### M7 — Desktop sync (decided 2026-10-17; plan `2026-10-18-m7-desktop-sync.md`)
+### M7 — Desktop sync (decided 2026-10-17; plan `2026-10-18-m7-desktop-sync.md`; server tasks 1–6 shipped)
 
-Design and evidence: `docs/desktop-sync-options.md` ("What a Ky client looks like").
+Design and evidence: `docs/desktop-sync-options.md` ("What a Ky client looks like"). Server: #42–#47 and this docs pass. Client: `Busnes-app/kydrive-desktop` (core and Linux shell in review; Windows and macOS shells not started).
 
 - **Server first.** WebDAV ETag reuse is fixed (#40). Then: stored client mtime; a per-workspace change log with cursor and snapshot API (lost access shows as a workspace leaving the list); per-device credentials minted by KyDrive through a loopback + PKCE approval after KyIdentity sign-in, listed beside app passwords and revoked by deactivation. Propagated folder ETags and a separate checksum property are dropped: the feed and the existing REST `digest` cover them.
 - **Phase 1, sync-lite.** Go sync core with native shells: WinUI 3 on Windows, SwiftUI on macOS, Qt6/Kirigami on Linux. Each synced file is a full local copy; conflicts keep both copies. Shared with me is deferred to v2. Revoking a device offers a local wipe. It defaults to on, an administrator can set and lock the default, and it runs only when the device next reaches the server.
