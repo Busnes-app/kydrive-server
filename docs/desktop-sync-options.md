@@ -641,7 +641,9 @@ killed on deactivation.
   - The checkbox defaults to checked (wipe). An administrator can change the drive-wide
     default and lock it, so users cannot change it when revoking.
 
-**Prerequisites.** The ETag fix and the five server primitives come first. Phase 1 is M;
+**Prerequisites.** The task plan is `superpowers/plans/2026-10-18-m7-desktop-sync.md`. It refines
+this note: a per-workspace change log instead of a per-user feed, no propagated folder ETags or
+new checksum property, and loopback + PKCE linking instead of a device code. Phase 1 is M;
 phase 2 is XL per platform.
 
 ## Server-side primitives any real sync needs

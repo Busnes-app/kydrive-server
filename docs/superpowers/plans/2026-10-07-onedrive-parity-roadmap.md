@@ -90,11 +90,11 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** a fresh host restores from the offsite repository plus a custodian-opened capsule with every blob verified; a handed-over tree is browsable by the recipient and absent from the leaver's workspace.
 
-### M7 — Desktop sync (decided 2026-10-17; no task plan yet)
+### M7 — Desktop sync (decided 2026-10-17; plan `2026-10-18-m7-desktop-sync.md`)
 
 Design and evidence: `docs/desktop-sync-options.md` ("What a Ky client looks like").
 
-- **Server first.** Fix WebDAV ETag reuse (ID + revision), then: stored client mtime; a checksum property; propagated folder ETags; a per-user change feed with cursor, tombstones and access-loss rows; per-device sync credentials minted by KyDrive after KyIdentity sign-in, listed beside app passwords and revoked by deactivation.
+- **Server first.** WebDAV ETag reuse is fixed (#40). Then: stored client mtime; a per-workspace change log with cursor and snapshot API (lost access shows as a workspace leaving the list); per-device credentials minted by KyDrive through a loopback + PKCE approval after KyIdentity sign-in, listed beside app passwords and revoked by deactivation. Propagated folder ETags and a separate checksum property are dropped: the feed and the existing REST `digest` cover them.
 - **Phase 1, sync-lite.** Go sync core with native shells: WinUI 3 on Windows, SwiftUI on macOS, Qt6/Kirigami on Linux. Each synced file is a full local copy; conflicts keep both copies. Shared with me is deferred to v2. Revoking a device offers a local wipe. It defaults to on, an administrator can set and lock the default, and it runs only when the device next reaches the server.
 - **Phase 2.** Files on demand via the Windows Cloud Files API and macOS File Provider. Linux keeps the sync folder.
 
