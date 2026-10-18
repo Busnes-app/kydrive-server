@@ -2,6 +2,7 @@ package drive_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -257,6 +258,7 @@ var noChange = map[string]string{
 	"AuthorizeSharedManager":  "read",
 	"CallbackActor":           "read",
 	"CancelUpload":            "staging only",
+	"Changes":                 "read",
 	"Children":                "read",
 	"CloseEditor":             "editor bookkeeping",
 	"Colleagues":              "read",
@@ -306,6 +308,7 @@ var noChange = map[string]string{
 	"SetRetention":            "workspace setting",
 	"Share":                   "shares only add access inside a readable workspace (Decision 1)",
 	"SharedWithMe":            "read",
+	"Snapshot":                "read",
 	"Shares":                  "read",
 	"StartUpload":             "staging only",
 	"Unshare":                 "shares only add access inside a readable workspace (Decision 1)",
@@ -409,5 +412,207 @@ func TestPruneChangesKeepsNewestPerWorkspace(t *testing.T) {
 	want := []string{row(e.other, "folder", idle.ID), row(e.w, "file", fresh.ID)}
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("after prune %q %v, want %q (dropped %s, %s)", got, err, want, a.ID, b.ID)
+	}
+}
+
+func changes(t *testing.T, e *changeEnv, workspace string, after int64) ([]drive.Change, int64) {
+	t.Helper()
+	cs, next, more, err := e.d.Changes(e.ctx, "worker", workspace, after, 1000)
+	if err != nil || more {
+		t.Fatalf("changes after %d: more=%v %v", after, more, err)
+	}
+	return cs, next
+}
+
+// Each changed item comes back once, as it is now.
+func TestChangesReturnCurrentState(t *testing.T) {
+	e := newChangeEnv(t)
+	f := e.file(t, "a.txt")
+	f, err := e.d.Publish(e.ctx, "worker", f, blob(t, e.blobs, "two"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.d.MoveFile(e.ctx, "worker", f.ID, 2, drive.Location{Workspace: e.w, Name: "b.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := e.folder(t, e.w, "worker", "Docs")
+	cs, next := changes(t, e, e.w, 0)
+	if len(cs) != 2 || cs[0].Kind != "file" || cs[0].File == nil || cs[0].File.Name != "b.txt" || cs[0].File.Revision != 2 || cs[1].Folder == nil || cs[1].Folder.Name != "Docs" {
+		t.Fatalf("changes %+v", cs)
+	}
+	if again, n := changes(t, e, e.w, next); len(again) != 0 || n != next {
+		t.Fatalf("after next %+v %d", again, n)
+	}
+
+	// A file moved out is removed here and live there; a restored folder is live again.
+	if _, err = e.d.MoveFile(e.ctx, "worker", f.ID, 2, drive.Location{Workspace: e.other, Name: "b.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.d.SetFolderTrash(e.ctx, "worker", dir.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	cs, next = changes(t, e, e.w, next)
+	if len(cs) != 2 || !cs[0].Removed || cs[0].ID != f.ID || cs[0].File != nil || !cs[1].Removed || cs[1].ID != dir.ID {
+		t.Fatalf("removals %+v", cs)
+	}
+	if there, _ := changes(t, e, e.other, 0); len(there) != 1 || there[0].File == nil || there[0].File.Workspace != e.other {
+		t.Fatalf("destination %+v", there)
+	}
+	if err = e.d.SetFolderTrash(e.ctx, "worker", dir.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if cs, _ = changes(t, e, e.w, next); len(cs) != 1 || cs[0].Removed || cs[0].Folder == nil || cs[0].Folder.Name != "Docs" {
+		t.Fatalf("restore %+v", cs)
+	}
+}
+
+func TestChangesPage(t *testing.T) {
+	e := newChangeEnv(t)
+	for i := range 3 {
+		e.file(t, fmt.Sprintf("%d.txt", i))
+	}
+	cs, next, more, err := e.d.Changes(e.ctx, "worker", e.w, 0, 2)
+	if err != nil || len(cs) != 2 || !more {
+		t.Fatalf("first page %d more=%v %v", len(cs), more, err)
+	}
+	if cs, _, more, err = e.d.Changes(e.ctx, "worker", e.w, next, 2); err != nil || len(cs) != 1 || more {
+		t.Fatalf("last page %d more=%v %v", len(cs), more, err)
+	}
+	if _, _, _, err = e.d.Changes(e.ctx, "worker", e.w, 0, 0); !errors.Is(err, drive.ErrInvalid) {
+		t.Fatalf("limit 0: %v", err)
+	}
+}
+
+// A cursor that missed pruned rows is gone; a head cursor, an idle workspace's and a new
+// workspace's are not.
+func TestChangesGone(t *testing.T) {
+	e := newChangeEnv(t)
+	e.file(t, "a.txt")
+	e.file(t, "b.txt")
+	e.folder(t, e.other, "worker", "Idle")
+	fresh, err := e.d.CreateWorkspace(e.ctx, "admin", "Fresh", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = e.d.Grant(e.ctx, "admin", fresh.ID, "team", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	_, idleHead := changes(t, e, e.other, 0)
+	_, head := changes(t, e, e.w, 0)
+	if err = drive.ExecSQL(e.ctx, e.d, `UPDATE drive_changes SET created=0`); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.d.PruneChanges(e.ctx, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err = e.d.Changes(e.ctx, "worker", e.w, 0, 10); !errors.Is(err, drive.ErrGone) {
+		t.Fatalf("pruned cursor: %v", err)
+	}
+	changes(t, e, e.w, head)
+	changes(t, e, e.other, idleHead)
+	if _, err = e.d.AddFolder(e.ctx, "worker", fresh.ID, "", "New"); err != nil {
+		t.Fatal(err)
+	}
+	if cs, _ := changes(t, e, fresh.ID, 0); len(cs) != 1 {
+		t.Fatalf("new workspace %+v", cs)
+	}
+}
+
+// A client that pages a snapshot while others write, then follows changes from the first
+// page's head, ends with exactly the workspace's live items.
+func TestSnapshotThenChangesMissesNothing(t *testing.T) {
+	e := newChangeEnv(t)
+	for _, w := range []string{e.w, e.other} {
+		if err := e.d.Quota(e.ctx, "admin", w, 1<<20); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type item struct{ name, parent string }
+	var seeds []drive.File
+	var bodies []drive.Version
+	for i := range 12 {
+		seeds = append(seeds, e.file(t, fmt.Sprintf("seed-%d.txt", i)))
+		bodies = append(bodies, blob(t, e.blobs, fmt.Sprint("new ", i)))
+	}
+	dir := e.folder(t, e.w, "worker", "Docs")
+	// Two writes land after every page: creations, moves within and out, and trash, on items
+	// the snapshot has and has not reached yet.
+	write := func(i int) {
+		f := seeds[i]
+		var err error
+		switch i % 4 {
+		case 0:
+			_, err = e.d.Publish(e.ctx, "worker", drive.File{Workspace: e.w, Parent: dir.ID, Name: fmt.Sprintf("new-%d.txt", i)}, bodies[i], 0)
+		case 1:
+			_, err = e.d.MoveFile(e.ctx, "worker", f.ID, 1, drive.Location{Workspace: e.w, Parent: dir.ID, Name: fmt.Sprintf("moved-%d.txt", i)})
+		case 2:
+			err = e.d.SetTrash(e.ctx, "worker", f.ID, 1, true)
+		case 3:
+			_, err = e.d.MoveFile(e.ctx, "worker", f.ID, 1, drive.Location{Workspace: e.other, Name: f.Name})
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	local := map[string]item{}
+	var head int64
+	after, written := "", 0
+	for page := 0; ; page++ {
+		folders, files, h, next, err := e.d.Snapshot(e.ctx, "worker", e.w, after, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page == 0 {
+			head = h
+		}
+		for _, f := range folders {
+			local["folder "+f.ID] = item{f.Name, f.Parent}
+		}
+		for _, f := range files {
+			local["file "+f.ID] = item{f.Name, f.Parent}
+		}
+		if next == "" {
+			break
+		}
+		after = next
+		for ; written < len(seeds) && written < 2*(page+1); written++ {
+			write(written)
+		}
+	}
+	if written < 8 {
+		t.Fatalf("only %d writes landed between pages", written)
+	}
+	for ; written < len(seeds); written++ {
+		write(written)
+	}
+	for more := true; more; {
+		var cs []drive.Change
+		var err error
+		if cs, head, more, err = e.d.Changes(e.ctx, "worker", e.w, head, 3); err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs {
+			switch {
+			case c.Removed:
+				delete(local, c.Kind+" "+c.ID)
+			case c.File != nil:
+				local["file "+c.ID] = item{c.File.Name, c.File.Parent}
+			default:
+				local["folder "+c.ID] = item{c.Folder.Name, c.Folder.Parent}
+			}
+		}
+	}
+	want := map[string]item{}
+	folders, _ := e.d.Folders(e.ctx, "worker", e.w, false)
+	for _, f := range folders {
+		want["folder "+f.ID] = item{f.Name, f.Parent}
+	}
+	files, _ := e.d.Files(e.ctx, "worker", e.w, false)
+	for _, f := range files {
+		want["file "+f.ID] = item{f.Name, f.Parent}
+	}
+	// Docs, 3 untouched seeds, 3 moved in, 3 new.
+	if len(want) != 10 || !reflect.DeepEqual(local, want) {
+		t.Fatalf("client has %v\nworkspace has %v", local, want)
 	}
 }

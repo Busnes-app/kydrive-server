@@ -43,6 +43,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/uploads", s.requireAuthenticated(s.driveUpload))
 	s.mux.HandleFunc("GET /api/drive/search", s.requireAuthenticated(s.driveSearch))
 	s.shareRoutes()
+	s.changeRoutes()
 	s.guestRoutes()
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
@@ -102,6 +103,9 @@ func (s *Server) driveError(w http.ResponseWriter, err error) {
 	case errors.Is(err, drive.ErrPassword):
 		status = 401
 		message = "Password required"
+	case errors.Is(err, drive.ErrGone):
+		status = 410
+		message = "Change cursor expired; take a new snapshot"
 	case errors.Is(err, drive.ErrInvalid):
 		status = 400
 		message = "Invalid drive input"
