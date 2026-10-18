@@ -129,8 +129,9 @@ func TestPutGetAndVersions(t *testing.T) {
 	path := e.org() + "/R%C3%A9sum%C3%A9%202026.txt" // "Résumé 2026.txt"
 	put := e.do("worker", "PUT", path, strings.NewReader("first draft"))
 	e.want(put, 201, "put")
-	if put.Header().Get("ETag") != `"1"` {
-		t.Fatalf("etag %q", put.Header().Get("ETag"))
+	first := put.Header().Get("ETag")
+	if !regexp.MustCompile(`^"[0-9a-f-]{36}-1"$`).MatchString(first) {
+		t.Fatalf("etag %q", first)
 	}
 	get := e.do("worker", "GET", path, nil)
 	e.want(get, 200, "get")
@@ -144,13 +145,14 @@ func TestPutGetAndVersions(t *testing.T) {
 	}
 
 	// Overwrite keeps the old revision in the history.
-	e.want(e.do("worker", "PUT", path, strings.NewReader("second")), 201, "overwrite")
+	second := e.do("worker", "PUT", path, strings.NewReader("second"))
+	e.want(second, 201, "overwrite")
 	if v := e.versions("Résumé 2026.txt"); v != 2 {
 		t.Fatalf("revision %d", v)
 	}
 	// If-Match against a stale ETag publishes nothing; the current one wins.
-	e.want(e.do("worker", "PUT", path, strings.NewReader("stale"), "If-Match", `"1"`), 412, "stale if-match")
-	e.want(e.do("worker", "PUT", path, strings.NewReader("third"), "If-Match", `"2"`), 201, "fresh if-match")
+	e.want(e.do("worker", "PUT", path, strings.NewReader("stale"), "If-Match", first), 412, "stale if-match")
+	e.want(e.do("worker", "PUT", path, strings.NewReader("third"), "If-Match", second.Header().Get("ETag")), 201, "fresh if-match")
 	if v := e.versions("Résumé 2026.txt"); v != 3 {
 		t.Fatalf("revision %d", v)
 	}
@@ -162,6 +164,24 @@ func TestPutGetAndVersions(t *testing.T) {
 }
 
 // A body cut off mid-upload must not publish what arrived.
+// A file deleted and recreated at the same path must not accept its predecessor's ETag.
+func TestRecreatedFileRefusesOldETag(t *testing.T) {
+	e := setup(t)
+	path := e.org() + "/a.txt"
+	old := e.do("worker", "PUT", path, strings.NewReader("old file"))
+	e.want(old, 201, "put old")
+	e.want(e.do("worker", "DELETE", path, nil), 204, "delete old")
+	recreated := e.do("worker", "PUT", path, strings.NewReader("new file"))
+	e.want(recreated, 201, "put new")
+	if old.Header().Get("ETag") == recreated.Header().Get("ETag") {
+		t.Fatalf("recreated file reuses ETag %s", old.Header().Get("ETag"))
+	}
+	e.want(e.do("worker", "PUT", path, strings.NewReader("stale edit"), "If-Match", old.Header().Get("ETag")), 412, "old etag")
+	if get := e.do("worker", "GET", path, nil); get.Body.String() != "new file" {
+		t.Fatalf("content %q", get.Body.String())
+	}
+}
+
 func TestInterruptedPutPublishesNothing(t *testing.T) {
 	e := setup(t)
 	cut := io.MultiReader(strings.NewReader("partial"), iotest.ErrReader(io.ErrUnexpectedEOF))
