@@ -16,11 +16,11 @@ import (
 var (
 	// Reads, content changes and the device's own unlink.
 	deviceAllowed = []string{
-		"AddFolder", "AppendUpload", "Authorize", "AuthorizeItem", "CancelUpload", "Children", "CompleteUpload",
+		"AddFolder", "AppendUpload", "Authorize", "AuthorizeItem", "CancelUpload", "Changes", "Children", "CompleteUpload",
 		"CopyFile", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderTree", "Folders",
 		"GuestLinks", "Grants", "Links", "Lookup", "MoveFile", "MoveFolder", "People", "Publish", "PurgeFile",
 		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SetFolderTrash", "SetTrash", "SharedWithMe",
-		"Shares", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
+		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
 	deviceRefused = []string{
@@ -35,7 +35,7 @@ var (
 		"AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
-		"PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs",
+		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs",
 		"ServiceToken", "SweepOrphans",
 	}
 )
