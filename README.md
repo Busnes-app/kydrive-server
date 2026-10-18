@@ -89,9 +89,17 @@ Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`
 
 For a cached drive, an offline folder (rclone) or Cyberduck, see [Desktop access](docs/DESKTOP-ACCESS.md).
 
-The top level lists your workspaces by name; two with the same name show as `Name` and `Name (2)`. Workspaces cannot be created, renamed or deleted over WebDAV. Deleting a file or folder moves it to the trash. Saving over a file creates a new version; with `If-Match` a stale save is refused (412), otherwise the last save wins and the earlier one stays in the history. Uploads are capped at `KYDRIVE_MAX_FILE_SIZE` and one `PUT` must finish within `KY_READ_TIMEOUT`.
+The top level lists your workspaces by name; two with the same name show as `Name` and `Name (2)`. Workspaces cannot be created, renamed or deleted over WebDAV. Deleting a file or folder moves it to the trash. Saving over a file creates a new version; with `If-Match` a stale save is refused (412), otherwise the last save wins and the earlier one stays in the history. A `PUT` may carry `X-OC-Mtime` (Unix seconds, as rclone's `owncloud` vendor sends it) to keep the file's own modification time. Uploads are capped at `KYDRIVE_MAX_FILE_SIZE` and one `PUT` must finish within `KY_READ_TIMEOUT`.
 
 WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating proxy, list the proxy in `KY_TRUSTED_PROXIES` so its `X-Forwarded-Proto` is believed, and let it pass request bodies up to `KYDRIVE_MAX_FILE_SIZE`. Failed WebDAV sign-ins are limited to 20 a minute per client and 10 per 15 minutes per username. Locks are held in memory and lost on restart; clients take them again.
+
+## Linked computers
+
+The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive-desktop), in development) keeps chosen workspaces in a local folder. Choosing **Link** in the app opens KyDrive in the browser; after the usual sign-in, the user approves the computer by name. The app receives its own credential, kept in the computer's keychain, and never sees a password. Shared with me is not synced yet.
+
+- **Account → Computers** lists linked computers with their last use, at most 20 per user. **Revoke** stops one at once. Its dialog offers *Also remove KyDrive files from this computer*: the files go the next time the computer reaches KyDrive, edits that never uploaded move to an `Unsynced` folder, and a computer offline for 30 days is never told. It is not a guaranteed remote wipe.
+- **Settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
+- A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
 
 ## Editor
 
@@ -147,7 +155,7 @@ The browser shell and actual Euro-Office were exercised through the native T3 co
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No SMB endpoint, desktop sync, guest editing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No SMB endpoint, released desktop app (in development, see Linked computers), guest editing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 
