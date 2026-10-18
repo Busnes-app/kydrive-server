@@ -27,14 +27,14 @@ func (s *Store) Lookup(ctx context.Context, user, workspace, parent, name string
 		return Item{}, ErrNotFound
 	}
 	mac := s.names.hmac(name)
-	folders, err := s.queryFolders(ctx, `workspace=? AND parent=? AND name_hmac=? AND trashed=false`, workspace, parent, mac)
+	folders, err := s.queryFolders(ctx, s.db, `workspace=? AND parent=? AND name_hmac=? AND trashed=false`, workspace, parent, mac)
 	if err != nil {
 		return Item{}, err
 	}
 	if len(folders) > 0 {
 		return Item{Folder: &folders[0]}, nil
 	}
-	files, err := s.queryFiles(ctx, `f.workspace=? AND f.parent=? AND f.name_hmac=? AND f.trashed=false`, workspace, parent, mac)
+	files, err := s.queryFiles(ctx, s.db, `f.workspace=? AND f.parent=? AND f.name_hmac=? AND f.trashed=false`, workspace, parent, mac)
 	if err != nil || len(files) == 0 {
 		return Item{}, cmp.Or(err, ErrNotFound)
 	}
@@ -46,18 +46,18 @@ func (s *Store) Children(ctx context.Context, user, workspace, parent string) ([
 	if err := authorizeItem(ctx, s.db, user, workspace, parent, "", 1); err != nil {
 		return nil, nil, err
 	}
-	folders, err := s.queryFolders(ctx, `workspace=? AND parent=? AND trashed=false`, workspace, parent)
+	folders, err := s.queryFolders(ctx, s.db, `workspace=? AND parent=? AND trashed=false`, workspace, parent)
 	if err != nil {
 		return nil, nil, err
 	}
-	files, err := s.queryFiles(ctx, `f.workspace=? AND f.parent=? AND f.trashed=false`, workspace, parent)
+	files, err := s.queryFiles(ctx, s.db, `f.workspace=? AND f.parent=? AND f.trashed=false`, workspace, parent)
 	return folders, files, err
 }
 
 // queryFolders and queryFiles decrypt the rows matching where (never a condition on name)
 // and sort them by name.
-func (s *Store) queryFolders(ctx context.Context, where string, args ...any) ([]Folder, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE `+where, args...)
+func (s *Store) queryFolders(ctx context.Context, q rowser, where string, args ...any) ([]Folder, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +77,8 @@ func (s *Store) queryFolders(ctx context.Context, where string, args ...any) ([]
 	return out, rows.Err()
 }
 
-func (s *Store) queryFiles(ctx context.Context, where string, args ...any) ([]File, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+where, args...)
+func (s *Store) queryFiles(ctx context.Context, q rowser, where string, args ...any) ([]File, error) {
+	rows, err := q.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -52,7 +52,11 @@ func (s *Server) driveTrashRetention(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]int{"trash_days": days})
 }
 
-// RunRetention applies retention, sweeps orphaned blobs and expires upload sessions now and then hourly. Blobs are
+// changeRetention is how long change rows are kept; an older cursor gets 410 and re-enumerates.
+const changeRetention = 90 * 24 * time.Hour
+
+// RunRetention applies retention, sweeps orphaned blobs, expires upload sessions and prunes the
+// change log now and then hourly. Blobs are
 // removed after their metadata commits; a failed removal leaves an unreferenced file, never a
 // dangling version.
 func (s *Server) RunRetention(ctx context.Context) {
@@ -83,6 +87,12 @@ func (s *Server) RunRetention(ctx context.Context) {
 			log.Printf("upload expiry: %v", err)
 		} else if n > 0 {
 			log.Printf("upload expiry: removed %d sessions", n)
+		}
+		if err := s.store.Drive().PruneChanges(ctx, time.Now().Add(-changeRetention)); err != nil && ctx.Err() == nil {
+			log.Printf("change log prune: %v", err)
+		}
+		if err := s.store.Drive().PruneDevices(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			log.Printf("device prune: %v", err)
 		}
 		select {
 		case <-ctx.Done():

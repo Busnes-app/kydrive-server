@@ -36,6 +36,7 @@ type Workspace struct {
 	TrashDays    int    `json:"trash_days"`
 	KeepVersions int    `json:"keep_versions"`
 	EditorsShare bool   `json:"editors_share"`
+	Head         int64  `json:"head"` // newest change seq; unchanged means nothing to fetch
 }
 type Grant struct {
 	GroupID string `json:"group_id"`
@@ -172,7 +173,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 	return nil
 }
 func admin(ctx context.Context, q queryer, user string) error {
-	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok {
+	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || isDevice(ctx) {
 		return ErrDenied
 	}
 	var n int
@@ -210,7 +211,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +220,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.EditorsShare, &w.Kind, &w.Used, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.EditorsShare, &w.Kind, &w.Used, &w.Head, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]
@@ -300,6 +301,9 @@ func sharedWorkspace(ctx context.Context, q queryer, workspace string) error {
 }
 
 func (s *Store) AuthorizeSharedManager(ctx context.Context, user, workspace string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
 		return err
 	}
@@ -331,6 +335,9 @@ func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, er
 	return out, rows.Err()
 }
 func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	if role != "" && Rank(role) == 0 {
 		return ErrInvalid
 	}
@@ -418,7 +425,7 @@ func (s *Store) Folders(ctx context.Context, user, workspace string, trashed boo
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	return s.queryFolders(ctx, `workspace=? AND trashed=?`, workspace, trashed)
+	return s.queryFolders(ctx, s.db, `workspace=? AND trashed=?`, workspace, trashed)
 }
 
 const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.size,v.digest,v.blob,v.sealed,v.created,` + versionMtime
@@ -449,7 +456,7 @@ func (s *Store) Files(ctx context.Context, user, workspace string, trashed bool)
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
 		return nil, err
 	}
-	return s.queryFiles(ctx, `f.workspace=? AND f.trashed=?`, workspace, trashed)
+	return s.queryFiles(ctx, s.db, `f.workspace=? AND f.trashed=?`, workspace, trashed)
 }
 
 // Publish makes a durably stored immutable blob visible. Caller owns that blob until success.

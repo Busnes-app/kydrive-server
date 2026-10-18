@@ -49,6 +49,9 @@ type GuestListing struct {
 // CreateGuestLink returns a guest link and its token, which is not stored. maxLife is the
 // administrator's limit; the expiry is mandatory.
 func (s *Store) CreateGuestLink(ctx context.Context, user, kind, id string, expires int64, secret string, uploadOnly bool, maxLife time.Duration) (GuestLink, string, error) {
+	if isDevice(ctx) {
+		return GuestLink{}, "", ErrDenied
+	}
 	g := GuestLink{ID: uuid.NewString(), Expires: expires, Created: now(), CreatedBy: user, UploadOnly: uploadOnly, HasPassword: secret != ""}
 	if expires <= time.Now().Unix() || expires > time.Now().Add(maxLife).Unix() || (uploadOnly && kind != "folder") || (secret != "" && (len(secret) < 8 || len(secret) > 1024)) {
 		return g, "", ErrInvalid
@@ -173,7 +176,7 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 	}
 	out := GuestListing{Kind: g.kind, UploadOnly: g.uploadOnly, Path: []GuestItem{}, Items: []GuestItem{}}
 	if g.kind == "file" {
-		files, err := s.queryFiles(ctx, `f.id=? AND f.trashed=false`, g.root)
+		files, err := s.queryFiles(ctx, s.db, `f.id=? AND f.trashed=false`, g.root)
 		if err != nil || len(files) == 0 {
 			return out, cmpErr(err)
 		}
@@ -187,7 +190,7 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 	if ok, err := within(ctx, s.db, g.workspace, folder, g.root); err != nil || !ok {
 		return out, cmpErr(err)
 	}
-	chain, err := s.queryFolders(ctx, `id IN (WITH RECURSIVE up(id) AS (SELECT ? UNION SELECT f.parent FROM drive_folders f JOIN up ON f.id=up.id WHERE f.id!=?) SELECT id FROM up)`, folder, g.root)
+	chain, err := s.queryFolders(ctx, s.db, `id IN (WITH RECURSIVE up(id) AS (SELECT ? UNION SELECT f.parent FROM drive_folders f JOIN up ON f.id=up.id WHERE f.id!=?) SELECT id FROM up)`, folder, g.root)
 	if err != nil {
 		return out, err
 	}
@@ -199,11 +202,11 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 		out.Path = out.Path[:1]
 		return out, nil // drop files in; never see what is there
 	}
-	folders, err := s.queryFolders(ctx, `workspace=? AND parent=? AND trashed=false`, g.workspace, folder)
+	folders, err := s.queryFolders(ctx, s.db, `workspace=? AND parent=? AND trashed=false`, g.workspace, folder)
 	if err != nil {
 		return out, err
 	}
-	files, err := s.queryFiles(ctx, `f.workspace=? AND f.parent=? AND f.trashed=false`, g.workspace, folder)
+	files, err := s.queryFiles(ctx, s.db, `f.workspace=? AND f.parent=? AND f.trashed=false`, g.workspace, folder)
 	if err != nil {
 		return out, err
 	}
@@ -254,7 +257,7 @@ func (s *Store) GuestFile(ctx context.Context, token, secret, id string) (File, 
 	if g.uploadOnly {
 		return File{}, ErrNotFound
 	}
-	files, err := s.queryFiles(ctx, `f.id=? AND f.workspace=? AND f.trashed=false`, id, g.workspace)
+	files, err := s.queryFiles(ctx, s.db, `f.id=? AND f.workspace=? AND f.trashed=false`, id, g.workspace)
 	if err != nil || len(files) == 0 {
 		return File{}, cmpErr(err)
 	}

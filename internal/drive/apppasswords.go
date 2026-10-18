@@ -32,6 +32,9 @@ var appPasswordEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 // CreateAppPassword returns the new password's record and its secret, which is not stored.
 func (s *Store) CreateAppPassword(ctx context.Context, user, name string) (AppPassword, string, error) {
+	if isDevice(ctx) {
+		return AppPassword{}, "", ErrDenied
+	}
 	p := AppPassword{ID: uuid.NewString(), Name: name, Created: now()}
 	if name == "" || len(name) > 100 || strings.TrimSpace(name) != name {
 		return p, "", ErrInvalid
@@ -91,6 +94,9 @@ func (s *Store) AppPasswords(ctx context.Context, user string) ([]AppPassword, e
 }
 
 func (s *Store) RevokeAppPassword(ctx context.Context, user, id string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `DELETE FROM drive_app_passwords WHERE id=? AND user_id=?`, id, user)
 		if err != nil {
