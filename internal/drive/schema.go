@@ -60,6 +60,9 @@ ALTER TABLE drive_upload_sessions ADD COLUMN mtime TEXT NOT NULL DEFAULT '';`,
 	`CREATE TABLE drive_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT,workspace TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('file','folder')),item TEXT NOT NULL,created INTEGER NOT NULL);
 CREATE INDEX drive_changes_ws ON drive_changes(workspace,seq);
 CREATE TABLE drive_change_floor(workspace TEXT PRIMARY KEY,seq INTEGER NOT NULL);`,
+	`CREATE TABLE drive_devices(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,platform TEXT NOT NULL,hash TEXT NOT NULL UNIQUE,created TEXT NOT NULL,last_used INTEGER NOT NULL,revoked_at INTEGER NOT NULL DEFAULT 0,wipe INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX drive_devices_user ON drive_devices(user_id);
+CREATE TABLE drive_device_codes(code_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,platform TEXT NOT NULL,challenge TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

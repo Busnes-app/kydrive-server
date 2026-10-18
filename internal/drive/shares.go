@@ -110,6 +110,9 @@ func principalName(ctx context.Context, q queryer, kind, id string) (string, err
 // Share grants role on a live folder or file to a person or a group, replacing any role that
 // principal already had there.
 func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, principalID, role string) (Share, error) {
+	if isDevice(ctx) {
+		return Share{}, ErrDenied
+	}
 	sh := Share{ID: uuid.NewString(), ResourceKind: kind, ResourceID: id, PrincipalKind: principalKind, PrincipalID: principalID, Role: role}
 	if Rank(role) == 0 {
 		return sh, ErrInvalid
@@ -149,6 +152,9 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 
 // Unshare removes a share the user may manage.
 func (s *Store) Unshare(ctx context.Context, user, id string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		var kind, rid, role string
 		err := tx.QueryRowContext(ctx, `SELECT resource_kind,resource_id,role FROM drive_shares WHERE id=? AND principal_kind!='link'`, id).Scan(&kind, &rid, &role)
@@ -282,6 +288,9 @@ func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
 
 // SetEditorsShare lets a shared workspace's managers allow its editors to share, up to their role.
 func (s *Store) SetEditorsShare(ctx context.Context, user, workspace string, on bool) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := sharedWorkspace(ctx, tx, workspace); err != nil {
 			return err

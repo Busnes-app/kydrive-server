@@ -91,6 +91,9 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if err := s.store.Drive().PruneChanges(ctx, time.Now().Add(-changeRetention)); err != nil && ctx.Err() == nil {
 			log.Printf("change log prune: %v", err)
 		}
+		if err := s.store.Drive().PruneDevices(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			log.Printf("device prune: %v", err)
+		}
 		select {
 		case <-ctx.Done():
 			return

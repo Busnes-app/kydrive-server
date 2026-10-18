@@ -132,7 +132,7 @@ func TestResumableUploadRoutes(t *testing.T) {
 	if err = st.Drive().Grant(ctx, "usr_upadmin", o.ID, "uploaders", "manager"); err != nil {
 		t.Fatal(err)
 	}
-	const token = "kyd_upload_service_token_for_tests_0123456789"
+	const token = "svc_upload_service_token_for_tests_0123456789"
 	if _, err = st.Drive().CreateServiceToken(ctx, "usr_uploader", o.ID, "Robot", "editor", token); err != nil {
 		t.Fatal(err)
 	}

@@ -173,7 +173,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 	return nil
 }
 func admin(ctx context.Context, q queryer, user string) error {
-	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok {
+	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || isDevice(ctx) {
 		return ErrDenied
 	}
 	var n int
@@ -301,6 +301,9 @@ func sharedWorkspace(ctx context.Context, q queryer, workspace string) error {
 }
 
 func (s *Store) AuthorizeSharedManager(ctx context.Context, user, workspace string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
 		return err
 	}
@@ -332,6 +335,9 @@ func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, er
 	return out, rows.Err()
 }
 func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) error {
+	if isDevice(ctx) {
+		return ErrDenied
+	}
 	if role != "" && Rank(role) == 0 {
 		return ErrInvalid
 	}

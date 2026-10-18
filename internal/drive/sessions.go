@@ -61,6 +61,9 @@ const sessionKey = `drive_editor_sessions.file_id||'-'||drive_editor_sessions.re
 // EditorSession opens the file for user. A document a force-save left open at the current
 // revision and epoch is joined, so co-editors always share one key.
 func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSession, error) {
+	if isDevice(ctx) {
+		return EditorSession{}, ErrDenied
+	}
 	f, err := s.File(ctx, user, id, 1)
 	if err != nil || f.Trashed {
 		return EditorSession{}, ErrDenied
