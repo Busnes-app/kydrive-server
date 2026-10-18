@@ -171,6 +171,7 @@ func (s *Store) Snapshot(ctx context.Context, user, workspace string, afterID st
   - `POST /api/devices/approve` (session + CSRF) → `{redirect}` with code and state;
   - `POST /api/devices/token` (public, form `code`, `verifier`, rate-limited like login) → `{token, user, devices_url}`;
   - `GET /api/devices`, `DELETE /api/devices/{id}?wipe=` (session + CSRF). The server forces `wipe` to the default when locked.
+  - `DELETE /api/devices/self` (Bearer `kyd_` only, CSRF-exempt, same-site checked) revokes the presenting device with `wipe=false`.
   - `GET`/`PUT /api/drive/device-policy` (`requireAuthenticated` / `requireAdmin`).
 - Bearer:
   - `kyd_` tokens are accepted on `/api/drive/*` without `WithServiceAccess` narrowing, CSRF-exempt like service tokens, refused on `requireAdmin` and installer routes.
@@ -218,7 +219,7 @@ func (s *Store) Snapshot(ctx context.Context, user, workspace string, afterID st
 ### Task 8: Linking
 
 - [ ] Loopback listener on a random port, an S256 verifier, and opening the system browser to `/link`. Callback state check, token exchange, keyring store. A timeout after 10 minutes.
-- [ ] Unlink: revoke the device on the server (best effort), delete the keyring item, and keep local files unless the user chooses removal.
+- [ ] Unlink: `DELETE /api/devices/self` with the device token (best effort; it never asks for a wipe), then delete the keyring item, and keep local files unless the user chooses removal.
 
 ### Task 9: Download path
 
