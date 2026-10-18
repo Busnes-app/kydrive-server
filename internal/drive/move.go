@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 )
@@ -97,6 +98,11 @@ func (s *Store) moveFile(ctx context.Context, user string, f File, expected int6
 				}
 			}
 		}
+		for _, w := range slices.Compact([]string{f.Workspace, to.Workspace}) {
+			if err := change(ctx, tx, w, "file", id); err != nil {
+				return err
+			}
+		}
 		return event(ctx, tx, user, "file.moved", fmt.Sprintf("%s:%s->%s", id, f.Workspace, to.Workspace))
 	})
 	if err != nil {
@@ -166,6 +172,9 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 			return fmt.Errorf("%w: name exists", ErrConflict)
 		}
 		if err != nil {
+			return err
+		}
+		if err := change(ctx, tx, f.Workspace, "folder", id); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "folder.moved", id)

@@ -53,6 +53,13 @@ ALTER TABLE drive_workspaces ADD COLUMN editors_share INTEGER NOT NULL DEFAULT 0
 	`CREATE TABLE drive_links(id TEXT PRIMARY KEY,workspace TEXT NOT NULL REFERENCES drive_workspaces(id),resource_kind TEXT NOT NULL CHECK(resource_kind IN ('folder','file')),resource_id TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('reader','editor')),scope TEXT NOT NULL CHECK(scope IN ('org','guest')),token_hash TEXT NOT NULL UNIQUE,expires INTEGER NOT NULL DEFAULT 0,password_hash TEXT NOT NULL DEFAULT '',upload_only INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created TEXT NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX drive_links_resource ON drive_links(resource_id);
 CREATE TABLE drive_link_users(link TEXT NOT NULL REFERENCES drive_links(id),user_id TEXT NOT NULL,opened TEXT NOT NULL,PRIMARY KEY(link,user_id));`,
+	// Client mtime; '' falls back to the version's creation time.
+	`ALTER TABLE drive_versions ADD COLUMN mtime TEXT NOT NULL DEFAULT '';
+ALTER TABLE drive_upload_sessions ADD COLUMN mtime TEXT NOT NULL DEFAULT '';`,
+	// drive_change_floor is the highest pruned seq per workspace: a cursor below it missed rows.
+	`CREATE TABLE drive_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT,workspace TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('file','folder')),item TEXT NOT NULL,created INTEGER NOT NULL);
+CREATE INDEX drive_changes_ws ON drive_changes(workspace,seq);
+CREATE TABLE drive_change_floor(workspace TEXT PRIMARY KEY,seq INTEGER NOT NULL);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

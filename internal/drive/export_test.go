@@ -19,6 +19,9 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 	return blobs, err
 }
 
+// SchemaVersion is the version a fully migrated database records.
+var SchemaVersion = len(schema)
+
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
 // MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:
@@ -63,6 +66,17 @@ func SeedFiles(ctx context.Context, s *Store, workspace string, n int) error {
 		}
 		return nil
 	})
+}
+
+// ChangesAfter lists change rows after seq in order, as "workspace kind item".
+func ChangesAfter(ctx context.Context, s *Store, seq int64) ([]string, error) {
+	return column(ctx, s.db, `SELECT workspace||' '||kind||' '||item FROM drive_changes WHERE seq>? ORDER BY seq`, seq)
+}
+
+// ChangeSeqs lists the seq of each published file's change row in the order the version
+// events were inserted, which is commit order under the one writer.
+func ChangeSeqs(ctx context.Context, s *Store) ([]string, error) {
+	return column(ctx, s.db, `SELECT printf('%020d',c.seq) FROM drive_events e JOIN drive_changes c ON c.item=e.resource WHERE e.action='file.version_created' ORDER BY e.rowid`)
 }
 
 func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {

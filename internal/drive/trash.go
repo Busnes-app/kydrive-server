@@ -54,6 +54,9 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 		if trashed == trash {
 			return ErrConflict
 		}
+		if err := change(ctx, tx, workspace, "folder", id); err != nil {
+			return err
+		}
 		if trash {
 			tree, err := subtree(ctx, tx, id, `d.trashed=false`)
 			if err != nil {

@@ -2,12 +2,15 @@ package dav_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -74,8 +77,12 @@ func (e *env) do(user, method, path string, body io.Reader, headers ...string) *
 	for i := 0; i+1 < len(headers); i += 2 {
 		r.Header.Set(headers[i], headers[i+1])
 	}
+	mtime, err := dav.Mtime(r.Header.Get("X-OC-Mtime"))
+	if err != nil {
+		e.t.Fatal(err)
+	}
 	w := httptest.NewRecorder()
-	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, e.blobs, testdb.Key, 1<<20), e.locks)
+	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, e.blobs, testdb.Key, 1<<20, mtime), e.locks)
 	return w
 }
 
@@ -431,4 +438,55 @@ func TestLocksAreScopedAndAuthorized(t *testing.T) {
 	e.want(e.do("reader", "LOCK", "/dav/Organization/shared.txt", lockBody()), 403, "reader lock")
 	e.want(e.do("worker", "PUT", "/dav/Organization/shared.txt", strings.NewReader("still writable")), 201, "write after refused lock")
 	e.want(e.do("worker", "UNLOCK", "/dav/My%20files/x.odt", nil, "Lock-Token", token), 204, "owner unlocks")
+}
+
+// rclone's owncloud vendor sends X-OC-Mtime and checks for "accepted"; PROPFIND reports it.
+func TestPutKeepsClientMtime(t *testing.T) {
+	e := setup(t)
+	put := e.do("worker", "PUT", e.org()+"/dated.txt", strings.NewReader("x"), "X-OC-Mtime", "1577934245")
+	e.want(put, 201, "put with mtime")
+	if got := put.Header().Get("X-OC-Mtime"); got != "accepted" {
+		t.Fatalf("X-OC-Mtime %q", got)
+	}
+	prop := e.do("worker", "PROPFIND", e.org()+"/dated.txt", nil, "Depth", "0")
+	if !strings.Contains(prop.Body.String(), "<D:getlastmodified>Thu, 02 Jan 2020 03:04:05 GMT</D:getlastmodified>") {
+		t.Fatalf("propfind:\n%s", prop.Body.String())
+	}
+	files, err := e.st.Drive().Files(context.Background(), "worker", e.team.ID, false)
+	if err != nil || len(files) != 1 || files[0].Mtime != "2020-01-02T03:04:05Z" {
+		t.Fatalf("stored %+v %v", files, err)
+	}
+
+	plain := e.do("worker", "PUT", e.org()+"/dated.txt", strings.NewReader("y"))
+	e.want(plain, 201, "put without mtime")
+	if got := plain.Header().Get("X-OC-Mtime"); got != "" {
+		t.Fatalf("X-OC-Mtime %q without one sent", got)
+	}
+	prop = e.do("worker", "PROPFIND", e.org()+"/dated.txt", nil, "Depth", "0")
+	if strings.Contains(prop.Body.String(), "2020") {
+		t.Fatalf("old mtime kept by a new version:\n%s", prop.Body.String())
+	}
+
+	cut := io.MultiReader(strings.NewReader("partial"), iotest.ErrReader(io.ErrUnexpectedEOF))
+	got := e.do("worker", "PUT", e.org()+"/cut.txt", cut, "X-OC-Mtime", "1577934245")
+	if got.Code < 400 || got.Header().Get("X-OC-Mtime") != "" {
+		t.Fatalf("interrupted put answered %d, X-OC-Mtime %q", got.Code, got.Header().Get("X-OC-Mtime"))
+	}
+	if v := e.versions("cut.txt"); v != 0 {
+		t.Fatalf("partial upload published as revision %d", v)
+	}
+}
+
+func TestMtimeHeader(t *testing.T) {
+	if m, err := dav.Mtime("1577934245"); err != nil || m != "2020-01-02T03:04:05Z" {
+		t.Fatalf("%q %v", m, err)
+	}
+	if m, err := dav.Mtime(""); err != nil || m != "" {
+		t.Fatalf("absent: %q %v", m, err)
+	}
+	for _, h := range []string{"soon", "1.5", "-1", strconv.FormatInt(time.Now().Add(48*time.Hour).Unix(), 10), "99999999999999"} {
+		if _, err := dav.Mtime(h); !errors.Is(err, drive.ErrInvalid) {
+			t.Fatalf("%q: %v", h, err)
+		}
+	}
 }

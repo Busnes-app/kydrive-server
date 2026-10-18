@@ -16,10 +16,10 @@ can be revoked on its own: revoke it if the computer is lost.
 
 These apply to every method:
 
-- A file's date shows when it was uploaded, not when you last changed it. Folders show no
-  date.
-- KyDrive offers no checksums over WebDAV, so sync tools cannot cheaply tell whether a file
-  changed.
+- A file keeps the date it had on your computer only if the app sends that date: rclone does
+  with `vendor=owncloud`. Otherwise, and for files saved in the browser, a file's date is
+  when it was uploaded. Folders show no date.
+- KyDrive offers no checksums over WebDAV, so sync tools compare size and date.
 - **Shared with me** is not visible. Open shared items in the browser.
 - Workspaces cannot be created, renamed or deleted from a desktop. Deleting a file moves it
   to the KyDrive trash.
@@ -29,9 +29,10 @@ These apply to every method:
 ## rclone
 
 [rclone](https://rclone.org/) is free and runs on Windows, macOS and Linux. Version 1.75.2
-was tested against KyDrive on Linux. That covered config encryption with a password command,
-`mount` and `bisync`. The keychain commands below, and the Windows and macOS steps, follow
-rclone's own documentation and were not tested here.
+was tested against KyDrive on Linux. With `vendor=owncloud` that covered `copy`, `sync` and
+`bisync`, keeping file dates; config encryption with a password command and `mount` were
+tested with the earlier `vendor=other`. The keychain commands below, and the Windows and
+macOS steps, follow rclone's own documentation and were not tested here.
 
 ### 1. Protect the saved password
 
@@ -67,8 +68,10 @@ Put the `export` line in your shell profile. Without it, rclone cannot open the 
 
 ```sh
 rclone config create --obscure kydrive webdav \
-  url=https://drive.example.com/dav/ vendor=other user=<username> pass=<app password>
+  url=https://drive.example.com/dav/ vendor=owncloud user=<username> pass=<app password>
 ```
+
+`vendor=owncloud` makes rclone send each file's date with the upload, and KyDrive keeps it.
 
 Keep `--obscure`. Without it, rclone can mistake a KyDrive app password for an
 already-obscured value and save a wrong one; every request then fails with
@@ -105,20 +108,21 @@ The first run must include `--resync`:
 
 ```sh
 rclone bisync "kydrive:My files/Projects" ~/KyDrive-Projects \
-  --compare size,checksum --download-hash --resync
+  --compare size,modtime --resync
 ```
 
 Every later run drops `--resync`:
 
 ```sh
 rclone bisync "kydrive:My files/Projects" ~/KyDrive-Projects \
-  --compare size,checksum --download-hash --resilient --recover --max-lock 2m
+  --compare size,modtime --resilient --recover --max-lock 2m
 ```
 
-- **Keep `--download-hash`.** Without it, rclone compares sizes only and silently misses an
-  edit that leaves a file the same size; the stale copy can later overwrite the newer one.
-  The cost: **every run downloads every file in the folder** to hash it. Use bisync for
-  small folders of documents, not for photos or video.
+- **Keep `--compare size,modtime` and `vendor=owncloud`.** Every save gives a file a new
+  date, so an edit that leaves it the same size is still noticed, without downloading
+  anything. With `--compare size` alone, or with `vendor=other`, rclone can miss such an
+  edit, and the stale copy can later overwrite the newer one.
+- Changing only a file's date on your computer uploads the file again, as a new version.
 - **Conflicts.** When a file changed on both sides since the last run, both versions are
   kept as `name.conflict1` (KyDrive's) and `name.conflict2` (yours). Merge them and delete
   the one you don't want.

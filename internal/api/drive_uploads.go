@@ -22,12 +22,13 @@ func (s *Server) driveStartUpload(w http.ResponseWriter, r *http.Request) {
 		File     string `json:"file"`
 		Revision int64  `json:"revision"`
 		Size     int64  `json:"size"`
+		Mtime    string `json:"mtime"`
 	}
 	if decodeDrive(r, &in) != nil {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	u := drive.UploadSession{Workspace: r.PathValue("id"), Parent: in.Parent, Name: in.Name, File: in.File, Expected: in.Revision, Size: in.Size}
+	u := drive.UploadSession{Workspace: r.PathValue("id"), Parent: in.Parent, Name: in.Name, File: in.File, Expected: in.Revision, Size: in.Size, Mtime: in.Mtime}
 	u, err := s.store.Drive().StartUpload(r.Context(), s.driveUser(r).ID, u, s.config.Drive.MaxFileSize)
 	if err != nil {
 		s.driveError(w, err)

@@ -38,6 +38,8 @@ type FS struct {
 	Err        error
 	bodyErr    error
 	workspaces map[string]string // display name -> workspace ID, filled on first use
+	mtime      string            // client mtime for a PUT, RFC 3339; "" when not sent
+	mtimeSaved bool              // a version was published with mtime
 }
 
 // Body wraps a request body so a failed read (a dropped connection) is remembered: x/net closes
@@ -57,8 +59,22 @@ func (b *body) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func New(store *drive.Store, user, blobs string, key []byte, maxFile int64) *FS {
-	return &FS{store: store, user: user, blobs: blobs, key: key, maxFile: maxFile}
+// New builds one request's view. mtime is the request's X-OC-Mtime from Mtime.
+func New(store *drive.Store, user, blobs string, key []byte, maxFile int64, mtime string) *FS {
+	return &FS{store: store, user: user, blobs: blobs, key: key, maxFile: maxFile, mtime: mtime}
+}
+
+// Mtime parses an X-OC-Mtime header (Unix seconds, as ownCloud clients and rclone send it) into
+// the drive's form. "" means absent.
+func Mtime(header string) (string, error) {
+	if header == "" {
+		return "", nil
+	}
+	n, err := strconv.ParseInt(header, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("%w: X-OC-Mtime", drive.ErrInvalid)
+	}
+	return drive.Mtime(time.Unix(n, 0).UTC().Format(time.RFC3339))
 }
 
 // node is a resolved path: the root, a workspace root (folder ""), a folder or a file.
@@ -323,6 +339,7 @@ func (w *writeFile) Close() error {
 		return w.fs.fail("write", w.target.Name, err)
 	}
 	*w.info = fileInfo{name: f.Name, size: f.Size, mod: modified(f), etag: etag(f)}
+	w.fs.mtimeSaved = w.fs.mtime != ""
 	return nil
 }
 
@@ -330,6 +347,7 @@ func (w *writeFile) Close() error {
 // meanwhile loses to this write (last writer wins) and stays in the version history.
 func (w *writeFile) publish(v drive.Version) (drive.File, error) {
 	t := w.target
+	v.Mtime = w.fs.mtime
 	for range 3 {
 		f, err := w.fs.store.Publish(w.ctx, w.fs.user, t, v, t.Revision)
 		if !errors.Is(err, drive.ErrConflict) || w.fs.IfMatch {
@@ -469,6 +487,6 @@ func info(n node) *fileInfo {
 func etag(f drive.File) string { return `"` + f.ID + "-" + strconv.FormatInt(f.Revision, 10) + `"` }
 
 func modified(f drive.File) time.Time {
-	t, _ := time.Parse(time.RFC3339Nano, f.Modified)
+	t, _ := time.Parse(time.RFC3339Nano, f.Mtime)
 	return t
 }

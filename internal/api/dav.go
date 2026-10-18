@@ -57,14 +57,18 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Installer administrators cannot use WebDAV", http.StatusForbidden)
 		return
 	}
-	limit := int64(1 << 20)
+	limit, mtime := int64(1<<20), ""
 	if r.Method == http.MethodPut {
 		limit = s.config.Drive.MaxFileSize + 1
+		if mtime, err = dav.Mtime(r.Header.Get("X-OC-Mtime")); err != nil {
+			http.Error(w, "Invalid X-OC-Mtime", http.StatusBadRequest)
+			return
+		}
 	}
 	if r.Body != nil {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 	}
-	fs := dav.New(s.store.Drive(), id, s.blobRoot(), s.config.Security.EncryptionKey, s.config.Drive.MaxFileSize)
+	fs := dav.New(s.store.Drive(), id, s.blobRoot(), s.config.Security.EncryptionKey, s.config.Drive.MaxFileSize, mtime)
 	dav.Serve(w, r, "/dav", fs, s.davLocks)
 }
 

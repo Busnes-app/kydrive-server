@@ -281,6 +281,12 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
+	// Refuse a bad mtime before writing the blob; Publish checks again.
+	mtime, err := drive.Mtime(r.URL.Query().Get("mtime"))
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
 	// Check before writing the blob; Publish checks again. A new version is checked on its file.
 	if f.ID == "" {
 		err = s.store.Drive().AuthorizeItem(r.Context(), user, f.Workspace, f.Parent, "", 2)
@@ -306,6 +312,7 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
+	v.Mtime = mtime
 	out, err := s.store.Drive().Publish(r.Context(), user, f, v, expected)
 	if err != nil {
 		s.discardBlob(v.Blob)
@@ -362,6 +369,7 @@ func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
 		"name":      f.Name,
 		"size":      f.Size,
 		"revision":  f.Revision,
+		"mtime":     f.Mtime,
 		"editable":  canEdit,
 	})
 }
