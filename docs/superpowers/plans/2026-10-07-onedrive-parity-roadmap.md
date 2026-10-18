@@ -11,7 +11,9 @@
 - Bulk backup: **offsite or cloud** Restic repository (S3-compatible or rest-server over HTTPS).
 - Out of scope for KyDrive integrations: Joplin (licence-incompatible; KyNotes is built in-house) and LimeSurvey (dropped). Third-party integrations only need to speak OIDC.
 
-**Out of scope throughout:** SharePoint metadata columns/content types, lists, intranet pages, workflow engines, eDiscovery/DLP/sensitivity labels, HA/multi-writer, desktop sync client (WebDAV is the stepping stone).
+**Out of scope throughout:** SharePoint metadata columns/content types, lists, intranet pages, workflow engines, eDiscovery/DLP/sensitivity labels, HA/multi-writer.
+
+**Desktop sync (decided 2026-10-17):** in scope as M7, after the early-November 2026 release. Research and options: `docs/desktop-sync-options.md`.
 
 ## Global constraints
 
@@ -88,6 +90,16 @@ Contract changes to record: KyDrive `AGENTS.md` (sharing model, personal workspa
 
 **Exit:** a fresh host restores from the offsite repository plus a custodian-opened capsule with every blob verified; a handed-over tree is browsable by the recipient and absent from the leaver's workspace.
 
+### M7 — Desktop sync (decided 2026-10-17; no task plan yet)
+
+Design and evidence: `docs/desktop-sync-options.md` ("What a Ky client looks like").
+
+- **Server first.** Fix WebDAV ETag reuse (ID + revision), then: stored client mtime; a checksum property; propagated folder ETags; a per-user change feed with cursor, tombstones and access-loss rows; per-device sync credentials minted by KyDrive after KyIdentity sign-in, listed beside app passwords and revoked by deactivation.
+- **Phase 1, sync-lite.** Go sync core with native shells: WinUI 3 on Windows, SwiftUI on macOS, Qt6/Kirigami on Linux. Each synced file is a full local copy; conflicts keep both copies. Shared with me is deferred to v2. Revoking a device offers a local wipe. It defaults to on, an administrator can set and lock the default, and it runs only when the device next reaches the server.
+- **Phase 2.** Files on demand via the Windows Cloud Files API and macOS File Provider. Linux keeps the sync folder.
+
+**Exit (phase 1):** a linked device survives a dropped connection mid-upload; a stale edit yields a conflict copy, never a silent overwrite; removing a grant removes synced copies but keeps unuploaded edits; a revoked device stops at once.
+
 ## Dependencies
 
 ```
@@ -96,4 +108,5 @@ M1 ──► M4 (MOVE/COPY/DELETE)
 M1 ──► M6 handover (cross-workspace move)
 M3.1 ──► M3.2–6 (single authorization definition first)
 M5, M6 offsite backup: independent; can run in parallel with M2–M4
+M2 upload sessions, M3 sharing, M4 app passwords ──► M7 (feed and device credentials build on them)
 ```
