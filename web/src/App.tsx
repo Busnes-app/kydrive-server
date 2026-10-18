@@ -12,6 +12,8 @@ import { Backup } from './pages/Backup';
 import { Settings } from './pages/Settings';
 import { TwoFactor } from './pages/TwoFactor';
 import { AppPasswords } from './pages/AppPasswords';
+import { Devices } from './pages/Devices';
+import { LinkDevice, hasLinkRequest, takeLinkRequestFromURL } from './pages/LinkDevice';
 import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
@@ -26,6 +28,8 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('drive');
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
   const [openInNewTab, setOpenInNewTab] = useState(true);
+  // Idempotent, so StrictMode's second call is harmless.
+  const [linking, setLinking] = useState(() => { takeLinkRequestFromURL(); return hasLinkRequest(); });
 
   useEffect(() => {
     takeLinkFromURL();
@@ -137,6 +141,8 @@ export const App: React.FC = () => {
     }} /></>;
   }
 
+  if (linking) return <LinkDevice onClose={() => setLinking(false)} />;
+
   return (
     <div className="app-shell">
       <AppHeader
@@ -158,7 +164,7 @@ export const App: React.FC = () => {
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}
-        {activeTab === 'account' && <><TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} /><AppPasswords /></>}
+        {activeTab === 'account' && <><TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} /><AppPasswords /><Devices /></>}
       </main>
     </div>
   );
