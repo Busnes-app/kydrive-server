@@ -445,7 +445,7 @@ func (i *fileInfo) Mode() os.FileMode {
 	return 0o644
 }
 
-// ETag is the file's revision, which If-Match compares against.
+// ETag is the file's ID and revision, which If-Match compares against.
 func (i *fileInfo) ETag(context.Context) (string, error) {
 	if i.etag == "" {
 		return "", webdav.ErrNotImplemented
@@ -465,7 +465,8 @@ func info(n node) *fileInfo {
 	return &fileInfo{name: n.file.Name, size: n.file.Size, mod: modified(*n.file), etag: etag(*n.file)}
 }
 
-func etag(f drive.File) string { return `"` + strconv.FormatInt(f.Revision, 10) + `"` }
+// The ID keeps a recreated file at the same path from reusing its predecessor's ETag.
+func etag(f drive.File) string { return `"` + f.ID + "-" + strconv.FormatInt(f.Revision, 10) + `"` }
 
 func modified(f drive.File) time.Time {
 	t, _ := time.Parse(time.RFC3339Nano, f.Modified)
