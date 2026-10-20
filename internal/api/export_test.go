@@ -47,3 +47,30 @@ func RegisterDetachedForTest(s *Server) func() {
 	s.detached.add()
 	return s.detached.done
 }
+
+// SetClockForTest replaces the clock /mcp signs agents in by, so a test can age a token. Test-only.
+func SetClockForTest(s *Server, now func() time.Time) { s.now = now }
+
+// Tool errors and limits the MCP tests compare against. Test-only.
+const (
+	MCPReadOnlyForTest   = msgReadOnly
+	MCPBadPathForTest    = msgBadPath
+	MCPNotFoundForTest   = msgNotFound
+	MCPDeniedForTest     = msgDenied
+	MCPExistsForTest     = msgExists
+	MCPReplaceForTest    = msgReplace
+	MCPChangedForTest    = msgChanged
+	MCPNotTextForTest    = msgNotText
+	MCPTooLargeForTest   = msgTooLarge
+	MCPFixedForTest      = msgFixed
+	MCPRootGoneForTest   = msgRootGone
+	MCPReadLimitForTest  = mcpReadLimit
+	MCPWriteLimitForTest = mcpWriteLimit
+	MCPListLimitForTest  = mcpListLimit
+	MCPReadNoticeForTest = readNotice
+	MCPNoPDFForTest      = msgNoPDF
+	MCPDamagedForTest    = msgDamaged
+)
+
+// TextRootForTest is where document text is cached. Test-only.
+func TextRootForTest(s *Server) string { return s.textRoot() }

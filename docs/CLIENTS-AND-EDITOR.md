@@ -32,6 +32,60 @@ The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive
 - **Settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
 - A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
 
+## AI agents
+
+AI agents reach a user's files over MCP (Streamable HTTP, stateless) at `<KY_APP_URL>/mcp`, with
+a Bearer token the user creates under **Account → App passwords → AI agent**. The token is shown
+once with copy-ready OpenClaw and Hermes Agent config that reads it from `KYDRIVE_TOKEN`; the
+KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
+
+- **Access levels.** *Read only* (default) offers `list_folder`, `search_files` (names only; there
+  is no full-text index), `get_file_info` and `read_file`. *Read and write* adds `write_file`,
+  `create_folder`, `move_item` and `move_to_trash`. The level can be changed later on the same
+  page. Every operation is still authorized as the user, so a token never exceeds their role.
+- **Folder limit.** A token may be limited to one folder or workspace, chosen by path when it is
+  created. That folder is then the agent's `/`; paths resolve downward from it one name at a time,
+  so nothing outside it can be named. If the folder is trashed, the agent is told so.
+- **Paths** are absolute, as in WebDAV: `/<workspace>/<folder>/<name>`, with workspace names as
+  WebDAV shows them. Empty, `.` and `..` parts, backslashes and control characters are refused,
+  never cleaned.
+- **Nothing is deleted for good.** `move_to_trash` uses the trash; `write_file` replaces a file
+  only when given its current revision, and the old content stays in the version history.
+  Workspaces cannot be created, renamed or trashed.
+- **Text and documents.** `read_file` returns UTF-8 text files as they are. Word, Excel,
+  PowerPoint and OpenDocument files (`docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp` and their macro
+  and template variants) are extracted inside KyDrive with no extra software: paragraphs as lines,
+  tables and sheets as tab-separated rows, `## name` before each sheet and slide; footnotes,
+  comments, speaker notes and headers are left out, and spreadsheet dates show as numbers. PDFs are
+  converted to text by Euro-Office when it is configured (otherwise refused with a message saying
+  so); KyDrive never parses a PDF itself. Euro-Office's PDF text can miss some text: in a check
+  against Euro-Office 9.3.4 it dropped Chinese characters and a table's second column. Scanned
+  PDFs have no text. Old binary `.doc`, `.xls` and `.ppt` files are refused. Each version's text is
+  cached sealed in `<KY_DATA_DIR>/text`, left out of backups and safe to delete; the hourly sweep
+  removes text of purged versions. Every result labels the text as untrusted content.
+- **Extraction limits.** Documents over 128 MiB are not extracted; a document may hold at most
+  10 000 zip entries, 64 MiB decompressed in one part and 256 MiB in all, 1 MiB in one XML tag and
+  4096 nested elements, and no DOCTYPE; at most 16 MiB of text is kept (`extract_truncated`). At most two extractions and two Document Server conversions run at
+  once.
+- **Limits.** `read_file` returns at most 256 KiB a call (64 KiB by default) and pages with
+  `next_offset`; `list_folder` at most 500 entries; `search_files` at most 50 results;
+  `write_file` at most 4 MiB (or `KYDRIVE_MAX_FILE_SIZE`, if lower); a request body at most 6 MiB.
+- **Sign-in.** Only `Authorization: Bearer kya_…`; cookies, Basic and WebDAV passwords are
+  refused, and an agent token is refused by WebDAV. Plain-HTTP requests are refused outside
+  `KY_ENV=development` (as for WebDAV).
+- **Browsers are refused.** Agents are not browsers, so any request carrying an `Origin` header,
+  whatever its value, gets 403 before the token is read, and `/mcp` sends no CORS headers at all.
+  No KyDrive route ever sends `Access-Control-Allow-Origin: *`; the rest of the API reflects only
+  `KY_APP_URL`'s own origin. Creating, revoking or changing an agent token needs a signed-in
+  session and its CSRF token, and a cross-site request is refused even with both, so a web page
+  cannot mint a token for itself (the flaw behind Joplin's GHSA-9728-v7ww-mxjv). The screens that
+  issue a token or widen its access always name the agent and the level it gets. Failed sign-ins are
+  limited to 20 a minute per client and audited as `mcp.auth_failed` without the token.
+  Installer administrators cannot use agents. Writes are audited as `mcp.file_write`,
+  `mcp.folder_create`, `mcp.move` and `mcp.trash` with item IDs, never names or content.
+- **Lifetime.** A token unused for 90 days is refused and deleted when presented, and the hourly
+  retention pass removes the rest. Deactivating the account stops it on the next request.
+
 ## Editor
 
 Set `KYDRIVE_EDITOR_URL` to the browser-visible HTTPS Euro-Office origin and `KYDRIVE_EDITOR_SECRET` to the same JWT secret supplied to Euro-Office. `KYDRIVE_EDITOR_DRIVE_URL` defaults to `KY_APP_URL`; the editor must resolve and reach it for authorized downloads and signed callbacks. Optional `KYDRIVE_EDITOR_INTERNAL_URL` changes server-to-editor transport, while output URLs must still name the configured public origin. No redirects are followed. HTTP origins are accepted only with `KY_ENV=development` for local testing.

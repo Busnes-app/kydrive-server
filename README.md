@@ -18,8 +18,35 @@ When a directory user is also named `admin`, reserve a distinct name for the loc
 
 - Upload, organize, share and version files in permissioned workspaces.
 - Use WebDAV or link compatible desktop sync clients.
+- Let AI agents read and organize files over MCP, with an access level and an optional folder limit per agent.
 - Configure optional Euro-Office editing and document previews.
 - Recover both sealed metadata and the bound bulk-file snapshot.
+
+## Connect an AI agent
+
+AI agents such as OpenClaw and Hermes Agent reach your files over MCP at
+`https://<your host>/mcp`. On the **Account** page, under **App passwords**, choose **AI agent**
+and an access level:
+
+- **Read only** (the default): the agent lists, searches and reads your files, including the
+  text of Word, Excel, PowerPoint and OpenDocument files, and of PDFs when Euro-Office is set up.
+- **Read and write**: it can also create, replace, rename, move and trash files.
+
+Optionally limit the agent to one folder: it then sees that folder as its whole drive and
+nothing outside it. An agent never has more access than you do, and none can delete anything
+for good: trashed items stay in KyDrive's trash, and a replaced file keeps its old version. The
+page shows the token once, with config for both agents that reads it from `KYDRIVE_TOKEN`, and
+the command to install the KyDrive skill (served at `/agent/skills/kydrive/SKILL.md`), which
+teaches the agent the tools and when to ask you first. You can change an agent's access there
+later. An agent token unused for 90 days is revoked; an agent token never works over WebDAV,
+nor a WebDAV password over MCP. Details are in [Clients and editor](docs/CLIENTS-AND-EDITOR.md#ai-agents).
+
+A web page can never obtain or use a token: `/mcp` refuses every browser request, sends no CORS
+headers, and tokens are created only from KyDrive's own pages, which always name the agent and
+the access it gets.
+
+File names and contents can come from other people, and an agent may treat them as
+instructions. Give an agent write access only if you trust everyone who can message it.
 
 ## Documentation
 
@@ -28,5 +55,5 @@ Euro-Office can also run on Docker with the optional [production editor Compose 
 - [Development](docs/DEVELOPMENT.md) — Local development, Verification. <a id="local-development"></a><a id="verification"></a>
 - [Deployment](docs/DEPLOYMENT.md) — NAS package, Kubernetes rendering. <a id="nas-package"></a><a id="upgrading"></a><a id="kubernetes-rendering"></a>
 - [Permissions](docs/PERMISSIONS.md) — Identity and permissions, Sharing, Leavers, Retention and permanent delete. <a id="identity-and-permissions"></a><a id="sharing"></a><a id="leavers"></a><a id="retention-and-permanent-delete"></a>
-- [Clients and editor](docs/CLIENTS-AND-EDITOR.md) — Previews, WebDAV, Linked computers, Editor. <a id="previews"></a><a id="webdav"></a><a id="linked-computers"></a><a id="editor"></a>
+- [Clients and editor](docs/CLIENTS-AND-EDITOR.md) — Previews, WebDAV, Linked computers, AI agents, Editor. <a id="previews"></a><a id="webdav"></a><a id="linked-computers"></a><a id="editor"></a>
 - [Recovery and encryption](docs/RECOVERY-AND-ENCRYPTION.md) — Encryption at rest, Recovery. <a id="encryption-at-rest"></a><a id="recovery"></a>

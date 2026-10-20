@@ -40,6 +40,8 @@ describe('LinkDevice', () => {
     expect(screen.getByText('Work laptop')).toBeTruthy();
     expect(screen.getByText(/Windows/)).toBeTruthy();
     expect(posts).toEqual([]);
+    // The approval names the computer (above) and what it will be able to do, never a generic prompt.
+    expect(screen.getByText(/can open and change every file you can/)).toBeTruthy();
     const approve = screen.getByRole('button', { name: 'Approve' });
     fireEvent.click(approve);
     fireEvent.click(approve);

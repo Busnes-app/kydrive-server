@@ -29,6 +29,8 @@ type fakeDocumentServer struct {
 	output []byte
 	source string // last source URL
 	got    []byte // last source bytes
+	asked  string // last outputtype
+	fail   bool   // answer every conversion with an error
 }
 
 func (d *fakeDocumentServer) sign(t *testing.T, claims any) string {
@@ -52,9 +54,18 @@ func (d *fakeDocumentServer) handler(t *testing.T) http.HandlerFunc {
 			return
 		}
 		var req struct {
-			Token string `json:"token"`
+			Token      string `json:"token"`
+			OutputType string `json:"outputtype"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
+		d.mu.Lock()
+		d.asked = req.OutputType
+		fail := d.fail
+		d.mu.Unlock()
+		if fail {
+			w.Write([]byte(`{"error":-3}`))
+			return
+		}
 		parsed, err := jwt.ParseSigned(req.Token, []jose.SignatureAlgorithm{jose.HS256})
 		var claims struct {
 			URL string `json:"url"`

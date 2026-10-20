@@ -83,6 +83,9 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if _, err := s.store.Drive().SweepOrphans(ctx, s.thumbRoot(), time.Hour); err != nil && ctx.Err() == nil {
 			log.Printf("thumbnail sweep: %v", err)
 		}
+		if _, err := s.store.Drive().SweepOrphans(ctx, s.textRoot(), time.Hour); err != nil && ctx.Err() == nil {
+			log.Printf("document text sweep: %v", err)
+		}
 		if n, err := s.store.Drive().ExpireUploads(ctx, s.stagingRoot()); err != nil && ctx.Err() == nil {
 			log.Printf("upload expiry: %v", err)
 		} else if n > 0 {
@@ -93,6 +96,11 @@ func (s *Server) RunRetention(ctx context.Context) {
 		}
 		if err := s.store.Drive().PruneDevices(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			log.Printf("device prune: %v", err)
+		}
+		if n, err := s.store.Drive().ExpireAgentTokens(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			log.Printf("agent token expiry: %v", err)
+		} else if n > 0 {
+			log.Printf("agent token expiry: revoked %d unused tokens", n)
 		}
 		select {
 		case <-ctx.Done():
