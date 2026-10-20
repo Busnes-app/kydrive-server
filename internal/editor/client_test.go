@@ -127,3 +127,36 @@ func TestConvertSignsTheRequestAndReturnsTheOutput(t *testing.T) {
 		}
 	}
 }
+
+// ConvertText asks for plain text, signed like a thumbnail conversion, and checks its output URL
+// the same way.
+func TestConvertTextAsksForTxt(t *testing.T) {
+	var got map[string]any
+	var answer string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(answer))
+	}))
+	defer server.Close()
+	t.Setenv("KYDRIVE_EDITOR_URL", server.URL)
+	t.Setenv("KYDRIVE_EDITOR_SECRET", strings.Repeat("s", 32))
+	c, err := FromEnv("http://drive.test", "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer = `{"endConvert":true,"fileType":"txt","fileUrl":"` + server.URL + `/cache/files/data/text/output.txt","percent":100}`
+	out, err := c.ConvertText(context.Background(), "text-1", "pdf", "http://drive.test/api/editor/convert/t1")
+	if err != nil || out != server.URL+"/cache/files/data/text/output.txt" {
+		t.Fatalf("convert %q %v", out, err)
+	}
+	if got["filetype"] != "pdf" || got["outputtype"] != "txt" || got["thumbnail"] != nil || got["key"] != "text-1" {
+		t.Fatalf("request %v", got)
+	}
+	if claims, err := c.Verify(got["token"].(string)); err != nil || !strings.Contains(string(claims["outputtype"]), "txt") {
+		t.Fatalf("token %v %v", claims, err)
+	}
+	answer = `{"endConvert":true,"fileUrl":"http://elsewhere.test/cache/x.txt"}`
+	if _, err := c.ConvertText(context.Background(), "text-1", "pdf", "http://drive.test/x"); err == nil {
+		t.Error("output on another host accepted")
+	}
+}

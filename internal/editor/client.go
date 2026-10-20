@@ -196,7 +196,16 @@ func (c *Client) Drop(ctx context.Context, key, user string) error {
 // fileType file the server fetches with its own signed request, as a PNG inside size square.
 // It returns the output URL for Fetch.
 func (c *Client) Convert(ctx context.Context, key, fileType, source string, size int) (string, error) {
-	payload := map[string]any{"async": false, "filetype": fileType, "key": key, "outputtype": "png", "url": source, "thumbnail": map[string]any{"aspect": 1, "first": true, "width": size, "height": size}}
+	return c.convert(ctx, map[string]any{"async": false, "filetype": fileType, "key": key, "outputtype": "png", "url": source, "thumbnail": map[string]any{"aspect": 1, "first": true, "width": size, "height": size}})
+}
+
+// ConvertText has the Document Server convert source (of fileType) to plain text and returns
+// the output URL, checked like Convert's. Fetch reads it.
+func (c *Client) ConvertText(ctx context.Context, key, fileType, source string) (string, error) {
+	return c.convert(ctx, map[string]any{"async": false, "filetype": fileType, "key": key, "outputtype": "txt", "url": source})
+}
+
+func (c *Client) convert(ctx context.Context, payload map[string]any) (string, error) {
 	token, err := c.Sign(payload)
 	if err != nil {
 		return "", err
