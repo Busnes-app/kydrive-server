@@ -135,3 +135,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `internal/api/` — HTTP transport, authorization middleware and editor page.
 - `web/` — shared-drive UI, recovery administration, theme behavior and browser checks.
 - `deploy/` — reviewable NAS/Kubernetes rendering contracts and tests.
+
+## Operator documentation
+
+`INSTALL.md` is the root-owned standalone entry point. When installation prerequisites, bootstrap, persistence or verification change, update it together with `README.md` and the linked operator guides.

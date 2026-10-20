@@ -1,5 +1,7 @@
 # KyDrive
 
+**Start here:** [Standalone installation](INSTALL.md). Browse, upload, download and organize files in permissioned workspaces, share files, retain versions and trash, and link desktop sync clients. Staff sign-in and provisioning require KyIdentity; the local bootstrap account is for administration. Euro-Office is an optional separate editor service. Recovery needs both sealed metadata and the independent bulk repository.
+
 Open-source personal and shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Euro-Office is the first editor integration. The drive stores arbitrary files and exposes a workspace-scoped service API for other suite applications.
 
 Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. Verified pilot deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
