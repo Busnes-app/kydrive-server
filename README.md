@@ -29,14 +29,16 @@ docker compose up -d
 docker compose exec app /app/kydrive-server bulk-init
 ```
 
-Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that immutable tag; there is no `v` and no `latest`. Verify it before first use:
+For a quick start, Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that tag once; there is no `v` and no `latest`. The release workflow refuses to push a version tag that already exists and master CI writes only commit tags, but the registry itself does not lock tags, so anyone with write access to the package could still move one.
+
+For production, pin the digest: set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>`, taking the digest from the release job's summary (`Published ...@sha256:<digest> as :X.Y.Z`) or from `docker buildx imagetools inspect ghcr.io/busnes-app/kydrive-server:X.Y.Z`. Verify it before first use:
 
 ```sh
-gh attestation verify oci://ghcr.io/busnes-app/kydrive-server:0.4.2 --repo Busnes-app/kydrive-server \
-  --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v0.4.2
+gh attestation verify oci://ghcr.io/busnes-app/kydrive-server@sha256:<digest> --repo Busnes-app/kydrive-server \
+  --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v<version>
 ```
 
-To pin by digest, set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>` with the digest the attestation verified. To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
+To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
 
 `bulk-init` is safe to rerun: when the repository already opens with this deployment's key it reports that and changes nothing. A repository at that location that the key cannot open is refused (`bulk repository exists but this deployment's key does not open it`); point `KYDRIVE_BULK_BACKUP_REPOSITORY` at the right repository rather than reinitializing.
 

@@ -1,6 +1,7 @@
 services:
   app:
-    # Immutable release tag, kept equal to api.AppVersion by TestComposeDefaultsToThisRelease.
+    # Release tag, kept equal to api.AppVersion by TestComposeDefaultsToThisRelease.
+    # Production pins the digest (README, NAS package).
     image: ${KY_IMAGE:-ghcr.io/busnes-app/kydrive-server:0.4.2}
     platform: linux/amd64
     container_name: kydrive-server
