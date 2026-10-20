@@ -244,7 +244,7 @@ func TestMCPAuthentication(t *testing.T) {
 		"WebDAV password with the prefix":   {map[string]string{"Authorization": "Bearer " + drive.AgentTokenPrefix + strings.ReplaceAll(davSecret, "-", "")}, 401},
 		"token without its prefix":          {map[string]string{"Authorization": "Bearer " + bare}, 401},
 		"token over Basic":                  {map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte("alice:"+read))}, 401},
-		"wrong secret":                      {map[string]string{"Authorization": "Bearer " + read[:len(read)-2] + "aa"}, 401},
+		"wrong secret":                      {map[string]string{"Authorization": "Bearer " + wrongSecret(read)}, 401},
 		"installer administrator":           {map[string]string{"Authorization": "Bearer " + installerToken}, 403},
 	} {
 		if got := rawMCP(t, w.srv, "/mcp", c.header).Code; got != c.want {
@@ -320,7 +320,7 @@ func TestMCPFailedSignInsAreLimitedAndAudited(t *testing.T) {
 			t.Fatalf("good request: %d", got)
 		}
 	}
-	wrong := tok[:len(tok)-4] + "zzzz"
+	wrong := wrongSecret(tok)
 	for i := range 20 {
 		if got := rawMCP(t, w.srv, "/mcp", map[string]string{"Authorization": "Bearer " + wrong}).Code; got != http.StatusUnauthorized {
 			t.Fatalf("failure %d: got %d, want 401", i+1, got)
@@ -341,8 +341,8 @@ func TestMCPFailedSignInsAreLimitedAndAudited(t *testing.T) {
 		}
 	}
 	all, _ := json.Marshal(recs)
-	if failed != 20 || strings.Contains(string(all), "zzzz") || strings.Contains(string(all), tok) {
-		t.Errorf("%d mcp.auth_failed rows (want 20); a secret in the audit log: %t", failed, strings.Contains(string(all), "zzzz"))
+	if leaked := strings.Contains(string(all), wrong) || strings.Contains(string(all), tok[len(drive.AgentTokenPrefix):]); failed != 20 || leaked {
+		t.Errorf("%d mcp.auth_failed rows (want 20); a secret in the audit log: %t", failed, leaked)
 	}
 }
 
@@ -990,6 +990,26 @@ func TestAgentSkill(t *testing.T) {
 		api.MCPReplaceForTest, api.MCPChangedForTest, api.MCPNotTextForTest, api.MCPNoPDFForTest, api.MCPDamagedForTest, api.MCPTooLargeForTest, api.MCPFixedForTest, api.MCPRootGoneForTest, "Storage quota exceeded"} {
 		if !strings.Contains(skill, msg) {
 			t.Errorf("skill error table lacks %q", msg)
+		}
+	}
+}
+
+// wrongSecret is token with its last character changed, so it is never the token itself. A fixed
+// suffix would equal the random token's own suffix now and then.
+func wrongSecret(token string) string {
+	last := token[len(token)-1]
+	swap := byte('a')
+	if last == 'a' {
+		swap = 'b'
+	}
+	return token[:len(token)-1] + string(swap)
+}
+
+// The cause of a 1-in-1024 flake: a token that already ended in the "wrong" suffix.
+func TestWrongSecretAlwaysDiffers(t *testing.T) {
+	for _, tok := range []string{"kya_aaaa", "kya_abab", "kya_zz77", "kya_b"} {
+		if got := wrongSecret(tok); got == tok || len(got) != len(tok) {
+			t.Errorf("wrongSecret(%q) = %q", tok, got)
 		}
 	}
 }
