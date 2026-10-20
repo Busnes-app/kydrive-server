@@ -40,6 +40,10 @@ teaches the agent the tools and when to ask you first. You can change an agent's
 later. An agent token unused for 90 days is revoked; an agent token never works over WebDAV,
 nor a WebDAV password over MCP. Details are in [Clients and editor](docs/CLIENTS-AND-EDITOR.md#ai-agents).
 
+A web page can never obtain or use a token: `/mcp` refuses every browser request, sends no CORS
+headers, and tokens are created only from KyDrive's own pages, which always name the agent and
+the access it gets.
+
 File names and contents can come from other people, and an agent may treat them as
 instructions. Give an agent write access only if you trust everyone who can message it.
 

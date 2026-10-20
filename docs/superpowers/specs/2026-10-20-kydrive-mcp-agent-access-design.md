@@ -54,6 +54,25 @@ either), content search, text extraction from Office/PDF, version history and re
 6. Installer administrators: 403.
 7. Body cap 6 MiB (the SDK's 413). Responses are `no-store`.
 
+## Browser-origin hardening
+
+After Joplin's Web Clipper flaw (GHSA-9728-v7ww-mxjv): a pairing endpoint with wildcard CORS,
+no Origin check and a consent prompt that did not say who was asking let any web page mint a
+full-access token. Each rule below has its own test.
+
+1. `/mcp` refuses any request carrying an `Origin` header, by presence (empty and `null`
+   included), with 403 before the token is read (`TestMCPRefusesEveryBrowserOrigin`).
+2. No response sends `Access-Control-Allow-Origin: *`; `/mcp` sends no CORS header; other routes
+   reflect only `KY_APP_URL`'s origin, always with `Vary: Origin`. WebDAV, the Euro-Office routes
+   and the Excalidraw fonts set none of their own, and `ServeHTTP` is the only code that may
+   (`TestCORSNeverGrantsAnotherOrigin`).
+3. Creating, revoking and re-scoping an agent token need a cookie session and its CSRF token, and
+   a cross-site `Origin` or `Sec-Fetch-Site` is refused even with both; agent tokens and WebDAV
+   passwords cannot call them (`TestAgentTokenWritesRefuseForgedCrossSiteRequests`).
+4. Every screen that issues or widens a token names the agent and the level it grants (`grant`
+   in `AppPasswords.tsx`); computer linking names the computer and what it can do
+   (`AppPasswords.test.tsx`, `LinkDevice.test.tsx`).
+
 ## Paths
 
 Absolute, as in WebDAV: `/<workspace>/<folder>/<name>`, workspace names from

@@ -58,8 +58,15 @@ KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
   `next_offset`; `list_folder` at most 500 entries; `search_files` at most 50 results;
   `write_file` at most 4 MiB (or `KYDRIVE_MAX_FILE_SIZE`, if lower); a request body at most 6 MiB.
 - **Sign-in.** Only `Authorization: Bearer kya_…`; cookies, Basic and WebDAV passwords are
-  refused, and an agent token is refused by WebDAV. Any request carrying `Origin` is refused, as
-  are plain-HTTP requests outside `KY_ENV=development` (as for WebDAV). Failed sign-ins are
+  refused, and an agent token is refused by WebDAV. Plain-HTTP requests are refused outside
+  `KY_ENV=development` (as for WebDAV).
+- **Browsers are refused.** Agents are not browsers, so any request carrying an `Origin` header,
+  whatever its value, gets 403 before the token is read, and `/mcp` sends no CORS headers at all.
+  No KyDrive route ever sends `Access-Control-Allow-Origin: *`; the rest of the API reflects only
+  `KY_APP_URL`'s own origin. Creating, revoking or changing an agent token needs a signed-in
+  session and its CSRF token, and a cross-site request is refused even with both, so a web page
+  cannot mint a token for itself (the flaw behind Joplin's GHSA-9728-v7ww-mxjv). The screens that
+  issue a token or widen its access always name the agent and the level it gets. Failed sign-ins are
   limited to 20 a minute per client and audited as `mcp.auth_failed` without the token.
   Installer administrators cannot use agents. Writes are audited as `mcp.file_write`,
   `mcp.folder_create`, `mcp.move` and `mcp.trash` with item IDs, never names or content.
