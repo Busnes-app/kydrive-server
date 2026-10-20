@@ -1,5 +1,7 @@
 # KyDrive UI verification — 2026-10-03
 
+> Evidence scope: this document records the revision, environment and capture conditions below. Screenshots and generated fixtures demonstrate appearance; they do not qualify live email delivery, push delivery, recovery custody or every product feature. Test counts describe that recorded run, not the current suite.
+
 Native T3 browser inspected the real local KyDrive container with three saved Euro-Office documents. Screenshots show OS-following Busnes Light/Dark at 1280×800 and 390×844 CSS pixels. Document width stayed within each viewport; navigation and file tables use local horizontal scrolling. This is visual/workflow evidence, not a complete accessibility audit.
 
 | Light | Dark |
