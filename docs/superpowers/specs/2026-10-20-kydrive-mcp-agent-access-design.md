@@ -21,12 +21,27 @@ creates and can revoke, and the server enforces what it may do.
 | Lifetime | No fixed expiry; a token unused for 90 days is refused and deleted at sign-in, and swept hourly by `RunRetention` |
 | Delete | Trash only (`move_to_trash`). No tool purges. A replaced file keeps its previous version |
 | Search | Names only (`drive.Search`, `SearchFolder`). There is no content index and none was built |
-| Office text | Not offered. KyDrive's only converter is the Euro-Office thumbnail path (PNG); `read_file` returns UTF-8 text and refuses everything else |
+| Office text | Extracted in process by `internal/extract` (standard library only, bounded) for Office Open XML and OpenDocument; PDFs through Euro-Office's `txt` conversion when configured, never parsed in process (approved 2026-10-20). Each version's text is cached sealed in `<KY_DATA_DIR>/text/<blob>` |
 | Reuse | Tools call the drive store as the user, like WebDAV; no loopback HTTP |
 | Agent guidance | `internal/agentskill/kydrive/SKILL.md`, embedded and served at `/agent/skills/kydrive/SKILL.md`; its rules are repeated in the MCP `instructions` |
 
 Out of scope: OAuth, stdio, MCP resources and prompts, Shared with me (WebDAV does not show it
-either), content search, text extraction from Office/PDF, version history and restore tools.
+either), content search, legacy binary `.doc`/`.xls`/`.ppt`, OCR of scanned PDFs, a PDF parser
+in KyDrive, version history and restore tools.
+
+## Document text
+
+- `read_file` on a supported document returns `extracted` (its kind) and pages over the extracted
+  text, so `size`, `offset` and `next_offset` count bytes of the text.
+- In process: zip entries at most 10 000, 64 MiB decompressed per part, 256 MiB per document,
+  16 MiB of text (`extract_truncated`); streamed XML (no recursion), no entity expansion; files
+  over 128 MiB are not opened; two at once. Skipped: `mc:Fallback` copies, tracked deletions,
+  field codes, footnotes, comments, speaker notes, headers.
+- PDF: a conversion ticket and `outputtype: txt`, the output fetched from the editor origin's
+  `/cache/` like thumbnails, capped at 16 MiB, BOM, CR and NUL removed, invalid UTF-8 dropped. A
+  failure is not cached. Checked live against Euro-Office 9.3.4 (the pinned image): it works, and is
+  lossy (it dropped CJK text and a table column that `pdftotext` kept). Swapping in `pdftotext` in
+  a sandboxed subprocess is the upgrade path if that matters.
 
 ## Differences from KyCalendar
 

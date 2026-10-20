@@ -28,7 +28,8 @@ AI agents such as OpenClaw and Hermes Agent reach your files over MCP at
 `https://<your host>/mcp`. On the **Account** page, under **App passwords**, choose **AI agent**
 and an access level:
 
-- **Read only** (the default): the agent lists, searches and reads your files.
+- **Read only** (the default): the agent lists, searches and reads your files, including the
+  text of Word, Excel, PowerPoint and OpenDocument files, and of PDFs when Euro-Office is set up.
 - **Read and write**: it can also create, replace, rename, move and trash files.
 
 Optionally limit the agent to one folder: it then sees that folder as its whole drive and
