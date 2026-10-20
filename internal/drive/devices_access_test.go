@@ -17,23 +17,23 @@ var (
 	// Reads, content changes and the device's own unlink.
 	deviceAllowed = []string{
 		"AddFolder", "AppendUpload", "Authorize", "AuthorizeItem", "CancelUpload", "Changes", "Children", "CompleteUpload",
-		"CopyFile", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderTree", "Folders",
+		"CopyFile", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderPath", "FolderTree", "Folders",
 		"GuestLinks", "Grants", "Links", "Lookup", "MoveFile", "MoveFolder", "People", "Publish", "PurgeFile",
-		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SetFolderTrash", "SetTrash", "SharedWithMe",
+		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchFolder", "SetFolderTrash", "SetTrash", "SharedWithMe",
 		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
 	deviceRefused = []string{
-		"ApproveLink", "AuthorizeSharedManager", "CreateAppPassword", "CreateGuestLink", "CreateLink",
+		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
-		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetEditorsShare", "SetRetention",
+		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
 		"Share", "Unshare",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
 	deviceUnreachable = []string{
-		"AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
-		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireUploads", "GuestFile", "GuestUpload",
+		"AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
+		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
 		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs",
 		"ServiceToken", "SweepOrphans",
@@ -84,6 +84,10 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	agent, _, err := d.CreateAgentToken(ctx, "worker", "Agent", drive.ScopeMCPRead, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc, err := d.CreateServiceToken(ctx, "worker", w.ID, "Robot", "reader", "svc-device-access-test")
 	if err != nil {
 		t.Fatal(err)
@@ -117,6 +121,11 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 			return err
 		},
 		"RevokeAppPassword": func(c context.Context) error { return d.RevokeAppPassword(c, "worker", pw.ID) },
+		"CreateAgentToken": func(c context.Context) error {
+			_, _, err := d.CreateAgentToken(c, "worker", "Agent 2", drive.ScopeMCPWrite, w.ID, "")
+			return err
+		},
+		"SetAgentScope": func(c context.Context) error { return d.SetAgentScope(c, "worker", agent.ID, drive.ScopeMCPWrite) },
 		"CreateServiceToken": func(c context.Context) error {
 			_, err := d.CreateServiceToken(c, "worker", w.ID, "Robot 2", "reader", "svc-device-access-test-2")
 			return err

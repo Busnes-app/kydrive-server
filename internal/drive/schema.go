@@ -63,6 +63,11 @@ CREATE TABLE drive_change_floor(workspace TEXT PRIMARY KEY,seq INTEGER NOT NULL)
 	`CREATE TABLE drive_devices(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,platform TEXT NOT NULL,hash TEXT NOT NULL UNIQUE,created TEXT NOT NULL,last_used INTEGER NOT NULL,revoked_at INTEGER NOT NULL DEFAULT 0,wipe INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX drive_devices_user ON drive_devices(user_id);
 CREATE TABLE drive_device_codes(code_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,name TEXT NOT NULL,platform TEXT NOT NULL,challenge TEXT NOT NULL,expires INTEGER NOT NULL,used INTEGER NOT NULL DEFAULT 0);`,
+	// AI agent tokens share the app password table; existing rows stay WebDAV passwords. An agent
+	// token may be limited to one workspace (root_folder '') or folder.
+	`ALTER TABLE drive_app_passwords ADD COLUMN scope TEXT NOT NULL DEFAULT 'dav' CHECK(scope IN ('dav','mcp:read','mcp:write'));
+ALTER TABLE drive_app_passwords ADD COLUMN root_workspace TEXT NOT NULL DEFAULT '';
+ALTER TABLE drive_app_passwords ADD COLUMN root_folder TEXT NOT NULL DEFAULT '';`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

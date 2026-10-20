@@ -3,6 +3,7 @@ package drive
 import (
 	"cmp"
 	"context"
+	"database/sql"
 	"errors"
 	"slices"
 	"strings"
@@ -93,4 +94,33 @@ func (s *Store) queryFiles(ctx context.Context, q rowser, where string, args ...
 	}
 	slices.SortStableFunc(out, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
 	return out, rows.Err()
+}
+
+// FolderPath returns the names from the workspace root down to folder id ("" = the root, no
+// names), which user must be able to read. ErrNotFound when the folder or an ancestor is
+// trashed, gone or in another workspace.
+func (s *Store) FolderPath(ctx context.Context, user, workspace, id string) ([]string, error) {
+	if err := authorizeItem(ctx, s.db, user, workspace, id, "", 1); err != nil {
+		return nil, err
+	}
+	names := []string{}
+	for depth := 0; id != ""; depth++ {
+		var ws, parent, stored string
+		var trashed bool
+		err := s.db.QueryRowContext(ctx, `SELECT workspace,parent,name,trashed FROM drive_folders WHERE id=?`, id).Scan(&ws, &parent, &stored, &trashed)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && (trashed || ws != workspace || depth == 256)) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		name, err := s.names.open("drive_folders", id, stored)
+		if err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+		id = parent
+	}
+	slices.Reverse(names)
+	return names, nil
 }
