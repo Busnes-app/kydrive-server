@@ -4,6 +4,7 @@
 Own restore instructions, local acceptance evidence and captured product UI assets.
 
 ## Ownership
+`EURO-DOCKER.md` owns the production Docker editor overlay, private JWT input, named-volume persistence and proxy/acceptance runbook.
 `INSTALLER-SETUP.md` owns the container-local setup schema, runtime activation and adapter limitations.
 `RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans; its roadmap file records milestone decisions. `desktop-sync-options.md` is the desktop sync research note (options, server gaps, recommendation); its "What a Ky client looks like" section is the M7 design. `DESKTOP-ACCESS.md` is the user guide for desktop WebDAV clients (rclone, Cyberduck) and `KyDrive.cyberduckprofile` its connection profile. Root README owns configuration; root STATUS owns handoff.
 

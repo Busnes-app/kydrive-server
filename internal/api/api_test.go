@@ -35,7 +35,13 @@ import (
 
 func setupTestServer(t *testing.T) (*api.Server, store.Store, *config.Config) {
 	t.Helper()
-	t.Setenv("KY_DATA_DIR", t.TempDir())
+	// Keep Unix socket paths within sun_path even with a long disk-backed TMPDIR.
+	dir, err := os.MkdirTemp("", "drive-api-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("KY_DATA_DIR", dir)
 	cfg, _ := config.LoadFromEnv()
 	db := testdb.Config(t)
 	db.DataDir = cfg.Database.DataDir // testdb only picks the backend; keep the temp data dir
