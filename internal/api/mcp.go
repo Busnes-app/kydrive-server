@@ -107,9 +107,10 @@ func (s *Server) withMCPAuth(next http.Handler) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		// Agents call from servers. An Origin means a page sent this: refused before any check,
-		// so a preflight gets no grant either.
-		if r.Header.Get("Origin") != "" {
+		// Agents call from servers. An Origin header, even an empty or "null" one, means a page sent
+		// this: refused before any credential is read, so no web page can use or probe a token
+		// (the Joplin Web Clipper flaw, GHSA-9728-v7ww-mxjv). A preflight gets no grant either.
+		if _, browser := r.Header["Origin"]; browser {
 			s.writeError(w, http.StatusForbidden, "Browser requests are not accepted")
 			return
 		}

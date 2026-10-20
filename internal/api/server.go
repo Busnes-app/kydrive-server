@@ -406,11 +406,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The only CORS grant KyDrive makes: the app's own origin, reflected, never "*".
+	// TestCORSNeverGrantsAnotherOrigin pins that no other code sets these headers.
 	origin := r.Header.Get("Origin")
+	w.Header().Set("Vary", "Origin")
 	if origin != "" && sameOrigin(origin, s.config.Server.AppURL) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Vary", "Origin")
 	}
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-KySignOn-Signature")
