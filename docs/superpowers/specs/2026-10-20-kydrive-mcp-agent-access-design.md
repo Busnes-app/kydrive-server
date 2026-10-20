@@ -1,6 +1,6 @@
 # KyDrive MCP access for AI agents — design
 
-Status: implemented on branch `feat/mcp-endpoint` (2026-10-20). It follows KyCalendar's design
+Status: implemented; merged to `master` in PR #58 (2026-10-20). It follows KyCalendar's design
 (`KyCalendar/docs/superpowers/specs/2026-10-14-kycalendar-mcp-agent-access-design.md`) so the suite
 exposes MCP one way; the differences are listed below.
 
