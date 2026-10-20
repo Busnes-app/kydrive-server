@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -370,5 +372,90 @@ func TestPartsAreReadOnce(t *testing.T) {
 	}
 	if err != nil || r.Text != "## s\nonce\n" {
 		t.Errorf("%q %v", r.Text, err)
+	}
+}
+
+// manyParts is a valid archive of n empty entries plus a document body.
+func manyParts(t *testing.T, n int) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	for i := range n {
+		if _, err := z.CreateHeader(&zip.FileHeader{Name: strconv.Itoa(i), Method: zip.Store}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	doc, _ := z.Create("word/document.xml")
+	doc.Write([]byte(`<w:document ` + w + `><w:body/></w:document>`))
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// The archive's directory is sized before it is read, so an archive declaring more entries than
+// MaxParts costs nothing to refuse, zip64 directories included.
+func TestEntryCountIsCheckedFirst(t *testing.T) {
+	for _, n := range []int{MaxParts * 5, 70000} { // 70000 entries needs a zip64 directory
+		data := manyParts(t, n)
+		var err error
+		if a := allocated(func() { _, err = text(t, data, "docx") }); a > 4<<20 || !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%d entries: %v, %d KiB allocated", n, err, a>>10)
+		}
+	}
+	if _, err := text(t, manyParts(t, MaxParts-1), "docx"); err != nil {
+		t.Errorf("%d entries: %v", MaxParts, err)
+	}
+}
+
+// Entry names must name each part once: names differing only in case or slashes, and names
+// that are absolute, empty or step outside the archive, are refused rather than one of them
+// silently chosen.
+func TestAmbiguousEntryNamesAreRefused(t *testing.T) {
+	body := docx(`<w:p><w:r><w:t>shown</w:t></w:r></w:p>`)
+	other := `<w:document ` + w + `><w:body><w:p><w:r><w:t>hidden</w:t></w:r></w:p></w:body></w:document>`
+	for name, parts := range map[string][]part{
+		"case":           {body, {"Word/Document.xml", other}},
+		"backslash":      {body, {`word\document.xml`, other}},
+		"leading slash":  {body, {"/word/document.xml", other}},
+		"dot dot":        {body, {"../word/document.xml", other}},
+		"dot segment":    {body, {"word/./document.xml", other}},
+		"empty segment":  {body, {"word//document.xml", other}},
+		"exact repeat":   {body, {"word/document.xml", other}},
+		"NUL in a name":  {body, {"word/x\x00.xml", other}},
+		"alone, unclean": {{"./word/document.xml", other}},
+	} {
+		if r, err := text(t, zipOf(t, parts...), "docx"); !errors.Is(err, ErrUnsupported) {
+			t.Errorf("%s: %q %v, want ErrUnsupported", name, r.Text, err)
+		}
+	}
+}
+
+// A directory longer than its declared count is refused while it is read, before it is held:
+// archive/zip compares the count only modulo 65536, so the count alone cannot be trusted.
+func TestUnderstatedDirectoryIsRefused(t *testing.T) {
+	defer func(n int64) { maxDirectory = n }(maxDirectory)
+	maxDirectory = 16 << 10
+	data := manyParts(t, 5000)
+	end := bytes.LastIndex(data, []byte{0x50, 0x4b, 0x05, 0x06})
+	binary.LittleEndian.PutUint16(data[end+8:], 10)  // entries on this disk
+	binary.LittleEndian.PutUint16(data[end+10:], 10) // entries in all
+	if _, err := text(t, data, "docx"); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("5000 entries declared as 10: %v", err)
+	}
+}
+
+// The directory budget covers parsing only: a document far larger than it still reads whole.
+func TestLargeDocumentsStillRead(t *testing.T) {
+	defer func(n int64) { maxDirectory = n }(maxDirectory)
+	maxDirectory = 16 << 10
+	var buf bytes.Buffer
+	z := zip.NewWriter(&buf)
+	f, _ := z.CreateHeader(&zip.FileHeader{Name: "word/document.xml", Method: zip.Store})
+	para := strings.Repeat("0123456789", 100)
+	f.Write([]byte(`<w:document ` + w + `><w:body>` + strings.Repeat(`<w:p><w:r><w:t>`+para+`</w:t></w:r></w:p>`, 1000) + `</w:body></w:document>`))
+	z.Close()
+	if r, err := text(t, buf.Bytes(), "docx"); err != nil || len(r.Text) != 1001*1000 {
+		t.Errorf("%d KiB stored document: %d bytes of text, %v", buf.Len()>>10, len(r.Text), err)
 	}
 }

@@ -7,6 +7,7 @@ package extract
 import (
 	"archive/zip"
 	"context"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -33,6 +34,7 @@ const (
 	maxGap        = 100       // empty spreadsheet columns written as tabs
 	MaxTag        = 1 << 20   // bytes in one tag, its attributes included
 	MaxDepth      = 4096      // elements open at once
+	MaxDirectory  = 4 << 20   // bytes of the archive's central directory
 )
 
 // The limits as enforced; tests lower them rather than build gigabytes.
@@ -41,6 +43,7 @@ var (
 	maxPartBytes = int64(MaxPartBytes)
 	maxTotal     = int64(MaxTotalBytes)
 	maxText      = MaxText
+	maxDirectory = int64(MaxDirectory)
 )
 
 // Result is a document's text. Truncated is set when it was cut at MaxText.
@@ -72,16 +75,31 @@ func Text(ctx context.Context, r io.ReaderAt, size int64, ext string) (Result, e
 	if !ok {
 		return Result{}, ErrUnsupported
 	}
-	z, err := zip.NewReader(r, size)
-	if err != nil {
-		return Result{}, ErrUnsupported
+	// archive/zip holds the whole directory in memory and checks its declared count only modulo
+	// 65536, so the count is checked first and the directory read is budgeted.
+	if err := declared(r, size); err != nil {
+		return Result{}, err
 	}
-	if len(z.File) > maxParts {
+	budget := &budgetReaderAt{r: r, left: maxDirectory + tailLen}
+	z, err := zip.NewReader(budget, size)
+	budget.parsed = true // parts are bounded by counted, not by this
+	switch {
+	case budget.over:
+		return Result{}, ErrTooLarge
+	case err != nil:
+		return Result{}, ErrUnsupported
+	case len(z.File) > maxParts:
 		return Result{}, ErrTooLarge
 	}
 	d := &doc{ctx: ctx, parts: map[string]*zip.File{}}
 	for _, p := range z.File {
-		d.parts[strings.ToLower(strings.TrimPrefix(strings.ReplaceAll(p.Name, `\`, "/"), "/"))] = p
+		// Each name must be one clean part name, once: Office matches names case-insensitively
+		// and refuses duplicates, so a second spelling could show it one part and us another.
+		key := strings.ToLower(p.Name)
+		if !cleanName(p.Name) || d.parts[key] != nil {
+			return Result{}, ErrUnsupported
+		}
+		d.parts[key] = p
 	}
 	err = f.read(d)
 	if errors.Is(err, errFull) {
@@ -97,6 +115,79 @@ func Text(ctx context.Context, r io.ReaderAt, size int64, ext string) (Result, e
 		}
 	}
 	return Result{Text: text, Truncated: d.full}, nil
+}
+
+// cleanName is a relative slash-separated name with no empty, . or .. segment, backslash or NUL;
+// a directory entry may end in a slash.
+func cleanName(name string) bool {
+	if name == "" || strings.HasPrefix(name, "/") || strings.ContainsAny(name, "\\\x00") {
+		return false
+	}
+	for _, seg := range strings.Split(strings.TrimSuffix(name, "/"), "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// declared reads the entry count the archive's end records declare, zip64 included, and refuses
+// more than maxParts before anything is parsed. Malformed records are left to archive/zip.
+func declared(r io.ReaderAt, size int64) error {
+	tail := make([]byte, min(size, tailLen))
+	if _, err := r.ReadAt(tail, size-int64(len(tail))); err != nil && err != io.EOF {
+		return ErrUnsupported
+	}
+	at := -1
+	for i := len(tail) - 22; i >= 0; i-- {
+		if binary.LittleEndian.Uint32(tail[i:]) == 0x06054b50 {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return ErrUnsupported
+	}
+	count := uint64(binary.LittleEndian.Uint16(tail[at+10:]))
+	if count == 0xffff && at >= 20 && binary.LittleEndian.Uint32(tail[at-20:]) == 0x07064b50 {
+		// The zip64 locator names the zip64 end record, which holds the real count.
+		rec := make([]byte, 56)
+		off := binary.LittleEndian.Uint64(tail[at-12:])
+		if off > uint64(size) || off > uint64(size)-56 {
+			return ErrUnsupported
+		}
+		if _, err := r.ReadAt(rec, int64(off)); err != nil || binary.LittleEndian.Uint32(rec) != 0x06064b50 {
+			return ErrUnsupported
+		}
+		count = binary.LittleEndian.Uint64(rec[32:])
+	}
+	if count > uint64(maxParts) {
+		return ErrTooLarge
+	}
+	return nil
+}
+
+// tailLen is the end of an archive that can hold its end record: 22 bytes and a comment.
+const tailLen = 22 + 65535
+
+// budgetReaderAt lets archive/zip read at most left bytes until parsed is set: the end records
+// and the directory, never more than a directory of MaxParts entries needs.
+type budgetReaderAt struct {
+	r      io.ReaderAt
+	left   int64
+	over   bool
+	parsed bool
+}
+
+func (b *budgetReaderAt) ReadAt(p []byte, off int64) (int, error) {
+	if b.parsed {
+		return b.r.ReadAt(p, off)
+	}
+	if b.left -= int64(len(p)); b.left < 0 {
+		b.over = true
+		return 0, ErrTooLarge
+	}
+	return b.r.ReadAt(p, off)
 }
 
 // errFull stops a read once MaxText is reached; Text reports it as Truncated.
