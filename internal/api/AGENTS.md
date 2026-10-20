@@ -86,6 +86,7 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 
 ## Verification
 - `go test -v ./internal/api/...` (`authz_test.go` pins the per-role exposure of every privileged route, `handover_test.go` the leaver routes; `backup_test.go` the backup routes, on SQLite only because a run snapshots the database)
+- `release_image_test.go` requires the Compose and `.env.example` image defaults to name `AppVersion`'s release tag.
 - `scripts/smoke-test.sh` asserts the same boundaries against a running binary
 
 ## Child DOX Index

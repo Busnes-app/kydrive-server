@@ -8,6 +8,7 @@ Owns `render.py` and the generated installation contract. Root Compose owns NAS 
 
 ## Local Contracts
 - Rendering performs no cluster writes, remote connections or readiness claims.
+- Generated `INSTALL.txt` names only origins the operator supplied; no deployment's hosts are built in.
 - Editor and drive images are digest-pinned for production manifests; workloads target amd64.
 - Required credentials are supplied through mode-0600 files and emitted into an output directory at mode 0700. Generated Secret manifests are never committed.
 - TLS, ingress class, storage class and independent bulk storage are operator inputs. A PVC alone does not establish an independent backup destination.

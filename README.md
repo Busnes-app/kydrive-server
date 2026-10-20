@@ -22,7 +22,6 @@ Choose a random `KY_ADMIN_PASSWORD` in a private environment file before startin
 cp .env.example .env
 cp .env.runtime.example .env.runtime
 chmod 600 .env .env.runtime
-# In .env set KY_IMAGE=ghcr.io/busnes-app/kydrive-server:<version> (e.g. 0.4.2).
 # Edit origins and credentials; choose persistent paths and an independent bulk mount.
 # Create each mount with ownership matching KY_UID:KY_GID (defaults 1000:1000).
 docker compose pull
@@ -30,16 +29,21 @@ docker compose up -d
 docker compose exec app /app/kydrive-server bulk-init
 ```
 
-Each GitHub release `vX.Y.Z` publishes the immutable image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` (no `v`, no `latest`). Verify it before first use:
+Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that immutable tag; there is no `v` and no `latest`. Verify it before first use:
 
 ```sh
 gh attestation verify oci://ghcr.io/busnes-app/kydrive-server:0.4.2 --repo Busnes-app/kydrive-server \
   --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v0.4.2
 ```
 
-To build from source instead, keep the example `KY_IMAGE=kydrive-server:local` and add the build overlay to every command: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
+To pin by digest, set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>` with the digest the attestation verified. To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
 
-Run `bulk-init` once per repository. A rerun against an initialized repository fails with Restic's `config file already exists` and changes nothing.
+`bulk-init` is safe to rerun: when the repository already opens with this deployment's key it reports that and changes nothing. A repository at that location that the key cannot open is refused (`bulk repository exists but this deployment's key does not open it`); point `KYDRIVE_BULK_BACKUP_REPOSITORY` at the right repository rather than reinitializing.
+
+### Upgrading
+
+- Unreleased (after 0.4.2): Compose defaults to the published image instead of `kydrive-server:local`. Installs that build from source keep working with the build overlay. An install that ran a separately built `kydrive-server:local` without the overlay, and has no `KY_IMAGE` in `.env`, now pulls the release image: set `KY_IMAGE=kydrive-server:local` to keep the local build.
+- To move to a new release, check out its tag, set `KY_IMAGE` to its version, then `docker compose pull` and `docker compose up -d`.
 
 The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Restic snapshot pruning (Recovery screen, Document retention) is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 

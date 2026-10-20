@@ -20,7 +20,8 @@ import (
 )
 
 // AppVersion is this build's release version; capsule manifests record it. The release
-// workflow requires it to match the tag and web/package.json.
+// workflow requires it to match the tag and web/package.json; the Compose image default
+// follows it (release_image_test.go).
 const AppVersion = "0.4.2"
 
 // errRecoveryKeyMismatch answers a swapped recovery.pub: the pin in the database and the key

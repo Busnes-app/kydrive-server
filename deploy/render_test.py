@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 import tempfile
 import subprocess
@@ -36,6 +37,10 @@ class RenderTests(unittest.TestCase):
                 self.assertEqual((seed/name/'bundled').read_text(),name)
             subprocess.run(['/bin/sh','-ec',script],check=True)
             with self.assertRaises(ValueError):render(a)
+            # INSTALL.txt names only the origins the operator supplied.
+            notes=(Path(a.output)/'INSTALL.txt').read_text()
+            self.assertIn('pair KyRecovery at your KyRecovery origin', notes)
+            self.assertEqual(set(re.findall(r'https?://[^\s/]+', notes)), {'https://drive.test'})
     def test_seed_resumes_after_interruption(self):
         with tempfile.TemporaryDirectory() as d:
             key=Path(d)/'jwt';key.write_text('synthetic-test-secret-at-least-32-bytes');key.chmod(0o600)
