@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -169,7 +170,7 @@ func TestNotADocument(t *testing.T) {
 	}
 }
 
-// No entity is expanded: no external file is read and no billion laughs explode.
+// No declaration is processed: no external file is read and no billion laughs explode.
 func TestEntitiesAreNotExpanded(t *testing.T) {
 	doc := `<?xml version="1.0"?><!DOCTYPE w:document [<!ENTITY ext SYSTEM "file:///etc/passwd"><!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]><w:document ` + w + `><w:body><w:p><w:r><w:t>&ext;&b;</w:t></w:r></w:p></w:body></w:document>`
 	r, err := text(t, zipOf(t, part{"word/document.xml", doc}), "docx")
@@ -178,11 +179,41 @@ func TestEntitiesAreNotExpanded(t *testing.T) {
 	}
 }
 
-// Deep nesting is streamed, not recursed.
+// Nesting a document needs is read; nesting beyond MaxDepth is refused before the decoder
+// stacks it, so a small file cannot fill memory.
 func TestDeepNesting(t *testing.T) {
-	body := strings.Repeat("<w:sdt>", 200000) + `<w:p><w:r><w:t>deep</w:t></w:r></w:p>` + strings.Repeat("</w:sdt>", 200000)
-	if r, err := text(t, zipOf(t, docx(body)), "docx"); err != nil || r.Text != "deep\n" {
-		t.Fatalf("%q %v", r.Text, err)
+	nest := func(n int) []byte {
+		return zipOf(t, docx(strings.Repeat("<w:sdt>", n)+`<w:p><w:r><w:t>deep</w:t></w:r></w:p>`+strings.Repeat("</w:sdt>", n)))
+	}
+	if r, err := text(t, nest(MaxDepth-10), "docx"); err != nil || r.Text != "deep\n" {
+		t.Fatalf("%d levels: %q %v", MaxDepth-10, r.Text, err)
+	}
+	var err error
+	deep := nest(3 << 20)
+	if n := allocated(func() { _, err = text(t, deep, "docx") }); n > 16<<20 || !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("3M levels: %v, %d MiB allocated", err, n>>20)
+	}
+}
+
+// One tag cannot hold millions of attributes; a long attribute value with '>' and the other
+// quote inside it still counts as the tag.
+func TestHugeTagsAreRefused(t *testing.T) {
+	for name, body := range map[string]string{
+		"attributes":            `<w:p ` + strings.Repeat(` a=""`, 3<<20/5) + `/>`,
+		"quoted > inside value": `<w:p a="` + strings.Repeat(`>'`, 1<<20) + `"/>`,
+		"end tag":               `<w:p></w:p` + strings.Repeat(" ", 2<<20) + `>`,
+	} {
+		var err error
+		data := zipOf(t, docx(body))
+		// Bounded by MaxTag: about twenty times its megabyte, against gigabytes at full part size.
+		if n := allocated(func() { _, err = text(t, data, "docx") }); n > 64<<20 || !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%s: %v, %d MiB allocated", name, err, n>>20)
+		}
+	}
+	// Comments, CDATA and processing instructions are not tags; their length is not limited here.
+	ok := docx(`<!-- ` + strings.Repeat(`"<>'`, 1<<19) + ` --><?pi ` + strings.Repeat("x>", 1<<19) + `?><w:p><w:r><w:t><![CDATA[` + strings.Repeat("<a>", 1<<19) + `]]></w:t></w:r></w:p>`)
+	if r, err := text(t, zipOf(t, ok), "docx"); err != nil || len(r.Text) != 3<<19+1 {
+		t.Errorf("comment, PI and CDATA: %d bytes, %v", len(r.Text), err)
 	}
 }
 
@@ -265,5 +296,79 @@ func TestKind(t *testing.T) {
 		if got := Kind(ext); got != want {
 			t.Errorf("Kind(%q) = %q, want %q", ext, got, want)
 		}
+	}
+}
+
+// allocated runs f and returns the bytes it allocated.
+func allocated(f func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	f()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// A small document cannot make a row bigger than the text the document may still produce:
+// cells that reference one long shared string, or repeat one long cell, are cut while the row is
+// built, not after joining it.
+func TestRowsCannotAmplify(t *testing.T) {
+	defer func(n int) { maxText = n }(maxText)
+	maxText = 1 << 20
+	long := strings.Repeat("z", 64<<10)
+	cells := strings.Repeat(`<c t="s"><v>0</v></c>`, 5000) // 5000 × 64 KiB = 320 MiB if joined
+	xlsx := zipOf(t,
+		part{"xl/workbook.xml", `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` + rels + `><sheets><sheet name="s" r:id="rId1"/></sheets></workbook>`},
+		part{"xl/_rels/workbook.xml.rels", relsOf("worksheets/sheet1.xml")},
+		part{"xl/sharedStrings.xml", `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>` + long + `</t></si></sst>`},
+		part{"xl/worksheets/sheet1.xml", `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row>` + cells + `</row><row>` + cells + `</row></sheetData></worksheet>`},
+	)
+	ods := zipOf(t, part{"content.xml", `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><office:body><office:spreadsheet><table:table table:name="s"><table:table-row table:number-rows-repeated="100">` +
+		strings.Repeat(`<table:table-cell table:number-columns-repeated="100"><text:p>x`+strings.Repeat(`<text:s text:c="100"/>`, 700)+`x</text:p></table:table-cell>`, 50) +
+		`</table:table-row></table:table></office:spreadsheet></office:body></office:document-content>`})
+	for name, c := range map[string]struct {
+		data []byte
+		ext  string
+	}{"shared strings": {xlsx, "xlsx"}, "repeated cells": {ods, "ods"}} {
+		var r Result
+		var err error
+		if n := allocated(func() { r, err = text(t, c.data, c.ext) }); n > 64<<20 {
+			t.Errorf("%s: %d MiB allocated for %d bytes of text", name, n>>20, len(r.Text))
+		}
+		if err != nil || !r.Truncated || len(r.Text) > maxText {
+			t.Errorf("%s: %d bytes, truncated %v, %v", name, len(r.Text), r.Truncated, err)
+		}
+	}
+}
+
+// A cell's text stops at the limit even when one XML text token is longer.
+func TestCellTextIsCapped(t *testing.T) {
+	defer func(n int) { maxText = n }(maxText)
+	maxText = 1 << 10
+	data := zipOf(t, docx(`<w:tbl><w:tr><w:tc><w:p><w:r><w:t>`+strings.Repeat("é", 1<<20)+`</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`))
+	var r Result
+	var err error
+	if n := allocated(func() { r, err = text(t, data, "docx") }); n > 32<<20 {
+		t.Errorf("%d MiB allocated", n>>20)
+	}
+	if err != nil || len(r.Text) > maxText || !utf8.ValidString(r.Text) {
+		t.Errorf("%d bytes, valid %v, %v", len(r.Text), utf8.ValidString(r.Text), err)
+	}
+}
+
+// A sheet listed a hundred thousand times is read once.
+func TestPartsAreReadOnce(t *testing.T) {
+	data := zipOf(t,
+		part{"xl/workbook.xml", `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` + rels + `><sheets>` + strings.Repeat(`<sheet name="s" r:id="rId1"/>`, 100000) + `</sheets></workbook>`},
+		part{"xl/_rels/workbook.xml.rels", relsOf("worksheets/sheet1.xml")},
+		part{"xl/worksheets/sheet1.xml", `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="inlineStr"><is><t>once</t></is></c></row></sheetData></worksheet>`},
+	)
+	var r Result
+	var err error
+	if n := allocated(func() { r, err = text(t, data, "xlsx") }); n > 64<<20 {
+		t.Errorf("%d MiB allocated", n>>20)
+	}
+	if err != nil || r.Text != "## s\nonce\n" {
+		t.Errorf("%q %v", r.Text, err)
 	}
 }

@@ -64,8 +64,8 @@ KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
   cached sealed in `<KY_DATA_DIR>/text`, left out of backups and safe to delete; the hourly sweep
   removes text of purged versions. Every result labels the text as untrusted content.
 - **Extraction limits.** Documents over 128 MiB are not extracted; a document may hold at most
-  10 000 zip entries, 64 MiB decompressed in one part and 256 MiB in all; at most 16 MiB of text is
-  kept (`extract_truncated`). At most two extractions and two Document Server conversions run at
+  10 000 zip entries, 64 MiB decompressed in one part and 256 MiB in all, 1 MiB in one XML tag and
+  4096 nested elements, and no DOCTYPE; at most 16 MiB of text is kept (`extract_truncated`). At most two extractions and two Document Server conversions run at
   once.
 - **Limits.** `read_file` returns at most 256 KiB a call (64 KiB by default) and pages with
   `next_offset`; `list_folder` at most 500 entries; `search_files` at most 50 results;

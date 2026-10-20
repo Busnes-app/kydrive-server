@@ -1,7 +1,7 @@
 // Package extract turns Office Open XML (Word, Excel, PowerPoint) and OpenDocument files into
 // plain text, in process, with the standard library only. Documents are untrusted: every read is
-// bounded (entries, bytes per part, bytes per document, text produced), XML is streamed so
-// nesting costs no stack, and Go's decoder expands no custom or external entities.
+// bounded (entries, bytes per part, bytes per document, bytes in one tag, nesting depth, text
+// produced, row size), and no declaration or entity is processed.
 package extract
 
 import (
@@ -31,6 +31,8 @@ const (
 	MaxText       = 16 << 20  // bytes of text produced; beyond it the result is Truncated
 	maxRepeat     = 100       // OpenDocument repeated rows and columns written out
 	maxGap        = 100       // empty spreadsheet columns written as tabs
+	MaxTag        = 1 << 20   // bytes in one tag, its attributes included
+	MaxDepth      = 4096      // elements open at once
 )
 
 // The limits as enforced; tests lower them rather than build gigabytes.
@@ -139,16 +141,18 @@ func (d *doc) part(name string) (*xml.Decoder, func(), error) {
 	if err != nil {
 		return nil, nil, ErrUnsupported
 	}
-	dec := xml.NewDecoder(&counted{r: rc, d: d, left: maxPartBytes})
+	dec := xml.NewDecoder(&counted{r: rc, d: d, left: maxPartBytes, lex: lexer{state: lexText}})
 	return dec, func() { rc.Close() }, nil
 }
 
 // counted enforces the per-part and per-document byte limits on what a part decompresses to,
-// whatever its header claimed, and stops when the context ends.
+// whatever its header claimed, runs the bytes through lexer before the decoder sees them, and
+// stops when the context ends.
 type counted struct {
 	r    io.Reader
 	d    *doc
 	left int64
+	lex  lexer
 }
 
 func (c *counted) Read(p []byte) (int, error) {
@@ -161,7 +165,106 @@ func (c *counted) Read(p []byte) (int, error) {
 	if c.left < 0 || c.d.read > maxTotal {
 		return n, ErrTooLarge
 	}
+	if lerr := c.lex.scan(p[:n]); lerr != nil {
+		return n, lerr
+	}
 	return n, err
+}
+
+// lexer follows XML's markup boundaries so that no tag holds more than MaxTag bytes and no more
+// than MaxDepth elements are open: encoding/xml builds a tag's attributes and its element stack
+// in memory, about twenty times the bytes, before a caller can refuse them. It tracks quotes as
+// the strict decoder does, so a tag's bytes cannot pass for text. Declarations (DOCTYPE and the
+// like) are refused: no document needs them.
+type lexer struct {
+	state   int
+	quote   byte // inside a quoted attribute value
+	run     int  // bytes in the current tag
+	depth   int
+	last    byte   // previous non-space byte of a start tag: '/' makes it self-closing
+	opening string // what follows "<!" so far
+	w1, w2  byte   // the two bytes before this one, to find "-->", "]]>" and "?>"
+}
+
+const (
+	lexText = iota
+	lexOpen
+	lexBang
+	lexStart
+	lexEnd
+	lexComment
+	lexCDATA
+	lexPI
+)
+
+func (l *lexer) scan(p []byte) error {
+	for _, c := range p {
+		switch l.state {
+		case lexText:
+			if c == '<' {
+				l.state, l.run = lexOpen, 1
+			}
+		case lexOpen:
+			switch c {
+			case '!':
+				l.state, l.opening = lexBang, ""
+			case '?':
+				l.state = lexPI
+			case '/':
+				l.state = lexEnd
+			default:
+				l.state, l.quote, l.last = lexStart, 0, c
+			}
+		case lexBang:
+			l.opening += string(c)
+			switch {
+			case l.opening == "--":
+				l.state = lexComment
+			case l.opening == "[CDATA[":
+				l.state = lexCDATA
+			case !strings.HasPrefix("--", l.opening) && !strings.HasPrefix("[CDATA[", l.opening):
+				return ErrUnsupported
+			}
+		case lexComment, lexCDATA, lexPI:
+			end := (l.state == lexComment && c == '>' && l.w1 == '-' && l.w2 == '-') ||
+				(l.state == lexCDATA && c == '>' && l.w1 == ']' && l.w2 == ']') ||
+				(l.state == lexPI && c == '>' && l.w1 == '?')
+			if end {
+				l.state = lexText
+			}
+		case lexStart:
+			if l.run++; l.run > MaxTag {
+				return ErrTooLarge
+			}
+			switch {
+			case l.quote != 0:
+				if c == l.quote {
+					l.quote = 0
+				}
+			case c == '"' || c == '\'':
+				l.quote = c
+			case c == '>':
+				l.state = lexText
+				if l.last != '/' {
+					if l.depth++; l.depth > MaxDepth {
+						return ErrTooLarge
+					}
+				}
+			case c != ' ' && c != '\t' && c != '\n' && c != '\r':
+				l.last = c
+			}
+		case lexEnd:
+			if l.run++; l.run > MaxTag {
+				return ErrTooLarge
+			}
+			if c == '>' {
+				l.state = lexText
+				l.depth--
+			}
+		}
+		l.w1, l.w2 = c, l.w1
+	}
+	return nil
 }
 
 // walk calls fn for each token of part name until the end of the part. A malformed part is
@@ -251,14 +354,12 @@ func fallback(e xml.StartElement) bool { return e.Name.Space == nsMC && e.Name.L
 // rows. Deleted text (w:delText), field codes, headers, footnotes and comments are left out.
 func readDOCX(d *doc) error {
 	var s skipper
-	var row []string
+	var r row
 	var cell strings.Builder
 	inText, inCell := false, 0
 	text := func(v string) error {
 		if inCell > 0 {
-			if cell.Len() < maxText {
-				cell.WriteString(v)
-			}
+			appendCapped(&cell, v)
 			return nil
 		}
 		return d.write(v)
@@ -281,7 +382,7 @@ func readDOCX(d *doc) error {
 				return text("\n")
 			case "tr":
 				if inCell == 0 {
-					row = row[:0]
+					d.newRow(&r)
 				}
 			case "tc":
 				if inCell == 0 {
@@ -303,11 +404,11 @@ func readDOCX(d *doc) error {
 				return d.write("\n")
 			case "tc":
 				if inCell--; inCell == 0 {
-					row = append(row, strings.TrimSpace(strings.NewReplacer("\t", " ", "\n", " ").Replace(cell.String())))
+					r.add(strings.TrimSpace(strings.NewReplacer("\t", " ", "\n", " ").Replace(cell.String())))
 				}
 			case "tr":
 				if inCell == 0 {
-					return writeRow(d, row)
+					return writeRow(d, &r)
 				}
 			}
 		case xml.CharData:
@@ -342,7 +443,8 @@ func (d *doc) rels(part string) (map[string]string, error) {
 	return out, err
 }
 
-// ordered lists the parts that part's elements named local point to with r:id, in document order.
+// ordered lists the parts that part's elements named local point to with r:id, in document order,
+// each once: a part listed again is not read again.
 func (d *doc) ordered(part, local string) ([]string, []xml.StartElement, error) {
 	rels, err := d.rels(part)
 	if err != nil {
@@ -350,9 +452,11 @@ func (d *doc) ordered(part, local string) ([]string, []xml.StartElement, error) 
 	}
 	var names []string
 	var elems []xml.StartElement
+	seen := map[string]bool{}
 	err = d.walk(part, func(tok xml.Token) error {
 		if e, ok := tok.(xml.StartElement); ok && e.Name.Local == local {
-			if target := rels[relID(e)]; target != "" && d.has(target) {
+			if target := rels[relID(e)]; target != "" && d.has(target) && !seen[strings.ToLower(target)] {
+				seen[strings.ToLower(target)] = true
 				names = append(names, target)
 				elems = append(elems, e.Copy())
 			}
@@ -385,8 +489,8 @@ func readXLSX(d *doc) error {
 					shared = append(shared, cur.String())
 				}
 			case xml.CharData:
-				if inT && cur.Len() < maxText {
-					cur.Write(t)
+				if inT {
+					appendCapped(&cur, string(t))
 				}
 			}
 			return nil
@@ -411,7 +515,7 @@ func readXLSX(d *doc) error {
 }
 
 func readSheet(d *doc, sheet string, shared []string) error {
-	var row []string
+	var r row
 	var cell strings.Builder
 	cellType, inValue, col := "", false, 0
 	return d.walk(sheet, func(tok xml.Token) error {
@@ -419,14 +523,15 @@ func readSheet(d *doc, sheet string, shared []string) error {
 		case xml.StartElement:
 			switch t.Name.Local {
 			case "row":
-				row, col = row[:0], 0
+				d.newRow(&r)
+				col = 0
 			case "c":
 				cellType = attr(t, "t")
 				cell.Reset()
 				// Empty columns before this cell keep the row aligned, up to maxGap of them.
 				if c := column(attr(t, "r")); c > col {
 					for range min(c-col-1, maxGap) {
-						row = append(row, "")
+						r.add("")
 					}
 					col = c
 				} else {
@@ -451,13 +556,13 @@ func readSheet(d *doc, sheet string, shared []string) error {
 				case "b":
 					v = map[string]string{"0": "FALSE", "1": "TRUE"}[strings.TrimSpace(v)]
 				}
-				row = append(row, strings.ReplaceAll(strings.ReplaceAll(v, "\t", " "), "\n", " "))
+				r.add(strings.ReplaceAll(strings.ReplaceAll(v, "\t", " "), "\n", " "))
 			case "row":
-				return writeRow(d, row)
+				return writeRow(d, &r)
 			}
 		case xml.CharData:
-			if inValue && cell.Len() < maxText {
-				cell.Write(t)
+			if inValue {
+				appendCapped(&cell, string(t))
 			}
 		}
 		return nil
@@ -478,16 +583,47 @@ func column(ref string) int {
 	return n
 }
 
+// row collects one table row's cells within what the document may still write, so cells that
+// share one long string, or repeat one, cannot make a row bigger than the text it can produce.
+type row struct {
+	cells  []string
+	size   int // bytes of the cells and their separators
+	budget int
+}
+
+func (d *doc) newRow(r *row) {
+	r.cells, r.size, r.budget = r.cells[:0], 0, maxText-d.out.Len()+1
+}
+
+func (r *row) add(v string) {
+	if r.size >= r.budget {
+		return
+	}
+	if r.size+len(v)+1 > r.budget {
+		v = strings.ToValidUTF8(v[:r.budget-r.size-1], "")
+	}
+	r.cells = append(r.cells, v)
+	r.size += len(v) + 1
+}
+
 // writeRow writes a row's cells tab-separated, without trailing empty cells; empty rows vanish.
-func writeRow(d *doc, row []string) error {
-	end := len(row)
-	for end > 0 && strings.TrimSpace(row[end-1]) == "" {
+func writeRow(d *doc, r *row) error {
+	end := len(r.cells)
+	for end > 0 && strings.TrimSpace(r.cells[end-1]) == "" {
 		end--
 	}
 	if end == 0 {
 		return nil
 	}
-	return d.write(strings.Join(row[:end], "\t") + "\n")
+	return d.write(strings.Join(r.cells[:end], "\t") + "\n")
+}
+
+// appendCapped writes s to b up to maxText bytes in all, ending on a whole character.
+func appendCapped(b *strings.Builder, s string) {
+	if room := maxText - b.Len(); len(s) > room {
+		s = strings.ToValidUTF8(s[:max(room, 0)], "")
+	}
+	b.WriteString(s)
 }
 
 // readPPTX writes each slide, in presentation order, as "## Slide n" and its text. Notes are
@@ -572,15 +708,13 @@ func repeat(e xml.StartElement, local string) int {
 // "## Slide n" (heading "slide").
 func readOpenDocument(d *doc, heading string) error {
 	var s skipper
-	var row []string
+	var r row
 	var cell strings.Builder
 	inPara, inCell, slide := 0, false, 0
 	rowRepeat, cellRepeat := 1, 1
 	text := func(v string) error {
 		if inCell {
-			if cell.Len() < maxText {
-				cell.WriteString(v)
-			}
+			appendCapped(&cell, v)
 			return nil
 		}
 		return d.write(v)
@@ -594,7 +728,7 @@ func readOpenDocument(d *doc, heading string) error {
 			switch {
 			case t.Name.Space == nsText && (t.Name.Local == "p" || t.Name.Local == "h"):
 				if inCell && cell.Len() > 0 && inPara == 0 {
-					cell.WriteString(" ") // paragraphs of one cell share its line
+					appendCapped(&cell, " ") // paragraphs of one cell share its line
 				}
 				inPara++
 			case t.Name.Space == nsText && t.Name.Local == "tab":
@@ -612,7 +746,8 @@ func readOpenDocument(d *doc, heading string) error {
 					return d.write("## " + attr(t, "name") + "\n")
 				}
 			case t.Name.Space == nsTable && t.Name.Local == "table-row":
-				row, rowRepeat = row[:0], repeat(t, "number-rows-repeated")
+				d.newRow(&r)
+				rowRepeat = repeat(t, "number-rows-repeated")
 			case t.Name.Space == nsTable && (t.Name.Local == "table-cell" || t.Name.Local == "covered-table-cell"):
 				inCell, cellRepeat = true, repeat(t, "number-columns-repeated")
 				cell.Reset()
@@ -630,14 +765,12 @@ func readOpenDocument(d *doc, heading string) error {
 			case t.Name.Space == nsTable && (t.Name.Local == "table-cell" || t.Name.Local == "covered-table-cell"):
 				v := strings.ReplaceAll(strings.ReplaceAll(cell.String(), "\t", " "), "\n", " ")
 				for range cellRepeat {
-					if len(row) < maxParts {
-						row = append(row, v)
-					}
+					r.add(v)
 				}
 				inCell = false
 			case t.Name.Space == nsTable && t.Name.Local == "table-row":
 				for range rowRepeat {
-					if err := writeRow(d, row); err != nil {
+					if err := writeRow(d, &r); err != nil {
 						return err
 					}
 				}

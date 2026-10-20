@@ -34,7 +34,9 @@ in KyDrive, version history and restore tools.
 - `read_file` on a supported document returns `extracted` (its kind) and pages over the extracted
   text, so `size`, `offset` and `next_offset` count bytes of the text.
 - In process: zip entries at most 10 000, 64 MiB decompressed per part, 256 MiB per document,
-  16 MiB of text (`extract_truncated`); streamed XML (no recursion), no entity expansion; files
+  16 MiB of text (`extract_truncated`); at most 1 MiB in one tag and 4096 open elements, checked
+  on the bytes before the decoder builds them; no DOCTYPE; rows built within the remaining text
+  budget, so shared strings and repeated cells cannot amplify memory; files
   over 128 MiB are not opened; two at once. Skipped: `mc:Fallback` copies, tracked deletions,
   field codes, footnotes, comments, speaker notes, headers.
 - PDF: a conversion ticket and `outputtype: txt`, the output fetched from the editor origin's
