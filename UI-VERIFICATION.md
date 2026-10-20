@@ -28,3 +28,8 @@ Native captures of the final release at 1280×800 and 390×844 are below. Neithe
 ## Owner administrator access — 2026-10-04
 
 Native KyIdentity sign-in after the explicit operator grant showed Yoshi / admin and Create shared workspace, Recovery, Settings & DB. The admin-only backup status endpoint returned 200. Identity ID and private workspace remain unchanged. Current release is `c5f4004`, passing CI 37183103503. The owner uses their usual KyIdentity login; the local recovery credential is kept separately.
+
+
+## Approved interface polish — 2026-10-19
+
+See [UI-POLISH.md](UI-POLISH.md) for the implemented changes, preservation scope, checks, actual before/after screenshots and disposable capture conditions. Earlier captures above remain historical evidence.

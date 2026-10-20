@@ -28,6 +28,7 @@ describe('upload queue', () => {
     await screen.findByText('Upload or workspace quota exceeded');
     await waitFor(() => expect(idle).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Done')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('1 file uploaded');
     expect(calls).toContain('DELETE /api/drive/upload-sessions/bad.txt');
     fireEvent.click(screen.getByRole('button', { name: 'Clear finished' }));
     expect(screen.queryByText('ok.txt')).toBeNull();

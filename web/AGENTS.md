@@ -39,6 +39,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - Hide privileged navigation from staff. Directory-managed group membership and workspace access are distinct. Managers can configure group grants; only administrators set quota or see global operations.
 
 ## Verification
+- Completed uploads have a compact receipt; keep every finished item and failed/retry row until the existing explicit Clear finished action removes completed rows.
 - Browser setup: build the frontend, run `go build -o .browser/server ./cmd/server` at the repo root, then `cd web && npx playwright install chromium && npm run test:browser`. CI also installs browser OS dependencies.
 - `make test-web` or `cd web && npm ci && npm test`, then `npm run build` (vitest with jsdom; `src/pages/Backup.test.tsx` renders the recovery screen against a stubbed status route and saves the Document retention form; `src/pages/drive/client.test.ts` and `MoveDialog.test.tsx` cover the file-management client and dialog; `Leavers.test.tsx` the handover panel; `TwoFactor.test.tsx` MFA enrol/confirm/disable; `Settings.test.tsx` the drive-wide trash form; `LinkDevice.test.tsx` the link approval (one post, never on load, no redirect for a bad request); `Devices.test.tsx` the computers list, the revoke wipe flag, the locked checkbox and the policy form; `src/App.test.tsx` sign-out). `web/dist` and `dist-fonts/` are build output, not committed; the build restores `dist/.gitkeep` so `go:embed` compiles on a fresh clone.
 
