@@ -6,175 +6,6 @@ Open-source personal and shared drive for the Ky suite. KyIdentity owns people a
 
 Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. Verified pilot deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
 
-## Local development
-
-Requires Go matching `go.mod`, Node/npm, Docker for editor tests and Restic for bulk recovery checks. Restic is included in the shipped container.
-
-```sh
-make build-web
-make build
-KY_DATA_DIR=./data KY_DB_DRIVER=sqlite KY_APP_NAME=KyDrive ./kydrive-server
-```
-
-Choose a random `KY_ADMIN_PASSWORD` in a private environment file before starting, or leave it empty: the first start then writes a generated password to `<KY_DATA_DIR>/initial-admin-password` (mode 0600, never logged); delete that file after the first sign-in. Bootstrap requires password replacement at first login. Startup refuses any secret still holding an example `replace-with` placeholder, an unparseable number or boolean, and a `KY_ENV` other than `production` or `development`. Use the configured OIDC provider for staff; SCIM never supplies passwords. Production uses `KY_ENV=production`, HTTPS, an explicit durable `KY_SESSION_SECRET` and explicitly configured integrations. Read/write timeouts default to 5m, configurable with `KY_READ_TIMEOUT`/`KY_WRITE_TIMEOUT` between 15s and 15m. `KYDRIVE_MAX_FILE_SIZE` caps one resumable upload and `KYDRIVE_MAX_ZIP_SIZE` one folder zip download; both default to `10GiB` and take whole `MiB`, `GiB` or `TiB` up to `1TiB`.
-
-## NAS package
-
-```sh
-cp .env.example .env
-cp .env.runtime.example .env.runtime
-chmod 600 .env .env.runtime
-# Edit origins and credentials; choose persistent paths and an independent bulk mount.
-# Create each mount with ownership matching KY_UID:KY_GID (defaults 1000:1000).
-docker compose pull
-docker compose up -d
-docker compose exec app /app/kydrive-server bulk-init
-```
-
-For a quick start, Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that tag once; there is no `v` and no `latest`. The release workflow refuses to push a version tag that already exists and master CI writes only commit tags, but the registry itself does not lock tags, so anyone with write access to the package could still move one.
-
-For production, pin the digest: set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>`, taking the digest from the release job's summary (`Published ...@sha256:<digest> as :X.Y.Z`) or from `docker buildx imagetools inspect ghcr.io/busnes-app/kydrive-server:X.Y.Z`. Verify it before first use:
-
-```sh
-gh attestation verify oci://ghcr.io/busnes-app/kydrive-server@sha256:<digest> --repo Busnes-app/kydrive-server \
-  --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v<version>
-```
-
-To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
-
-`bulk-init` is safe to rerun: when the repository already opens with this deployment's key it reports that and changes nothing. A repository at that location that the key cannot open is refused (`bulk repository exists but this deployment's key does not open it`); point `KYDRIVE_BULK_BACKUP_REPOSITORY` at the right repository rather than reinitializing.
-
-### Upgrading
-
-- Unreleased (after 0.4.2): Compose defaults to the published image instead of `kydrive-server:local`. Installs that build from source keep working with the build overlay. An install that ran a separately built `kydrive-server:local` without the overlay, and has no `KY_IMAGE` in `.env`, now pulls the release image: set `KY_IMAGE=kydrive-server:local` to keep the local build.
-- To move to a new release, check out its tag, set `KY_IMAGE` to its version, then `docker compose pull` and `docker compose up -d`.
-
-The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Restic snapshot pruning (Recovery screen, Document retention) is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
-
-## Identity and permissions
-
-Register an OIDC application in KyIdentity using callback `<drive origin>/api/sso/kysignon/callback`. The route retains the base's name; set `KY_KYSIGNON_ISSUER` to the actual KyIdentity issuer, with its client ID/secret. Keep `KY_SSO_AUTO_PROVISION=false`. A verified OIDC `sub` must equal the user's SCIM `externalId`; username and email do not link accounts.
-
-Configure a KyIdentity outbound SCIM system at `<drive origin>/scim/v2` with `KY_SCIM_TOKEN`. Enable group delivery and assign the required users/groups. KyDrive supports exact `externalId` reconciliation, user PUT/deactivation, groups PUT/delete and atomic membership replacement. An `externalId` is immutable. Application administrator privilege is separate from directory roles; incoming `roles=admin` cannot elevate it. The break-glass local administrator cannot be modified through SCIM.
-
-Create a workspace in KyDrive and grant a KyIdentity group reader, editor or manager access. Grants inherit throughout the workspace. An administrator can configure quotas/grants and view audits, but needs a group grant to read document content. Workspace files survive deletion of any employee or group. A manager can issue reader/editor service credentials scoped to their workspace, expiring after 90 days and invalidated when that user's membership or account ceases to authorize them.
-
-The main sidebar lists My files and shared workspaces. Each active account gets one private workspace, initially 10GiB; its owner can edit files, and group grants cannot expose it to others. Shared workspaces use group grants. New file creates a blank DOCX, XLSX or PPTX in the selected workspace and opens Euro-Office. The UI also provides folders, upload/download, versions, trash restore, quotas, operational status and audit. The people/group action links to KyIdentity; it does not duplicate the directory or embed another administration application.
-
-To make an installation owner an application administrator, run the audited operator command inside the drive container:
-
-```sh
-/app/kydrive-server set-directory-role -subject <exact-KyIdentity-subject> -role admin
-```
-
-This preserves the directory account and revokes its existing sessions; sign in with KyIdentity again. Use `-role user` to remove the grant. SCIM roles do not assign application administration, and offboarding still disables administrators. The distinct local `recovery-admin` account is for recovery; deployment credentials belong in an operator-controlled secret location.
-
-## Sharing
-
-Beyond workspace group grants, any folder or file can be shared with a person or a group as reader, editor or manager from its Actions menu. A folder share covers everything inside it. Shares only add access; they never take away what a workspace grant gives. Workspace managers share; editors can share up to editor access when a manager turns on "Editors may share" in Workspace settings. People who received a share, even as manager, cannot pass it on. The owner of My files can share from it too; those shares stop while the owner's account is deactivated and are dropped when an administrator hands the files over. Moving a file to another workspace drops its shares.
-
-An **organisation link** gives anyone signed in to KyDrive who opens it reader or editor access to one file or folder, until it expires (1, 7 or 30 days, or never) or is revoked; create and revoke links in the same Share dialog. The link is shown once. Its secret sits after the `#`, which browsers never send to a server, so it does not appear in proxy logs; every opening is audited.
-
-A **guest link** shares one file or folder with people who have no account. It is off until an administrator turns it on under Settings > Guest links, which also sets the longest a link may last (default 30 days). A guest link is view and download only, or upload-only into a folder, where guests send files without seeing what is there. It always expires, can need a password (send it separately), and stops working if its creator loses the right to share the item. Guest pages send no referrer, ask search engines not to index them and set no cookies; turning guest links off stops all of them at once.
-
-Items shared with you outside your own workspaces appear under **Shared with me**, where you can browse shared folders and open or download files. They are not yet listed over WebDAV, and the search box covers your workspaces only. Removing a share, or removing someone from a shared group, ends their open editor at once.
-
-## Previews
-
-Clicking a file that has no editor (images, PDFs, audio, video, plain text) opens a quick look in the browser; every file's menu also has Preview. What the file actually contains decides whether it renders, never its name: PNG, JPEG, GIF, WebP, PDF, MP3, WAV, Ogg, MP4, WebM and UTF-8 text are shown, and everything else, HTML and SVG included, offers Download instead. Text shows its first 256 KiB as plain text. Previews are served sandboxed (`Content-Security-Policy: sandbox`, `nosniff`), so nothing in a file runs as KyDrive, and need the same access as a download.
-
-The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GIF and WebP images and, when Euro-Office is configured, for the first page of Office documents (DOCX, ODT, RTF, XLSX, ODS, CSV, PPTX, ODP) and PDFs. Documents are rendered by the Document Server from a one-time link to that file alone, and its picture is checked like an upload. Thumbnails are made on the server once per version, encrypted on disk like the files themselves under `<KY_DATA_DIR>/thumbs`, left out of backups, and safe to delete. Images over 64 MiB, over 16384 pixels a side or too large to decode in 256 MiB keep their icon.
-
-## Leavers
-
-A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:
-
-```sh
-/app/kydrive-server handover                       # list leavers
-/app/kydrive-server handover -from <personal-workspace-id> -to-user <exact-KyIdentity-subject>
-/app/kydrive-server handover -from <personal-workspace-id> -workspace <shared-workspace-id>
-```
-
-## Retention and permanent delete
-
-Trashed items are permanently deleted after 90 days by default, in every workspace including My files. An administrator changes that age, or turns it off with 0, under Settings > Trash. A manager of a workspace (or the owner of a personal one) can permanently delete trashed files and folders, delete a non-current version, or empty the trash; each action is audited and confirmed in the UI. A file with an open or undelivered editor session cannot be purged. An administrator can set per-workspace retention on shared workspaces: `trash_days` (purge items trashed longer than N days, overriding the drive-wide age; 0 follows it) and `keep_versions` (keep only the newest N versions; 0 is off). An hourly worker applies the policies as actor `system` and logs how many items it skipped. Files trashed before trash timestamps existed count from that upgrade; anything trashed longer ago than the drive-wide age is purged on the first run after upgrading to it. The same worker removes upload staging files and blobs no version names once they are an hour old. Backups still hold purged bytes until their own snapshots are retired. Known limitation: if a purge removes a blob during the hard-link pass that follows a bulk backup's database snapshot, that run fails loudly and is retried at the next interval.
-
-## WebDAV
-
-Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** on their Account page; it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account stops all of its app passwords on the next request.
-
-- **Windows:** File Explorer → *Map network drive* → `https://drive.example.com/dav/`. Windows refuses downloads over 50 MB by default; raise `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes` (up to `4294967295`) and restart the WebClient service.
-- **macOS:** Finder → *Go* → *Connect to Server* → `https://drive.example.com/dav/`.
-- **Linux:** `davs://drive.example.com/dav/` in Files (GNOME) or `webdavs://drive.example.com/dav/` in Dolphin (KDE).
-
-For a cached drive, an offline folder (rclone) or Cyberduck, see [Desktop access](docs/DESKTOP-ACCESS.md).
-
-The top level lists your workspaces by name; two with the same name show as `Name` and `Name (2)`. Workspaces cannot be created, renamed or deleted over WebDAV. Deleting a file or folder moves it to the trash. Saving over a file creates a new version; with `If-Match` a stale save is refused (412), otherwise the last save wins and the earlier one stays in the history. A `PUT` may carry `X-OC-Mtime` (Unix seconds, as rclone's `owncloud` vendor sends it) to keep the file's own modification time. Uploads are capped at `KYDRIVE_MAX_FILE_SIZE` and one `PUT` must finish within `KY_READ_TIMEOUT`.
-
-WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating proxy, list the proxy in `KY_TRUSTED_PROXIES` so its `X-Forwarded-Proto` is believed, and let it pass request bodies up to `KYDRIVE_MAX_FILE_SIZE`. Failed WebDAV sign-ins are limited to 20 a minute per client and 10 per 15 minutes per username. Locks are held in memory and lost on restart; clients take them again.
-
-## Linked computers
-
-The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive-desktop), in development) keeps chosen workspaces in a local folder. Choosing **Link** in the app opens KyDrive in the browser; after the usual sign-in, the user approves the computer by name. The app receives its own credential, kept in the computer's keychain, and never sees a password. Shared with me is not synced yet.
-
-- **Account → Computers** lists linked computers with their last use, at most 20 per user. **Revoke** stops one at once. Its dialog offers *Also remove KyDrive files from this computer*: the files go the next time the computer reaches KyDrive, edits that never uploaded move to an `Unsynced` folder, and a computer offline for 30 days is never told. It is not a guaranteed remote wipe.
-- **Settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
-- A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
-
-## Editor
-
-Set `KYDRIVE_EDITOR_URL` to the browser-visible HTTPS Euro-Office origin and `KYDRIVE_EDITOR_SECRET` to the same JWT secret supplied to Euro-Office. `KYDRIVE_EDITOR_DRIVE_URL` defaults to `KY_APP_URL`; the editor must resolve and reach it for authorized downloads and signed callbacks. Optional `KYDRIVE_EDITOR_INTERNAL_URL` changes server-to-editor transport, while output URLs must still name the configured public origin. No redirects are followed. HTTP origins are accepted only with `KY_ENV=development` for local testing.
-
-DOCX/ODT/TXT use the document editor; XLSX/ODS/CSV use the spreadsheet editor; PPTX/ODP use the presentation editor; PDFs open in the PDF editor from the file menu. Other files open in quick look or download. Browser configuration, callbacks and commands use HS256 JWT. The download URL names one editor session and carries no credential: Euro-Office must sign the request with the shared secret for that exact URL, and the session must be unrevoked, unexpired and backed by current membership. The signed browser configuration expires after 10 minutes. A force-saved document keeps its key while it stays open, so later co-editors join it. Saved output is restricted to the editor origin's `/cache/` paths, capped at 128 MiB and committed as an immutable version. Stale saves fail with a conflict; replayed identical output is acknowledged without another version. Force-save sequences use a persisted revision pointer.
-
-Password change or reset, sign-out, MFA changes, deactivation, deletion, membership loss, permission downgrade, trash and session expiry queue durable revocations; an account revocation also gives the affected files a new document key. Expiry waits until Euro-Office closes the document (at most 7 days past expiry), so a connected editor is not dropped mid-edit. The worker scans every two seconds and retries failed Euro-Office `drop` commands with backoff up to an hour. The administration UI shows pending commands. Revoked users lose online editing and file access; plaintext already delivered to a browser cannot be recalled. Euro-Office processes plaintext. This is not CryptPad-style client-side encryption.
-
-The local image under test is Euro-Office `v9.3.4-hotfix.1`, amd64 digest in `deploy/render.py`. The documented `9.3.1` tag was unavailable. Its runtime carries AGPLv3 and inherited ONLYOFFICE strings. Release workflow and BuildKit provenance bind the selected amd64 digest to its Euro-Office source commit. This establishes observed build correspondence; an independently reproducible rebuild is not claimed. See [provenance evidence](docs/EURO-PROVENANCE.md) and [pilot gates](docs/PILOT.md).
-
-## Encryption at rest
-
-Every stored file version is encrypted with AES-256-GCM under a per-file key derived from the deployment encryption key. Files written by earlier releases are encrypted in the background after upgrade. This protects a stolen disk, NAS or copied data directory, but only if the key is not stored with the data: by default it is minted at `data/encryption.key`, and the server logs a warning and the Recovery screen shows a notice. Move it into a Compose or Kubernetes secret: set `KY_ENCRYPTION_KEY` to the file's exact hex contents (a different key cannot decrypt existing files or MFA secrets), delete `data/encryption.key` while keeping the secret safe, restart, then confirm the notice is gone. A restore copies `encryption.key` back into the data directory; move it out again. An interrupted recovery drill leaves its opened capsule, key included, under `data/drill`; the notice stays until the next drill sweeps it or you delete it.
-
-This is not end-to-end encryption. The server decrypts on download, Euro-Office edits plaintext, and the operator who holds the key can read every file. File and folder names are encrypted too; workspace, group and service-token names are not. Upgrading encrypts existing names and rewrites the database file once (SQLite `VACUUM`) so freed pages keep no plaintext; Restic snapshots and capsules taken before the upgrade still contain plaintext names.
-
-## Recovery
-
-KyRecovery is the blind sealed-capsule destination at your KyRecovery origin (for example `https://kyrecovery.example.com/`). Pair through the Recovery screen after the suite ceremony or pin its public key manually; compare fingerprints. Pairing pins the key permanently. `KY_BACKUP_ALLOW_PRIVATE_RECOVERY` is an explicit opt-in for HTTPS private-network destinations, with loopback still refused. A LAN resolver override is provided by `docker-compose.lan-dns.yml`.
-
-`KY_BACKUP_DIR` enables local sealed copies; `KY_BACKUP_KEEP` defaults to seven. `KY_BACKUP_DEPOSIT_INTERVAL` is the default schedule (UI can choose off or at least 15 minutes). A run seals once and sends to all configured capsule destinations. Backups audit pairing/deposits, include the deployment encryption key and require at least one destination. Unpairing keeps the key pin and requires a separate KyRecovery administrator to revoke its token.
-
-`KYDRIVE_BULK_BACKUP_REPOSITORY` names an independent Restic repository: an absolute path outside the data directory (a mounted independent destination), or offsite `s3:https://host/bucket[/prefix]` (any S3-compatible store) or `rest:https://host[:port]/path` (rest-server). Plain HTTP, other backends and credentials inside the URL are refused; plain HTTP is accepted only with `KY_ENV=development`. Put credentials in the file `KYDRIVE_BULK_BACKUP_CREDENTIALS_FILE` names, as `KEY=VALUE` lines: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_DEFAULT_REGION` for S3, `RESTIC_REST_USERNAME` and `RESTIC_REST_PASSWORD` for rest-server. Other keys are refused, the file must not be readable by other users (mode 0600, or 0440 with the runtime group), it is read on every use so credentials rotate without a restart, and its values reach only the `restic` child process, never the server's environment or logs. The capsule seals the repository and credentials, so a restore needs nothing else. **Choose a repository the drive host cannot delete from**: rest-server started with `--append-only` on another machine, or an S3 bucket with versioning and Object Lock. A compromised or ransomed drive host then cannot destroy its own backups; bulk pruning fails against such a repository by design (an operator prunes from a trusted machine instead). After a scheduled backup, at most weekly, `restic check --read-data-subset=5%` reads back a random 5% of the repository; the Recovery screen shows the repository, the last check and its result, and each run is audited as `backup.bulk_check`. Initialize the repository once with `bulk-init`. When there are documents, every backup first snapshots SQLite, verifies all referenced immutable blobs (new or changed ones by digest, unchanged ones by size, all by digest at least weekly; the record is `data/bulk-verified.json`) and writes an encrypted Restic snapshot of exactly those blobs. The sealed capsule binds its full snapshot ID and all blob hashes/sizes. The Restic password is an HKDF subkey (`kydrive:restic`) of the deployment key escrowed inside the capsule; repositories initialized with the raw key move to it on the next backup. A missing/unavailable repository or missing source blob fails the backup. Capsules carry metadata rather than putting the whole corpus inside the 384 MiB KyRecovery cap.
-
-See [restore runbook](docs/RESTORE.md). `backup-drill` uses a throwaway custodian kit, restores the sealed database and the exact Restic snapshot into scratch storage, verifies all hashes and deletes scratch plaintext. Scratch is `KY_DRILL_DIR` (absolute; default `<data dir>/drill`, on the live volume); a restore refuses to start without the snapshot's size plus 10% and 64 MiB free there. `KY_DRILL_TIMEOUT` (default 2h, at least 1m) bounds a drill, `KY_BACKUP_COLLECT_TIMEOUT` (default 2h, at least 1m) one backup's database snapshot, blob verification and Restic snapshot; raise it for a first backup of a large drive. Shutdown cancels a backup still collecting. Operator commands other than `init-admin` and `restore` (`bulk-init`, `deposit`, `backup-drill`, `export-capsule`, `set-directory-role`, `rename-local-admin`, `handover`) refuse to run without the existing deployment key and database. It does not hold the suite private key or custodian shares.
-
-## Kubernetes rendering
-
-`deploy/render.py` renders Euro-Office's single-instance deployment, persistence, service and TLS ingress. It performs no installation. Optionally render the drive profile with a digest-pinned drive image and an already provisioned independent bulk PVC.
-
-```sh
-python deploy/render.py --drive-url https://kydrive.example.test \
-  --editor-url https://euro-office.example.test --editor-secret-file /private/editor-jwt \
-  --storage-class YOUR_CLASS --output /private/kydrive-rendered
-```
-
-The secret file must have mode 0600. Output contains a Secret and is protected at 0700/0600; never commit it. Supply TLS Secrets through existing ingress/certificate tooling. For a Kubernetes drive, pass `--kubernetes-drive --drive-image REGISTRY/IMAGE@sha256:DIGEST --bulk-pvc EXISTING_INDEPENDENT_CLAIM` and create `drive-integrations` with OIDC/SCIM/bootstrap configuration. Read generated `INSTALL.txt` before applying.
-
-No Compose service ships for Euro-Office. To run the editor outside Kubernetes, reproduce what `render.py` sets: the digest-pinned `EDITOR_IMAGE` (amd64); `JWT_ENABLED=true` and `JWT_SECRET` equal to `KYDRIVE_EDITOR_SECRET` (at least 32 bytes); `ALLOW_PRIVATE_IP_ADDRESS=false` and `ALLOW_META_IP_ADDRESS=false`; HTTP on container port 80 behind the HTTPS proxy serving `KYDRIVE_EDITOR_URL`, with 3600s proxy read/send timeouts and a 129 MiB body limit; 2 GiB memory reserved, 4 GiB limit. It runs as root by design. Persist `/var/lib/euro-office`, `/var/www/euro-office/Data`, `/var/lib/postgresql`, `/var/lib/rabbitmq` and `/var/lib/redis`. An empty mount over these hides the image's initialized bundled databases: seed each from the same image first, as `render.py`'s `seed-bundled-services` init container does.
-
-Private-IP fetching stays disabled in the editor package (`ALLOW_PRIVATE_IP_ADDRESS=false`, `ALLOW_META_IP_ADDRESS=false`). If NAS DNS resolves privately, as on a LAN-only drive, Euro-Office cannot fetch `KYDRIVE_EDITOR_DRIVE_URL` until `ALLOW_PRIVATE_IP_ADDRESS=true`. That lifts the editor's private-address block for every fetch, so first constrain editor egress to the intended drive/proxy endpoints and record the explicit exception before enabling it. This delivery does not choose actual ingress/TLS or NAS filesystem settings without testing that infrastructure.
-
-## Verification
-
-```sh
-PATH=/path/containing/restic:$PATH go test -race ./...
-go vet ./...
-cd web && npm test && npm run build
-python -m unittest discover -s deploy -p '*_test.py'
-docker build --platform linux/amd64 -t kydrive-server:local .
-```
-
-The browser shell and actual Euro-Office were exercised through the native T3 collaborative browser. Evidence and limits are in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`. Live identity, HTTPS, NAS storage, spreadsheet save/reopen and recovery drill evidence is recorded separately in `docs/PILOT.md`. Suite-wide one-prompt installation is not implemented.
-
 ## Scope
 
 Single-instance SQLite and filesystem storage. No SMB endpoint, released desktop app (in development, see Linked computers), guest editing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
@@ -182,3 +13,18 @@ Single-instance SQLite and filesystem storage. No SMB endpoint, released desktop
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 
 When a directory user is also named `admin`, reserve a distinct name for the local recovery administrator before provisioning: `/app/kydrive-server rename-local-admin -from admin -to recovery-admin`. Run this operator command with the deployment environment and persistent data mounted. It atomically renames only a local administrator, preserves its credentials and privileges, and records an audit row. Directory accounts are never adopted as local administrators.
+
+## What it can do
+
+- Upload, organize, share and version files in permissioned workspaces.
+- Use WebDAV or link compatible desktop sync clients.
+- Configure optional Euro-Office editing and document previews.
+- Recover both sealed metadata and the bound bulk-file snapshot.
+
+## Documentation
+
+- [Development](docs/DEVELOPMENT.md) — Local development, Verification. <a id="local-development"></a><a id="verification"></a>
+- [Deployment](docs/DEPLOYMENT.md) — NAS package, Kubernetes rendering. <a id="nas-package"></a><a id="upgrading"></a><a id="kubernetes-rendering"></a>
+- [Permissions](docs/PERMISSIONS.md) — Identity and permissions, Sharing, Leavers, Retention and permanent delete. <a id="identity-and-permissions"></a><a id="sharing"></a><a id="leavers"></a><a id="retention-and-permanent-delete"></a>
+- [Clients and editor](docs/CLIENTS-AND-EDITOR.md) — Previews, WebDAV, Linked computers, Editor. <a id="previews"></a><a id="webdav"></a><a id="linked-computers"></a><a id="editor"></a>
+- [Recovery and encryption](docs/RECOVERY-AND-ENCRYPTION.md) — Encryption at rest, Recovery. <a id="encryption-at-rest"></a><a id="recovery"></a>

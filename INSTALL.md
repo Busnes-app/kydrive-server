@@ -44,7 +44,7 @@ locking/fsync; do not put its database on SMB.
 In `.env.runtime`, set the real HTTPS `KY_APP_URL`, a generated durable
 `KY_SESSION_SECRET`, and your KyIdentity issuer/client secret and matching SCIM token.
 Register callback `<drive origin>/api/sso/kysignon/callback`, keep
-`KY_SSO_AUTO_PROVISION=false`, and follow [identity and permissions](README.md#identity-and-permissions)
+`KY_SSO_AUTO_PROVISION=false`, and follow [identity and permissions](docs/PERMISSIONS.md#identity-and-permissions)
 for subjects, groups and administrator grants. Configure a TLS proxy with exact trusted
 peers (`KY_TRUSTED_PROXIES` in `.env.runtime`) as described in the README. Configure the separate editor and its JWT secret only
 if editing is needed; otherwise clear `KYDRIVE_EDITOR_URL` and `KYDRIVE_EDITOR_SECRET`
@@ -68,7 +68,7 @@ preserve it and find the correct key instead of reinitializing.
 The capsule seals metadata/keys and references bulk snapshots; it is not a copy of every
 file. Complete both parts of [recovery](docs/RESTORE.md). For source builds select
 `docker-compose.yml` plus `docker-compose.build.yml` on **every** Compose command, build,
-and start the same overlay selection. See [NAS package](README.md#nas-package),
+and start the same overlay selection. See [NAS package](docs/DEPLOYMENT.md#nas-package),
 [pilot evidence](docs/PILOT.md) and [acceptance limits](docs/ACCEPTANCE.md).
 
 ## Keep it recoverable
