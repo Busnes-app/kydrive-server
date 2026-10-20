@@ -23,6 +23,8 @@ When a directory user is also named `admin`, reserve a distinct name for the loc
 
 ## Documentation
 
+Euro-Office can also run on Docker with the optional [production editor Compose overlay](docs/EURO-DOCKER.md); Kubernetes remains supported.
+
 - [Development](docs/DEVELOPMENT.md) — Local development, Verification. <a id="local-development"></a><a id="verification"></a>
 - [Deployment](docs/DEPLOYMENT.md) — NAS package, Kubernetes rendering. <a id="nas-package"></a><a id="upgrading"></a><a id="kubernetes-rendering"></a>
 - [Permissions](docs/PERMISSIONS.md) — Identity and permissions, Sharing, Leavers, Retention and permanent delete. <a id="identity-and-permissions"></a><a id="sharing"></a><a id="leavers"></a><a id="retention-and-permanent-delete"></a>
