@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { AppPasswords } from './AppPasswords';
+import { AppPasswords, grant } from './AppPasswords';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -20,8 +20,10 @@ describe('AppPasswords', () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     render(<AppPasswords />);
     fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    expect(screen.getByText('"Laptop" gets read and write access to all your files over WebDAV.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
     expect(await screen.findByText('abcd-efgh-ijkl-mnop-qrst-uvwx-yz23-4567')).toBeTruthy();
+    expect(screen.getAllByText('"Laptop" gets read and write access to all your files over WebDAV.').length).toBeGreaterThan(0);
     expect(screen.getByText('https://drive.example/dav/')).toBeTruthy();
     expect(screen.getByText(/Laptop · created 2026-10-15 · never used/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'I have copied it' }));
@@ -57,10 +59,15 @@ describe('AppPasswords', () => {
     expect(screen.getByRole('note').textContent).toContain('never delete anything for good');
     fireEvent.change(screen.getByLabelText('Limit to folder (optional)'), { target: { value: '/Team/Projects' } });
     fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'Hermes' } });
+    // Before anything is issued, the form says who gets what.
+    expect(screen.getByText('AI agent "Hermes" gets read and write access to /Team/Projects.')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Read only'));
+    expect(screen.getByText('AI agent "Hermes" gets read-only access to /Team/Projects.')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Read and write'));
     fireEvent.click(screen.getByRole('button', { name: 'Create agent token' }));
     expect(await screen.findByText('kya_abcdefghijklmnopqrstuvwxyz234567')).toBeTruthy();
     expect(bodies).toEqual([{ name: 'Hermes', scope: 'mcp:write', folder: '/Team/Projects' }]);
-    expect(screen.getByText(/The agent sees only \/Team\/Projects/)).toBeTruthy();
+    expect(screen.getByText(/AI agent "Hermes" gets read and write access to \/Team\/Projects\. It sees nothing outside that folder\./)).toBeTruthy();
     expect(screen.getAllByText(/Bearer \$\{KYDRIVE_TOKEN\}/)).toHaveLength(2);
     expect(screen.getByText(/hermes skills install https:\/\/drive.example\/agent\/skills\/kydrive\/SKILL.md/)).toBeTruthy();
     expect(screen.getByText(/Hermes · AI agent · created 2026-10-20/)).toBeTruthy();
@@ -83,9 +90,19 @@ describe('AppPasswords', () => {
     expect(screen.getByText(/Its folder is in the trash or gone/)).toBeTruthy();
     fireEvent.change(access, { target: { value: 'mcp:write' } });
     expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]).toEqual([expect.stringContaining('AI agent "Hermes" gets read and write access to all your files.')]);
     expect(calls.some(c => c.startsWith('PATCH'))).toBe(false);
     confirm.mockReturnValue(true);
     fireEvent.change(access, { target: { value: 'mcp:write' } });
     await waitFor(() => expect(calls).toContain('PATCH /api/auth/app-passwords/a1 {"scope":"mcp:write"}'));
+  });
+
+  it('never issues a token without naming who gets it and at what access', () => {
+    for (const [name, scope, root] of [['Hermes', 'mcp:read', undefined], ['OpenClaw', 'mcp:write', '/Team'], ['Phone', 'dav', undefined]] as const) {
+      const text = grant(name, scope, root);
+      expect(text).toContain(`"${name}"`);
+      expect(text).toMatch(scope === 'mcp:read' ? /read-only/ : /read and write/);
+      expect(text).not.toMatch(/an app|wants access/i);
+    }
   });
 });

@@ -11,6 +11,14 @@ function appPassword(v: unknown): v is AppPassword { return record(v) && typeof 
 function created(v: unknown): v is Created { return record(v) && ['name', 'password', 'url'].every(k => typeof v[k] === 'string') && scopes.includes(v.scope as Scope); }
 const isAgent = (s: Scope) => s !== 'dav';
 
+// grant says who gets a credential and what it can do. Every screen that issues or widens one
+// shows it, so no prompt ever asks for "access" without naming the agent and its level.
+export function grant(name: string, scope: Scope, root?: string): string {
+  const where = root ? root : 'all your files';
+  if (scope === 'dav') return `"${name}" gets read and write access to ${where} over WebDAV.`;
+  return `AI agent "${name}" gets ${scope === 'mcp:write' ? 'read and write' : 'read-only'} access to ${where}.`;
+}
+
 const WRITE_WARNING = 'The agent can create, replace, rename, move and trash files you can edit. Anyone who can message the agent can try to make it do so. It can never delete anything for good.';
 
 // AppPasswords lets a user connect WebDAV clients (file managers, LibreOffice) and AI agents with
@@ -48,7 +56,7 @@ export function AppPasswords() {
     await load();
   }); };
   const setAccess = (p: AppPassword, scope: Scope) => {
-    if (scope === 'mcp:write' && !window.confirm(`${WRITE_WARNING}\n\nGive "${p.name}" write access?`)) return;
+    if (scope === 'mcp:write' && !window.confirm(`${grant(p.name, scope, p.root)}\n\n${WRITE_WARNING}\n\nGive "${p.name}" write access?`)) return;
     void run(async () => { await change(`/api/auth/app-passwords/${p.id}`, 'PATCH', { scope }); await load(); });
   };
 
@@ -57,6 +65,7 @@ export function AppPasswords() {
     <p>Connect a file manager or office app over WebDAV, or an AI agent such as OpenClaw or Hermes Agent. Each password works only for its kind and can be revoked on its own.</p>
     {shown && (isAgent(shown.scope) ? <AgentSetup token={shown} onDone={() => setShown(null)} /> : <div role="status">
       <p><strong>Copy this password now. It will not be shown again.</strong></p>
+      <p>{grant(shown.name, shown.scope)}</p>
       <dl>
         <dt>Server</dt><dd><code className="font-mono" style={{ userSelect: 'all' }}>{shown.url}</code></dd>
         <dt>Username</dt><dd><code className="font-mono" style={{ userSelect: 'all' }}>{shown.username}</code></dd>
@@ -80,6 +89,7 @@ export function AppPasswords() {
       </fieldset>}
       <label htmlFor="app-password-name">{agent ? 'Agent name' : 'Device or app name'}</label>
       <input id="app-password-name" required maxLength={100} placeholder={agent ? 'Hermes' : 'Work laptop'} value={name} onChange={e => setName(e.target.value)} />
+      {name.trim() && <p aria-live="polite">{grant(name.trim(), agent ? (write ? 'mcp:write' : 'mcp:read') : 'dav', agent ? folder.trim() || undefined : undefined)}</p>}
       <button type="submit" disabled={busy || !name.trim()}>{agent ? 'Create agent token' : 'Create app password'}</button>
     </form>
     {list.length > 0 && <ul aria-label="Your app passwords">{list.map(p => <li key={p.id}>
@@ -114,8 +124,8 @@ function AgentSetup({ token, onDone }: { token: Created; onDone: () => void }) {
       Authorization: "Bearer \${KYDRIVE_TOKEN}"`;
   return <div role="status">
     <p><strong>Set this as KYDRIVE_TOKEN in the agent's environment now. It will not be shown again.</strong></p>
+    <p>{grant(token.name, token.scope, token.root || undefined)}{token.root && ' It sees nothing outside that folder.'}</p>
     <p><code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{token.password}</code></p>
-    {token.root && <p>The agent sees only {token.root}.</p>}
     <p>The agent loses access if it does not use KyDrive for 90 days; create a new token then.</p>
     <h3>OpenClaw</h3>
     <p>Add to <code>openclaw.json</code>:</p>
