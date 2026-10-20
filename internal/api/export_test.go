@@ -68,4 +68,9 @@ const (
 	MCPWriteLimitForTest = mcpWriteLimit
 	MCPListLimitForTest  = mcpListLimit
 	MCPReadNoticeForTest = readNotice
+	MCPNoPDFForTest      = msgNoPDF
+	MCPDamagedForTest    = msgDamaged
 )
+
+// TextRootForTest is where document text is cached. Test-only.
+func TextRootForTest(s *Server) string { return s.textRoot() }

@@ -734,13 +734,16 @@ func TestMCPSizeCaps(t *testing.T) {
 		}
 	}
 
-	// Office documents, PDFs and other binaries are refused, not decoded.
+	// Binaries are refused, not decoded; a damaged document says so; without Euro-Office a PDF
+	// says what it needs.
+	w.file(t, w.team, "", "photo.png", []byte("\x89PNG\r\n\x1a\n\x00\x00"))
+	w.file(t, w.team, "", "latin1.txt", []byte("caf\xe9"))
 	w.file(t, w.team, "", "report.docx", []byte("PK\x03\x04\x14\x00\x06\x00\x08\x00\x00\x00!\x00"))
 	w.file(t, w.team, "", "scan.pdf", []byte("%PDF-1.7\n\xe2\xe3\xcf\xd3\n"))
-	w.file(t, w.team, "", "latin1.txt", []byte("caf\xe9"))
-	for _, p := range []string{"/Team/report.docx", "/Team/scan.pdf", "/Team/latin1.txt"} {
-		if msg := callTool(t, cs, "read_file", map[string]any{"path": p}, nil); msg != api.MCPNotTextForTest {
-			t.Errorf("%s: %q, want %q", p, msg, api.MCPNotTextForTest)
+	for p, want := range map[string]string{"/Team/photo.png": api.MCPNotTextForTest, "/Team/latin1.txt": api.MCPNotTextForTest,
+		"/Team/report.docx": api.MCPDamagedForTest, "/Team/scan.pdf": api.MCPNoPDFForTest} {
+		if msg := callTool(t, cs, "read_file", map[string]any{"path": p}, nil); msg != want {
+			t.Errorf("%s: %q, want %q", p, msg, want)
 		}
 	}
 
@@ -984,7 +987,7 @@ func TestAgentSkill(t *testing.T) {
 		}
 	}
 	for _, msg := range []string{api.MCPReadOnlyForTest, api.MCPBadPathForTest, api.MCPNotFoundForTest, api.MCPDeniedForTest, api.MCPExistsForTest,
-		api.MCPReplaceForTest, api.MCPChangedForTest, api.MCPNotTextForTest, api.MCPTooLargeForTest, api.MCPFixedForTest, api.MCPRootGoneForTest, "Storage quota exceeded"} {
+		api.MCPReplaceForTest, api.MCPChangedForTest, api.MCPNotTextForTest, api.MCPNoPDFForTest, api.MCPDamagedForTest, api.MCPTooLargeForTest, api.MCPFixedForTest, api.MCPRootGoneForTest, "Storage quota exceeded"} {
 		if !strings.Contains(skill, msg) {
 			t.Errorf("skill error table lacks %q", msg)
 		}

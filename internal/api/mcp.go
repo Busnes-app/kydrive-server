@@ -24,6 +24,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/extract"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -45,7 +46,9 @@ const (
 	msgExists    = "A file or folder with that name already exists"
 	msgReplace   = "A file with that name exists: pass its revision to replace it"
 	msgChanged   = "The file changed elsewhere; look at it again"
-	msgNotText   = "Not a text file: only UTF-8 text can be read"
+	msgNotText   = "Not a text file or a document KyDrive extracts text from"
+	msgNoPDF     = "PDF text needs Euro-Office, which this KyDrive does not have: open the PDF in KyDrive"
+	msgDamaged   = "The document could not be read: it is damaged or not really of its type"
 	msgTooLarge  = "Too large"
 	msgQuota     = "Storage quota exceeded"
 	msgFixed     = "Workspaces and the top folder cannot be created, moved or trashed"
@@ -209,7 +212,7 @@ func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_file_info", Annotations: read,
 		Description: "Get a file's or folder's metadata: size, revision, modification time and type." + untrustedNote}, t.fileInfo)
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_file", Annotations: read,
-		Description: "Read part of a UTF-8 text file; other files are refused. Call again with next_offset for more." + untrustedNote}, t.readFile)
+		Description: "Read part of a UTF-8 text file, or the text of a Word, Excel, PowerPoint or OpenDocument file, or of a PDF when KyDrive has Euro-Office; other files are refused. Call again with next_offset for more." + untrustedNote}, t.readFile)
 	mcp.AddTool(srv, &mcp.Tool{Name: "write_file", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: false, OpenWorldHint: boolPtr(false)},
 		Description: "Create a file, or replace one when you pass its current revision; the old content stays in its version history. Confirm with the user first."}, t.writeFile)
 	mcp.AddTool(srv, &mcp.Tool{Name: "create_folder", Annotations: add,
@@ -555,9 +558,11 @@ type readOut struct {
 	Notice     string `json:"notice"`
 	Path       string `json:"path"`
 	Revision   int64  `json:"revision"`
+	Extracted  string `json:"extracted,omitempty" jsonschema:"set when the text was extracted from a document of this kind; size and offsets then count bytes of that text"`
+	Cut        bool   `json:"extract_truncated,omitempty" jsonschema:"the document holds more text than KyDrive extracts (16 MiB)"`
 	Size       int64  `json:"size"`
 	Offset     int64  `json:"offset"`
-	NextOffset int64  `json:"next_offset,omitempty" jsonschema:"where the rest starts; absent at the end of the file"`
+	NextOffset int64  `json:"next_offset,omitempty" jsonschema:"where the rest starts; absent at the end"`
 	Text       string `json:"text"`
 }
 
@@ -574,22 +579,26 @@ func (t *mcpTools) readFile(ctx context.Context, _ *mcp.CallToolRequest, in read
 		return nil, readOut{}, toolErr(msgNotFile)
 	}
 	f := *n.file
-	if in.Offset > f.Size {
-		return nil, readOut{}, toolErr("offset is past the end of the file")
-	}
-	r, err := t.s.openBlob(f)
-	if err != nil {
-		log.Printf("mcp read_file: %v", err)
-		return nil, readOut{}, toolErr("The file could not be read")
-	}
-	defer r.Close()
-	buf := make([]byte, min(length, f.Size-in.Offset))
-	if _, err = r.Seek(in.Offset, io.SeekStart); err == nil {
-		_, err = io.ReadFull(r, buf)
-	}
-	if err != nil {
-		log.Printf("mcp read_file: %v", err)
-		return nil, readOut{}, toolErr("The file could not be read")
+	out := readOut{Notice: readNotice, Path: n.path, Revision: f.Revision, Size: f.Size}
+	var buf []byte
+	if ext := strings.TrimPrefix(path.Ext(f.Name), "."); t.s.documentKind(ext) != "" {
+		text, cut, err := t.s.documentText(ctx, f, ext)
+		if err != nil {
+			return nil, readOut{}, t.documentError(f, ext, err)
+		}
+		out.Extracted, out.Cut, out.Size = t.s.documentKind(ext), cut, int64(len(text))
+		if in.Offset > out.Size {
+			return nil, readOut{}, toolErr("offset is past the end of the text")
+		}
+		buf = []byte(text[in.Offset:min(in.Offset+length, out.Size)])
+	} else {
+		if in.Offset > f.Size {
+			return nil, readOut{}, toolErr("offset is past the end of the file")
+		}
+		if buf, err = t.readBytes(f, in.Offset, min(length, f.Size-in.Offset)); err != nil {
+			log.Printf("mcp read_file: %v", err)
+			return nil, readOut{}, toolErr("The file could not be read")
+		}
 	}
 	// Start and end on whole characters: an offset inside one skips its rest, and a
 	// character cut at the end is left for the next call.
@@ -597,7 +606,7 @@ func (t *mcpTools) readFile(ctx context.Context, _ *mcp.CallToolRequest, in read
 	for in.Offset > 0 && start < len(buf) && start < utf8.UTFMax-1 && !utf8.RuneStart(buf[start]) {
 		start++
 	}
-	more := in.Offset+int64(end) < f.Size
+	more := in.Offset+int64(end) < out.Size
 	if more {
 		end = start + completeRunes(buf[start:])
 	}
@@ -605,11 +614,40 @@ func (t *mcpTools) readFile(ctx context.Context, _ *mcp.CallToolRequest, in read
 	if bytes.IndexByte(text, 0) >= 0 || !utf8.Valid(text) {
 		return nil, readOut{}, toolErr(msgNotText)
 	}
-	out := readOut{Notice: readNotice, Path: n.path, Revision: f.Revision, Size: f.Size, Offset: in.Offset + int64(start), Text: string(text)}
+	out.Offset, out.Text = in.Offset+int64(start), string(text)
 	if more {
 		out.NextOffset = in.Offset + int64(end)
 	}
 	return nil, out, nil
+}
+
+// readBytes reads n bytes of f's current version from offset.
+func (t *mcpTools) readBytes(f drive.File, offset, n int64) ([]byte, error) {
+	r, err := t.s.openBlob(f)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	buf := make([]byte, n)
+	if _, err = r.Seek(offset, io.SeekStart); err == nil {
+		_, err = io.ReadFull(r, buf)
+	}
+	return buf, err
+}
+
+// documentError says why a document's text is not available.
+func (t *mcpTools) documentError(f drive.File, ext string, err error) error {
+	switch {
+	case errors.Is(err, errNoPDFConverter):
+		return toolErr(msgNoPDF)
+	case errors.Is(err, extract.ErrTooLarge):
+		return toolErr(msgTooLarge + ": the document holds more than KyDrive extracts")
+	case errors.Is(err, extract.ErrUnsupported):
+		return toolErr(msgDamaged)
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return toolErr("The request ended before the text was ready")
+	}
+	return toolErr("KyDrive could not get the text of this " + t.s.documentKind(ext) + "; try again later")
 }
 
 // completeRunes is the length of b without a character cut off at its end.

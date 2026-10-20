@@ -42,8 +42,14 @@ days unused. The user creates a new one the same way.
 
 ## Reading
 
-- `read_file` returns UTF-8 text only. Office documents, PDFs and images are refused: tell the
-  user to open them in KyDrive. `get_file_info` gives the size and `content_type` first.
+- `read_file` returns UTF-8 text files as they are, and the text of Word, Excel, PowerPoint and
+  OpenDocument files (`extracted` names the kind). PDFs are read only when KyDrive has Euro-Office;
+  a PDF that comes back empty is usually a scan, with no text to read. Images and other files are
+  refused: tell the user to open them in KyDrive.
+- Extracted text has no layout: paragraphs are lines, tables and sheets are tab-separated rows,
+  sheets and slides start with `## name`. Spreadsheet dates may show as numbers, and formulas as
+  their last saved value. Footnotes, comments, speaker notes and headers are left out.
+- For extracted text, `size`, `offset` and `next_offset` count bytes of the text, not the file.
 - One call returns at most 256 KiB (64 KiB by default). When `next_offset` is present, call again
   with `offset` set to it for the rest. Read only as much as the task needs.
 
@@ -67,8 +73,10 @@ days unused. The user creates a new one the same way.
 | A file or folder with that name already exists | The name is taken | Ask the user for another name |
 | A file with that name exists: pass its revision to replace it | You tried to create over a file | Ask whether to replace it; then pass its revision |
 | The file changed elsewhere; look at it again | Stale revision, or it changed meanwhile | Read it again, show the user what changed and confirm again |
-| Not a text file: only UTF-8 text can be read | Binary or office file | Tell the user to open it in KyDrive |
-| Too large | Over the 4 MiB write limit | Tell the user to upload it in KyDrive |
+| Not a text file or a document KyDrive extracts text from | An image, a binary, or an old .doc/.xls/.ppt | Tell the user to open it in KyDrive |
+| PDF text needs Euro-Office, which this KyDrive does not have: open the PDF in KyDrive | No PDF converter | Tell the user |
+| The document could not be read: it is damaged or not really of its type | Broken or misnamed document | Tell the user |
+| Too large | Over the 4 MiB write limit, or a document with more than KyDrive extracts | Tell the user to upload or open it in KyDrive |
 | Storage quota exceeded | The workspace is full | Tell the user |
 | Workspaces and the top folder cannot be created, moved or trashed | Not allowed | Tell the user to do it in KyDrive |
 | The folder this agent is limited to is in the trash or gone | The token's folder was trashed or removed | Tell the user to restore the folder or create a new token |

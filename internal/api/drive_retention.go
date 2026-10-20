@@ -83,6 +83,9 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if _, err := s.store.Drive().SweepOrphans(ctx, s.thumbRoot(), time.Hour); err != nil && ctx.Err() == nil {
 			log.Printf("thumbnail sweep: %v", err)
 		}
+		if _, err := s.store.Drive().SweepOrphans(ctx, s.textRoot(), time.Hour); err != nil && ctx.Err() == nil {
+			log.Printf("document text sweep: %v", err)
+		}
 		if n, err := s.store.Drive().ExpireUploads(ctx, s.stagingRoot()); err != nil && ctx.Err() == nil {
 			log.Printf("upload expiry: %v", err)
 		} else if n > 0 {
