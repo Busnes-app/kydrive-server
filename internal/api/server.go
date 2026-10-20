@@ -35,7 +35,9 @@ type recoveryClient interface {
 }
 
 type Server struct {
-	davLocks   *dav.Locks // one per server: WebDAV locks are single-instance
+	davLocks   *dav.Locks   // one per server: WebDAV locks are single-instance
+	mcp        http.Handler // /mcp, for AI agents
+	now        func() time.Time
 	editor     *editor.Client
 	editorErr  error
 	revokeMu   sync.Mutex
@@ -161,10 +163,12 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 		mux:      http.NewServeMux(),
 		attempts: make(map[string]attemptWindow),
 		tickets:  make(map[string]convertTicket),
+		now:      time.Now,
 	}
 	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
 
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
+	s.mcp = s.newMCPHandler()
 	s.routes()
 	return s
 }
@@ -262,7 +266,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
 	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.handleCreateAppPassword))
+	s.mux.HandleFunc("PATCH /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleSetAgentScope))
 	s.mux.HandleFunc("DELETE /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleRevokeAppPassword))
+	// The agent skill holds no user or instance data.
+	s.mux.HandleFunc("GET /agent/skills/kydrive/SKILL.md", s.handleAgentSkill)
 
 	// SSO
 	s.mux.HandleFunc("/api/sso/kysignon/login", s.handleKySignOnLogin)
@@ -390,6 +397,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 	if s.config.Security.CookieSecure {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
+
+	// AI agents authenticate every request themselves and are never browsers: no CORS grant, and
+	// a preflight reaches withMCPAuth, which refuses it.
+	if r.URL.Path == "/mcp" {
+		s.mcp.ServeHTTP(w, r)
+		return
 	}
 
 	origin := r.Header.Get("Origin")

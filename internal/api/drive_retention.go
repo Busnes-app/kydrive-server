@@ -94,6 +94,11 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if err := s.store.Drive().PruneDevices(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			log.Printf("device prune: %v", err)
 		}
+		if n, err := s.store.Drive().ExpireAgentTokens(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			log.Printf("agent token expiry: %v", err)
+		} else if n > 0 {
+			log.Printf("agent token expiry: revoked %d unused tokens", n)
+		}
 		select {
 		case <-ctx.Done():
 			return

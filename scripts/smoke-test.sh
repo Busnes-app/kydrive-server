@@ -235,6 +235,27 @@ contains "a locked policy overrides wipe=false" \
   "$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X DELETE "$BASE/api/devices/$DEVICE_ID?wipe=false")" '"wipe":true'
 contains "revoked token is told to wipe on the API" "$(bearer "$BASE/api/drive/workspaces")" '{"error":"device_revoked","wipe":true}'
 contains "revoked token is told to wipe on /dav/" "$(bearer -X PROPFIND -H 'Depth: 0' "$BASE/dav/")" '{"error":"device_revoked","wipe":true}'
+
+echo "==> AI agents (MCP)"
+mcp() { # mcp <json-rpc body> [curl args]: body, then the status code
+  local body="$1"; shift
+  curl -s -w ' %{http_code}' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d "$body" "$@" "$BASE/mcp"
+}
+LIST_TOOLS='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+contains "agent skill is served" "$(curl -s "$BASE/agent/skills/kydrive/SKILL.md")" 'name: kydrive'
+contains "mcp refuses no credentials" "$(mcp "$LIST_TOOLS")" ' 401'
+AGENT_OUT="$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -X POST \
+  -d '{"name":"Smoke agent","scope":"mcp:read"}' "$BASE/api/auth/app-passwords")"
+contains "agent token created" "$AGENT_OUT" '"password":"kya_'
+AGENT="$(printf %s "$AGENT_OUT" | sed -n 's/.*"password":"\(kya_[a-z2-7]*\)".*/\1/p')"
+AGENT_ID="$(printf %s "$AGENT_OUT" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
+contains "agent token lists the tools" "$(mcp "$LIST_TOOLS" -H "Authorization: Bearer $AGENT")" '"read_file"'
+contains "agent token calls a tool" \
+  "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_folder","arguments":{"path":"/"}}}' -H "Authorization: Bearer $AGENT")" '"entries"'
+contains "mcp refuses a browser origin" "$(mcp "$LIST_TOOLS" -H "Authorization: Bearer $AGENT" -H "Origin: $BASE")" ' 403'
+check "agent token is no WebDAV password" "$(status -u "admin:$AGENT" -X PROPFIND -H 'Depth: 0' "$BASE/dav/")" "401"
+check "agent token revoked" "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X DELETE "$BASE/api/auth/app-passwords/$AGENT_ID")" "204"
+contains "revoked agent token refused" "$(mcp "$LIST_TOOLS" -H "Authorization: Bearer $AGENT")" ' 401'
 check "logout succeeds" "$(status -b "$WORK/cookies" -c "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X POST "$BASE/api/auth/logout")" "200"
 contains "session dead after logout" "$(curl -s -b "$WORK/cookies" "$BASE/api/auth/me")" '"authenticated":false' 
 stop_server
