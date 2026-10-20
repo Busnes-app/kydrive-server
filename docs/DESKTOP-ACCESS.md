@@ -7,7 +7,7 @@ can be revoked on its own: revoke it if the computer is lost.
 
 | You want | Use |
 |---|---|
-| Browse and open files, online only | Your file manager: see [WebDAV in the README](../README.md#webdav) |
+| Browse and open files, online only | Your file manager: see [WebDAV in the README](CLIENTS-AND-EDITOR.md#webdav) |
 | A drive or folder with a local cache | `rclone mount` |
 | A folder that works offline and syncs both ways | `rclone bisync` (small folders, see below) |
 | A file-transfer app | Cyberduck, or Mountain Duck (paid) for a drive with offline files |
