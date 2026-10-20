@@ -76,7 +76,7 @@ Default section order:
 6. Report any docs intentionally left unchanged and why
 
 ## Purpose
-KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyDrive owns workspace permissions. Initial delivery builds and tests locally. NAS target: `unraid.urlxl.us` / KyYard `hluswcdata01`; recovery target: `https://kyrecovery.urlxl.us/`. The user authorized the live pilot on 2026-10-04; preserve existing suite data/services and verify production gates.
+KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyDrive owns workspace permissions. Initial delivery builds and tests locally. Pilot NAS (via KyYard) and KyRecovery hosts are private and stay out of public docs; `docs/PILOT.md` uses placeholders. The user authorized the live pilot on 2026-10-04; preserve existing suite data/services and verify production gates.
 
 ## Ownership
 Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared verification and operator documentation. Domain packages own contracts in the Child DOX Index.
