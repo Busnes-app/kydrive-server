@@ -13,7 +13,7 @@ describe('AppPasswords', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       calls.push(`${method} ${String(input)}`);
-      if (method === 'POST') { stored = [{ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', last_used: 0 }]; return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', password: 'abcd-efgh-ijkl-mnop-qrst-uvwx-yz23-4567', username: 'alice', url: 'https://drive.example/dav/' }, 201); }
+      if (method === 'POST') { stored = [{ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', last_used: 0, scope: 'dav' }]; return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'abcd-efgh-ijkl-mnop-qrst-uvwx-yz23-4567', username: 'alice', url: 'https://drive.example/dav/' }, 201); }
       if (method === 'DELETE') { stored = []; return new Response(null, { status: 204 }); }
       return json(stored);
     }));
@@ -32,10 +32,60 @@ describe('AppPasswords', () => {
   });
 
   it('does nothing when the revoke is not confirmed', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => json([{ id: 'p1', name: 'Phone', created: '2026-10-15T10:00:00Z', last_used: 1760000000 }])));
+    vi.stubGlobal('fetch', vi.fn(async () => json([{ id: 'p1', name: 'Phone', created: '2026-10-15T10:00:00Z', last_used: 1760000000, scope: 'dav' }])));
     vi.stubGlobal('confirm', vi.fn(() => false));
     render(<AppPasswords />);
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates an AI agent token, sends its access and folder, and shows the setup once', async () => {
+    let stored: unknown[] = [];
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        bodies.push(JSON.parse(String(init.body)));
+        stored = [{ id: 'a1', name: 'Hermes', created: '2026-10-20T10:00:00Z', last_used: 0, scope: 'mcp:write', revoke_after: 1768800000, root: '/Team/Projects' }];
+        return json({ id: 'a1', name: 'Hermes', created: '2026-10-20T10:00:00Z', scope: 'mcp:write', password: 'kya_abcdefghijklmnopqrstuvwxyz234567', root: '/Team/Projects', url: 'https://drive.example/mcp', skill: 'https://drive.example/agent/skills/kydrive/SKILL.md' }, 201);
+      }
+      return json(stored);
+    }));
+    render(<AppPasswords />);
+    fireEvent.click(await screen.findByLabelText('AI agent'));
+    expect(screen.queryByRole('note')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Read and write'));
+    expect(screen.getByRole('note').textContent).toContain('never delete anything for good');
+    fireEvent.change(screen.getByLabelText('Limit to folder (optional)'), { target: { value: '/Team/Projects' } });
+    fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'Hermes' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent token' }));
+    expect(await screen.findByText('kya_abcdefghijklmnopqrstuvwxyz234567')).toBeTruthy();
+    expect(bodies).toEqual([{ name: 'Hermes', scope: 'mcp:write', folder: '/Team/Projects' }]);
+    expect(screen.getByText(/The agent sees only \/Team\/Projects/)).toBeTruthy();
+    expect(screen.getAllByText(/Bearer \$\{KYDRIVE_TOKEN\}/)).toHaveLength(2);
+    expect(screen.getByText(/hermes skills install https:\/\/drive.example\/agent\/skills\/kydrive\/SKILL.md/)).toBeTruthy();
+    expect(screen.getByText(/Hermes · AI agent · created 2026-10-20/)).toBeTruthy();
+    expect(screen.getByText(/Limited to \/Team\/Projects/)).toBeTruthy();
+    expect(screen.getByText(/Revoked if unused by/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'I have copied it' }));
+    expect(screen.queryByText('kya_abcdefghijklmnopqrstuvwxyz234567')).toBeNull();
+  });
+
+  it('asks before widening an agent to write and changes nothing when declined', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${String(input)} ${init?.body ?? ''}`);
+      return json(init?.method === 'PATCH' ? {} : [{ id: 'a1', name: 'Hermes', created: '2026-10-20T10:00:00Z', last_used: 0, scope: 'mcp:read', revoke_after: 1768800000, root_missing: true }]);
+    }));
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    render(<AppPasswords />);
+    const access = await screen.findByLabelText('Access for Hermes');
+    expect(screen.getByText(/Its folder is in the trash or gone/)).toBeTruthy();
+    fireEvent.change(access, { target: { value: 'mcp:write' } });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(calls.some(c => c.startsWith('PATCH'))).toBe(false);
+    confirm.mockReturnValue(true);
+    fireEvent.change(access, { target: { value: 'mcp:write' } });
+    await waitFor(() => expect(calls).toContain('PATCH /api/auth/app-passwords/a1 {"scope":"mcp:write"}'));
   });
 });
