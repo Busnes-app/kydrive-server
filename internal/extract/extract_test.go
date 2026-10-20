@@ -343,6 +343,38 @@ func TestRowsCannotAmplify(t *testing.T) {
 	}
 }
 
+// A shared string costs no more than the room its row has left: references past a full row, and
+// blank rows that write nothing, do not each copy the string.
+func TestSharedStringsCostTheirRoom(t *testing.T) {
+	defer func(n int, total int64) { maxText, maxTotal = n, total }(maxText, maxTotal)
+	maxText, maxTotal = 1<<20, 8<<20
+	sheet := func(shared, rows string) []byte {
+		return zipOf(t,
+			part{"xl/workbook.xml", `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` + rels + `><sheets><sheet name="s" r:id="rId1"/></sheets></workbook>`},
+			part{"xl/_rels/workbook.xml.rels", relsOf("worksheets/sheet1.xml")},
+			part{"xl/sharedStrings.xml", `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>` + shared + `</t></si></sst>`},
+			part{"xl/worksheets/sheet1.xml", `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` + rows + `</sheetData></worksheet>`},
+		)
+	}
+	ref := `<c t="s"><v>0</v></c>`
+	for name, c := range map[string]struct {
+		data []byte
+		err  error
+	}{
+		// 5000 × 64 KiB = 320 MiB if each reference were copied.
+		"past a full row": {sheet(strings.Repeat("z\t", 32<<10), `<row>`+strings.Repeat(ref, 5000)+`</row>`), nil},
+		"blank rows":      {sheet(strings.Repeat("\t", 64<<10), strings.Repeat(`<row>`+ref+`</row>`, 5000)), ErrTooLarge},
+	} {
+		var err error
+		if n := allocated(func() { _, err = text(t, c.data, "xlsx") }); n > 32<<20 {
+			t.Errorf("%s: %d MiB allocated", name, n>>20)
+		}
+		if !errors.Is(err, c.err) {
+			t.Errorf("%s: %v, want %v", name, err, c.err)
+		}
+	}
+}
+
 // A cell's text stops at the limit even when one XML text token is longer.
 func TestCellTextIsCapped(t *testing.T) {
 	defer func(n int) { maxText = n }(maxText)

@@ -495,7 +495,7 @@ func readDOCX(d *doc) error {
 				return d.write("\n")
 			case "tc":
 				if inCell--; inCell == 0 {
-					r.add(strings.TrimSpace(strings.NewReplacer("\t", " ", "\n", " ").Replace(cell.String())))
+					r.add(strings.TrimSpace(cell.String()))
 				}
 			case "tr":
 				if inCell == 0 {
@@ -647,7 +647,7 @@ func readSheet(d *doc, sheet string, shared []string) error {
 				case "b":
 					v = map[string]string{"0": "FALSE", "1": "TRUE"}[strings.TrimSpace(v)]
 				}
-				r.add(strings.ReplaceAll(strings.ReplaceAll(v, "\t", " "), "\n", " "))
+				r.add(v)
 			case "row":
 				return writeRow(d, &r)
 			}
@@ -693,12 +693,18 @@ func (r *row) add(v string) {
 	if r.size+len(v)+1 > r.budget {
 		v = strings.ToValidUTF8(v[:r.budget-r.size-1], "")
 	}
+	v = strings.ReplaceAll(strings.ReplaceAll(v, "\t", " "), "\n", " ")
 	r.cells = append(r.cells, v)
 	r.size += len(v) + 1
 }
 
 // writeRow writes a row's cells tab-separated, without trailing empty cells; empty rows vanish.
+// A row counts against MaxTotalBytes even when it vanishes, so blank cells sharing one long
+// string cannot cost more than the document may read.
 func writeRow(d *doc, r *row) error {
+	if d.read += int64(r.size); d.read > maxTotal {
+		return ErrTooLarge
+	}
 	end := len(r.cells)
 	for end > 0 && strings.TrimSpace(r.cells[end-1]) == "" {
 		end--
@@ -854,7 +860,7 @@ func readOpenDocument(d *doc, heading string) error {
 					return d.write("\n")
 				}
 			case t.Name.Space == nsTable && (t.Name.Local == "table-cell" || t.Name.Local == "covered-table-cell"):
-				v := strings.ReplaceAll(strings.ReplaceAll(cell.String(), "\t", " "), "\n", " ")
+				v := cell.String()
 				for range cellRepeat {
 					r.add(v)
 				}
