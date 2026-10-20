@@ -2,7 +2,7 @@
 
 Open-source personal and shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Euro-Office is the first editor integration. The drive stores arbitrary files and exposes a workspace-scoped service API for other suite applications.
 
-Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. The live pilot uses NAS `unraid.urlxl.us` / KyYard `hluswcdata01`; verified deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
+Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. Verified pilot deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
 
 ## Local development
 
@@ -24,10 +24,28 @@ cp .env.runtime.example .env.runtime
 chmod 600 .env .env.runtime
 # Edit origins and credentials; choose persistent paths and an independent bulk mount.
 # Create each mount with ownership matching KY_UID:KY_GID (defaults 1000:1000).
-docker compose -f docker-compose.yml -f docker-compose.build.yml build
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+docker compose pull
+docker compose up -d
 docker compose exec app /app/kydrive-server bulk-init
 ```
+
+For a quick start, Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that tag once; there is no `v` and no `latest`. The release workflow refuses to push a version tag that already exists and master CI writes only commit tags, but the registry itself does not lock tags, so anyone with write access to the package could still move one.
+
+For production, pin the digest: set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>`, taking the digest from the release job's summary (`Published ...@sha256:<digest> as :X.Y.Z`) or from `docker buildx imagetools inspect ghcr.io/busnes-app/kydrive-server:X.Y.Z`. Verify it before first use:
+
+```sh
+gh attestation verify oci://ghcr.io/busnes-app/kydrive-server@sha256:<digest> --repo Busnes-app/kydrive-server \
+  --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v<version>
+```
+
+To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
+
+`bulk-init` is safe to rerun: when the repository already opens with this deployment's key it reports that and changes nothing. A repository at that location that the key cannot open is refused (`bulk repository exists but this deployment's key does not open it`); point `KYDRIVE_BULK_BACKUP_REPOSITORY` at the right repository rather than reinitializing.
+
+### Upgrading
+
+- Unreleased (after 0.4.2): Compose defaults to the published image instead of `kydrive-server:local`. Installs that build from source keep working with the build overlay. An install that ran a separately built `kydrive-server:local` without the overlay, and has no `KY_IMAGE` in `.env`, now pulls the release image: set `KY_IMAGE=kydrive-server:local` to keep the local build.
+- To move to a new release, check out its tag, set `KY_IMAGE` to its version, then `docker compose pull` and `docker compose up -d`.
 
 The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Restic snapshot pruning (Recovery screen, Document retention) is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 
@@ -119,7 +137,7 @@ This is not end-to-end encryption. The server decrypts on download, Euro-Office 
 
 ## Recovery
 
-KyRecovery is the blind sealed-capsule destination at `https://kyrecovery.urlxl.us/`. Pair through the Recovery screen after the suite ceremony or pin its public key manually; compare fingerprints. Pairing pins the key permanently. `KY_BACKUP_ALLOW_PRIVATE_RECOVERY` is an explicit opt-in for HTTPS private-network destinations, with loopback still refused. A LAN resolver override is provided by `docker-compose.lan-dns.yml`.
+KyRecovery is the blind sealed-capsule destination at your KyRecovery origin (for example `https://kyrecovery.example.com/`). Pair through the Recovery screen after the suite ceremony or pin its public key manually; compare fingerprints. Pairing pins the key permanently. `KY_BACKUP_ALLOW_PRIVATE_RECOVERY` is an explicit opt-in for HTTPS private-network destinations, with loopback still refused. A LAN resolver override is provided by `docker-compose.lan-dns.yml`.
 
 `KY_BACKUP_DIR` enables local sealed copies; `KY_BACKUP_KEEP` defaults to seven. `KY_BACKUP_DEPOSIT_INTERVAL` is the default schedule (UI can choose off or at least 15 minutes). A run seals once and sends to all configured capsule destinations. Backups audit pairing/deposits, include the deployment encryption key and require at least one destination. Unpairing keeps the key pin and requires a separate KyRecovery administrator to revoke its token.
 
@@ -139,7 +157,9 @@ python deploy/render.py --drive-url https://kydrive.example.test \
 
 The secret file must have mode 0600. Output contains a Secret and is protected at 0700/0600; never commit it. Supply TLS Secrets through existing ingress/certificate tooling. For a Kubernetes drive, pass `--kubernetes-drive --drive-image REGISTRY/IMAGE@sha256:DIGEST --bulk-pvc EXISTING_INDEPENDENT_CLAIM` and create `drive-integrations` with OIDC/SCIM/bootstrap configuration. Read generated `INSTALL.txt` before applying.
 
-Private-IP fetching stays disabled in the editor package. If NAS DNS resolves privately, first constrain editor egress to the intended drive/proxy endpoints and record the explicit exception before enabling it. This delivery does not choose actual ingress/TLS or NAS filesystem settings without testing that infrastructure.
+No Compose service ships for Euro-Office. To run the editor outside Kubernetes, reproduce what `render.py` sets: the digest-pinned `EDITOR_IMAGE` (amd64); `JWT_ENABLED=true` and `JWT_SECRET` equal to `KYDRIVE_EDITOR_SECRET` (at least 32 bytes); `ALLOW_PRIVATE_IP_ADDRESS=false` and `ALLOW_META_IP_ADDRESS=false`; HTTP on container port 80 behind the HTTPS proxy serving `KYDRIVE_EDITOR_URL`, with 3600s proxy read/send timeouts and a 129 MiB body limit; 2 GiB memory reserved, 4 GiB limit. It runs as root by design. Persist `/var/lib/euro-office`, `/var/www/euro-office/Data`, `/var/lib/postgresql`, `/var/lib/rabbitmq` and `/var/lib/redis`. An empty mount over these hides the image's initialized bundled databases: seed each from the same image first, as `render.py`'s `seed-bundled-services` init container does.
+
+Private-IP fetching stays disabled in the editor package (`ALLOW_PRIVATE_IP_ADDRESS=false`, `ALLOW_META_IP_ADDRESS=false`). If NAS DNS resolves privately, as on a LAN-only drive, Euro-Office cannot fetch `KYDRIVE_EDITOR_DRIVE_URL` until `ALLOW_PRIVATE_IP_ADDRESS=true`. That lifts the editor's private-address block for every fetch, so first constrain editor egress to the intended drive/proxy endpoints and record the explicit exception before enabling it. This delivery does not choose actual ingress/TLS or NAS filesystem settings without testing that infrastructure.
 
 ## Verification
 

@@ -1,6 +1,8 @@
 services:
   app:
-    image: ${KY_IMAGE:-kydrive-server:local}
+    # Release tag, kept equal to api.AppVersion by TestComposeDefaultsToThisRelease.
+    # Production pins the digest (README, NAS package).
+    image: ${KY_IMAGE:-ghcr.io/busnes-app/kydrive-server:0.4.2}
     platform: linux/amd64
     container_name: kydrive-server
     user: "${KY_UID:-1000}:${KY_GID:-1000}"

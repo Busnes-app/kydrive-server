@@ -156,6 +156,13 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	}
 	return b.Buffer.Write(p)
 }
+
+// ErrForeignBulkRepository means a repository exists at the configured location but neither
+// the derived password nor the pre-upgrade raw key opens it.
+var ErrForeignBulkRepository = errors.New("bulk repository exists but this deployment's key does not open it")
+
+// InitBulkRepository creates the bulk repository. One the deployment key already opens, with
+// the derived password or the raw key the next backup moves, is left unchanged.
 func InitBulkRepository(ctx context.Context, dataDir string, key []byte) error {
 	repo, err := bulkRepository(dataDir)
 	if err != nil {
@@ -165,8 +172,21 @@ func InitBulkRepository(ctx context.Context, dataDir string, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = restic(ctx, repo, password, "", "init")
-	return err
+	_, probe := restic(ctx, repo, password, "", "cat", "config")
+	if errors.Is(probe, errWrongPassword) {
+		if _, probe = restic(ctx, repo, key, "", "cat", "config"); errors.Is(probe, errWrongPassword) {
+			return fmt.Errorf("%w: %s", ErrForeignBulkRepository, repo)
+		}
+	}
+	if probe == nil {
+		log.Printf("bulk: %s is already initialized; nothing changed", repo)
+		return nil
+	}
+	// Any other probe failure is treated as no repository; init never overwrites one.
+	if _, err = restic(ctx, repo, password, "", "init"); err != nil {
+		return fmt.Errorf("%w (open: %v)", err, probe)
+	}
+	return nil
 }
 
 func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkFile, error) {

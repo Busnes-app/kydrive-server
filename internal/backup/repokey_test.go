@@ -27,6 +27,17 @@ func (f *fakeRepo) run(_ context.Context, _ Repository, password []byte, _ strin
 	pw := hex.EncodeToString(password)
 	verb := strings.Join(args[:min(2, len(args))], " ")
 	f.calls = append(f.calls, verb)
+	// No keys is no repository: only init succeeds.
+	if len(f.keys) == 0 {
+		if verb != "init" {
+			return nil, errors.New("unable to open config file: Is there a repository at the following location?")
+		}
+		f.keys[fmt.Sprintf("%064x", 1)] = pw
+		return nil, nil
+	}
+	if verb == "init" {
+		return nil, errors.New("config file already exists")
+	}
 	current := ""
 	for id, p := range f.keys {
 		if p == pw {
@@ -41,6 +52,8 @@ func (f *fakeRepo) run(_ context.Context, _ Repository, password []byte, _ strin
 		return nil, errors.New("killed")
 	}
 	switch verb {
+	case "cat config":
+		return []byte("{}"), nil
 	case "key list":
 		type key struct {
 			Current bool   `json:"current"`
@@ -160,6 +173,54 @@ func TestOpenRepositoryMovesRawKeyToDerived(t *testing.T) {
 		}
 		if len(f.keys) != 1 {
 			t.Fatal("a repository neither password opens was changed")
+		}
+	})
+}
+
+func TestInitBulkRepositoryIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	key := bytes.Repeat([]byte{0x01}, 32)
+	derived, err := resticPassword(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataDir := t.TempDir()
+	t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", t.TempDir())
+	t.Setenv("KYDRIVE_BULK_BACKUP_CREDENTIALS_FILE", "")
+	changed := func(calls []string) bool {
+		return slices.Contains(calls, "init") || slices.Contains(calls, "key add") || slices.Contains(calls, "key remove")
+	}
+
+	t.Run("missing repository is created with the derived password", func(t *testing.T) {
+		f := fakeRepoWith(t)
+		if err := InitBulkRepository(ctx, dataDir, key); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.passwords(); !slices.Equal(got, []string{hex.EncodeToString(derived)}) {
+			t.Fatalf("keys after init: %v", got)
+		}
+	})
+
+	for name, pw := range map[string][]byte{"derived": derived, "raw key": key} {
+		t.Run("rerun on a "+name+" repository changes nothing", func(t *testing.T) {
+			f := fakeRepoWith(t, pw)
+			if err := InitBulkRepository(ctx, dataDir, key); err != nil {
+				t.Fatalf("rerun: %v", err)
+			}
+			if changed(f.calls) || !slices.Equal(f.passwords(), []string{hex.EncodeToString(pw)}) {
+				t.Fatalf("rerun changed the repository: %v", f.calls)
+			}
+		})
+	}
+
+	t.Run("repository the key cannot open fails clearly", func(t *testing.T) {
+		f := fakeRepoWith(t, []byte("someone else's password"))
+		err := InitBulkRepository(ctx, dataDir, key)
+		if !errors.Is(err, ErrForeignBulkRepository) {
+			t.Fatalf("got %v, want ErrForeignBulkRepository", err)
+		}
+		if changed(f.calls) {
+			t.Fatalf("a foreign repository was changed: %v", f.calls)
 		}
 	})
 }

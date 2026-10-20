@@ -713,3 +713,47 @@ func TestCheckBulkIfDue(t *testing.T) {
 		t.Fatalf("last check %+v", last)
 	}
 }
+
+// repoDigest hashes every file name and content under dir.
+func repoDigest(t *testing.T, dir string) string {
+	t.Helper()
+	h := sha256.New()
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(path)
+		h.Write([]byte(path + "\x00"))
+		h.Write(b)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func TestBulkInitRerun(t *testing.T) {
+	ctx := context.Background()
+	f := newBulkFixture(t)
+	before := repoDigest(t, f.repo)
+	if err := backup.InitBulkRepository(ctx, f.dir, f.key); err != nil {
+		t.Fatalf("rerun on an initialized repository: %v", err)
+	}
+	if repoDigest(t, f.repo) != before {
+		t.Fatal("rerun changed the repository")
+	}
+
+	f.repo = filepath.Join(t.TempDir(), "foreign-repo")
+	if out, err := f.resticAs([]byte("another deployment"), "", "init"); err != nil {
+		t.Fatalf("init foreign: %v %s", err, out)
+	}
+	t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", f.repo)
+	before = repoDigest(t, f.repo)
+	if err := backup.InitBulkRepository(ctx, f.dir, f.key); !errors.Is(err, backup.ErrForeignBulkRepository) {
+		t.Fatalf("got %v, want ErrForeignBulkRepository", err)
+	}
+	if repoDigest(t, f.repo) != before {
+		t.Fatal("a foreign repository was changed")
+	}
+}

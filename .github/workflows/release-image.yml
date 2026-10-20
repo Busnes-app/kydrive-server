@@ -122,6 +122,22 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
+      # GHCR does not enforce immutable tags, so this does: never overwrite a published
+      # version. Anything but "not found" (registry or network error) also fails.
+      - name: Refuse to republish an existing version tag
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          if out="$(docker buildx imagetools inspect "$IMAGE_NAME:$VERSION" 2>&1)"; then
+            echo "::error::$IMAGE_NAME:$VERSION already exists and is never overwritten. Release a new version; if an earlier run pushed it but did not attest it, attest that digest instead." >&2
+            exit 1
+          fi
+          if ! grep -q ': not found$' <<< "$out"; then
+            echo "::error::cannot tell whether $IMAGE_NAME:$VERSION exists: $out" >&2
+            exit 1
+          fi
+
       - name: Build and publish the immutable version tag
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

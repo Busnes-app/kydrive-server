@@ -76,7 +76,7 @@ Default section order:
 6. Report any docs intentionally left unchanged and why
 
 ## Purpose
-KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyDrive owns workspace permissions. Initial delivery builds and tests locally. NAS target: `unraid.urlxl.us` / KyYard `hluswcdata01`; recovery target: `https://kyrecovery.urlxl.us/`. The user authorized the live pilot on 2026-10-04; preserve existing suite data/services and verify production gates.
+KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyDrive owns workspace permissions. Initial delivery builds and tests locally. Pilot NAS (via KyYard) and KyRecovery hosts are private and stay out of public docs; `docs/PILOT.md` uses placeholders. The user authorized the live pilot on 2026-10-04; preserve existing suite data/services and verify production gates.
 
 ## Ownership
 Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared verification and operator documentation. Domain packages own contracts in the Child DOX Index.
@@ -98,6 +98,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Compose and the Kubernetes drive pod drop all capabilities, forbid privilege escalation and mount the root filesystem read-only with a `/tmp` tmpfs/emptyDir; the server writes only to its data, backups and bulk volumes and `/tmp` (Restic packs, SQLite temp files). CLI subcommands run in the container need output paths on those volumes (e.g. `export-capsule -out /app/backups/...`). Subcommands that operate on a deployment refuse a missing key or database (`config.LoadExisting`) rather than creating one; only the server and `init-admin` create them.
 - `runServer` stops HTTP, cancels the scheduler, editor, retention and blob-sealing workers and any backup still collecting its payload, and waits for them and detached backup handlers before closing the store. Shutdown timeout closes remaining HTTP connections. Compose's 20m grace period exceeds HTTP drain plus the library backup wait budget.
 - Keep generated credentials, database files, rendered Secrets, opened capsules and bulk repositories out of Git and Docker build contexts.
+- `docker-compose.yml` and `.env.example` default `KY_IMAGE` to `ghcr.io/busnes-app/kydrive-server:<api.AppVersion>`, the tag `release-image.yml` publishes once (quick start; the README tells production to pin the digest); `docker-compose.build.yml` overrides it with the local `kydrive-server:local` build. Bump them with every version source (`TestComposeDefaultsToThisRelease`, `internal/api`).
 
 ## User Preferences
 - Bootstrap and operator-reset passwords must be replaced before privileged use; resets revoke sessions/MFA.
@@ -115,7 +116,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
 - `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.
-- Publishing a GitHub release `vX.Y.Z` runs `release-image.yml`. It refuses a malformed tag, a tag that disagrees with `api.AppVersion` (`internal/api/backup_handlers.go`, the one Go version source; `cmd/server` uses it) or `web/package.json`, and any commit on which a ci.yml job in its `REQUIRED` list (`test`) did not pass. It then builds `:X.Y.Z` with provenance and SBOM, then attests and verifies it (identity `release-image.yml@refs/tags/vX.Y.Z`). There is no mutable release tag: releases publish `:X.Y.Z` only and master CI publishes commit tags only. A job added to ci.yml must be added to `REQUIRED` too.
+- Publishing a GitHub release `vX.Y.Z` runs `release-image.yml`. It refuses a malformed tag, a tag that disagrees with `api.AppVersion` (`internal/api/backup_handlers.go`, the one Go version source; `cmd/server` uses it) or `web/package.json`, and any commit on which a ci.yml job in its `REQUIRED` list (`test`) did not pass. It then builds `:X.Y.Z` with provenance and SBOM, then attests and verifies it (identity `release-image.yml@refs/tags/vX.Y.Z`). Before pushing it refuses a version tag that already exists in GHCR, and fails on any lookup error other than not found; GHCR itself does not lock tags. There is no mutable release tag: releases publish `:X.Y.Z` only and master CI publishes commit tags only. A job added to ci.yml must be added to `REQUIRED` too.
 - Native T3 browser evidence and remaining gates are recorded in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`.
 
 ## Child DOX Index
