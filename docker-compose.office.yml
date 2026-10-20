@@ -1,0 +1,55 @@
+# Optional production Euro-Office; see docs/EURO-DOCKER.md before starting.
+services:
+  euro-office:
+    image: ghcr.io/euro-office/documentserver@sha256:beca380debb9b4eadb7e4c662d112a325c5df0f2179453a4affd8e6ba5d00562
+    platform: linux/amd64
+    hostname: euro-office
+    restart: unless-stopped
+    stop_grace_period: 2m
+    mem_reservation: 2g
+    mem_limit: 4g
+    memswap_limit: 4g
+    cpus: 2
+    pids_limit: 512
+    ports:
+      - "${KY_OFFICE_BIND_IP:-127.0.0.1}:${KY_OFFICE_HTTP_PORT:-8082}:80"
+    environment:
+      JWT_ENABLED: "true"
+      ALLOW_PRIVATE_IP_ADDRESS: "${KY_OFFICE_ALLOW_PRIVATE_IP_ADDRESS:-false}"
+      ALLOW_META_IP_ADDRESS: "false"
+      USE_UNAUTHORIZED_STORAGE: "false"
+      NGINX_CLIENT_MAX_BODY_SIZE: 129m
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        key=/var/www/euro-office/Data/.private/jwt_secret
+        test -f "$$key" && test ! -L "$$key" || { echo 'Euro-Office JWT file must be regular' >&2; exit 1; }
+        test "$$(stat -c %a "$$key")" = 600 || { echo 'Euro-Office JWT file must have mode 0600' >&2; exit 1; }
+        value=$$(cat "$$key")
+        test "$${#value}" -ge 32 || { echo 'Euro-Office JWT must contain at least 32 bytes' >&2; exit 1; }
+        unset value
+        exec /entrypoint.sh
+    secrets:
+      - source: office-jwt
+        target: /var/www/euro-office/Data/.private/jwt_secret
+    volumes:
+      - office-postgresql:/var/lib/postgresql
+      - office-rabbitmq:/var/lib/rabbitmq
+      - office-redis:/var/lib/redis
+      - office-runtime:/var/lib/euro-office
+      - office-data:/var/www/euro-office/Data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1/healthcheck | grep -qx true"]
+      interval: 30s
+      timeout: 10s
+      start_period: 3m
+      retries: 5
+secrets:
+  office-jwt:
+    file: ${KY_OFFICE_JWT_FILE:?Set the mode-0600 shared editor JWT file}
+volumes:
+  office-postgresql:
+  office-rabbitmq:
+  office-redis:
+  office-runtime:
+  office-data:

@@ -102,6 +102,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 
 ## User Preferences
 - Bootstrap and operator-reset passwords must be replaced before privileged use; resets revoke sessions/MFA.
+- Euro-Office may run in production on Docker (`docker-compose.office.yml`, `docs/EURO-DOCKER.md`) or Kubernetes; both require the existing provenance, HTTPS and acceptance gates.
 - Euro-Office is the editor; no Nextcloud or ONLYOFFICE product deployment. Inherited Euro code/branding does not prove an independent artifact build chain.
 - People/groups live in KyIdentity. Group permission administration lives in KyDrive. The installation owner’s KyIdentity account must receive an explicit KyDrive administrator grant; do not leave owner administration dependent on an undisclosed local recovery login. Use the audited set-directory-role CLI with the exact directory subject.
 - Reserve a distinct local recovery administrator username when the directory also uses `admin`; use the audited `rename-local-admin -from admin -to recovery-admin` operator command on existing installations. Directory provisioning never adopts the local account.
@@ -110,6 +111,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - OneDrive/SharePoint parity decisions (2026-10-07), planned in `docs/superpowers/plans/2026-10-07-onedrive-parity-roadmap.md`: per-workspace opt-in retention (admin-set, off by default) plus manager purge; an admin hands a leaver's My files to a shared workspace or named colleague (shipped); sharing covers people, per-folder grants, organisation links and external guest links; independent bulk backup goes offsite (S3-compatible or rest-server over HTTPS, shipped). Current contracts above stay binding until each milestone ships and rewrites them.
 
 ## Verification
+- `python3 scripts/accept-office-compose.py` runs the optional editor image in a disposable bounded Compose project: unsafe JWT refusal, readiness and volume persistence after recreation; no Drive editing or production provenance claim.
 - `PATH=/path/to/restic:$PATH go test -race ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable.
 - `go test -race ./cmd/server -run '^TestInstallerPreparation$' -count=1` checks native
   metadata staging/check/resume and input refusal without UI rendering or a running server.
