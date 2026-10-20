@@ -541,3 +541,30 @@ dialog.modal-window::backdrop {
 .drive-preview-body pre { align-self: stretch; flex: 1; margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .85rem/1.5 var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
 .app-preference { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--ink); }
 @media (max-width: 720px) { .app-preference { font-size: .75rem; white-space: nowrap; } }
+
+/* File actions use the existing permission gates and native menus. */
+.drive-page { padding: 32px; }
+.drive-heading { margin-bottom: 28px; }
+.drive-files-panel { padding: 24px; }
+.drive-workspace-heading { padding-bottom: 16px; }
+.drive-toolbar { align-items: flex-start; gap: 16px; margin-block: 20px; }
+.drive-breadcrumb { flex-basis: 100%; font-size: 13px; }
+.drive-toolbar-actions { gap: 8px; width: 100%; }
+.drive-toolbar-actions > .drive-new-file, .drive-toolbar-actions > .drive-upload-button { flex-shrink: 0; }
+.drive-toolbar-actions > .drive-new-file summary, .drive-upload-button { min-height: 40px; }
+.drive-toolbar-actions > .drive-upload-button { background: var(--accent); color: var(--button-text); }
+.drive-toolbar-actions > button.btn-secondary { border-color: transparent; }
+.drive-toolbar-actions > .drive-new-folder { margin-left: auto; }
+.drive-table th, .drive-table td { padding: 16px 12px; vertical-align: middle; }
+.drive-table tbody tr:hover { background: var(--panel-hover); }
+.drive-table td:not(:first-child) { font-variant-numeric: tabular-nums; font-size: 13px; }
+.drive-name-cell { gap: 12px; }
+.drive-file-menu { width: auto; min-width: 100px; }
+.drive-file-menu[open] { min-width: 160px; }
+.drive-file-menu summary { min-height: 36px; display: flex; align-items: center; }
+.drive-file-actions { gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); margin-top: 6px; }
+.drive-file-actions > a:hover, .drive-file-actions > button:hover { background: var(--panel-hover); }
+.drive-uploads { border: 1px solid var(--line); background: var(--bg); padding: 14px 16px; border-radius: 8px; }
+.drive-uploads li { grid-template-columns: minmax(0, 1fr) minmax(80px, 140px) auto auto; font-size: 12px; }
+.drive-upload-receipt { margin-bottom: 10px; color: var(--ink-strong); font-size: 13px; }
+@media (max-width: 720px) { .drive-page { padding: 20px 16px; } .drive-files-panel { padding: 16px; } .drive-toolbar-actions > .drive-new-folder { margin-left: 0; } .drive-uploads li { grid-template-columns: minmax(0, 1fr) auto; } .drive-uploads progress { grid-column: 1 / -1; grid-row: auto; } }

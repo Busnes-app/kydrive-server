@@ -53,7 +53,9 @@ export function useUploads(onIdle: () => void) {
 
 export function UploadList({ items, retry, clear }: Pick<ReturnType<typeof useUploads>, 'items' | 'retry' | 'clear'>) {
   if (items.length === 0) return null;
+  const finished = items.filter((item) => item.finished).length;
   return <section className="drive-uploads" aria-label="Uploads">
+    {finished > 0 && <p className="drive-upload-receipt" role="status">{finished} {finished === 1 ? 'file uploaded' : 'files uploaded'}. Completed items remain below until cleared.</p>}
     <ul>{items.map(u => <li key={u.key}>
       <span>{u.file.name}</span>
       <progress max={u.file.size || 1} value={u.finished ? u.file.size || 1 : u.done} aria-label={`Upload progress for ${u.file.name}`} />
