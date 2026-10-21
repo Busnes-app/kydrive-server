@@ -8,7 +8,7 @@ import { iconFor } from './FileIcon';
 // Snippet highlights are [start, end) offsets in UTF-16 code units, which is what String.slice uses.
 export type Snippet = { text: string; highlights: [number, number][]; cut_start: boolean; cut_end: boolean };
 export type Hit = { kind: 'file' | 'folder'; id: string; workspace: string; parent: string; name: string; path: string; match?: string[]; snippet?: Snippet };
-type Found = { results: Hit[]; truncated: boolean; pending: number };
+type Found = { query: string; results: Hit[]; truncated: boolean; pending: number };
 
 function snippet(v: unknown): v is Snippet {
   return record(v) && typeof v.text === 'string' && typeof v.cut_start === 'boolean' && typeof v.cut_end === 'boolean' && Array.isArray(v.highlights)
@@ -20,19 +20,30 @@ function hit(v: unknown): v is Hit {
     && (v.snippet === undefined || snippet(v.snippet));
 }
 
-// Marked renders a snippet as text with <mark> around its highlights; out-of-order or
-// out-of-range highlights are skipped. Never markup from the server.
-export function Marked({ s }: { s: Snippet }) {
+// marks renders text with <mark> around its highlights; out-of-order or out-of-range
+// highlights are skipped. Never markup from the server.
+function marks(text: string, highlights: [number, number][]): ReactNode[] {
   const parts: ReactNode[] = [];
   let at = 0;
-  for (const [start, end] of s.highlights) {
-    if (start < at || end <= start || end > s.text.length) continue;
-    if (start > at) parts.push(s.text.slice(at, start));
-    parts.push(<mark key={start}>{s.text.slice(start, end)}</mark>);
+  for (const [start, end] of highlights) {
+    if (start < at || end <= start || end > text.length) continue;
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(<mark key={start}>{text.slice(start, end)}</mark>);
     at = end;
   }
-  parts.push(s.text.slice(at));
-  return <span className="drive-search-snippet">{s.cut_start && '…'}{parts}{s.cut_end && '…'}</span>;
+  parts.push(text.slice(at));
+  return parts;
+}
+
+export function Marked({ s }: { s: Snippet }) {
+  return <span className="drive-search-snippet">{s.cut_start && '…'}{marks(s.text, s.highlights)}{s.cut_end && '…'}</span>;
+}
+
+// nameMatches finds query in name case-insensitively, as the server's name match does. The
+// "iu" regular expression keeps offsets in name itself, which lower-casing first would not.
+export function nameMatches(name: string, query: string): [number, number][] {
+  if (!query) return [];
+  return [...name.matchAll(new RegExp(query.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'), 'giu'))].map(m => [m.index, m.index + m[0].length]);
 }
 
 // Search finds files and folders by name, and files by the words in them, across every workspace
@@ -52,7 +63,7 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
         const v = await response(await fetch(`/api/drive/search?q=${encodeURIComponent(query)}`, { signal: abort.signal }));
         if (!record(v) || !Array.isArray(v.results) || !v.results.every(hit) || typeof v.truncated !== 'boolean') throw new Error('Invalid search response');
         const pending = record(v.contents) && typeof v.contents.pending === 'number' ? v.contents.pending : 0;
-        setFound({ results: v.results, truncated: v.truncated, pending }); setError(''); setHidden(false);
+        setFound({ query, results: v.results, truncated: v.truncated, pending }); setError(''); setHidden(false);
       } catch (e) { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'Search failed'); }
     })(), 300);
     return () => { clearTimeout(timer); abort.abort(); };
@@ -72,7 +83,7 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
       {error ? <p role="alert">{error}</p> : found && (found.results.length === 0 ? <p>No matches</p> : <ul>{found.results.map(h => {
         const Icon = h.kind === 'folder' ? Folder : iconFor(h.name);
         return <li key={`${h.kind}-${h.id}`}><button type="button" onClick={() => { setQ(''); onOpen(h); }}>
-          <Icon size={18} aria-hidden="true" /><span>{h.name}</span>
+          <Icon size={18} aria-hidden="true" /><span>{h.match?.includes('name') ? marks(h.name, nameMatches(h.name, found.query)) : h.name}</span>
           <small>{[names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
           {h.snippet && <Marked s={h.snippet} />}
         </button></li>;

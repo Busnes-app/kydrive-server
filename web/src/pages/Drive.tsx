@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, Share2, Trash2, Upload } from 'lucide-react';
-import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, HttpError, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { Leavers } from './drive/Leavers';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -267,7 +267,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
         {audit.length > 0 && <ul className="drive-audit" aria-label="Recent audit events">{audit.map((e, i) => <li key={i}><When value={e.created} /><code>{e.action}</code></li>)}</ul>}
       </div></details>
       <details className="panel drive-create-workspace"><summary>Create shared workspace</summary><div className="details-body">
-        <form className="form-row" onSubmit={e => { e.preventDefault(); void run(async () => { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); setNewName(''); }); }}>
+        <form className="form-row" onSubmit={e => { e.preventDefault(); void run(async () => { try { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); } catch (err) { throw err instanceof HttpError && err.status === 409 ? new Error(`A shared workspace named “${newName.trim()}” already exists.`) : err; } setNewName(''); }); }}>
           <label className="field grow">Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label>
           <label className="field">Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label>
           <button disabled={busy}>Create workspace</button>

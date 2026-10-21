@@ -13,6 +13,11 @@ It must be a regular file with mode 0600 and at least 32 bytes. Configure exactl
 the same value as `KYDRIVE_EDITOR_SECRET` in Drive's protected `.env.runtime`.
 The editor reads the mounted file directly; no secret enters Compose interpolation.
 
+On an SELinux host (Fedora, RHEL, rootless Podman) the container can read the file only when it
+is labelled `container_file_t`. Compose secrets take no `:Z` option, so label the file itself:
+`chcon -t container_file_t "$KY_OFFICE_JWT_FILE"`. Without the label the editor refuses to start
+with "Euro-Office cannot read its JWT file", and `ausearch -m avc -ts recent` shows the denial.
+
 Set `KYDRIVE_EDITOR_URL` to the editor's public HTTPS origin and
 `KYDRIVE_EDITOR_DRIVE_URL` to Drive's HTTPS origin in `.env.runtime`. Both origins
 must resolve and verify from browsers and the opposite service. Private CAs must

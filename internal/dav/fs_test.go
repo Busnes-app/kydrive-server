@@ -2,6 +2,7 @@ package dav_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"net/http/httptest"
@@ -24,13 +25,14 @@ type env struct {
 	blobs  string
 	locks  *dav.Locks
 	team   drive.Workspace
-	shared drive.Workspace // another workspace also named "Organization"
+	shared drive.Workspace // another workspace also named "Organization", as an older install may hold
 }
 
 func setup(t *testing.T) *env {
 	t.Helper()
 	ctx := context.Background()
-	st, err := store.Open(ctx, testdb.Config(t), testdb.Key)
+	cfg := testdb.Config(t)
+	st, err := store.Open(ctx, cfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,11 +51,21 @@ func setup(t *testing.T) *env {
 		}
 	}
 	e := &env{t: t, st: st, blobs: t.TempDir(), locks: dav.NewLocks()}
-	for _, w := range []*drive.Workspace{&e.team, &e.shared} {
-		if *w, err = st.Drive().CreateWorkspace(ctx, "admin", "Organization", 1<<20); err != nil {
+	for i, w := range []*drive.Workspace{&e.team, &e.shared} {
+		if *w, err = st.Drive().CreateWorkspace(ctx, "admin", "Organization"+strings.Repeat(" copy", i), 1<<20); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// New names are unique now; installs from before that can still hold duplicates.
+	raw, err := sql.Open("sqlite", cfg.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = raw.ExecContext(ctx, `UPDATE drive_workspaces SET name='Organization' WHERE id=?`, e.shared.ID)
+	if err = errors.Join(err, raw.Close()); err != nil {
+		t.Fatal(err)
+	}
+	e.shared.Name = "Organization"
 	grants := [][3]string{{e.team.ID, "team", "editor"}, {e.team.ID, "readers", "reader"}, {e.shared.ID, "team", "editor"}}
 	for _, g := range grants {
 		if err = st.Drive().Grant(ctx, "admin", g[0], g[1], g[2]); err != nil {

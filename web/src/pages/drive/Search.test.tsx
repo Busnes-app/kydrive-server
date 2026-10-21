@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { Search } from './Search';
+import { nameMatches, Search } from './Search';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -61,6 +61,17 @@ describe('Search', () => {
     expect(p?.textContent).toBe('…Intro 😀 budget <b>x</b> plan');
     expect(p?.querySelector('b')).toBeNull();
     expect(screen.getByText(/Still indexing 3 of your files/)).toBeTruthy();
+  });
+
+  it('marks the matched words in a name match, case-insensitively and as text', async () => {
+    const hits = [{ ...results[0], name: 'Q4 Budget (budget).csv', match: ['name', 'content'] }, { ...results[0], id: 'f2', name: 'Budget notes.txt', match: ['content'] }];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: hits, truncated: false }), { status: 200 })));
+    const { container } = render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: ' budget ' } });
+    expect(await screen.findByRole('button', { name: /Q4 Budget \(budget\)\.csv/ })).toBeTruthy();
+    expect([...container.querySelectorAll('mark')].map(m => m.textContent)).toEqual(['Budget', 'budget']);
+    expect(nameMatches('a.b (c)', '.b (')).toEqual([[1, 5]]);
+    expect(nameMatches('Ärger', 'är')).toEqual([[0, 2]]);
   });
 
   it('refuses a malformed snippet', async () => {

@@ -1,5 +1,6 @@
 // The episode-8 launch bugs, checked against the real server: upload over an existing file,
-// version dates, menus that close, document icons, the trash title and the Account layout.
+// version dates, menus that close, document icons, the trash title and the Account layout; and
+// from the re-shoot, name-match highlights and duplicate workspace names.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 
@@ -92,4 +93,31 @@ test('the trash has a title and the Account page has the app layout', async ({ p
   await expect(page.locator('fieldset.choice-group')).toHaveCSS('border-top-width', '0px');
   await page.screenshot({ path: testInfo.outputPath('account.png'), fullPage: true });
   expect(await fits(page)).toBe(true);
+});
+
+test('search marks the matched words in a file name', async ({ page }, testInfo) => {
+  const headers = await signIn(page);
+  await page.request.post('/api/drive/personal-workspace', { headers, data: {} });
+  const mine = (await (await page.request.get('/api/drive/workspaces')).json()).find(w => w.kind === 'personal');
+  const word = `budget${testInfo.project.name.replace(/\W/g, '')}`;
+  const name = `Q4 ${word}.csv`;
+  expect((await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${encodeURIComponent(name)}&parent=&revision=0`, { headers, data: 'item,amount\n' })).status()).toBe(201);
+  await page.reload();
+  await page.getByLabel('Search files').fill(word.toUpperCase());
+  const result = page.getByRole('search').getByRole('button', { name: new RegExp(name.replace('.', '\\.')) });
+  await expect(result.locator('span > mark')).toHaveText(word);
+});
+
+test('a second shared workspace with the same name is refused', async ({ page }, testInfo) => {
+  const headers = await signIn(page);
+  const name = `Studio ${testInfo.project.name.replace(/\W/g, '')}`;
+  expect((await page.request.post('/api/drive/workspaces', { headers, data: { name, quota: 1048576 } })).status()).toBe(201);
+  expect((await page.request.post('/api/drive/workspaces', { headers, data: { name: name.toLowerCase(), quota: 1048576 } })).status()).toBe(409);
+  await page.reload();
+  await page.getByText('Create shared workspace').click();
+  await page.getByLabel('Name', { exact: true }).fill(name);
+  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(page.getByText(`A shared workspace named “${name}” already exists.`)).toBeVisible();
+  const all = await (await page.request.get('/api/drive/workspaces?admin=true')).json();
+  expect(all.filter(w => w.name.toLowerCase() === name.toLowerCase())).toHaveLength(1);
 });
