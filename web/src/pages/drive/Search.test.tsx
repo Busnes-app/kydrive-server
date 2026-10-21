@@ -47,4 +47,27 @@ describe('Search', () => {
     fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'zz' } });
     expect(await screen.findByText('No matches')).toBeTruthy();
   });
+
+  it('marks snippet highlights by UTF-16 offsets as text and says when indexing is behind', async () => {
+    // "😀" is two UTF-16 code units, so "budget" starts at 9 in "Intro 😀 budget".
+    const snip = { text: 'Intro 😀 budget <b>x</b> plan', highlights: [[9, 15], [25, 29], [40, 50], [2, 1]], cut_start: true, cut_end: false };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ ...results[0], match: ['content'], snippet: snip }], truncated: false, contents: { searched: true, pending: 3 } }), { status: 200 })));
+    const { container } = render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'budget plan' } });
+    expect(await screen.findByText('budget')).toBeTruthy();
+    const marks = [...container.querySelectorAll('mark')].map(m => m.textContent);
+    expect(marks).toEqual(['budget', 'plan']);
+    const p = container.querySelector('.drive-search-snippet');
+    expect(p?.textContent).toBe('…Intro 😀 budget <b>x</b> plan');
+    expect(p?.querySelector('b')).toBeNull();
+    expect(screen.getByText(/Still indexing 3 of your files/)).toBeTruthy();
+  });
+
+  it('refuses a malformed snippet', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ ...results[0], snippet: { text: '<img src=x onerror=alert(1)>', highlights: 'all' } }], truncated: false }), { status: 200 })));
+    const { container } = render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'zz' } });
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(container.querySelector('img')).toBeNull();
+  });
 });

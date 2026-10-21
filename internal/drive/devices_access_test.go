@@ -19,7 +19,7 @@ var (
 		"AddFolder", "AppendUpload", "Authorize", "AuthorizeItem", "CancelUpload", "Changes", "Children", "CompleteUpload",
 		"CopyFile", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderPath", "FolderTree", "Folders",
 		"GuestLinks", "Grants", "Links", "Lookup", "MoveFile", "MoveFolder", "People", "Publish", "PurgeFile",
-		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchFolder", "SetFolderTrash", "SetTrash", "SharedWithMe",
+		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchContent", "SearchFolder", "SearchFolderContent", "SetFolderTrash", "SetTrash", "SharedWithMe",
 		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
@@ -34,7 +34,7 @@ var (
 	deviceUnreachable = []string{
 		"AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
-		"GuestView", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
+		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
 		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs",
 		"ServiceToken", "SweepOrphans",
 	}

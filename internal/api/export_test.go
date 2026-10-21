@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -70,7 +71,16 @@ const (
 	MCPReadNoticeForTest = readNotice
 	MCPNoPDFForTest      = msgNoPDF
 	MCPDamagedForTest    = msgDamaged
+	MCPSearchInForTest   = msgSearchIn
 )
+
+// IndexSearchForTest brings the content search index up to date now: changes queued, the
+// drive reconciled, every queued file indexed, debounce ignored. Tests call it instead of
+// waiting for the worker. Test-only.
+func IndexSearchForTest(s *Server) error { return s.indexIdle(context.Background()) }
+
+// SearchRootForTest is the content search index directory. Test-only.
+func SearchRootForTest(s *Server) string { return s.searchRoot() }
 
 // TextRootForTest is where document text is cached. Test-only.
 func TextRootForTest(s *Server) string { return s.textRoot() }

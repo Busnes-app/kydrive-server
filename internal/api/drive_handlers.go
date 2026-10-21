@@ -252,13 +252,29 @@ func (s *Server) driveFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	s.writeJSON(w, 200, out)
 }
+
+// driveSearch matches names and, unless content search is off or contents=0, file contents.
+// contents reports whether contents were searched and how many of the caller's files are not
+// yet indexed.
 func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
-	hits, truncated, err := s.store.Drive().Search(r.Context(), s.driveUser(r).ID, r.URL.Query().Get("q"), 200)
+	user := s.driveUser(r).ID
+	var m drive.ContentMatcher
+	cm := s.matcher()
+	if cm != nil && r.URL.Query().Get("contents") != "0" {
+		m = cm
+	}
+	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, r.URL.Query().Get("q"), 200, m)
 	if err != nil {
 		s.driveError(w, err)
 		return
 	}
-	s.writeJSON(w, 200, map[string]any{"results": hits, "truncated": truncated})
+	contents := map[string]any{"searched": m != nil, "pending": 0}
+	var terms []string
+	if m != nil {
+		terms = cm.terms
+		contents["pending"] = cm.pending
+	}
+	s.writeJSON(w, 200, map[string]any{"results": s.withSnippets(r.Context(), user, hits, terms, snippetCount), "truncated": truncated, "contents": contents})
 }
 func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
 

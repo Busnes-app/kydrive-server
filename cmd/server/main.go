@@ -240,6 +240,8 @@ func runServer() {
 	go func() { defer close(sealingDone); srv.RunBlobSealing(ctx) }()
 	cleanupDone := make(chan struct{})
 	go func() { defer close(cleanupDone); cleanExpiredLoop(ctx, st) }()
+	searchDone := make(chan struct{})
+	go func() { defer close(searchDone); srv.RunSearchIndex(ctx) }()
 	backupDone := make(chan struct{})
 	go backupLoop(ctx, cfg, st, backupDone)
 
@@ -313,6 +315,14 @@ func runServer() {
 	case <-cleanupDone:
 	case <-waitCtx.Done():
 		log.Print("Expired-row cleanup shutdown timed out")
+	}
+	select {
+	case <-searchDone:
+		if err := srv.CloseSearch(); err != nil {
+			log.Printf("Search index close: %v", err)
+		}
+	case <-waitCtx.Done():
+		log.Print("Search index shutdown timed out")
 	}
 	log.Println("[KY-BASE] Server stopped")
 }

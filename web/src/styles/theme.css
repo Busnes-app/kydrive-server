@@ -526,3 +526,9 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 .settings-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .75rem 1rem; align-items: center; font-size: .9rem; }
 .settings-facts dt { color: var(--ink); font-weight: 600; font-size: .82rem; }
 .settings-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; color: var(--ink-strong); }
+
+/* ---------- Content search snippets ---------- */
+.drive-search-results li svg { grid-row: span 3; }
+.drive-search-snippet { grid-column: 2; display: block; color: var(--ink); font-size: .85rem; font-weight: 400; line-height: 1.45; overflow-wrap: anywhere; }
+.drive-search-snippet mark { background: var(--accent-soft, var(--ky-accent-soft)); color: var(--ink-strong); font-weight: 600; border-radius: 3px; padding: 0 2px; }
+.drive-search-results > p.drive-search-note { font-size: .8rem; padding-top: .25rem; }

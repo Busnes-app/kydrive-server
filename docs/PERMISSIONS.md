@@ -30,7 +30,7 @@ An **organisation link** gives anyone signed in to KyDrive who opens it reader o
 
 A **guest link** shares one file or folder with people who have no account. It is off until an administrator turns it on under Settings > Guest links, which also sets the longest a link may last (default 30 days). A guest link is view and download only, or upload-only into a folder, where guests send files without seeing what is there. It always expires, can need a password (send it separately), and stops working if its creator loses the right to share the item. Guest pages send no referrer, ask search engines not to index them and set no cookies; turning guest links off stops all of them at once.
 
-Items shared with you outside your own workspaces appear under **Shared with me**, where you can browse shared folders and open or download files. They are not yet listed over WebDAV, and the search box covers your workspaces only. Removing a share, or removing someone from a shared group, ends their open editor at once.
+Items shared with you outside your own workspaces appear under **Shared with me**, where you can browse shared folders and open or download files. They are not yet listed over WebDAV, and the search box, by name or by content, covers your workspaces only. Search never shows a file, a match or a snippet you cannot read at that moment; losing access ends it on the next search. Removing a share, or removing someone from a shared group, ends their open editor at once.
 
 ## Leavers
 

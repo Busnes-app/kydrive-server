@@ -987,7 +987,7 @@ func TestAgentSkill(t *testing.T) {
 		}
 	}
 	for _, msg := range []string{api.MCPReadOnlyForTest, api.MCPBadPathForTest, api.MCPNotFoundForTest, api.MCPDeniedForTest, api.MCPExistsForTest,
-		api.MCPReplaceForTest, api.MCPChangedForTest, api.MCPNotTextForTest, api.MCPNoPDFForTest, api.MCPDamagedForTest, api.MCPTooLargeForTest, api.MCPFixedForTest, api.MCPRootGoneForTest, "Storage quota exceeded"} {
+		api.MCPReplaceForTest, api.MCPChangedForTest, api.MCPNotTextForTest, api.MCPNoPDFForTest, api.MCPDamagedForTest, api.MCPTooLargeForTest, api.MCPFixedForTest, api.MCPRootGoneForTest, api.MCPSearchInForTest, "Storage quota exceeded"} {
 		if !strings.Contains(skill, msg) {
 			t.Errorf("skill error table lacks %q", msg)
 		}

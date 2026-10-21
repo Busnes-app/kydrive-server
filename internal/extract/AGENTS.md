@@ -1,7 +1,7 @@
 # Document text extraction
 
 ## Purpose
-Turn Office Open XML (`docx`, `xlsx`, `pptx`, their macro and template variants) and OpenDocument (`odt`, `ods`, `odp`, templates) files into plain text for the MCP `read_file` tool.
+Turn Office Open XML (`docx`, `xlsx`, `pptx`, their macro and template variants) and OpenDocument (`odt`, `ods`, `odp`, templates) files into plain text for the MCP `read_file` tool and the content search index.
 
 ## Ownership
 Owns parsing. Where the bytes come from, caching and PDF conversion belong to `internal/api` (`document_text.go`).

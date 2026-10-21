@@ -22,6 +22,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/editor"
 	"github.com/Busnes-app/kydrive-server/internal/scim"
+	"github.com/Busnes-app/kydrive-server/internal/search"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/web"
@@ -61,6 +62,7 @@ type Server struct {
 	// has sent nothing, so StopBackupCollection may abandon it.
 	collecting     context.Context
 	stopCollecting context.CancelFunc
+	search         *search.Index // content search; nil when off
 }
 
 // detachedCounter is a WaitGroup that tolerates a registration arriving while the wait is
@@ -168,6 +170,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
 
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
+	s.openSearch()
 	s.mcp = s.newMCPHandler()
 	s.routes()
 	return s
