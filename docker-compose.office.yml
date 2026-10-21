@@ -23,7 +23,9 @@ services:
     command:
       - |
         key=/var/www/euro-office/Data/.private/jwt_secret
-        test -f "$$key" && test ! -L "$$key" || { echo 'Euro-Office JWT file must be regular' >&2; exit 1; }
+        test ! -L "$$key" || { echo 'Euro-Office JWT file must not be a symlink' >&2; exit 1; }
+        test ! -e "$$key" || test -f "$$key" || { echo 'Euro-Office JWT file must be a regular file' >&2; exit 1; }
+        cat "$$key" >/dev/null 2>&1 || { echo 'Euro-Office cannot read its JWT file (KY_OFFICE_JWT_FILE): it is missing or unreadable, or SELinux denies it; see docs/EURO-DOCKER.md' >&2; exit 1; }
         test "$$(stat -c %a "$$key")" = 600 || { echo 'Euro-Office JWT file must have mode 0600' >&2; exit 1; }
         value=$$(cat "$$key")
         test "$${#value}" -ge 32 || { echo 'Euro-Office JWT must contain at least 32 bytes' >&2; exit 1; }
