@@ -20,6 +20,7 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 
 - `KY_EXCALIDRAW_FONTS_DIR` (default empty, none served) is the directory holding Excalidraw's `Xiaolai/` CJK fonts; set but not a directory fails startup. The Docker image sets it to `/app/excalidraw-fonts`.
 
+- `KYDRIVE_CONTENT_SEARCH` (boolean, default on) runs the content search index worker and content matching (`Drive.ContentSearch`); off leaves file name search alone.
 - `KYDRIVE_MAX_FILE_SIZE` (resumable upload size) and `KYDRIVE_MAX_ZIP_SIZE` (folder zip plaintext total) default to `10GiB` and accept a whole number of `MiB`, `GiB` or `TiB` from 1 MiB to 1 TiB; anything else fails startup naming the variable.
 
 - `KY_READ_TIMEOUT` and `KY_WRITE_TIMEOUT` default to 5m and accept 15s–15m, supporting bounded streaming uploads. Production requires an explicit SCIM token when provisioning is enabled; SSO auto-provision defaults off.

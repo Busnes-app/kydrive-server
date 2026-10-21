@@ -311,6 +311,17 @@ func WriteThumb(root string, key []byte, blob string, thumb []byte) error {
 
 // ReadThumb opens a cached thumbnail; a missing one is fs.ErrNotExist.
 func ReadThumb(root string, key []byte, blob string) ([]byte, error) {
+	f, err := OpenThumb(root, key, blob)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
+}
+
+// OpenThumb streams a cache entry (thumbnail or document text), authenticating each chunk as
+// it is read; a missing one is fs.ErrNotExist.
+func OpenThumb(root string, key []byte, blob string) (io.ReadSeekCloser, error) {
 	path, err := BlobPath(root, blob)
 	if err != nil {
 		return nil, err
@@ -323,12 +334,7 @@ func ReadThumb(root string, key []byte, blob string) ([]byte, error) {
 	if !ok {
 		return nil, errSealed
 	}
-	f, err := OpenBlob(path, key, true, plain)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return io.ReadAll(f)
+	return OpenBlob(path, key, true, plain)
 }
 
 // plainSize inverts SealedSize.

@@ -39,8 +39,8 @@ a Bearer token the user creates under **Account → App passwords → AI agent**
 once with copy-ready OpenClaw and Hermes Agent config that reads it from `KYDRIVE_TOKEN`; the
 KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
 
-- **Access levels.** *Read only* (default) offers `list_folder`, `search_files` (names only; there
-  is no full-text index), `get_file_info` and `read_file`. *Read and write* adds `write_file`,
+- **Access levels.** *Read only* (default) offers `list_folder`, `search_files` (names, and whole
+  words in file contents with a short snippet, unless content search is off), `get_file_info` and `read_file`. *Read and write* adds `write_file`,
   `create_folder`, `move_item` and `move_to_trash`. The level can be changed later on the same
   page. Every operation is still authorized as the user, so a token never exceeds their role.
 - **Folder limit.** A token may be limited to one folder or workspace, chosen by path when it is
@@ -68,7 +68,7 @@ KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
   4096 nested elements, and no DOCTYPE; at most 16 MiB of text is kept (`extract_truncated`). At most two extractions and two Document Server conversions run at
   once.
 - **Limits.** `read_file` returns at most 256 KiB a call (64 KiB by default) and pages with
-  `next_offset`; `list_folder` at most 500 entries; `search_files` at most 50 results;
+  `next_offset`; `list_folder` at most 500 entries; `search_files` at most 50 results, 10 with snippets;
   `write_file` at most 4 MiB (or `KYDRIVE_MAX_FILE_SIZE`, if lower); a request body at most 6 MiB.
 - **Sign-in.** Only `Authorization: Bearer kya_…`; cookies, Basic and WebDAV passwords are
   refused, and an agent token is refused by WebDAV. Plain-HTTP requests are refused outside

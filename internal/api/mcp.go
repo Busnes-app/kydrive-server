@@ -55,17 +55,19 @@ const (
 	msgRootGone  = "The folder this agent is limited to is in the trash or gone"
 	msgNotFolder = "Not a folder"
 	msgNotFile   = "Not a file"
+	msgSearchIn  = "in must be names, contents or both"
 )
 
 // Every read and write is bounded.
 const (
-	mcpBodyLimit   = 6 << 20   // a request; fits a base64 write of mcpWriteLimit
-	mcpWriteLimit  = 4 << 20   // bytes one write_file stores
-	mcpReadDefault = 64 << 10  // bytes read_file returns when no length is given
-	mcpReadLimit   = 256 << 10 // bytes one read_file returns at most
-	mcpListLimit   = 500       // entries one list_folder returns
-	mcpSearchLimit = 50        // results one search_files returns
-	mcpPathLimit   = 4096      // bytes in a path
+	mcpBodyLimit    = 6 << 20   // a request; fits a base64 write of mcpWriteLimit
+	mcpWriteLimit   = 4 << 20   // bytes one write_file stores
+	mcpReadDefault  = 64 << 10  // bytes read_file returns when no length is given
+	mcpReadLimit    = 256 << 10 // bytes one read_file returns at most
+	mcpListLimit    = 500       // entries one list_folder returns
+	mcpSearchLimit  = 50        // results one search_files returns
+	mcpSnippetCount = 10        // content matches given a snippet
+	mcpPathLimit    = 4096      // bytes in a path
 	// mcpFailsPerMinute is the failed sign-ins one client gets, as for WebDAV.
 	mcpFailsPerMinute = 20
 )
@@ -208,7 +210,7 @@ func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_folder", Annotations: read,
 		Description: "List the files and folders in a folder. / is the top." + untrustedNote}, t.listFolder)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_files", Annotations: read,
-		Description: "Find files and folders whose name contains the query, case-insensitively. Names only: file contents are not searched." + untrustedNote}, t.searchFiles)
+		Description: "Find files and folders whose name contains the query, case-insensitively, and files whose text contains every word of the query (whole words, ignoring case and accents; Office, OpenDocument, text files, and PDFs when Euro-Office is set up). Content matches carry a short snippet. Recently changed files may not be searchable by content for a few seconds." + untrustedNote}, t.searchFiles)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_file_info", Annotations: read,
 		Description: "Get a file's or folder's metadata: size, revision, modification time and type." + untrustedNote}, t.fileInfo)
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_file", Annotations: read,
@@ -471,12 +473,21 @@ func (t *mcpTools) listFolder(ctx context.Context, _ *mcp.CallToolRequest, in pa
 }
 
 type searchIn struct {
-	Query string `json:"query" jsonschema:"2 to 100 characters matched against names"`
+	Query string `json:"query" jsonschema:"2 to 100 characters matched against names and, as whole words, file contents"`
+	In    string `json:"in,omitempty" jsonschema:"names, contents or both (the default)"`
 }
 
 type searchOut struct {
-	Results   []entry `json:"results"`
-	Truncated bool    `json:"truncated,omitempty"`
+	Notice    string   `json:"notice,omitempty"`
+	Results   []mcpHit `json:"results"`
+	Truncated bool     `json:"truncated,omitempty"`
+}
+
+// mcpHit is a search_files result: an entry, what matched, and for content matches a snippet.
+type mcpHit struct {
+	entry
+	Match   []string `json:"match"`
+	Snippet string   `json:"snippet,omitempty"`
 }
 
 func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
@@ -484,14 +495,25 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	var hits []drive.Hit
 	var more bool
 	var err error
+	var m drive.ContentMatcher
+	cm := t.s.matcher()
+	switch in.In {
+	case "", "both", "contents":
+		if cm != nil {
+			m = cm
+		}
+	case "names":
+	default:
+		return nil, searchOut{}, toolErr(msgSearchIn)
+	}
 	prefix := map[string]string{} // workspace ID -> the path its items start with
 	if t.paths.scoped() {
 		if _, err = t.paths.top(ctx); err == nil {
-			hits, more, err = d.SearchFolder(ctx, t.user(), t.paths.token.Workspace, t.paths.token.Folder, in.Query, mcpSearchLimit)
+			hits, more, err = d.SearchFolderContent(ctx, t.user(), t.paths.token.Workspace, t.paths.token.Folder, in.Query, mcpSearchLimit, m)
 			prefix[t.paths.token.Workspace] = "/"
 		}
 	} else {
-		hits, more, err = d.Search(ctx, t.user(), in.Query, mcpSearchLimit)
+		hits, more, err = d.SearchContent(ctx, t.user(), in.Query, mcpSearchLimit, m)
 		if err == nil {
 			var names map[string]string
 			if names, err = t.paths.spaces(ctx); err == nil {
@@ -507,16 +529,35 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	if err != nil {
 		return nil, searchOut{}, t.fail("search_files", err)
 	}
-	out := searchOut{Results: []entry{}, Truncated: more}
+	out := searchOut{Results: []mcpHit{}, Truncated: more}
+	var terms []string
+	if m != nil {
+		terms = cm.terms
+	}
+	snippets := mcpSnippetCount
 	for _, h := range hits {
 		dir, ok := prefix[h.Workspace]
 		if !ok {
 			continue // access ended since the search listed it
 		}
+		if in.In == "contents" && !contentHit(h) {
+			continue
+		}
 		if h.Path != "" {
 			dir = joinPath(dir, h.Path)
 		}
-		out.Results = append(out.Results, entry{Name: h.Name, Path: joinPath(dir, h.Name), Kind: h.Kind})
+		r := mcpHit{entry: entry{Name: h.Name, Path: joinPath(dir, h.Name), Kind: h.Kind}, Match: h.Match}
+		if snippets > 0 && len(terms) > 0 && contentHit(h) {
+			snippets--
+			sn, ok := t.s.snippet(ctx, t.user(), h, terms)
+			if !ok {
+				continue
+			}
+			if sn != nil {
+				r.Snippet, out.Notice = sn.Text, readNotice
+			}
+		}
+		out.Results = append(out.Results, r)
 	}
 	return nil, out, nil
 }

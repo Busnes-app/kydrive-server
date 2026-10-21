@@ -318,3 +318,24 @@ func TestDriveSizeLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestContentSearchSwitch(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	if cfg, err := config.LoadFromEnv(); err != nil || !cfg.Drive.ContentSearch {
+		t.Fatalf("default: cfg=%+v err=%v", cfg, err)
+	}
+	for _, off := range []string{"off", "false", "0", "no"} {
+		t.Setenv("KYDRIVE_CONTENT_SEARCH", off)
+		if cfg, err := config.LoadFromEnv(); err != nil || cfg.Drive.ContentSearch {
+			t.Fatalf("%q: cfg=%+v err=%v", off, cfg, err)
+		}
+	}
+	t.Setenv("KYDRIVE_CONTENT_SEARCH", "on")
+	if cfg, err := config.LoadFromEnv(); err != nil || !cfg.Drive.ContentSearch {
+		t.Fatalf("on: cfg=%+v err=%v", cfg, err)
+	}
+	t.Setenv("KYDRIVE_CONTENT_SEARCH", "maybe")
+	if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), "KYDRIVE_CONTENT_SEARCH") {
+		t.Fatalf("want KYDRIVE_CONTENT_SEARCH error, got %v", err)
+	}
+}

@@ -29,10 +29,12 @@ type Config struct {
 	Drive    DriveConfig    `json:"drive"`
 }
 
-// DriveConfig bounds resumable uploads and folder zip downloads, in bytes.
+// DriveConfig bounds resumable uploads and folder zip downloads, in bytes. ContentSearch
+// (KYDRIVE_CONTENT_SEARCH, default on) runs the search index worker and matches file contents.
 type DriveConfig struct {
-	MaxFileSize int64 `json:"max_file_size"`
-	MaxZipSize  int64 `json:"max_zip_size"`
+	MaxFileSize   int64 `json:"max_file_size"`
+	MaxZipSize    int64 `json:"max_zip_size"`
+	ContentSearch bool  `json:"content_search"`
 }
 
 // ServerConfig defines HTTP and network settings.
@@ -325,7 +327,7 @@ func load(existing bool) (*Config, error) {
 			SecretKey:     getEnv("KY_CAPTCHA_SECRET_KEY", ""),
 			DifficultyPoW: envInt("KY_CAPTCHA_POW_DIFFICULTY", 100000),
 		},
-		Drive: DriveConfig{MaxFileSize: maxFile, MaxZipSize: maxZip},
+		Drive: DriveConfig{MaxFileSize: maxFile, MaxZipSize: maxZip, ContentSearch: envBool("KYDRIVE_CONTENT_SEARCH", true)},
 	}
 
 	if len(invalid) > 0 {

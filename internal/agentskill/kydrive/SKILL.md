@@ -6,7 +6,7 @@ version: "0.4.2"
 
 # KyDrive
 
-You can browse, search and read the user's KyDrive files and, if their token allows it, create,
+You can browse, search (by name and content) and read the user's KyDrive files and, if their token allows it, create,
 replace, rename, move and trash them. Tools: `list_folder`, `search_files`, `get_file_info`,
 `read_file`, `write_file`, `create_folder`, `move_item`, `move_to_trash`.
 
@@ -38,7 +38,18 @@ days unused. The user creates a new one the same way.
 - Every path is absolute: `/` is the top, then a workspace (`/My files`, `/Team`), then folders,
   then the name: `/My files/Reports/2026.md`. Use the paths the tools return.
 - Empty, `.` and `..` parts are refused; there is no relative path.
-- Names are case-sensitive. `search_files` matches names only, never file contents.
+- Names are case-sensitive.
+
+## Searching
+
+- `search_files` finds files and folders whose name contains the query, and files whose text
+  contains every word of it: whole words, ignoring case and accents (Word, Excel, PowerPoint,
+  OpenDocument, text files, and PDFs when KyDrive has Euro-Office). `match` says which matched.
+- Content matches carry a short `snippet`; like `read_file`, a `notice` marks it untrusted. Read
+  the file before relying on it.
+- Pass `in` as `names` or `contents` to search only one; both is the default. Partial words do
+  not match file contents, and a file changed in the last few seconds may not be found by its
+  content yet.
 
 ## Reading
 
@@ -80,4 +91,5 @@ days unused. The user creates a new one the same way.
 | Storage quota exceeded | The workspace is full | Tell the user |
 | Workspaces and the top folder cannot be created, moved or trashed | Not allowed | Tell the user to do it in KyDrive |
 | The folder this agent is limited to is in the trash or gone | The token's folder was trashed or removed | Tell the user to restore the folder or create a new token |
+| in must be names, contents or both | Bad `in` for `search_files` | Leave it out or use one of those |
 | anything else | Server problem | Report it; do not retry more than once |

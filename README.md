@@ -8,7 +8,7 @@ Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office i
 
 ## Scope
 
-Single-instance SQLite and filesystem storage. No SMB endpoint, released desktop app (in development, see Linked computers), guest editing, full-text search, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
+Single-instance SQLite and filesystem storage. No SMB endpoint, released desktop app (in development, see Linked computers), guest editing, automatic version deletion unless a workspace retention policy is enabled, or HA. Interrupted unpublished uploads leave unreferenced blobs until the hourly sweep removes them; abandoned resumable uploads keep their sealed staging under `<data>/staging` for 24 hours. Filename search decrypts names per request (about 0.2 s per 50 000 names on the reference host). Search also matches whole words in the current version of Office, OpenDocument, text and (with Euro-Office) PDF files, a few seconds after they change; `KYDRIVE_CONTENT_SEARCH=off` turns that off. Its index holds keyed hashes of words, not words, and is in no backup: it is rebuilt after a restore, and it reveals to someone holding the disk which files share words and how often words occur ([Encryption at rest](docs/RECOVERY-AND-ENCRYPTION.md#encryption-at-rest)). A folder zip or the completion of a very large upload must finish within `KY_WRITE_TIMEOUT` (at most 15m). An acknowledged save refers to durably flushed bytes plus a committed database revision.
 
 KyDrive inherits the MIT-licensed server base. Euro-Office is a separate AGPLv3 service; Restic is BSD-2-Clause. Keep each dependency's license and source obligations with its distribution.
 
@@ -16,7 +16,7 @@ When a directory user is also named `admin`, reserve a distinct name for the loc
 
 ## What it can do
 
-- Upload, organize, share and version files in permissioned workspaces.
+- Upload, organize, share and version files in permissioned workspaces, and find them by name or by the words in them.
 - Use WebDAV or link compatible desktop sync clients.
 - Let AI agents read and organize files over MCP, with an access level and an optional folder limit per agent.
 - Configure optional Euro-Office editing and document previews.
@@ -28,7 +28,7 @@ AI agents such as OpenClaw and Hermes Agent reach your files over MCP at
 `https://<your host>/mcp`. On the **Account** page, under **App passwords**, choose **AI agent**
 and an access level:
 
-- **Read only** (the default): the agent lists, searches and reads your files, including the
+- **Read only** (the default): the agent lists, searches (by name and by content) and reads your files, including the
   text of Word, Excel, PowerPoint and OpenDocument files, and of PDFs when Euro-Office is set up.
 - **Read and write**: it can also create, replace, rename, move and trash files.
 
