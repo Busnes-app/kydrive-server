@@ -282,6 +282,14 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
+		// Shared workspace names are unique, ignoring case; every My files shares one name.
+		var taken int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND lower(w.name)=lower(?)`, name).Scan(&taken); err != nil {
+			return err
+		}
+		if taken > 0 {
+			return fmt.Errorf("%w: workspace name exists", ErrConflict)
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, w.ID, name, quota); err != nil {
 			return err
 		}

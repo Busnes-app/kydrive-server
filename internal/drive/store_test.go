@@ -306,3 +306,35 @@ func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
 		t.Fatal("offboarding failed to queue editor revocation")
 	}
 }
+
+func TestSharedWorkspaceNamesAreUnique(t *testing.T) {
+	st, _, _ := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	for _, name := range []string{"Organization", "organization"} {
+		if _, err := d.CreateWorkspace(ctx, "admin", name, 100); !errors.Is(err, drive.ErrConflict) {
+			t.Fatalf("second workspace named %q: %v", name, err)
+		}
+	}
+	if _, err := d.EnsurePersonalWorkspace(ctx, "worker"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateWorkspace(ctx, "admin", "Studio", 100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.EnsurePersonalWorkspace(ctx, "stranger"); err != nil {
+		t.Fatalf("personal My files collided with another: %v", err)
+	}
+	all, err := d.Workspaces(ctx, "admin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := 0
+	for _, w := range all {
+		if w.Kind == "shared" {
+			shared++
+		}
+	}
+	if shared != 2 {
+		t.Fatalf("shared workspaces = %d, want 2", shared)
+	}
+}
