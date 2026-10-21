@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { ShareDialog } from './ShareDialog';
 
 beforeAll(() => { HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; });
+
+// li finds a list row by its whole text, which now spans a title, a badge and a meta line.
+const li = (re: RegExp) => (_: string, el: Element | null) => el?.tagName === 'LI' && re.test(el.textContent ?? '');
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
@@ -20,12 +24,12 @@ describe('ShareDialog', () => {
       return json(url.endsWith('/links') ? [] : shares);
     }));
     render(<ShareDialog kind="folder" id="d1" name="Reports" groups={[]} maxRole="editor" onClose={() => {}} />);
-    expect(await screen.findByText(/Finance · group · reader/)).toBeTruthy();
+    expect(await screen.findByText(li(/Finance.*Reader.*Group/))).toBeTruthy();
     expect(screen.queryByRole('option', { name: 'Manager' })).toBeNull(); // editors cannot share above their role
     fireEvent.change(screen.getByLabelText('Access'), { target: { value: 'editor' } });
     fireEvent.change(screen.getByLabelText('Find a person'), { target: { value: 'an' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add' }, { timeout: 2000 }));
-    await screen.findByText(/Ann Lee · person · editor/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add as editor' }, { timeout: 2000 }));
+    await screen.findByText(li(/Ann Lee.*Editor.*Person/));
     expect(calls.find(c => c.method === 'PUT')).toEqual({ method: 'PUT', url: '/api/drive/folders/d1/shares', body: { principal_kind: 'user', principal_id: 'u2', role: 'editor' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
     await waitFor(() => expect(screen.queryByText(/Finance/)).toBeNull());
@@ -58,9 +62,9 @@ describe('ShareDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     expect(await screen.findByText('https://drive.example/l/#tok')).toBeTruthy();
     expect(calls.find(c => c.method === 'POST')).toEqual({ method: 'POST', url: '/api/drive/files/f1/links', body: { role: 'editor', expires: 0 } });
-    expect(await screen.findByText(/editor link · never expires · opened by 0/)).toBeTruthy();
+    expect(await screen.findByText(li(/Editor link.*Never expires · opened by 0/))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
-    await waitFor(() => expect(screen.queryByText(/editor link/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Editor link/)).toBeNull());
     expect(calls.some(c => c.method === 'DELETE' && c.url === '/api/drive/links/l1')).toBe(true);
   });
 });

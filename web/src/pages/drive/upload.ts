@@ -14,8 +14,12 @@ export class UploadInterrupted extends Error { constructor(readonly session: Ses
 type Options = { chunk?: number; retries?: number; wait?: (ms: number) => Promise<void> };
 const pause = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-export async function startUpload(workspace: string, parent: string, f: File): Promise<Session> {
-  const v = await change(`/api/drive/workspaces/${workspace}/upload-sessions`, 'POST', { parent, name: f.name, size: f.size });
+// Target is where an upload lands: a new file called name, or a new version of an existing file.
+export type Target = { name: string; replace?: { id: string; revision: number } };
+
+export async function startUpload(workspace: string, parent: string, f: File, target: Target = { name: f.name }): Promise<Session> {
+  const body = target.replace ? { file: target.replace.id, revision: target.replace.revision, size: f.size } : { parent, name: target.name, size: f.size };
+  const v = await change(`/api/drive/workspaces/${workspace}/upload-sessions`, 'POST', body);
   if (!session(v)) throw new Error('Invalid upload response');
   return v;
 }
@@ -106,4 +110,16 @@ export async function makeFolders(workspace: string, parent: string, dirs: strin
     ids.set(key, found.id);
   }
   return ids;
+}
+
+// numbered is name with " (n)" before its extension, as the server numbers guest uploads.
+export function numbered(name: string, n: number): string {
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot) : '';
+  return `${name.slice(0, name.length - ext.length)} (${n})${ext}`;
+}
+
+// freeName is the first numbered form of name that no name in taken uses.
+export function freeName(name: string, taken: Set<string>): string {
+  for (let n = 2; ; n++) { const candidate = numbered(name, n); if (!taken.has(candidate)) return candidate; }
 }

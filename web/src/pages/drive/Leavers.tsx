@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useConfirm } from '../../components/Dialog';
 import { bytes, change, record, response, type Workspace } from './client';
 
 type Leaver = { workspace: string; name: string; status: string; size: number; items: number };
@@ -13,6 +14,7 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirm, confirmNode] = useConfirm();
   const shared = workspaces.filter(w => w.kind === 'shared');
   const load = useCallback(async () => {
     const v = await response(await fetch('/api/drive/leavers'));
@@ -27,7 +29,7 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
   }
   async function handOver(l: Leaver) {
     const target = targets[l.workspace] ?? '';
-    if (!window.confirm(`Move ${bytes(l.size)} (${l.items} items) from ${l.name} to ${label(target)}? Everyone with access there will see the files.`)) return;
+    if (!await confirm({ title: `Hand over ${l.name}'s files?`, body: `Move ${bytes(l.size)} (${l.items} items) from ${l.name} to ${label(target)}? Everyone with access there will see the files.`, confirm: 'Hand over' })) return;
     const id = target.slice(target.indexOf(':') + 1);
     setBusy(true); setMessage('');
     try {
@@ -37,18 +39,19 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
       onDone();
     } catch (e) { setMessage(e instanceof Error ? e.message : 'Handover failed'); } finally { setBusy(false); }
   }
-  return <details className="panel"><summary>Leavers</summary>
-    <p>Move a removed account's My files to a shared workspace or a colleague. File names stay hidden here.</p>
-    {message && <p role="status">{message}</p>}
-    {leavers.length === 0 && <p>No removed accounts hold files.</p>}
-    {leavers.map(l => <form key={l.workspace} className="drive-toolbar" onSubmit={e => { e.preventDefault(); void handOver(l); }}>
-      <span>{l.name} · {l.status} · {bytes(l.size)} · {l.items} items</span>
-      <label>Destination<select required value={targets[l.workspace] ?? ''} onChange={e => setTargets({ ...targets, [l.workspace]: e.target.value })}>
-        <option value="">Choose destination</option>
-        <optgroup label="Shared workspaces">{shared.map(w => <option key={w.id} value={`workspace:${w.id}`}>{w.name}</option>)}</optgroup>
-        <optgroup label="Colleagues">{colleagues.map(c => <option key={c.id} value={`user:${c.id}`}>{c.name}</option>)}</optgroup>
-      </select></label>
-      <button disabled={busy || !targets[l.workspace]}>Hand over</button>
-    </form>)}
-  </details>;
+  return <details className="panel"><summary>Leavers <small>{leavers.length ? `${leavers.length} removed ${leavers.length === 1 ? 'account holds' : 'accounts hold'} files` : 'Hand over a removed account’s files'}</small></summary><div className="details-body">
+    <p className="hint">Move a removed account's My files to a shared workspace or a colleague. File names stay hidden here.</p>
+    {message && <p role="status" className="alert alert-info">{message}</p>}
+    {leavers.length === 0 ? <p className="empty-note">No removed accounts hold files.</p> : <ul className="item-list" aria-label="Leavers">{leavers.map(l => <li key={l.workspace}>
+      <div className="item-main"><span className="item-title">{l.name} <span className="badge">{l.status}</span></span><span className="item-meta">{bytes(l.size)} · {l.items} items</span></div>
+      <form className="form-row" onSubmit={e => { e.preventDefault(); void handOver(l); }}>
+        <label className="field">Destination<select required value={targets[l.workspace] ?? ''} onChange={e => setTargets({ ...targets, [l.workspace]: e.target.value })}>
+          <option value="">Choose destination</option>
+          <optgroup label="Shared workspaces">{shared.map(w => <option key={w.id} value={`workspace:${w.id}`}>{w.name}</option>)}</optgroup>
+          <optgroup label="Colleagues">{colleagues.map(c => <option key={c.id} value={`user:${c.id}`}>{c.name}</option>)}</optgroup>
+        </select></label>
+        <button className="btn-secondary" disabled={busy || !targets[l.workspace]}>Hand over</button>
+      </form>
+    </li>)}</ul>}
+  </div>{confirmNode}</details>;
 }

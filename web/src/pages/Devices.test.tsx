@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Devices, DevicePolicySettings } from './Devices';
 
+
+// li finds a list row by its whole text, which now spans a title, a badge and a meta line.
+const li = (re: RegExp) => (_: string, el: Element | null) => el?.tagName === 'LI' && re.test(el.textContent ?? '');
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
@@ -25,9 +29,9 @@ describe('Devices', () => {
     const calls = server({ wipe_default: true, wipe_locked: false });
     render(<Devices />);
     expect(await screen.findByText(/Work laptop/)).toBeTruthy();
-    expect(screen.getByText(/macOS · linked 2026-10-15 · never used/)).toBeTruthy();
+    expect(screen.getByText(li(/Work laptop.*macOS · linked .*2026 · never used/))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
-    const wipe = await screen.findByLabelText('Also remove KyDrive files from this computer') as HTMLInputElement;
+    const wipe = await screen.findByLabelText(/^Also remove KyDrive files from this computer/) as HTMLInputElement;
     expect(wipe.checked).toBe(true);
     expect(screen.getByText(/offline for 30 days/)).toBeTruthy();
     fireEvent.click(wipe);
@@ -41,7 +45,7 @@ describe('Devices', () => {
     const calls = server({ wipe_default: true, wipe_locked: true });
     render(<Devices />);
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
-    const wipe = await screen.findByLabelText('Also remove KyDrive files from this computer') as HTMLInputElement;
+    const wipe = await screen.findByLabelText(/^Also remove KyDrive files from this computer/) as HTMLInputElement;
     expect(wipe.disabled).toBe(true);
     expect(wipe.checked).toBe(true);
     fireEvent.click(wipe);
@@ -54,7 +58,7 @@ describe('Devices', () => {
     const calls = server({ wipe_default: false, wipe_locked: false });
     render(<Devices />);
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
-    expect(((await screen.findByLabelText('Also remove KyDrive files from this computer')) as HTMLInputElement).checked).toBe(false);
+    expect(((await screen.findByLabelText(/^Also remove KyDrive files from this computer/)) as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(calls.some(c => c.startsWith('DELETE'))).toBe(false);
   });

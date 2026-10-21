@@ -69,7 +69,8 @@ export const CaptchaWidget: React.FC<CaptchaProps> = ({ onToken }) => {
       } catch (err) {
         if (!cancelled) {
           setStatus('failed');
-          setErrorMsg(err instanceof Error ? err.message : 'Security check failed');
+          // WebCrypto exists only on HTTPS (or localhost); say so instead of a script error.
+          setErrorMsg(typeof crypto === 'undefined' || !crypto.subtle ? 'The sign-in check needs a secure connection. Open KyDrive over HTTPS.' : err instanceof Error ? err.message : 'Security check failed');
         }
       }
     };

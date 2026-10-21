@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Dialog } from '../../components/Dialog';
+import { Alert } from '../../components/Alert';
 import { change, folder, list, type DriveFile, type Folder, type Workspace } from './client';
 
 export type Item = { kind: 'file'; file: DriveFile } | { kind: 'folder'; folder: Folder };
@@ -11,7 +13,6 @@ function descendants(folders: Folder[], root: string): Set<string> {
 }
 
 export function MoveDialog({ mode, item, workspaceID, workspaces, onClose, onDone }: { mode: Mode; item: Item; workspaceID: string; workspaces: Workspace[]; onClose: () => void; onDone: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const original = item.kind === 'file' ? item.file : item.folder;
   const writable = workspaces.filter(w => w.role === 'editor' || w.role === 'manager');
   // Moving a file across workspaces needs manager rights on the source; copying does not.
@@ -23,8 +24,6 @@ export function MoveDialog({ mode, item, workspaceID, workspaces, onClose, onDon
   const [folders, setFolders] = useState<Folder[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // jsdom lacks showModal; opening by attribute keeps the form reachable in unit tests.
-  useEffect(() => { const d = ref.current; if (d && !d.open) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } }, []);
   useEffect(() => {
     if (mode === 'rename') return;
     let live = true;
@@ -43,14 +42,11 @@ export function MoveDialog({ mode, item, workspaceID, workspaces, onClose, onDon
       onDone();
     } catch (e) { setError(e instanceof Error ? e.message : `${verb} failed`); } finally { setBusy(false); }
   }
-  return <dialog ref={ref} className="drive-document-dialog" aria-labelledby="move-title" onCancel={onClose}>
-    <form onSubmit={e => { e.preventDefault(); void submit(); }}>
-      <h2 id="move-title">{verb} {original.name}</h2>
-      <label>Name<input autoFocus required value={name} onChange={e => setName(e.target.value)} /></label>
-      {mode !== 'rename' && crossWorkspace && <label>Workspace<select value={target} onChange={e => { setTarget(e.target.value); setParent(''); }}>{writable.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>}
-      {mode !== 'rename' && <label>Folder<select value={parent} onChange={e => setParent(e.target.value)}><option value="">Workspace root</option>{folders.filter(f => !hidden.has(f.id)).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
-      {error && <p role="alert">{error}</p>}
-      <div className="drive-dialog-actions"><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button disabled={busy || !name.trim()}>{verb}</button></div>
-    </form>
-  </dialog>;
+  return <Dialog title={`${verb} ${original.name}`} onClose={onClose} onSubmit={() => void submit()}
+    footer={<><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button disabled={busy || !name.trim()}>{verb}</button></>}>
+    <label className="field">Name<input autoFocus required value={name} onChange={e => setName(e.target.value)} /></label>
+    {mode !== 'rename' && crossWorkspace && <label className="field">Workspace<select value={target} onChange={e => { setTarget(e.target.value); setParent(''); }}>{writable.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>}
+    {mode !== 'rename' && <label className="field">Folder<select value={parent} onChange={e => setParent(e.target.value)}><option value="">Workspace root</option>{folders.filter(f => !hidden.has(f.id)).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
+    {error && <Alert>{error}</Alert>}
+  </Dialog>;
 }

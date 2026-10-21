@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Leavers } from './Leavers';
 
 const workspaces = [
@@ -25,15 +25,17 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('Leavers', () => {
   it('hands a leaver over to a colleague after confirming the size', async () => {
     const calls = stub();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const done = vi.fn();
     render(<Leavers workspaces={workspaces} onDone={done} />);
-    await screen.findByText('Lee Ver · inactive · 2.0 KiB · 3 items');
+    await screen.findByText('2.0 KiB · 3 items');
+    expect(screen.getByText('inactive')).toBeTruthy();
     expect(screen.queryByRole('option', { name: 'My files' })).toBeNull();
     fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'user:u2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Hand over' }));
+    const ask = await screen.findByRole('dialog');
+    expect(ask.textContent).toContain('2.0 KiB (3 items) from Lee Ver to Heir\'s My files');
+    fireEvent.click(within(ask).getByRole('button', { name: 'Hand over' }));
     await waitFor(() => expect(done).toHaveBeenCalled());
-    expect(confirm.mock.calls[0][0]).toContain('2.0 KiB (3 items) from Lee Ver to Heir\'s My files');
     const post = calls.find(([, init]) => init?.method === 'POST');
     expect(post?.[0]).toBe('/api/drive/leavers/p1/handover');
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ user: 'u2' });
@@ -42,11 +44,12 @@ describe('Leavers', () => {
 
   it('sends nothing when the confirmation is declined', async () => {
     const calls = stub();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<Leavers workspaces={workspaces} onDone={() => {}} />);
     await screen.findByText(/Lee Ver/);
     fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'workspace:team' } });
     fireEvent.click(screen.getByRole('button', { name: 'Hand over' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 });

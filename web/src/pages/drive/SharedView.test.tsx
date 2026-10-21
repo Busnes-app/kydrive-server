@@ -18,15 +18,16 @@ describe('SharedView', () => {
       return json({ folder: {}, folders: [], files: [] });
     }));
     render(<SharedView openInNewTab={false} />);
-    expect(await screen.findByText('Finance · editor')).toBeTruthy();
-    expect(screen.getByText('Ann Lee · reader')).toBeTruthy();
+    expect((await screen.findAllByText('Finance · Editor')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ann Lee · Reader').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'draft.docx' }).getAttribute('href')).toBe('/editor.html?file=f9');
-    fireEvent.click(screen.getByRole('button', { name: 'Budgets/' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Budgets' }));
     expect(await screen.findByRole('link', { name: 'q1.xlsx' })).toBeTruthy();
-    expect(screen.getByText('2.0 KiB')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '2026/' })).toBeTruthy();
+    expect(screen.getAllByText('2.0 KiB').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: '2026' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Actions for q1.xlsx' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Shared with me' }));
-    expect(await screen.findByText('Finance · editor')).toBeTruthy();
+    expect((await screen.findAllByText('Finance · Editor')).length).toBeGreaterThan(0);
   });
 
   it('says when nothing is shared', async () => {

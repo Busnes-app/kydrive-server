@@ -33,28 +33,29 @@ test('rename, move, trash a folder, restore it and delete it permanently', async
   await page.reload();
 
   await page.getByLabel(`Actions for note ${tag}.md`).click();
-  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(`moved ${tag}.md`);
   await page.getByRole('dialog').getByLabel('Folder').selectOption({ label: folderName });
   await page.getByRole('dialog').getByRole('button', { name: 'Move', exact: true }).click();
-  await page.getByRole('button', { name: `${folderName}/` }).click();
+  await page.getByRole('button', { name: folderName, exact: true }).click();
   await expect(page.getByRole('link', { name: `moved ${tag}.md` })).toBeVisible();
 
   await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: mine.name }).click();
   await page.getByLabel(`Actions for folder ${folderName}`).click();
-  await page.getByRole('button', { name: 'Move to trash' }).click();
-  await expect(page.getByRole('button', { name: `${folderName}/` })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await expect(page.getByRole('button', { name: folderName, exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Trash', exact: true }).click();
   await page.getByRole('row', { name: new RegExp(folderName) }).getByRole('button', { name: 'Restore', exact: true }).click();
   await page.getByRole('button', { name: 'Back to files' }).click();
-  await expect(page.getByRole('button', { name: `${folderName}/` })).toBeVisible();
+  await expect(page.getByRole('button', { name: folderName, exact: true })).toBeVisible();
 
   await page.getByLabel(`Actions for folder ${folderName}`).click();
-  await page.getByRole('button', { name: 'Move to trash' }).click();
+  await page.getByRole('menuitem', { name: 'Move to trash' }).click();
   await page.getByRole('button', { name: 'Trash', exact: true }).click();
-  page.once('dialog', d => d.accept());
+  await expect(page.getByRole('heading', { name: 'Trash', exact: true })).toBeVisible();
   await page.getByRole('row', { name: new RegExp(folderName) }).getByRole('button', { name: 'Delete permanently' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' }).click();
   await expect(page.getByRole('row', { name: new RegExp(folderName) })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

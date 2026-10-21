@@ -18,6 +18,7 @@ import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
 import { secureFetch } from './api';
+import { Alert } from './components/Alert';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<DriveUser | null>(null);
@@ -120,7 +121,7 @@ export const App: React.FC = () => {
   if (!user) {
     return (
       <>
-      {notice && <p role="status" style={{ padding: 16 }}>{notice}</p>}
+      {notice && <div className="app-notice" style={{ maxWidth: '24rem', margin: '1.5rem auto 0' }}><Alert tone="info">{notice}</Alert></div>}
       <Login
         appName={typeof settings?.app_name === 'string' ? settings.app_name : 'KyDrive'}
         onSuccess={(u) => {
@@ -135,7 +136,7 @@ export const App: React.FC = () => {
   }
 
   if (user.must_change_password) {
-    return <>{notice && <p role="alert" style={{ padding: 16 }}>{notice}</p>}<ChangePassword onLogout={handleLogout} onComplete={() => {
+    return <>{notice && <div className="app-notice"><Alert>{notice}</Alert></div>}<ChangePassword onLogout={handleLogout} onComplete={() => {
       setUser(null);
       setNotice('Password changed. Sign in with your new password.');
     }} /></>;
@@ -159,12 +160,19 @@ export const App: React.FC = () => {
       />
 
       <main className="app-main">
-        {notice && <p role="alert" className="panel">{notice}</p>}
+        {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
         {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}
-        {activeTab === 'account' && <><TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} /><AppPasswords /><Devices /></>}
+        {activeTab === 'account' && <section className="page page-narrow">
+          <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
+          <div className="stack">
+            <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />
+            <AppPasswords />
+            <Devices />
+          </div>
+        </section>}
       </main>
     </div>
   );

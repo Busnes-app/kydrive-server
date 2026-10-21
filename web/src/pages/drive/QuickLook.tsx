@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Download, ExternalLink, FileQuestion, X } from 'lucide-react';
 
 type Kind = 'image' | 'pdf' | 'audio' | 'video' | 'text';
 type Shown = { kind: 'loading' | 'none' } | { kind: 'error'; message: string } | { kind: Exclude<Kind, 'text'> } | { kind: 'text'; text: string; cut: boolean };
@@ -43,18 +44,18 @@ export function QuickLook({ file, onClose }: { file: { id: string; name: string 
     return () => { live = false; };
   }, [url]);
   const rendered = shown.kind !== 'loading' && shown.kind !== 'none' && shown.kind !== 'error';
-  return <dialog ref={ref} className="drive-preview-dialog" aria-labelledby="preview-title" onCancel={onClose}>
+  return <dialog ref={ref} className="drive-preview-dialog" aria-labelledby="preview-title" onCancel={e => { e.preventDefault(); onClose(); }}>
     <header>
       <h2 id="preview-title">{file.name}</h2>
-      <div className="drive-dialog-actions">
-        {rendered && <a href={url} target="_blank" rel="noreferrer">Open in new tab</a>}
-        <a href={`/api/drive/files/${encodeURIComponent(file.id)}/download`}>Download</a>
-        <button type="button" className="btn-secondary" autoFocus onClick={onClose}>Close</button>
+      <div className="button-row">
+        {rendered && <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden="true" />Open in new tab</a>}
+        <a className="btn btn-secondary btn-sm" href={`/api/drive/files/${encodeURIComponent(file.id)}/download`}><Download size={14} aria-hidden="true" />Download</a>
+        <button type="button" className="icon-btn" aria-label="Close" autoFocus onClick={onClose}><X size={18} aria-hidden="true" /></button>
       </div>
     </header>
     <div className="drive-preview-body">
       {shown.kind === 'loading' && <p role="status">Loading preview…</p>}
-      {shown.kind === 'none' && <p>No preview for this file. Download it to open it.</p>}
+      {shown.kind === 'none' && <><FileQuestion size={40} aria-hidden="true" /><p>No preview for this file. Download it to open it.</p></>}
       {shown.kind === 'error' && <p role="alert">{shown.message}</p>}
       {shown.kind === 'image' && <img src={url} alt={file.name} />}
       {shown.kind === 'pdf' && <iframe src={url} title={file.name} />}

@@ -67,16 +67,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
           {user && (
             <div className="app-user">
               <div className="app-user-copy">
-                <div style={{ fontWeight: 600, color: 'var(--ink-strong)' }}>{user.display_name || user.username}</div>
-                <div style={{ fontSize: '11px', color: 'var(--ink)' }}>{user.role}</div>
+                <div className="app-user-name">{user.display_name || user.username}</div>
+                <div className="app-user-role">{user.role === 'admin' ? 'Administrator' : user.username}</div>
               </div>
               <button
-                className="btn-secondary app-logout"
+                className="icon-btn app-logout"
                 onClick={onLogout}
                 title="Sign out"
                 aria-label="Sign out"
               >
-                <LogOut size={16} />
+                <LogOut size={16} aria-hidden="true" />
               </button>
             </div>
           )}

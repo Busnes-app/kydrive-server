@@ -27,14 +27,14 @@ it('keeps the session on a failed sign-out and resets the shell on success', asy
   expect(screen.getByRole('button', { name: 'Settings & DB' }).getAttribute('aria-current')).toBe('page');
 
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-  expect((await screen.findByRole('alert')).textContent).toContain('Sign out failed');
+  expect((await screen.findByText(/Sign out failed/)).closest('[role="alert"]')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
 
   const settingsReads = fetcher.mock.calls.filter(([u]) => String(u) === '/api/settings').length;
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Fake sign in' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Settings & DB' }).getAttribute('aria-current')).toBeNull());
-  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByText(/Sign out failed/)).toBeNull();
   expect(fetcher.mock.calls.filter(([u]) => String(u) === '/api/settings').length).toBeGreaterThan(settingsReads);
 });
 

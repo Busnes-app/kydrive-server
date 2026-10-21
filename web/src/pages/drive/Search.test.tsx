@@ -25,8 +25,20 @@ describe('Search', () => {
     expect(urls).toEqual(['/api/drive/search?q=bud%20get']);
     expect(screen.getByText('Team / Reports')).toBeTruthy();
     expect(screen.getByText(/Showing the first 1 matches/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Q1 budget.xlsx' }));
+    fireEvent.click(screen.getByRole('button', { name: /Q1 budget\.xlsx/ }));
     expect(open).toHaveBeenCalledWith(results[0]);
+  });
+
+  it('hides the results on Escape and shows them again on focus', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results, truncated: false }), { status: 200 })));
+    render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    const box = screen.getByLabelText('Search files');
+    fireEvent.change(box, { target: { value: 'budget' } });
+    expect(await screen.findByText('Team / Reports')).toBeTruthy();
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByText('Team / Reports')).toBeNull();
+    fireEvent.focus(box);
+    expect(screen.getByText('Team / Reports')).toBeTruthy();
   });
 
   it('says when nothing matched', async () => {

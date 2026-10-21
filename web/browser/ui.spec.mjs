@@ -55,7 +55,7 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await expect(nav.getByRole('button').nth(1)).toHaveCSS('outline-style', 'solid');
   await nav.getByRole('button', { name: 'Settings & DB' }).click();
   await expect(nav.getByRole('button', { name: 'Settings & DB' })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('heading', { name: 'System Settings & Architecture' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await fits(page);
   await expect(page.getByRole('button', { name: 'Pair Device' })).toHaveCount(0);
   await page.evaluate(() => fetch('/browser-regression-uncached'));
