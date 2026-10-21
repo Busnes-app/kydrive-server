@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { secureFetch } from '../api';
 import { change, record, response } from './drive/client';
+import { Alert } from '../components/Alert';
+import { useConfirm } from '../components/Dialog';
+import { When } from '../components/When';
 
 type Scope = 'dav' | 'mcp:read' | 'mcp:write';
 type AppPassword = { id: string; name: string; created: string; last_used: number; scope: Scope; revoke_after?: number; root?: string; root_missing?: boolean };
@@ -32,6 +35,7 @@ export function AppPasswords() {
   const [shown, setShown] = useState<Created | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirm, confirmNode] = useConfirm();
 
   async function run(action: () => Promise<void>) {
     setError(''); setBusy(true);
@@ -50,62 +54,73 @@ export function AppPasswords() {
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
   }); };
-  const revoke = (p: AppPassword) => { if (window.confirm(isAgent(p.scope) ? `Revoke "${p.name}"? The agent loses access at once.` : `Revoke "${p.name}"? Devices using it stop syncing.`)) void run(async () => {
+  const revoke = async (p: AppPassword) => { if (await confirm({ title: `Revoke "${p.name}"?`, body: isAgent(p.scope) ? 'The agent loses access at once.' : 'Devices using it stop syncing.', confirm: 'Revoke', danger: true })) void run(async () => {
     const r = await secureFetch(`/api/auth/app-passwords/${p.id}`, { method: 'DELETE' });
     if (!r.ok) await response(r);
     await load();
   }); };
-  const setAccess = (p: AppPassword, scope: Scope) => {
-    if (scope === 'mcp:write' && !window.confirm(`${grant(p.name, scope, p.root)}\n\n${WRITE_WARNING}\n\nGive "${p.name}" write access?`)) return;
+  const setAccess = async (p: AppPassword, scope: Scope) => {
+    if (scope === 'mcp:write' && !await confirm({ title: `Give "${p.name}" write access?`, body: <><p>{grant(p.name, scope, p.root)}</p><p>{WRITE_WARNING}</p></>, confirm: 'Give write access', danger: true })) return;
     void run(async () => { await change(`/api/auth/app-passwords/${p.id}`, 'PATCH', { scope }); await load(); });
   };
 
-  return <section className="panel" style={{ maxWidth: 560 }} aria-labelledby="app-passwords-heading">
-    <h2 id="app-passwords-heading">App passwords</h2>
+  const pendingScope: Scope = agent ? (write ? 'mcp:write' : 'mcp:read') : 'dav';
+  return <section className="panel" aria-labelledby="app-passwords-heading">
+    <h2 id="app-passwords-heading">App passwords and AI agents</h2>
     <p>Connect a file manager or office app over WebDAV, or an AI agent such as OpenClaw or Hermes Agent. Each password works only for its kind and can be revoked on its own.</p>
-    {shown && (isAgent(shown.scope) ? <AgentSetup token={shown} onDone={() => setShown(null)} /> : <div role="status">
-      <p><strong>Copy this password now. It will not be shown again.</strong></p>
+    {shown && (isAgent(shown.scope) ? <AgentSetup token={shown} onDone={() => setShown(null)} /> : <div className="reveal" role="status">
+      <strong>Copy this password now. It will not be shown again.</strong>
       <p>{grant(shown.name, shown.scope)}</p>
       <dl>
-        <dt>Server</dt><dd><code className="font-mono" style={{ userSelect: 'all' }}>{shown.url}</code></dd>
-        <dt>Username</dt><dd><code className="font-mono" style={{ userSelect: 'all' }}>{shown.username}</code></dd>
-        <dt>Password</dt><dd><code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{shown.password}</code></dd>
+        <dt>Server</dt><dd><code className="secret font-mono">{shown.url}</code></dd>
+        <dt>Username</dt><dd><code className="secret font-mono">{shown.username}</code></dd>
+        <dt>Password</dt><dd><code className="secret font-mono">{shown.password}</code></dd>
       </dl>
-      <button type="button" onClick={() => setShown(null)}>I have copied it</button>
+      <div><button type="button" onClick={() => setShown(null)}>I have copied it</button></div>
     </div>)}
-    <form onSubmit={create}>
-      <fieldset>
+    <form className="form" onSubmit={create}>
+      <fieldset className="choice-group">
         <legend>Kind</legend>
-        <label><input type="radio" name="app-password-kind" checked={!agent} onChange={() => setAgent(false)} /> File manager or office app (WebDAV)</label>
-        <label><input type="radio" name="app-password-kind" checked={agent} onChange={() => setAgent(true)} /> AI agent</label>
+        <label className="choice"><input type="radio" name="app-password-kind" checked={!agent} onChange={() => setAgent(false)} /><span><b>File manager or office app (WebDAV)</b><small>Finder, Windows Explorer, rclone, Cyberduck, LibreOffice</small></span></label>
+        <label className="choice"><input type="radio" name="app-password-kind" checked={agent} onChange={() => setAgent(true)} /><span><b>AI agent</b><small>OpenClaw, Hermes Agent or another MCP client</small></span></label>
       </fieldset>
-      {agent && <fieldset>
+      {agent && <fieldset className="choice-group">
         <legend>Agent access</legend>
-        <label><input type="radio" name="app-password-access" checked={!write} onChange={() => setWrite(false)} /> Read only</label>
-        <label><input type="radio" name="app-password-access" checked={write} onChange={() => setWrite(true)} /> Read and write</label>
-        {write && <p role="note">{WRITE_WARNING}</p>}
-        <label htmlFor="app-password-folder">Limit to folder (optional)</label>
-        <input id="app-password-folder" placeholder="/My files/Projects" value={folder} onChange={e => setFolder(e.target.value)} />
+        <label className="choice"><input type="radio" name="app-password-access" checked={!write} onChange={() => setWrite(false)} /><span><b>Read only</b><small>Lists, searches and reads files</small></span></label>
+        <label className="choice"><input type="radio" name="app-password-access" checked={write} onChange={() => setWrite(true)} /><span><b>Read and write</b><small>Can also create, change and trash files</small></span></label>
+        {write && <p role="note" className="alert alert-warn" style={{ gridColumn: '1 / -1' }}>{WRITE_WARNING}</p>}
       </fieldset>}
-      <label htmlFor="app-password-name">{agent ? 'Agent name' : 'Device or app name'}</label>
-      <input id="app-password-name" required maxLength={100} placeholder={agent ? 'Hermes' : 'Work laptop'} value={name} onChange={e => setName(e.target.value)} />
-      {name.trim() && <p aria-live="polite">{grant(name.trim(), agent ? (write ? 'mcp:write' : 'mcp:read') : 'dav', agent ? folder.trim() || undefined : undefined)}</p>}
-      <button type="submit" disabled={busy || !name.trim()}>{agent ? 'Create agent token' : 'Create app password'}</button>
+      {agent && <div className="field"><label htmlFor="app-password-folder">Limit to folder (optional)</label>
+        <input id="app-password-folder" placeholder="/My files/Projects" value={folder} onChange={e => setFolder(e.target.value)} />
+        <span className="hint">The agent sees nothing outside this folder. Leave empty for all your files.</span></div>}
+      <div className="field"><label htmlFor="app-password-name">{agent ? 'Agent name' : 'Device or app name'}</label>
+        <input id="app-password-name" required maxLength={100} placeholder={agent ? 'Hermes' : 'Work laptop'} value={name} onChange={e => setName(e.target.value)} /></div>
+      {name.trim() && <p aria-live="polite" className="hint">{grant(name.trim(), pendingScope, agent ? folder.trim() || undefined : undefined)}</p>}
+      <div><button type="submit" disabled={busy || !name.trim()}>{agent ? 'Create agent token' : 'Create app password'}</button></div>
     </form>
-    {list.length > 0 && <ul aria-label="Your app passwords">{list.map(p => <li key={p.id}>
-      <span>{p.name} · {isAgent(p.scope) ? 'AI agent · ' : ''}created {p.created.slice(0, 10)} · {p.last_used ? `last used ${new Date(p.last_used * 1000).toLocaleString()}` : 'never used'}</span>
-      {isAgent(p.scope) && <>
-        <select aria-label={`Access for ${p.name}`} value={p.scope} disabled={busy} onChange={e => setAccess(p, e.target.value as Scope)}>
-          <option value="mcp:read">Read only</option>
-          <option value="mcp:write">Read and write</option>
-        </select>
-        {p.root && <small> Limited to {p.root}</small>}
-        {p.root_missing && <small> Its folder is in the trash or gone</small>}
-        {p.revoke_after ? <small> Revoked if unused by {new Date(p.revoke_after * 1000).toLocaleDateString()}</small> : null}
-      </>}
-      <button type="button" className="btn-secondary" disabled={busy} onClick={() => revoke(p)}>Revoke</button>
-    </li>)}</ul>}
-    {error && <p role="alert">{error}</p>}
+    {error && <div style={{ marginTop: '1rem' }}><Alert>{error}</Alert></div>}
+    <div className="panel-section">
+      <h3>In use</h3>
+      {list.length === 0 ? <p className="empty-note">No app passwords or agent tokens yet.</p> : <ul className="item-list" aria-label="Your app passwords">{list.map(p => <li key={p.id}>
+        <div className="item-main">
+          <span className="item-title">{p.name} <span className="badge">{isAgent(p.scope) ? 'AI agent' : 'WebDAV'}</span></span>
+          <span className="item-meta">Created <When value={p.created} dateOnly /> · {p.last_used ? <>last used <When value={p.last_used} relativeOnly /></> : 'never used'}</span>
+          {isAgent(p.scope) && <span className="item-meta">
+            {p.root && <>Limited to {p.root}. </>}
+            {p.root_missing && <>Its folder is in the trash or gone. </>}
+            {p.revoke_after ? <>Revoked if unused by <When value={p.revoke_after} dateOnly />.</> : null}
+          </span>}
+        </div>
+        <div className="item-actions">
+          {isAgent(p.scope) && <select aria-label={`Access for ${p.name}`} value={p.scope} disabled={busy} onChange={e => void setAccess(p, e.target.value as Scope)}>
+            <option value="mcp:read">Read only</option>
+            <option value="mcp:write">Read and write</option>
+          </select>}
+          <button type="button" className="btn-danger-quiet btn-sm" disabled={busy} onClick={() => void revoke(p)}>Revoke</button>
+        </div>
+      </li>)}</ul>}
+    </div>
+    {confirmNode}
   </section>;
 }
 
@@ -122,10 +137,10 @@ function AgentSetup({ token, onDone }: { token: Created; onDone: () => void }) {
     url: "${token.url}"
     headers:
       Authorization: "Bearer \${KYDRIVE_TOKEN}"`;
-  return <div role="status">
-    <p><strong>Set this as KYDRIVE_TOKEN in the agent's environment now. It will not be shown again.</strong></p>
+  return <div className="reveal" role="status">
+    <strong>Set this as KYDRIVE_TOKEN in the agent's environment now. It will not be shown again.</strong>
     <p>{grant(token.name, token.scope, token.root || undefined)}{token.root && ' It sees nothing outside that folder.'}</p>
-    <p><code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{token.password}</code></p>
+    <code className="secret font-mono">{token.password}</code>
     <p>The agent loses access if it does not use KyDrive for 90 days; create a new token then.</p>
     <h3>OpenClaw</h3>
     <p>Add to <code>openclaw.json</code>:</p>
@@ -138,6 +153,6 @@ function AgentSetup({ token, onDone }: { token: Created; onDone: () => void }) {
     <pre><code>{hermes}</code></pre>
     <p>Install the skill:</p>
     <pre><code>{`hermes skills install ${token.skill ?? ''} --category productivity`}</code></pre>
-    <button type="button" onClick={onDone}>I have copied it</button>
+    <div><button type="button" onClick={onDone}>I have copied it</button></div>
   </div>;
 }

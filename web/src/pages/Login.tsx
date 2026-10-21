@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Key, AlertCircle, LogIn } from 'lucide-react';
+import { Key, LogIn } from 'lucide-react';
+import { Alert } from '../components/Alert';
 import { CaptchaWidget } from '../components/CaptchaWidget';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 
@@ -95,146 +96,60 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        background: 'var(--bg)',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 20, right: 20 }}>
-        <ThemeSwitcher />
-      </div>
-
-      <div style={{ width: '100%', maxWidth: '420px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              padding: '12px',
-              background: 'var(--accent-soft)',
-              borderRadius: '12px',
-              color: 'var(--accent)',
-              marginBottom: '12px',
-            }}
-          >
-            <img src="/app-icon.png" width={56} height={56} alt="" />
+    <div className="auth-page">
+      <div className="auth-theme"><ThemeSwitcher /></div>
+      <main className="auth-center">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <img src="/app-icon.png" width={56} height={56} alt="" style={{ borderRadius: 14 }} />
+            <h1>{appName || 'Busnes.app'}</h1>
+            <p>Organization files and shared workspaces</p>
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>{appName || 'Busnes.app'}</h1>
-          <p style={{ color: 'var(--ink)', fontSize: '14px', marginTop: '4px' }}>Organization files and shared workspaces</p>
-        </div>
-
-        <div className="panel">
-          {error && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid var(--danger)',
-                borderRadius: '6px',
-                padding: '10px',
-                color: 'var(--danger)',
-                fontSize: '13px',
-                marginBottom: '16px',
-              }}
-            >
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {mfaChallenge ? (
-            <form onSubmit={handleMFASubmit}>
-              <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>Two-Factor Verification</h2>
-              <p style={{ color: 'var(--ink)', fontSize: '13px', marginBottom: '16px' }}>
-                {isRecoveryCode ? 'Enter one of your single-use recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}
-              </p>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--ink)', marginBottom: '6px' }}>
+          <div className="panel">
+            {mfaChallenge ? (
+              <form onSubmit={handleMFASubmit}>
+                <div>
+                  <h2 style={{ fontSize: '1.1rem', marginBottom: '.25rem' }}>Two-Factor Verification</h2>
+                  <p className="hint">{isRecoveryCode ? 'Enter one of your single-use recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}</p>
+                </div>
+                {error && <Alert>{error}</Alert>}
+                <label className="field">
                   {isRecoveryCode ? 'Recovery Code' : 'Authenticator Code'}
+                  <input type="text" className="otp-input" autoFocus autoComplete="one-time-code" inputMode={isRecoveryCode ? 'text' : 'numeric'} value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} placeholder={isRecoveryCode ? 'XXXX-XXXX' : '123456'} required />
                 </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value)}
-                  placeholder={isRecoveryCode ? 'XXXX-XXXX' : '123456'}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', letterSpacing: '2px', textAlign: 'center' }}
-                  required
-                />
-              </div>
-
-              <button type="submit" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-                {loading ? 'Verifying...' : 'Verify & Sign In'}
-              </button>
-
-              <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: '12px' }}
-                  onClick={() => setIsRecoveryCode(!isRecoveryCode)}
-                >
+                <button type="submit" disabled={loading}>{loading ? 'Verifying...' : 'Verify & Sign In'}</button>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => setIsRecoveryCode(!isRecoveryCode)}>
                   {isRecoveryCode ? 'Use Authenticator App' : 'Use a Recovery Code'}
                 </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--ink)', marginBottom: '6px' }}>Username</label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: 'var(--ink)', marginBottom: '6px' }}>Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                />
-              </div>
-
-              <CaptchaWidget key={captchaRound} onToken={setCaptchaToken} />
-
-              <button type="submit" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} disabled={loading}>
-                <LogIn size={16} />
-                <span>{loading ? 'Signing in...' : 'Sign In'}</span>
-              </button>
-
-              <div style={{ marginTop: '20px', borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
-                <div style={{ fontSize: '12px', color: 'var(--ink)', textAlign: 'center', marginBottom: '12px' }}>
-                  Or continue with Single Sign-On
+              </form>
+            ) : (
+              <form onSubmit={handleLogin}>
+                {error && <Alert>{error}</Alert>}
+                <label className="field">
+                  Username
+                  <input type="text" autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" required />
+                </label>
+                <label className="field">
+                  Password
+                  <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required />
+                </label>
+                <CaptchaWidget key={captchaRound} onToken={setCaptchaToken} />
+                <button type="submit" disabled={loading}>
+                  <LogIn size={16} aria-hidden="true" />
+                  <span>{loading ? 'Signing in...' : 'Sign In'}</span>
+                </button>
+                <div className="auth-divider">
+                  <span>Or continue with Single Sign-On</span>
+                  <a href="/api/sso/kysignon/login" className="btn btn-secondary">
+                    <Key size={16} aria-hidden="true" />
+                    <span>Sign On with KyIdentity</span>
+                  </a>
                 </div>
-                <a
-                  href="/api/sso/kysignon/login"
-                  className="btn btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}
-                >
-                  <Key size={16} style={{ color: 'var(--accent)' }} />
-                  <span>Sign On with KyIdentity</span>
-                </a>
-              </div>
-            </form>
-          )}
+              </form>
+            )}
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

@@ -1,6 +1,9 @@
 # Desktop access
 
-KyDrive has no desktop app yet (roadmap M7). Until then, a computer reaches it over WebDAV at
+The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive-desktop)) is in
+development and has no release yet. The server already supports it: once you have the app, link
+a computer as described in [Linked computers](CLIENTS-AND-EDITOR.md#linked-computers). Until then,
+and for anything the app does not cover, a computer reaches KyDrive over WebDAV at
 `https://<your drive>/dav/`, signing in with your KyDrive username and an **app password**.
 Create one per computer on your Account page. It is shown once, works only for WebDAV, and
 can be revoked on its own: revoke it if the computer is lost.

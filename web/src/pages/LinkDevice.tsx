@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { change, record } from './drive/client';
+import { Alert } from '../components/Alert';
 
 // The desktop app opens /link?redirect=&challenge=&state=&name=&platform=. The request moves to
 // session storage at once, so it survives a KyIdentity sign-in, and waits for an explicit
@@ -50,22 +51,24 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
     } catch (e) { setError(e instanceof Error ? e.message : 'Linking failed.'); }
   };
 
-  return <main className="app-main">
-    <section className="panel" style={{ maxWidth: 560, margin: '40px auto' }} aria-labelledby="link-device-heading">
+  return <main className="auth-center" style={{ minHeight: '100vh' }}>
+    <section className="panel" style={{ width: '100%', maxWidth: '32rem' }} aria-labelledby="link-device-heading">
       <h2 id="link-device-heading">Link a computer</h2>
       {!request ? <>
-        <p role="alert">This link request is not valid. Start linking again from the KyDrive app on your computer.</p>
-        <button type="button" onClick={cancel}>Close</button>
+        <Alert>This link request is not valid. Start linking again from the KyDrive app on your computer.</Alert>
+        <div className="button-row"><button type="button" className="btn-secondary" onClick={cancel}>Close</button></div>
       </> : <>
         <p>Link <strong>{request.name}</strong> ({platforms[request.platform]}) to your KyDrive?</p>
-        <dl>
+        <dl className="settings-facts" style={{ margin: '1rem 0' }}>
           <dt>Request from</dt><dd className="font-mono">{ip || 'unknown'}</dd>
           <dt>Time</dt><dd>{at.toLocaleString()}</dd>
         </dl>
-        <p>The computer can open and change every file you can, until you revoke it on your Account page. Approve only if you just chose Link in the KyDrive app on this computer.</p>
-        <button type="button" onClick={() => void approve()} disabled={sent}>Approve</button>{' '}
-        <button type="button" className="btn-secondary" onClick={cancel} disabled={sent && !error}>Cancel</button>
-        {error && <p role="alert">{error} Start linking again from the KyDrive app.</p>}
+        <p className="alert alert-warn">The computer can open and change every file you can, until you revoke it on your Account page. Approve only if you just chose Link in the KyDrive app on this computer.</p>
+        <div className="button-row">
+          <button type="button" className="btn-secondary" onClick={cancel} disabled={sent && !error}>Cancel</button>
+          <button type="button" onClick={() => void approve()} disabled={sent}>Approve</button>
+        </div>
+        {error && <div style={{ marginTop: '1rem' }}><Alert>{error} Start linking again from the KyDrive app.</Alert></div>}
       </>}
     </section>
   </main>;

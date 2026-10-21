@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { secureFetch } from '../api';
+import { Alert } from '../components/Alert';
 
 interface TwoFactorProps {
   enabled: boolean;
@@ -58,43 +59,46 @@ export function TwoFactor({ enabled, local, onChange }: TwoFactorProps) {
     body = <p>Your identity provider manages two-factor authentication for this account.</p>;
   } else if (recoveryCodes.length > 0) {
     body = <>
-      <p role="status"><strong>Save these recovery codes now.</strong> Each one signs you in once if you lose your authenticator. They will not be shown again.</p>
-      <ol className="font-mono">{recoveryCodes.map((c) => <li key={c}>{c}</li>)}</ol>
-      <button type="button" onClick={() => setRecoveryCodes([])}>I have saved them</button>
+      <div className="reveal" role="status">
+        <p><strong>Save these recovery codes now.</strong> Each one signs you in once if you lose your authenticator. They will not be shown again.</p>
+        <ol className="font-mono secret" style={{ listStylePosition: 'inside', columns: 2 }}>{recoveryCodes.map((c) => <li key={c}>{c}</li>)}</ol>
+        <div><button type="button" onClick={() => setRecoveryCodes([])}>I have saved them</button></div>
+      </div>
     </>;
   } else if (enabled) {
-    body = <form onSubmit={disable}>
-      <p>Two-factor authentication is on. Signing in needs your password and a code from your authenticator app.</p>
-      <label htmlFor="mfa-password">Password</label>
-      <input id="mfa-password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={(e) => setPassword(e.target.value)} />
-      <label htmlFor="mfa-code">Authenticator or recovery code</label>
-      <input id="mfa-code" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
-      <button type="submit" className="btn-secondary" disabled={busy}>Turn off two-factor authentication</button>
+    body = <form className="form" onSubmit={disable}>
+      <p><span className="badge badge-success">On</span> Signing in needs your password and a code from your authenticator app.</p>
+      <div className="field"><label htmlFor="mfa-password">Password</label>
+      <input id="mfa-password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+      <div className="field"><label htmlFor="mfa-code">Authenticator or recovery code</label>
+      <input id="mfa-code" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></div>
+      <div><button type="submit" className="btn-danger-quiet" disabled={busy}>Turn off two-factor authentication</button></div>
     </form>;
   } else if (enrolment) {
-    body = <form onSubmit={confirm}>
+    body = <form className="form" onSubmit={confirm}>
       <p>Add this account to your authenticator app, then enter the 6-digit code it shows.</p>
-      <p>Setup key: <code className="font-mono" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{enrolment.secret}</code></p>
+      <div className="field"><span className="field-label">Setup key</span><code className="secret font-mono">{enrolment.secret}</code></div>
       <p><a href={enrolment.uri}>Open in authenticator app</a></p>
-      <label htmlFor="mfa-code">Code</label>
-      <input id="mfa-code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+      <div className="field"><label htmlFor="mfa-code">Code</label>
+      <input id="mfa-code" className="otp-input" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></div>
+      <div className="button-row" style={{ marginTop: 0 }}>
         <button type="submit" disabled={busy}>Confirm</button>
         <button type="button" className="btn-secondary" disabled={busy} onClick={() => { setEnrolment(null); setCode(''); }}>Cancel</button>
       </div>
     </form>;
   } else {
     body = <>
-      <p>Two-factor authentication is off. Turn it on to require a code from an authenticator app when you sign in.</p>
+      <p className="panel-desc"><span className="badge">Off</span> Turn it on to require a code from an authenticator app when you sign in.</p>
       <button type="button" disabled={busy} onClick={() => void start()}>Turn on two-factor authentication</button>
     </>;
   }
 
   return (
-    <section className="panel" style={{ maxWidth: 560 }} aria-labelledby="mfa-heading">
+    <section className="panel" aria-labelledby="mfa-heading">
       <h2 id="mfa-heading">Two-factor authentication</h2>
-      {body}
-      {error && <p role="alert">{error}</p>}
+      {!local && <p className="panel-desc" style={{ marginBottom: 0 }}>Your identity provider manages two-factor authentication for this account.</p>}
+      {local && body}
+      {error && <div style={{ marginTop: '1rem' }}><Alert>{error}</Alert></div>}
     </section>
   );
 }

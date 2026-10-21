@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { secureFetch } from '../api';
+import { useConfirm } from '../components/Dialog';
 
 export interface DepositReceipt {
   capsule_id: string;
@@ -148,6 +149,7 @@ const Badge: React.FC<{ tone: 'success' | 'accent' | 'danger' | 'muted'; childre
 
 export const Backup: React.FC = () => {
   const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [confirm, confirmNode] = useConfirm();
   const [loadingStatus, setLoadingStatus] = useState<boolean>(true);
   const [statusError, setStatusError] = useState<string>('');
 
@@ -320,12 +322,7 @@ export const Backup: React.FC = () => {
   };
 
   const unpair = async () => {
-    if (
-      !window.confirm(
-        'Unpair from KyRecovery?\n\nRemoves the URL and sealed token rows. The key pin, receipts and local copies stay. The credential is dead only when the KyRecovery admin revokes it.',
-      )
-    )
-      return;
+    if (!await confirm({ title: 'Unpair from KyRecovery?', body: 'Removes the URL and sealed token rows. The key pin, receipts and local copies stay. The credential is dead only when the KyRecovery admin revokes it.', confirm: 'Unpair', danger: true })) return;
     setUnpairing(true);
     setPairMessage('');
     setPairError('');
@@ -373,6 +370,7 @@ export const Backup: React.FC = () => {
 
   return (
     <div className="dr-page">
+      {confirmNode}
       <div className="dr-header">
         <h1>Backup &amp; recovery</h1>
         <button type="button" className="btn-secondary" onClick={fetchStatus} disabled={loadingStatus}>

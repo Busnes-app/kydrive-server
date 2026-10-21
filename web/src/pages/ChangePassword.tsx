@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { secureFetch } from '../api';
+import { Alert } from '../components/Alert';
 
 interface ChangePasswordProps {
   onComplete: () => void;
@@ -38,25 +39,27 @@ export function ChangePassword({ onComplete, onLogout }: ChangePasswordProps) {
   }
 
   return (
-    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 20 }}>
-      <form onSubmit={submit} className="panel" style={{ width: '100%', maxWidth: 440 }}>
-        <h1>Change your password</h1>
-        <p>Replace your temporary password before continuing. Use at least 12 characters. You will sign in again afterward.</p>
-        <label htmlFor="current-password">Current password</label>
-        <input id="current-password" type="password" autoComplete="current-password" required maxLength={1024}
-          value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-        <label htmlFor="new-password">New password</label>
-        <input id="new-password" type="password" autoComplete="new-password" required minLength={12} maxLength={1024}
-          value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-        <label htmlFor="confirm-password">Confirm new password</label>
-        <input id="confirm-password" type="password" autoComplete="new-password" required minLength={12} maxLength={1024}
-          value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
-        {error && <p role="alert">{error}</p>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
+    <main className="auth-center" style={{ minHeight: '100vh' }}>
+      <div className="auth-card">
+        <form onSubmit={submit} className="panel">
+          <div>
+            <h1 style={{ fontSize: '1.35rem', marginBottom: '.35rem' }}>Change your password</h1>
+            <p className="hint">Replace your temporary password before continuing. Use at least 12 characters. You will sign in again afterward.</p>
+          </div>
+          <div className="field"><label htmlFor="current-password">Current password</label>
+          <input id="current-password" type="password" autoComplete="current-password" required maxLength={1024}
+            value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div>
+          <div className="field"><label htmlFor="new-password">New password</label>
+          <input id="new-password" type="password" autoComplete="new-password" required minLength={12} maxLength={1024}
+            value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
+          <div className="field"><label htmlFor="confirm-password">Confirm new password</label>
+          <input id="confirm-password" type="password" autoComplete="new-password" required minLength={12} maxLength={1024}
+            value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
+          {error && <Alert>{error}</Alert>}
           <button type="submit" disabled={busy}>{busy ? 'Changing password…' : 'Change password'}</button>
-          <button type="button" className="btn-secondary" disabled={busy} onClick={onLogout}>Sign out</button>
-        </div>
-      </form>
+          <button type="button" className="btn-ghost" disabled={busy} onClick={onLogout}>Sign out</button>
+        </form>
+      </div>
     </main>
   );
 }

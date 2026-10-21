@@ -18,8 +18,8 @@ test('files open in a new tab or in place, per saved user preference', async ({ 
 
   // Creating a file opens the editor in a new tab and leaves the drive in place.
   const name = `tab-${testInfo.project.name}`;
-  await page.locator('.drive-new-file summary').click();
-  await page.getByRole('button', { name: 'New whiteboard' }).click();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'New whiteboard' }).click();
   await page.getByLabel('File name').fill(name);
   const created = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Create & open' }).click();

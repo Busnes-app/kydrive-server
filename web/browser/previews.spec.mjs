@@ -48,7 +48,7 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
   await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath('list.png') });
 
-  await page.getByRole('button', { name: `dot ${tag}.png` }).click();
+  await page.getByRole('button', { name: `dot ${tag}.png`, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: `dot ${tag}.png` });
   const img = dialog.getByRole('img', { name: `dot ${tag}.png` });
   await expect(img).toBeVisible();
@@ -57,16 +57,16 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toHaveCount(0);
 
-  await page.getByRole('button', { name: `log ${tag}.log` }).click();
+  await page.getByRole('button', { name: `log ${tag}.log`, exact: true }).click();
   await expect(page.getByRole('dialog').locator('pre')).toHaveText('first line\n<b>not bold</b>\n');
   await page.screenshot({ path: testInfo.outputPath('text-preview.png') });
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: `paper ${tag}.pdf` }).click();
+  await page.getByRole('button', { name: `paper ${tag}.pdf`, exact: true }).click();
   await expect(page.getByRole('dialog').locator('iframe')).toHaveAttribute('src', `/api/drive/files/${pdf}/preview`);
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: `page ${tag}.html` }).click();
+  await page.getByRole('button', { name: `page ${tag}.html`, exact: true }).click();
   await expect(page.getByRole('dialog').getByText('No preview for this file')).toBeVisible();
   await expect(page).not.toHaveTitle('ran');
   await page.keyboard.press('Escape');

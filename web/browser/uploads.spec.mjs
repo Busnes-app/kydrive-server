@@ -35,9 +35,9 @@ test('upload a folder tree, resume a dropped chunk, search and download the fold
     await expect(page.getByRole('heading', { name: 'My files' })).toBeVisible();
 
     await page.getByLabel('Choose folder to upload').setInputFiles(join(dir, top));
-    await page.getByRole('button', { name: `${top}/` }).click();
+    await page.getByRole('button', { name: top, exact: true }).click();
     await expect(page.getByRole('link', { name: 'a.txt' })).toBeVisible();
-    await page.getByRole('button', { name: 'sub/' }).click();
+    await page.getByRole('button', { name: 'sub', exact: true }).click();
     await expect(page.getByRole('link', { name: `findme-${tag}.txt` })).toBeVisible();
 
     // The first chunk's connection drops; the upload asks the server where it got to and finishes.
@@ -52,7 +52,7 @@ test('upload a folder tree, resume a dropped chunk, search and download the fold
       dt.items.add(new File([body], name));
       for (const type of ['dragover', 'drop']) panel.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
     }, { name: `dropped-${tag}.bin`, body });
-    await expect(page.getByRole('button', { name: `dropped-${tag}.bin` })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: `dropped-${tag}.bin`, exact: true })).toBeVisible({ timeout: 15000 });
     expect(dropped).toBe(true);
     await page.unroute('**/api/drive/upload-sessions/*');
     const spaces = await (await page.request.get('/api/drive/workspaces')).json();
@@ -64,13 +64,13 @@ test('upload a folder tree, resume a dropped chunk, search and download the fold
 
     await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'My files' }).click();
     await page.getByLabel('Search files').fill(`dme-${tag}`);
-    await page.getByRole('button', { name: `findme-${tag}.txt` }).click();
+    await page.getByRole('search').getByRole('button', { name: new RegExp(`findme-${tag}\\.txt`) }).click();
     await expect(page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'sub' })).toBeVisible();
 
     await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'My files' }).click();
     await page.getByLabel(`Actions for folder ${top}`).click();
     const download = page.waitForEvent('download');
-    await page.getByRole('link', { name: 'Download zip' }).click();
+    await page.getByRole('menuitem', { name: 'Download zip' }).click();
     const zip = await readFile(await (await download).path());
     for (const entry of [`${top}/a.txt`, `${top}/sub/findme-${tag}.txt`, 'alpha', 'bravo']) expect(zip.includes(entry)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
