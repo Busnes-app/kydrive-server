@@ -17,7 +17,7 @@ docker compose up -d
 docker compose exec app /app/kydrive-server bulk-init
 ```
 
-For a quick start, Compose runs the published image `ghcr.io/busnes-app/kydrive-server:X.Y.Z` of the release you checked out (`KY_IMAGE` in `.env`). Each GitHub release `vX.Y.Z` publishes that tag once; there is no `v` and no `latest`. The release workflow refuses to push a version tag that already exists and master CI writes only commit tags, but the registry itself does not lock tags, so anyone with write access to the package could still move one.
+For a quick start, Compose runs `ghcr.io/busnes-app/kydrive-server:stable` (`KY_IMAGE` in `.env`), which follows the newest release. Each GitHub release `vX.Y.Z` publishes `:X.Y.Z` once, and so does each daily dependency-update release `vX.Y.Z.N` (`:X.Y.Z.N`); the newest non-prerelease then moves `:stable`. There is no `v` and no `latest`. To hold a version, set `KY_IMAGE` to its `:X.Y.Z[.N]` tag. The release workflow refuses to push a version tag that already exists and master CI writes only commit tags, but the registry itself does not lock tags, so anyone with write access to the package could still move one.
 
 For production, pin the digest: set `KY_IMAGE=ghcr.io/busnes-app/kydrive-server@sha256:<digest>`, taking the digest from the release job's summary (`Published ...@sha256:<digest> as :X.Y.Z`) or from `docker buildx imagetools inspect ghcr.io/busnes-app/kydrive-server:X.Y.Z`. Verify it before first use:
 
@@ -33,7 +33,8 @@ To build from source instead, add the build overlay to every command, which tags
 ### Upgrading
 
 - Unreleased (after 0.4.2): Compose defaults to the published image instead of `kydrive-server:local`. Installs that build from source keep working with the build overlay. An install that ran a separately built `kydrive-server:local` without the overlay, and has no `KY_IMAGE` in `.env`, now pulls the release image: set `KY_IMAGE=kydrive-server:local` to keep the local build.
-- To move to a new release, check out its tag, set `KY_IMAGE` to its version, then `docker compose pull` and `docker compose up -d`.
+- Unreleased (after 0.4.2): the Compose default moves from `:0.4.2` to `:stable`, so `docker compose pull` takes each new release, daily dependency releases included. An install that wants to stay on a version sets `KY_IMAGE` to it (or pins the digest).
+- To move to a new release on `:stable`, check out its tag, then `docker compose pull` and `docker compose up -d`. With a pinned `KY_IMAGE`, set it to the new version or digest first.
 
 The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs on Docker with `docker-compose.office.yml` (see [Docker setup](EURO-DOCKER.md)), or in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Restic snapshot pruning (Recovery screen, Document retention) is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 

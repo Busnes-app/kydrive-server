@@ -1,8 +1,8 @@
 services:
   app:
-    # Release tag, kept equal to api.AppVersion by TestComposeDefaultsToThisRelease.
+    # :stable, which release-image.yml moves to the newest release (TestComposeDefaultsToStable).
     # Production pins the digest (README, NAS package).
-    image: ${KY_IMAGE:-ghcr.io/busnes-app/kydrive-server:0.4.2}
+    image: ${KY_IMAGE:-ghcr.io/busnes-app/kydrive-server:stable}
     platform: linux/amd64
     container_name: kydrive-server
     user: "${KY_UID:-1000}:${KY_GID:-1000}"

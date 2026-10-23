@@ -20,6 +20,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/agentskill"
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/appversion"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -964,8 +965,8 @@ func TestAgentSkill(t *testing.T) {
 	if want := []string{"name", "description", "version"}; !slices.Equal(keys, want) {
 		t.Errorf("frontmatter keys %v, want exactly %v", keys, want)
 	}
-	if !strings.Contains(front, `version: "`+api.AppVersion+`"`) {
-		t.Errorf("skill version is not the app version %s", api.AppVersion)
+	if !strings.Contains(front, `version: "`+appversion.String()+`"`) {
+		t.Errorf("skill version is not the app version %s", appversion.String())
 	}
 
 	_, tok := w.token(t, drive.ScopeMCPRead, "", "")
