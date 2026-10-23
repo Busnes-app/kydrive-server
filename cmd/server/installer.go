@@ -19,7 +19,7 @@ func runInstaller(args []string) error {
 		return err
 	}
 	if opts.Capabilities {
-		return applysetup.WriteCapabilities(os.Stdout, "kydrive", "kyidentity-oidc", "scim", "dedicated-admin", "local-backup-config", "bundle-preparation", "check", "restart")
+		return applysetup.WriteCapabilities(os.Stdout, "kydrive", "kyidentity-oidc", "scim", "dedicated-admin", "local-backup-config", "bundle-preparation", "check", "restart", "restore-reset")
 	}
 	dir := os.Getenv("KY_DATA_DIR")
 	if dir == "" {

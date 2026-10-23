@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,5 +87,36 @@ func TestInstallerPreparation(t *testing.T) {
 	wrong, _ := json.Marshal(b)
 	if out, err := run(wrong, false); err == nil || len(out) != 0 {
 		t.Fatal("webhook substituted for SCIM")
+	}
+}
+
+func TestInstallerCapabilitiesAdvertiseOfflineRestoreReset(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("KY_DATA_DIR", dir)
+	output, err := os.CreateTemp(t.TempDir(), "capabilities")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := os.Stdout
+	os.Stdout = output
+	defer func() { os.Stdout = previous; _ = output.Close() }()
+	err = runInstaller([]string{"--capabilities"})
+	os.Stdout = previous
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(output.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var capabilities applysetup.Capabilities
+	if err := json.Unmarshal(raw, &capabilities); err != nil || capabilities.Service != "kydrive" || !slices.Contains(capabilities.Features, "restore-reset") {
+		t.Fatalf("missing offline restore reset capability: %+v, %v", capabilities, err)
+	}
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+		t.Fatal("capability discovery initialized a deployment", entries, err)
 	}
 }
