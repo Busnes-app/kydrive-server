@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/appversion"
 )
 
 func readRepoFile(t *testing.T, name string) string {
@@ -19,7 +19,7 @@ func readRepoFile(t *testing.T, name string) string {
 
 // The NAS package defaults to the image the release workflow publishes for this version.
 func TestComposeDefaultsToThisRelease(t *testing.T) {
-	want := "ghcr.io/busnes-app/kydrive-server:" + api.AppVersion
+	want := "ghcr.io/busnes-app/kydrive-server:" + appversion.String()
 	for file, line := range map[string]string{
 		"docker-compose.yml": "image: ${KY_IMAGE:-" + want + "}",
 		".env.example":       "KY_IMAGE=" + want,

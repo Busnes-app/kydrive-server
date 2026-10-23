@@ -1,10 +1,15 @@
 name: publish release image
 
-# A published release vX.Y.Z publishes the immutable :X.Y.Z image, then attests and
-# verifies it. KyDrive has no mutable release tag; :<sha> belongs to ci.yml.
+# A published release vX.Y.Z (or vX.Y.Z.N, from dependency-release.yml) publishes
+# the immutable :X.Y.Z[.N] image, then attests and verifies it. KyDrive has no
+# mutable release tag; :<sha> belongs to ci.yml.
+#
+# A release created by a workflow's GITHUB_TOKEN raises no release event, so
+# dependency-release.yml dispatches this workflow on the release's tag instead.
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 # Serialised and never cancelled: a run that pushed :X.Y.Z must finish attesting it.
 concurrency:
@@ -26,23 +31,41 @@ jobs:
       checks: read
     env:
       IMAGE_NAME: ghcr.io/busnes-app/kydrive-server
+      # The release event names its tag; a dispatch runs on the tag's ref.
+      TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
     steps:
       # Red, not skipped: a skipped job is green and leaves a release with no image.
+      # A dispatch must run on a tag that has a published release, so it can only
+      # build what a release event would have.
       - name: Validate release version
         id: version
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
-          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            echo "::error::release tag must be v<major>.<minor>.<patch>, got: $TAG" >&2
+          if [[ ! "$TAG" =~ ^v(([0-9]+\.[0-9]+\.[0-9]+)(\.[1-9][0-9]*)?)$ ]]; then
+            echo "::error::release tag must be v<major>.<minor>.<patch> or v<major>.<minor>.<patch>.<n>, got: $TAG" >&2
             exit 1
           fi
           echo "value=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "line=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = release ]; then
+            exit 0
+          fi
+          if [ "$REF_TYPE" != tag ]; then
+            echo "::error::dispatch this workflow on a release tag, not a branch" >&2
+            exit 1
+          fi
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .draft)" != false ]; then
+            echo "::error::$TAG has no published release" >&2
+            exit 1
+          fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ github.event.release.tag_name }}
+          ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
 
       # A branch named like the tag must not stand in for it: build only the
@@ -57,23 +80,18 @@ jobs:
             exit 1
           fi
 
-      # api.AppVersion is written into every capsule manifest; the web bundle's
-      # version is checked so the artifact has one answer to "which version".
-      - name: Require the tag and every version source to agree
+      # internal/appversion/VERSION is the only version source. The image reports
+      # the tag's full version (the build sets it); the tag's X.Y.Z must be the file's.
+      - name: Require the tag to match internal/appversion/VERSION
         env:
-          VERSION: ${{ steps.version.outputs.value }}
+          LINE: ${{ steps.version.outputs.line }}
         run: |
           set -euo pipefail
-          fail=""
-          check() {
-            echo "$1: ${2:-<unparsed>}"
-            [ "$2" = "$VERSION" ] || fail="$fail $1(${2:-unparsed})"
-          }
-          check internal/api/backup_handlers.go "$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/api/backup_handlers.go)"
-          check web/package.json "$(jq -r .version web/package.json)"
-          if [ -n "$fail" ]; then
-            echo "::error::release $VERSION disagrees with:$fail" >&2
-            echo "Bump every version source in the commit you tag." >&2
+          file="$(tr -d '[:space:]' < internal/appversion/VERSION)"
+          echo "tag line: $LINE; internal/appversion/VERSION: ${file:-<empty>}"
+          if [ "$file" != "$LINE" ]; then
+            echo "::error::$TAG is on the $LINE line, but internal/appversion/VERSION says ${file:-nothing}" >&2
+            echo "Bump internal/appversion/VERSION in the commit you tag." >&2
             exit 1
           fi
 
@@ -148,7 +166,9 @@ jobs:
           provenance: mode=max
           sbom: true
           platforms: linux/amd64
-          build-args: SOURCE_REVISION=${{ steps.gate.outputs.sha }}
+          build-args: |
+            SOURCE_REVISION=${{ steps.gate.outputs.sha }}
+            VERSION=${{ steps.version.outputs.value }}
 
       - name: Publish GitHub image attestation
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -162,7 +182,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DIGEST: ${{ steps.build.outputs.digest }}
-          TAG: ${{ github.event.release.tag_name }}
           VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail

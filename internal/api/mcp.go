@@ -21,6 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/Busnes-app/kydrive-server/internal/agentskill"
+	"github.com/Busnes-app/kydrive-server/internal/appversion"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -202,7 +203,7 @@ func (s *Server) handleAgentSkill(w http.ResponseWriter, _ *http.Request) {
 func boolPtr(b bool) *bool { return &b }
 
 func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "kydrive", Version: AppVersion},
+	srv := mcp.NewServer(&mcp.Implementation{Name: "kydrive", Version: appversion.String()},
 		&mcp.ServerOptions{Instructions: mcpInstructions, SchemaCache: mcpSchemas})
 	t := &mcpTools{s: s, caller: c, paths: agentPaths{d: s.store.Drive(), user: c.user.ID, token: c.token}}
 	read := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(false)}
