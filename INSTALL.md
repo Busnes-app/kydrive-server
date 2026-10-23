@@ -76,7 +76,7 @@ and start the same overlay selection. See [NAS package](docs/DEPLOYMENT.md#nas-p
 Preserve the database **and deployment keys**, not just the image. Configure recovery using
 the linked restore runbook, retain an independent copy, and complete a scratch restore with
 custodian cards before treating recovery as verified. A synthetic drill uses a throwaway
-key and does not prove that the real cards are available or correct.
+key and does not prove that the real cards are available or correct. A capsule restore invalidates client credentials and sharing links; follow the runbook to reconcile current account access and reissue them before resuming use.
 
 For upgrades, back up first, read the chosen release’s migration notes, and reuse the same
 Compose project, volume mounts and overlay selection for every command. `docker compose

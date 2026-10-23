@@ -20,7 +20,7 @@ When a directory user is also named `admin`, reserve a distinct name for the loc
 - Use WebDAV or link compatible desktop sync clients.
 - Let AI agents read and organize files over MCP, with an access level and an optional folder limit per agent.
 - Configure optional Euro-Office editing and document previews.
-- Recover both sealed metadata and the bound bulk-file snapshot.
+- Recover both sealed metadata and the bound bulk-file snapshot; restored clients sign in and receive new access credentials ([restore runbook](docs/RESTORE.md)).
 
 ## Connect an AI agent
 

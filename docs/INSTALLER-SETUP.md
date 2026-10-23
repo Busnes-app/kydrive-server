@@ -1,6 +1,6 @@
 # Container-local installer setup
 
-`/app/kydrive-server apply-setup --capabilities` advertises supported features.
+`/app/kydrive-server apply-setup --capabilities` advertises supported features without opening or initializing deployment data. The `restore-reset` feature means the image supports offline access-grant invalidation through `/app/kydrive-server restore-reset -to <root>`, where `<root>/data` contains the restored `ky_server.db` and `encryption.key`. Filesystem-restore orchestrators must require this feature before altering their destination and run the reset before starting the restored service; an older image without it cannot complete a safe restore. The command preserves file/version bindings, direct permissions and integration secrets; see [restore runbook](RESTORE.md) for reissue and directory reconciliation.
 `apply-setup --file /app/data/installer/bundle.json` sends a protected bundle to the
 running product's private socket. `--check` inspects without writes; `--restart`
 requests graceful shutdown so the workload controller can activate saved configuration.

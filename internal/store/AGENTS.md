@@ -28,6 +28,8 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 - Production drive storage is SQLite-only. Every SQLite connection enables WAL, foreign keys, busy timeout and synchronous FULL even when the caller supplied other DSN pragmas. `Drive()` exposes the domain repository, never its SQL handle.
 - `ReplaceGroup` writes group attributes, the complete membership set and its audit in one transaction; invalid members roll back the entire replacement. Nonempty SCIM external subjects/group identifiers are unique.
 
+- `ResetAfterRestore` runs offline on the extracted SQLite database: one transaction removes browser/MFA grants, DAV/agent passwords, desktop credentials/codes, service tokens, organisation/guest links, editor state and unfinished uploads, randomizes file editor epochs and audits `system.restore_reset`. Accounts, content, direct shares, groups and integration settings stay; current directory and password changes must be reconciled before exposure. A failed transaction retains every original row.
+
 ## Verification
 - `go test -v ./internal/store/...`
 

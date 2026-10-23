@@ -30,6 +30,8 @@ type Store interface {
 	Driver() string
 	Ping(ctx context.Context) error
 	Close() error
+	// ResetAfterRestore invalidates restored bearer grants without changing accounts or content.
+	ResetAfterRestore(context.Context) error
 }
 
 // UserStore defines repository operations for accounts.

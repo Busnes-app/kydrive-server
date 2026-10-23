@@ -139,6 +139,9 @@ func main() {
 		case "restore":
 			runRestore(os.Args[2:])
 			return
+		case "restore-reset":
+			runRestoreReset(os.Args[2:])
+			return
 		case "version":
 			fmt.Println("kydrive-server v" + api.AppVersion + " (KyDrive)")
 			return
@@ -665,8 +668,18 @@ func runExportCapsule(args []string) {
 // restore is the product-side half of the ceremony, owned by the lib: k custodian shares
 // combined, used once, dropped; a capsule from another service refused before the key is
 // touched; the authenticated manifest printed for comparison with KyRecovery's record.
+// Restored access grants are then invalidated before this command returns success.
 func restore(capsulePath, targetDir, expectService string, shares []string, stdout io.Writer) error {
-	return recoveryclient.Restore(capsulePath, targetDir, expectService, shares, stdout)
+	if err := checkRestorePath(targetDir); err != nil {
+		return err
+	}
+	if err := recoveryclient.Restore(capsulePath, targetDir, expectService, shares, stdout); err != nil {
+		return err
+	}
+	if err := resetRestored(context.Background(), filepath.Join(targetDir, "data")); err != nil {
+		return fmt.Errorf("%w: %w", errResetFailed, err)
+	}
+	return nil
 }
 
 // stdinIsTerminal reports whether a human is typing, so a pipeline gets no stray prompt.
@@ -714,6 +727,10 @@ func runRestore(args []string) {
 		log.Fatal("Error: no custodian shares on stdin")
 	}
 	if err := restore(*capsulePath, *target, *service, shares, os.Stdout); err != nil {
+		if errors.Is(err, errResetFailed) {
+			log.Fatalf("%v\nDo not start the server on %s. Finish with: kydrive-server restore-reset -to %s", err, *target, *target)
+		}
 		log.Fatalf("Restore failed: %v", err)
 	}
+	fmt.Println(resetDone)
 }

@@ -72,6 +72,42 @@ func (s *SQLStore) Driver() string                 { return s.driver }
 func (s *SQLStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 func (s *SQLStore) Close() error                   { return s.db.Close() }
 
+// ResetAfterRestore ends restored access grants in one transaction. Passwords, MFA secrets,
+// directory membership and content remain as backed up; operators reconcile those separately.
+func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
+	if s.drive == nil {
+		return errors.New("restore reset requires a SQLite drive")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{
+		"sessions", "mfa_challenges", "drive_app_passwords", "drive_devices", "drive_device_codes",
+		"drive_service_tokens", "drive_link_users", "drive_links", "drive_editor_saves",
+		"drive_editor_documents", "drive_editor_sessions", "drive_upload_segments", "drive_upload_sessions",
+	} {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+			return err
+		}
+	}
+	// A new opener must not reuse a document key held by an editor from before restoration.
+	// A random positive 56-bit epoch also separates repeated restores of the same capsule.
+	epoch, err := strconv.ParseInt(crypto.RandomHex(7), 16, 64)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=?`, epoch+1); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`,
+		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked", "", time.Now().UTC()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // rebind converts '?' placeholders to '$1, $2, ...' for Postgres
 func (s *SQLStore) rebind(query string) string {
 	if s.driver != "postgres" {
