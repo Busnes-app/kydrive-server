@@ -1,8 +1,8 @@
 name: publish release image
 
 # A published release vX.Y.Z (or vX.Y.Z.N, from dependency-release.yml) publishes
-# the immutable :X.Y.Z[.N] image, then attests and verifies it. KyDrive has no
-# mutable release tag; :<sha> belongs to ci.yml.
+# the immutable :X.Y.Z[.N] image, attests and verifies it, then moves :stable,
+# which Compose installs follow. :<sha> belongs to ci.yml.
 #
 # A release created by a workflow's GITHUB_TOKEN raises no release event, so
 # dependency-release.yml dispatches this workflow on the release's tag instead.
@@ -11,7 +11,8 @@ on:
     types: [published]
   workflow_dispatch:
 
-# Serialised and never cancelled: a run that pushed :X.Y.Z must finish attesting it.
+# Serialised so two releases cannot race to move :stable. Never cancelled: a run
+# that pushed :X.Y.Z must finish attesting it.
 concurrency:
   group: release-image
   cancel-in-progress: false
@@ -43,6 +44,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
+          EVENT_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -euo pipefail
           if [[ ! "$TAG" =~ ^v(([0-9]+\.[0-9]+\.[0-9]+)(\.[1-9][0-9]*)?)$ ]]; then
@@ -52,16 +54,19 @@ jobs:
           echo "value=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
           echo "line=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
           if [ "$EVENT" = release ]; then
+            echo "prerelease=$EVENT_PRERELEASE" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$REF_TYPE" != tag ]; then
             echo "::error::dispatch this workflow on a release tag, not a branch" >&2
             exit 1
           fi
-          if [ "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .draft)" != false ]; then
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '{draft, prerelease}')"
+          if [ "$(jq -r .draft <<< "$release")" != false ]; then
             echo "::error::$TAG has no published release" >&2
             exit 1
           fi
+          echo "prerelease=$(jq -r .prerelease <<< "$release")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -188,3 +193,49 @@ jobs:
           gh attestation verify "oci://$IMAGE_NAME@$DIGEST" --repo "$GITHUB_REPOSITORY" \
             --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release-image.yml@refs/tags/$TAG"
           echo "Published \`$IMAGE_NAME@$DIGEST\` as \`:$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Decide whether this release may move stable
+        id: promote
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "$PRERELEASE" = "true" ]; then
+            echo "::notice::$VERSION is a prerelease; :stable stays where it is"
+            echo "move=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A failed lookup must stop here: an empty list would make this release "highest".
+          tags="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')"
+          published="$(printf '%s\n' "$tags" | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(\.[1-9][0-9]*)?$' || true)"
+          highest="$(printf '%s\n%s\n' "$published" "$VERSION" | sort -V | tail -n1)"
+          echo "highest published release: $highest; this release: $VERSION"
+          if [ "$highest" != "$VERSION" ]; then
+            echo "::notice::$VERSION is older than $highest; :stable stays where it is"
+            echo "move=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "move=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # By digest, as a carbon copy (--prefer-index=false), then asserted and
+      # verified on the tag operators actually pull.
+      - name: Promote the verified digest to stable
+        if: steps.promote.outputs.move == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create --prefer-index=false --tag "$IMAGE_NAME:stable" "$IMAGE_NAME@$DIGEST"
+          stable="$(docker buildx imagetools inspect "$IMAGE_NAME:stable" --format '{{.Manifest.Digest}}')"
+          if [ "$stable" != "$DIGEST" ]; then
+            echo "::error:::stable resolves to $stable, attested digest is $DIGEST" >&2
+            exit 1
+          fi
+          gh attestation verify "oci://$IMAGE_NAME:stable" --repo "$GITHUB_REPOSITORY" \
+            --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release-image.yml@refs/tags/$TAG"
+          echo "Moved \`:stable\` to \`$IMAGE_NAME@$DIGEST\` (\`:$VERSION\`)" >> "$GITHUB_STEP_SUMMARY"

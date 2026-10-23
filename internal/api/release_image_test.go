@@ -4,8 +4,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/Busnes-app/kydrive-server/internal/appversion"
 )
 
 func readRepoFile(t *testing.T, name string) string {
@@ -17,9 +15,9 @@ func readRepoFile(t *testing.T, name string) string {
 	return string(b)
 }
 
-// The NAS package defaults to the image the release workflow publishes for this version.
-func TestComposeDefaultsToThisRelease(t *testing.T) {
-	want := "ghcr.io/busnes-app/kydrive-server:" + appversion.String()
+// The NAS package defaults to :stable, which the release workflow moves to each newest release.
+func TestComposeDefaultsToStable(t *testing.T) {
+	want := "ghcr.io/busnes-app/kydrive-server:stable"
 	for file, line := range map[string]string{
 		"docker-compose.yml": "image: ${KY_IMAGE:-" + want + "}",
 		".env.example":       "KY_IMAGE=" + want,
@@ -27,6 +25,9 @@ func TestComposeDefaultsToThisRelease(t *testing.T) {
 		if !strings.Contains(readRepoFile(t, file), line) {
 			t.Errorf("%s must contain %q", file, line)
 		}
+	}
+	if !strings.Contains(readRepoFile(t, ".github/workflows/release-image.yml"), `--tag "$IMAGE_NAME:stable"`) {
+		t.Error("release-image.yml must move :stable, which Compose defaults to")
 	}
 }
 
