@@ -120,8 +120,8 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 - **Rate limits and proof-of-work spent salts are process-local** (single-instance server).
 - **AI agents may follow instructions in file contents.** The README says to give write access only
   when everyone who can message the agent is trusted.
-- **No govulncheck or SAST in CI.** Go dependencies are covered by Dependabot only; the OpenSSF
-  Scorecard workflow reports the missing SAST.
+- **No govulncheck in CI.** Known Go vulnerabilities are caught by Dependabot alerts, not by a
+  reachability scan on each pull request.
 - **No independent security audit** has been done.
 
 ## Evidence
@@ -129,7 +129,9 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 - **Tests:** the security tests named above, the whole Go suite under the race detector, Vitest and
   Playwright browser tests, and the deploy rendering tests, on every push and pull request (`test`
   job). Restic-backed tests run in CI, which installs restic.
-- **Static analysis:** `go vet` and `tsc -b` (strict TypeScript) on every push and pull request.
+- **Static analysis:** `go vet` and `tsc -b` (strict TypeScript) on every push and pull request,
+  and GitHub CodeQL (default setup, configured in the repository settings rather than a workflow
+  file) for Go, JavaScript/TypeScript, Python and Actions.
 - **Dynamic analysis:** the race detector on the full suite, the binary smoke test
   (`scripts/smoke-test.sh`) and Playwright against the built server.
 - **Releases:** attested images and a repeatable binary ([VERIFYING-RELEASES.md](VERIFYING-RELEASES.md)).
