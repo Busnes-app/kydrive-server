@@ -6,6 +6,8 @@ Commands and unlinked file paths below are relative to the repository root.
 
 ## Encryption at rest
 
+[Assurance case](ASSURANCE-CASE.md) ties encryption, permissions and the other protections to the threat model and the code.
+
 Every stored file version is encrypted with AES-256-GCM under a per-file key derived from the deployment encryption key. Files written by earlier releases are encrypted in the background after upgrade. This protects a stolen disk, NAS or copied data directory, but only if the key is not stored with the data: by default it is minted at `data/encryption.key`, and the server logs a warning and the Recovery screen shows a notice. Move it into a Compose or Kubernetes secret: set `KY_ENCRYPTION_KEY` to the file's exact hex contents (a different key cannot decrypt existing files or MFA secrets), delete `data/encryption.key` while keeping the secret safe, restart, then confirm the notice is gone. A restore copies `encryption.key` back into the data directory; move it out again. An interrupted recovery drill leaves its opened capsule, key included, under `data/drill`; the notice stays until the next drill sweeps it or you delete it.
 
 This is not end-to-end encryption. The server decrypts on download, Euro-Office edits plaintext, and the operator who holds the key can read every file. File and folder names are encrypted too; workspace, group and service-token names are not. Upgrading encrypts existing names and rewrites the database file once (SQLite `VACUUM`) so freed pages keep no plaintext; Restic snapshots and capsules taken before the upgrade still contain plaintext names.

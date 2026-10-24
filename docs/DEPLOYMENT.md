@@ -26,6 +26,8 @@ gh attestation verify oci://ghcr.io/busnes-app/kydrive-server@sha256:<digest> --
   --cert-identity https://github.com/Busnes-app/kydrive-server/.github/workflows/release-image.yml@refs/tags/v<version>
 ```
 
+[Verifying releases](VERIFYING-RELEASES.md) also checks that the attestation names the commit the release tag points at, and rebuilds the binary to compare hashes.
+
 To build from source instead, add the build overlay to every command, which tags the build `kydrive-server:local` whatever `KY_IMAGE` says: `docker compose -f docker-compose.yml -f docker-compose.build.yml build`, then `... up -d` with the same two files.
 
 `bulk-init` is safe to rerun: when the repository already opens with this deployment's key it reports that and changes nothing. A repository at that location that the key cannot open is refused (`bulk repository exists but this deployment's key does not open it`); point `KYDRIVE_BULK_BACKUP_REPOSITORY` at the right repository rather than reinitializing.
