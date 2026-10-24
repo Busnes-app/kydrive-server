@@ -118,6 +118,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
   metadata staging/check/resume and input refusal without UI rendering or a running server.
 - `cd web && npm ci && npm test && npm run build` before Go builds/tests that need the UI. `web/dist` is build output embedded by `go:embed`, not committed (only `.gitkeep`); CI and the Docker image build it from source. Then `go build -o .browser/server ./cmd/server && cd web && npm run test:browser`.
 - `scripts/smoke-test.sh .browser/server` (binary path argument; defaults to `./kydrive-server`) against the built binary; `python -m unittest discover -s deploy -p '*_test.py'`.
+- The `test` job's `release binary is repeatable` step rebuilds `web/dist` and `./cmd/server` the way the Dockerfile does (`-trimpath`, from `git archive` copies) in two directories and requires identical bytes. Keep the Dockerfile's `go build` and that step in step; `docs/VERIFYING-RELEASES.md` gives users the same commands.
 - `docker build --platform linux/amd64 -t kydrive-server:local .`; run health/restart/editor/recovery checks locally. Master CI publishes only the image built after passing checks, under its commit tag, and verifies GitHub build provenance; no mutable latest promotion.
 - The version has one source: `internal/appversion/VERSION` (`X.Y.Z`, the release line; `web/package.json` has no version). Go code calls `appversion.String()`; a release image build sets the tag's full version through `-ldflags -X …/internal/appversion.release` (Dockerfile `ARG VERSION`), so images report `X.Y.Z` or `X.Y.Z.N` and source builds report the line.
 - Publishing a GitHub release `vX.Y.Z` or `vX.Y.Z.N` runs `release-image.yml` (a dispatch on a published release's tag runs it too). It refuses a malformed tag, a tag whose `X.Y.Z` disagrees with `internal/appversion/VERSION`, and any commit on which a ci.yml job in its `REQUIRED` list (`test`) did not pass. It then builds `:X.Y.Z[.N]` with provenance and SBOM, then attests and verifies it (identity `release-image.yml@refs/tags/<tag>`). Before pushing it refuses a version tag that already exists in GHCR, and fails on any lookup error other than not found; GHCR itself does not lock tags. It then moves `:stable` to that digest only for the highest non-prerelease, and asserts and verifies `:stable`. `:stable` is the only mutable tag; master CI publishes commit tags only. A job added to ci.yml must be added to `REQUIRED` too.
@@ -125,7 +126,8 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Native T3 browser evidence and remaining gates are recorded in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`.
 
 ## Child DOX Index
-- `docs/` — operator restore runbook, local acceptance and UI evidence assets.
+- `docs/` — operator restore runbook, local acceptance and UI evidence assets, release verification and the assurance case.
+- `CONTRIBUTING.md` (root-owned) — contribution process, test policy and the coding standard with the CI step enforcing each.
 - `internal/config/` — environment parsing, durable secrets and configuration validation.
 - `internal/store/` — base identity repositories, atomic group replacement and SQLite initialization.
 - `internal/drive/` — workspace/file domain, immutable blob publication, grants and editor/service sessions.
@@ -151,4 +153,4 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 
 ## README and topic guides
 
-Keep `README.md` as the concise product overview and navigation. Detailed procedures live in `docs/DEVELOPMENT.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, `docs/CLIENTS-AND-EDITOR.md`, `docs/RECOVERY-AND-ENCRYPTION.md`. Update the owning topic guide and preserve README links when a procedure changes. Commands in these guides run from the repository root.
+Keep `README.md` as the concise product overview and navigation. Detailed procedures live in `docs/DEVELOPMENT.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, `docs/CLIENTS-AND-EDITOR.md`, `docs/RECOVERY-AND-ENCRYPTION.md`, `docs/VERIFYING-RELEASES.md`, `docs/ASSURANCE-CASE.md`. Update the owning topic guide and preserve README links when a procedure changes. Commands in these guides run from the repository root.

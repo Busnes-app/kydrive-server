@@ -23,6 +23,22 @@ jobs:
       # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - run: go test -race ./... && go vet ./...
+      # The release binary must not depend on where it is built: build it the way the
+      # Dockerfile does (no .git in the context, web/dist rebuilt from the lockfile, -trimpath)
+      # from two directories and require identical bytes. docs/VERIFYING-RELEASES.md tells
+      # users how to repeat this against a release image.
+      - name: release binary is repeatable
+        run: |
+          set -euo pipefail
+          ld="-s -w -X github.com/Busnes-app/kydrive-server/internal/appversion.release=0.0.0"
+          for d in "$RUNNER_TEMP/a" "$RUNNER_TEMP/elsewhere/b"; do
+            mkdir -p "$d/src"
+            git archive HEAD | tar -x -C "$d/src"
+            (cd "$d/src/web" && npm ci --no-audit --no-fund && npm run build)
+            (cd "$d/src" && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="$ld" -o "$d/kydrive-server" ./cmd/server)
+          done
+          sha256sum "$RUNNER_TEMP/a/kydrive-server" "$RUNNER_TEMP/elsewhere/b/kydrive-server"
+          cmp "$RUNNER_TEMP/a/kydrive-server" "$RUNNER_TEMP/elsewhere/b/kydrive-server"
       # Timing bounds skip under -race; run them once in a normal build.
       - run: go test -count=1 -run 'TestSearchScale' ./internal/drive/
       - run: test -z "$(gofmt -l $(git ls-files '*.go'))" && go mod verify

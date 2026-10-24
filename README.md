@@ -57,3 +57,6 @@ Euro-Office can also run on Docker with the optional [production editor Compose 
 - [Permissions](docs/PERMISSIONS.md) — Identity and permissions, Sharing, Leavers, Retention and permanent delete. <a id="identity-and-permissions"></a><a id="sharing"></a><a id="leavers"></a><a id="retention-and-permanent-delete"></a>
 - [Clients and editor](docs/CLIENTS-AND-EDITOR.md) — Previews, WebDAV, Linked computers, AI agents, Editor. <a id="previews"></a><a id="webdav"></a><a id="linked-computers"></a><a id="editor"></a>
 - [Recovery and encryption](docs/RECOVERY-AND-ENCRYPTION.md) — Encryption at rest, Recovery. <a id="encryption-at-rest"></a><a id="recovery"></a>
+- [Verifying releases](docs/VERIFYING-RELEASES.md) — Check a release image's signature and source commit, and rebuild its binary to the same bytes.
+- [Assurance case](docs/ASSURANCE-CASE.md) — Threat model, trust boundaries, and why the security requirements are met.
+- [Contributing](CONTRIBUTING.md) — How to report bugs, propose changes, the test policy and the coding standard.
