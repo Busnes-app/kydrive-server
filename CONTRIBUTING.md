@@ -1,50 +1,56 @@
 # Contributing to KyDrive
 
-[Product overview](README.md) · [Development](docs/DEVELOPMENT.md) · [Assurance case](docs/ASSURANCE-CASE.md)
+KyDrive is the open-source personal and shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Contributions must preserve authenticated service access, correct workspace scoping, and the survival of shared content across employee offboarding.
 
-## Reporting bugs and asking for features
+## Before contributing
 
-Open a [GitHub issue](https://github.com/Busnes-app/kydrive-server/issues). Say which version
-you run (the image tag, or `internal/appversion/VERSION` for a source build), what you did, what
-you expected and what happened. Leave passwords, tokens, keys and file contents out of the issue.
+Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md),
+the [README](README.md), and any AGENTS.md in the subtree you are about to
+touch. Open an issue before proposing a feature larger than a bug fix or
+documentation change.
 
-**Security problems are not issues.** Report them privately through the repository's
-**Security** tab → **Report a vulnerability**, as the
-[Busnes-app security policy](https://github.com/Busnes-app/.github/blob/main/SECURITY.md)
-describes.
+Keep changes small, reuse existing code, and fix the shared root cause rather
+than the reported symptom. New non-trivial logic ships with a runnable test or
+self-check.
 
-## Making a change
+## Security requirements
 
-1. Branch from `master` and open a pull request against `master`. `master` takes changes only
-   through pull requests.
-2. Read [AGENTS.md](AGENTS.md) and every AGENTS.md on the way to the files you change. They are
-   binding: a change that alters a contract, workflow or verification updates the nearest owning
-   AGENTS.md (and its parents' indexes) in the same pull request, and a changed procedure updates
-   its topic guide under `docs/`.
-3. The `test` CI job must pass before a pull request can merge. Run the checks in
-   [Development → Verification](docs/DEVELOPMENT.md#verification) locally first.
-4. Describe what changed and how you checked it in the pull request.
+- Every file and workspace operation is authorized against the authenticated identity and the workspace's owner or group.
+- Shared files belong to organization workspaces and survive offboarding; do not tie their ownership to a single personal account.
+- Destructive actions — trash, permanent delete, quota purge — require an explicit action and respect trash and versioning.
+- Do not add telemetry, phone-home, analytics, or unconfigured third-party
+  services.
+- Do not add silent security fallbacks; fail closed with a readable error and a
+  remediation step.
+- Name and document any security trade-off in [SECURITY.md](SECURITY.md) before
+  it merges.
 
-## Tests
+## Verification
 
-New behaviour comes with a test that exercises it: Go tests next to the code, Vitest for web
-logic, and Playwright (`npm run test:browser`) for browser flows. A security change also needs a
-test for the attack it stops, not only the happy path; the tests named in the
-[assurance case](docs/ASSURANCE-CASE.md#common-weaknesses-and-how-they-are-countered) show the
-pattern. CI runs `go test -race ./...`, `npm test` and the browser tests on every push and pull
-request.
+Run the checks that apply to the files you changed, and the repository's
+full required checks before hand-off. Record the exact commands and their
+results in the pull request.
 
-## Coding standard
+## AI attribution
 
-Contributions follow these style guides. CI enforces the parts a tool can check, so a style
-failure is a red build, not a review comment.
+AI-assisted contributions are welcome; undisclosed ones are not. Disclose
+material AI assistance in the pull request — the tool, what it changed, and what
+you personally ran, read, and verified — and add a commit trailer naming any
+tool that materially contributed. You are the author of the code you submit for
+every purpose, regardless of how it was produced.
 
-| Language | Style guide | Enforced by (`test` job) |
-|---|---|---|
-| Go | [Effective Go](https://go.dev/doc/effective_go) and the [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) | `gofmt -l` (must print nothing), `go vet ./...`, and `go mod tidy` with no diff |
-| TypeScript (`web/`) | The TypeScript compiler in `strict` mode | `tsc -b` in `npm run build` |
-| Shared browser UI (`web/src/ky-ui/`) | Generated from Busnes-app/ky-ui; never edited here | `node src/ky-ui/check-vendor.mjs`, run before `npm test` and `npm run build` |
-| Python (`deploy/`, `scripts/`) | [PEP 8](https://peps.python.org/pep-0008/) | No linter; `python -m unittest discover -s deploy -p '*_test.py'` runs the rendering tests |
+## Pull requests
 
-Beyond what the tools check: keep to the comment density and naming of the file you are editing,
-and prefer the standard library and the shared `ky-primitives` packages to new dependencies.
+Branch off `main` with a focused name, and use a Conventional Commit subject
+(`fix:`, `feat:`, `docs:`, `refactor:`, `test:`, or `chore:`). The pull request
+explains why the change exists, the verification performed, the security impact,
+and any known limitations.
+
+Every pull request gets an adversarial review pass; see
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md#hostile-reviews-are-about-code-never-people)
+for what that is and the boundary it keeps.
+
+## Licence
+
+KyDrive is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt).
+
