@@ -13,7 +13,6 @@ import (
 	"image/png"
 	"io"
 	"os"
-	"path/filepath"
 
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
@@ -293,20 +292,18 @@ func orient(img *image.NRGBA, o int) *image.NRGBA {
 }
 
 // WriteThumb seals a thumbnail under key as root/<blob>: named by blob, never by digest, so the
-// cache cannot confirm what a file holds.
+// cache cannot confirm what a file holds. It is bound as a cache entry, so it never opens as a blob.
 func WriteThumb(root string, key []byte, blob string, thumb []byte) error {
 	path, err := BlobPath(root, blob)
 	if err != nil {
 		return err
 	}
-	v, err := WriteBlob(root, key, bytes.NewReader(thumb), int64(len(thumb)))
+	tmp, _, err := stage(root, key, cacheBinding(blob), bytes.NewReader(thumb), int64(len(thumb)))
 	if err != nil {
 		return err
 	}
-	if err = os.Rename(filepath.Join(root, v.Blob), path); err != nil {
-		os.Remove(filepath.Join(root, v.Blob))
-	}
-	return err
+	defer os.Remove(tmp)
+	return os.Rename(tmp, path)
 }
 
 // ReadThumb opens a cached thumbnail; a missing one is fs.ErrNotExist.
@@ -326,23 +323,5 @@ func OpenThumb(root string, key []byte, blob string) (io.ReadSeekCloser, error) 
 	if err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	plain, ok := plainSize(info.Size())
-	if !ok {
-		return nil, errSealed
-	}
-	return OpenBlob(path, key, true, plain)
-}
-
-// plainSize inverts SealedSize.
-func plainSize(sealed int64) (int64, bool) {
-	body := sealed - int64(blobHeader)
-	if body < blobTag {
-		return 0, false
-	}
-	plain := body - (body+blobChunk+blobTag-1)/(blobChunk+blobTag)*blobTag
-	return plain, plain >= 0 && SealedSize(plain) == sealed
+	return openFile(path, key, true, -1, cacheBinding(blob))
 }

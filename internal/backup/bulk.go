@@ -348,7 +348,7 @@ func verifyBulkFiles(ctx context.Context, dataDir, root string, files []BulkFile
 		}
 		path := filepath.Join(root, f.Blob)
 		info, err := os.Lstat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() != diskSize(f) {
+		if err != nil || !info.Mode().IsRegular() || !drive.StoredSizeOK(f.Sealed, f.Size, info.Size()) {
 			return errors.New("bulk file missing or size differs")
 		}
 		entry := verifiedBlob{f, info.ModTime().UnixNano()}
@@ -385,7 +385,8 @@ func writeFileAtomic(path string, data []byte) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// diskSize is a blob's size on disk: sealed blobs carry their encryption overhead.
+// diskSize bounds a blob's size on disk: sealed blobs carry their encryption overhead, KYB2's
+// the larger.
 func diskSize(f BulkFile) int64 {
 	if f.Sealed {
 		return drive.SealedSize(f.Size)
@@ -396,7 +397,7 @@ func diskSize(f BulkFile) int64 {
 // verifyBulkFile checks a blob's size and plaintext digest, decrypting a sealed blob.
 func verifyBulkFile(path string, f BulkFile, key []byte) error {
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() != diskSize(f) {
+	if err != nil || !info.Mode().IsRegular() || !drive.StoredSizeOK(f.Sealed, f.Size, info.Size()) {
 		return errors.New("bulk file missing or size differs")
 	}
 	file, err := drive.OpenBlob(path, key, f.Sealed, f.Size)

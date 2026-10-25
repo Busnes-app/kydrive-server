@@ -15,47 +15,65 @@ import (
 	"github.com/google/uuid"
 )
 
-// WriteBlob seals r under key into a unique staging file and publishes it only after a
-// durable flush. Digest and Size describe the plaintext.
+// WriteBlob seals r under key, bound to a new blob ID, into a unique staging file and
+// publishes it only after a durable flush. Digest and Size describe the plaintext.
 func WriteBlob(root string, key []byte, r io.Reader, limit int64) (Version, error) {
-	var v Version
-	if limit < 1 {
-		return v, ErrInvalid
-	}
-	if err := os.MkdirAll(root, 0700); err != nil {
-		return v, err
-	}
-	f, err := os.CreateTemp(root, ".upload-*")
+	id := uuid.NewString()
+	tmp, v, err := stage(root, key, blobBinding(id), r, limit)
 	if err != nil {
 		return v, err
 	}
-	tmp := f.Name()
 	defer os.Remove(tmp)
-	defer f.Close()
-	h := sha256.New()
-	n, err := seal(f, key, io.TeeReader(io.LimitReader(r, limit+1), h))
-	if err != nil {
-		return v, err
-	}
-	if n > limit {
-		return v, ErrTooLarge
-	}
-	if err = f.Sync(); err != nil {
-		return v, err
-	}
-	if err = f.Close(); err != nil {
-		return v, err
-	}
-	v = Version{Blob: uuid.NewString(), Digest: hex.EncodeToString(h.Sum(nil)), Size: n, Sealed: true}
-	if err = os.Rename(tmp, filepath.Join(root, v.Blob)); err != nil {
+	v.Blob, v.Sealed = id, true
+	if err = os.Rename(tmp, filepath.Join(root, id)); err != nil {
 		return v, err
 	}
 	if err = SyncDirectory(root); err != nil {
-		os.Remove(filepath.Join(root, v.Blob))
+		os.Remove(filepath.Join(root, id))
 		return v, err
 	}
 	return v, nil
 }
+
+// stage seals r under key and bind into a synced, closed staging file in root and returns its
+// path; the caller renames or removes it.
+func stage(root string, key []byte, bind string, r io.Reader, limit int64) (string, Version, error) {
+	var v Version
+	if limit < 1 {
+		return "", v, ErrInvalid
+	}
+	if err := os.MkdirAll(root, 0700); err != nil {
+		return "", v, err
+	}
+	f, err := os.CreateTemp(root, ".upload-*")
+	if err != nil {
+		return "", v, err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			f.Close()
+			os.Remove(f.Name())
+		}
+	}()
+	h := sha256.New()
+	n, err := seal(f, key, bind, io.TeeReader(io.LimitReader(r, limit+1), h))
+	if err != nil {
+		return "", v, err
+	}
+	if n > limit {
+		return "", v, ErrTooLarge
+	}
+	if err = f.Sync(); err != nil {
+		return "", v, err
+	}
+	if err = f.Close(); err != nil {
+		return "", v, err
+	}
+	ok = true
+	return f.Name(), Version{Digest: hex.EncodeToString(h.Sum(nil)), Size: n}, nil
+}
+
 func SyncDirectory(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

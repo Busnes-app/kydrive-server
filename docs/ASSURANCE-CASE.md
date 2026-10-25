@@ -104,7 +104,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Forged directory events | HMAC-SHA256 checked in constant time before parsing; five-minute window; older events ignored; payload `role` ignored | `internal/sso/kysignon.go`, `internal/crypto/crypto.go` |
 | Forged editor callbacks, SSRF through the editor | Signed JWT callbacks; output fetched only from the editor origin with redirects refused | `internal/editor` |
 | SSRF through the recovery URL | `recoveryclient.ValidateURL` refuses private destinations unless explicitly allowed | `internal/api/backup_handlers.go` |
-| Secrets and files at rest | Per-blob HKDF key from a random salt, AES-256-GCM chunks with the header as AAD; names and TOTP secrets AES-GCM with the row as AAD | `internal/drive/sealed.go`, `internal/drive/names.go`, `internal/auth/totp.go` |
+| Secrets and files at rest | Blobs: age v1 streaming encryption (random file key, 64 KiB authenticated chunks) with the file key wrapped under HKDF of the deployment key, bound to the blob ID (KYB2; KYB1 read until migrated); names and TOTP secrets AES-GCM with the row as AAD | `internal/drive/sealed.go`, `internal/drive/names.go`, `internal/auth/totp.go` |
 | Vulnerable dependencies | Dependabot; `npm audit --audit-level=high` in CI; OSV ignore list with reasons; dependency releases ship daily | `.github/`, `osv-scanner.toml` |
 | Supply-chain tampering | Actions and base images pinned by digest; release images carry build provenance verified before `:stable` moves; the binary rebuilds to the same bytes | [VERIFYING-RELEASES.md](VERIFYING-RELEASES.md) |
 

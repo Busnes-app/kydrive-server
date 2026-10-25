@@ -310,7 +310,7 @@ func TestStagingIsSealed(t *testing.T) {
 		t.Fatalf("%v %v", entries, err)
 	}
 	b, err := os.ReadFile(filepath.Join(staging, u.ID, entries[0].Name()))
-	if err != nil || !bytes.HasPrefix(b, []byte("KYB1")) || bytes.Contains(b, []byte("plaintext-marker")) {
+	if err != nil || !bytes.HasPrefix(b, []byte("KYB2")) || bytes.Contains(b, []byte("plaintext-marker")) {
 		t.Fatalf("segment not sealed: %q %v", b, err)
 	}
 	names, err := drive.RawNames(context.Background(), d, "drive_upload_sessions")

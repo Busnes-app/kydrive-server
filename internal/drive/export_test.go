@@ -1,13 +1,21 @@
 package drive
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, error) {
@@ -156,4 +164,72 @@ func QueryPlan(ctx context.Context, s *Store, q string, args ...any) ([]string, 
 		out = append(out, detail)
 	}
 	return out, rows.Err()
+}
+
+// WriteBlobV1 stores r as a KYB1 blob, as releases before KYB2 did.
+func WriteBlobV1(root string, key []byte, r io.Reader) (Version, error) {
+	h := sha256.New()
+	var buf bytes.Buffer
+	n, err := sealV1(&buf, key, io.TeeReader(r, h))
+	if err != nil {
+		return Version{}, err
+	}
+	v := Version{Blob: uuid.NewString(), Digest: hex.EncodeToString(h.Sum(nil)), Size: n, Sealed: true}
+	return v, os.WriteFile(filepath.Join(root, v.Blob), buf.Bytes(), 0600)
+}
+
+// sealV1 is the KYB1 writer this package shipped before KYB2.
+func sealV1(w io.Writer, key []byte, r io.Reader) (int64, error) {
+	header := make([]byte, headerV1)
+	copy(header, blobMagicV1)
+	rand.Read(header[len(blobMagicV1):])
+	aead, err := aeadV1(key, header[len(blobMagicV1):])
+	if err != nil {
+		return 0, err
+	}
+	if _, err = w.Write(header); err != nil {
+		return 0, err
+	}
+	cur, next := make([]byte, blobChunk), make([]byte, blobChunk)
+	m, err := io.ReadFull(r, cur)
+	var total int64
+	for i := int64(0); ; i++ {
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			return total, err
+		}
+		final, k := m < blobChunk, 0
+		if !final {
+			k, err = io.ReadFull(r, next)
+			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+				return total, err
+			}
+			final = k == 0
+		}
+		if _, err = w.Write(aead.Seal(nil, nonceV1(i, final), cur[:m], header)); err != nil {
+			return total, err
+		}
+		total += int64(m)
+		if final {
+			return total, nil
+		}
+		cur, next, m = next, cur, k
+	}
+}
+
+// StageUpgrade and CommitUpgrade are the two halves of one KYB2 rewrite.
+func StageUpgrade(ctx context.Context, s *Store, root string, key []byte, id string) (string, error) {
+	tmp, _, err := s.stageUpgrade(ctx, root, key, id)
+	return tmp, err
+}
+
+func CommitUpgrade(ctx context.Context, s *Store, root, id, tmp string) error {
+	return s.commitUpgrade(ctx, root, id, tmp)
+}
+
+// Migrate reruns every schema step not recorded in drive_schema.
+func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
+
+// CheckStaged is the decrypt check a staged rewrite must pass before it replaces its blob.
+func CheckStaged(tmp string, key []byte, id string, size int64, digest string) error {
+	return checkStaged(tmp, key, id, size, digest)
 }

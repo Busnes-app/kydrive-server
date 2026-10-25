@@ -5,6 +5,7 @@ go 1.26.9
 toolchain go1.27.3
 
 require (
+	filippo.io/age v1.3.2
 	github.com/Busnes-app/ky-primitives v0.10.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/elimity-com/scim v0.0.0-20260728105928-2641426a1539
@@ -21,6 +22,7 @@ require (
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

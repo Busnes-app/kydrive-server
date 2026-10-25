@@ -178,7 +178,7 @@ func writeSegment(dir, path string, key []byte, r io.Reader, length int64) error
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	n, err := seal(f, key, io.LimitReader(r, length+1))
+	n, err := seal(f, key, blobBinding(filepath.Base(path)), io.LimitReader(r, length+1))
 	if err != nil {
 		return err
 	}

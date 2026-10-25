@@ -35,7 +35,7 @@ var (
 		"AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
-		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs",
+		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeUserEditors", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
 	}
 )
