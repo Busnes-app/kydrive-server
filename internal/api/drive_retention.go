@@ -110,8 +110,12 @@ func (s *Server) RunRetention(ctx context.Context) {
 	}
 }
 
-// RunBlobSealing encrypts blobs written before sealing existed, now and then hourly. Each
-// pass first finishes swaps an earlier run committed but did not clean up.
+// blobUpgradeRate caps the KYB1 to KYB2 rewrite, in sealed bytes per second.
+const blobUpgradeRate = 32 << 20
+
+// RunBlobSealing encrypts blobs written before sealing existed and rewrites KYB1 blobs as
+// KYB2, now and then hourly. Each pass first finishes swaps an earlier run committed but did
+// not clean up.
 func (s *Server) RunBlobSealing(ctx context.Context) {
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
@@ -122,6 +126,9 @@ func (s *Server) RunBlobSealing(ctx context.Context) {
 		}
 		if n > 0 {
 			log.Printf("blob sealing: sealed %d legacy blobs", n)
+		}
+		if _, err = s.store.Drive().UpgradeBlobs(ctx, s.blobRoot(), s.config.Security.EncryptionKey, blobUpgradeRate); err != nil && ctx.Err() == nil {
+			log.Printf("blob format: %v", err)
 		}
 		select {
 		case <-ctx.Done():

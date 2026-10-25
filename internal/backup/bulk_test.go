@@ -364,6 +364,37 @@ func TestBulkManifestVersionsAndSealedBlobs(t *testing.T) {
 	}
 }
 
+// A KYB1 blob (testdata/kyb1.blob, written by the last KYB1 release under the fixture key)
+// backs up and restores beside KYB2 blobs until the format migration rewrites it.
+func TestBulkKeepsKYB1Blobs(t *testing.T) {
+	f := newBulkFixture(t)
+	ctx := context.Background()
+	raw, err := os.ReadFile("testdata/kyb1.blob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "kyb1 bytes from the last KYB1 release"
+	old := drive.Version{Blob: uuid.NewString(), Digest: digest(body), Size: int64(len(body)), Sealed: true}
+	os.MkdirAll(filepath.Join(f.dir, "blobs"), 0700)
+	if err = os.WriteFile(filepath.Join(f.dir, "blobs", old.Blob), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.st.Drive().Publish(ctx, "admin", drive.File{Workspace: f.workspace, Name: "old.txt"}, old, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, v := f.publish(t, "new.txt", "new bytes")
+	_, target, err := restoreInto(t, f, f.collect(t, backup.PurposeDeposit))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.read(t, target, old, true); got != body {
+		t.Fatalf("KYB1 restore: %q", got)
+	}
+	if got := f.read(t, target, v, true); got != "new bytes" {
+		t.Fatalf("KYB2 restore: %q", got)
+	}
+}
+
 // Three deposits with a purge between them, beside two month-old legacy snapshots: an off
 // policy forgets nothing; a one-day policy leaves only the newest deposit, the purged bytes
 // and the legacy bytes leave the repository, and the newest capsule still restores.

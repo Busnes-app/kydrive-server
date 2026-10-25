@@ -68,6 +68,9 @@ CREATE TABLE drive_device_codes(code_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL
 	`ALTER TABLE drive_app_passwords ADD COLUMN scope TEXT NOT NULL DEFAULT 'dav' CHECK(scope IN ('dav','mcp:read','mcp:write'));
 ALTER TABLE drive_app_passwords ADD COLUMN root_workspace TEXT NOT NULL DEFAULT '';
 ALTER TABLE drive_app_passwords ADD COLUMN root_folder TEXT NOT NULL DEFAULT '';`,
+	// Blobs sealed as KYB1, which UpgradeBlobs rewrites as KYB2; every new blob is KYB2.
+	`CREATE TABLE drive_blob_kyb1(blob TEXT PRIMARY KEY);
+INSERT INTO drive_blob_kyb1(blob) SELECT DISTINCT blob FROM drive_versions WHERE sealed=1;`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
