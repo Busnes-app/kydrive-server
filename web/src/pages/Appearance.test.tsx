@@ -31,6 +31,12 @@ describe('Appearance', () => {
     }
   });
 
+  it('previews the shipped themes with their own styles/theme.css colours', () => {
+    const { container } = render(<Appearance />);
+    for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) expect(container.querySelector(`[data-ky-preview="${id}"]`)?.getAttribute('data-theme')).toBe(id);
+    expect(container.querySelector('[data-ky-preview="ocean"]')?.hasAttribute('data-theme')).toBe(false);
+  });
+
   it('follows the system until a choice is saved', () => {
     expect(storedTheme().id).toBe('system');
     applyTheme(storedTheme());

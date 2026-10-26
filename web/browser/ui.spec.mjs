@@ -63,6 +63,16 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
   await page.keyboard.press('ArrowRight');
   await expect(pick(page, 'Coffee')).toBeChecked();
+  // The shipped themes' previews show the colours the app applies (not the catalog's).
+  for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
+    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
+    const [preview, applied] = await page.evaluate((v) => {
+      const read = (el, names) => names.map((n) => getComputedStyle(el).getPropertyValue(n).trim().toLowerCase());
+      return [read(document.querySelector(`[data-ky-preview="${v}"]`), ['--ky-preview-bg', '--ky-preview-sidebar', '--ky-preview-ink', '--ky-preview-accent']),
+        read(document.documentElement, ['--bg', '--panel', '--ink-strong', '--accent'])];
+    }, id);
+    expect(preview, id).toEqual(applied);
+  }
   await pick(page, 'Match system').check();
   await nav.getByRole('button').first().focus();
   await page.keyboard.press('Tab');

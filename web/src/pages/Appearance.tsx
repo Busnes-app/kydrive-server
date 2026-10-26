@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
+import { LEGACY, THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
 
 const mode = (scheme: string) => scheme === 'system' ? 'Light or dark' : scheme === 'light' ? 'Light' : 'Dark';
 
@@ -18,7 +18,7 @@ export function Appearance() {
       <div className="ky-appearance-grid">
         {THEME_OPTIONS.map(theme => <label key={theme.id} className="ky-appearance-option">
           <input className="ky-appearance-radio" type="radio" name="kydrive-theme" value={theme.id} checked={theme.id === selected.id} onChange={() => { setSelected(theme); applyTheme(theme, true); }} />
-          <span className="ky-appearance-preview" aria-hidden="true" data-ky-preview={theme.id} />
+          <span className="ky-appearance-preview" aria-hidden="true" data-ky-preview={theme.id} data-theme={LEGACY.has(theme.id) ? theme.id : undefined} />
           <span className="ky-appearance-name">{theme.name}</span>
           <small className="ky-appearance-mode">{mode(theme.scheme)}</small>
         </label>)}

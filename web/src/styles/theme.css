@@ -65,6 +65,15 @@
   --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
 }
 
+/* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
+   catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes. */
+.ky-appearance-preview[data-theme] {
+  --ky-preview-bg: var(--bg);
+  --ky-preview-sidebar: var(--panel);
+  --ky-preview-ink: var(--ink-strong);
+  --ky-preview-accent: var(--accent);
+}
+
 /* Busnes light/dark: every short alias reads the ky-ui token. */
 :root[data-theme="busnes-light"], :root[data-theme="busnes-dark"], :root:not([data-theme]) {
   --bg: var(--ky-bg);

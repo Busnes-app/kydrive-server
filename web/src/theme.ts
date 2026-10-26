@@ -6,7 +6,7 @@ import type { CatalogTheme, SystemTheme } from './ky-ui/themes';
 export type Theme = CatalogTheme | SystemTheme;
 export const THEME_OPTIONS: readonly Theme[] = [SYSTEM_THEME, ...THEME_CATALOG];
 // Themes KyDrive shipped before the suite catalog keep the exact values in styles/theme.css.
-const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
+export const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
 const KEY = 'ky_theme';
 
 export function storedTheme(): Theme {
