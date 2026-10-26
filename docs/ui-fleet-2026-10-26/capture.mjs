@@ -20,6 +20,26 @@ const FILES = [
   { name: 'Meeting notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Weekly sync: agree the launch checklist and owners.\n') },
 ];
 
+// Fleet review F7: the real filled "Delete permanently" confirmation for a synthetic file in the
+// trash, under a saved light (Sky) or dark (Forest) suite palette. The dialog is never confirmed.
+let trashed = false;
+async function deleteDialog(page, palette) {
+  await page.goto('/');
+  await page.evaluate((id) => localStorage.setItem('ky_theme', id), palette);
+  await page.reload();
+  await page.getByRole('navigation', { name: 'Workspaces' }).waitFor();
+  const victim = FILES[2].name;
+  if (!trashed) {
+    await page.getByLabel(`Actions for ${victim}`).click();
+    await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+    trashed = true;
+  }
+  await page.getByRole('button', { name: 'Trash', exact: true }).click();
+  await page.getByRole('row', { name: new RegExp(victim) }).getByRole('button', { name: 'Delete permanently' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' }).waitFor();
+  await page.waitForTimeout(300);
+}
+
 await main({
   product: 'kydrive',
   repo,
@@ -70,6 +90,8 @@ await main({
       await page.getByRole('button', { name: 'Appearance' }).click();
       await page.getByRole('heading', { name: 'Appearance', level: 1 }).waitFor();
     },
+    'delete-dialog-sky': (page) => deleteDialog(page, 'sky'),
+    'delete-dialog-forest': (page) => deleteDialog(page, 'forest'),
     async settings(page) {
       await page.getByRole('button', { name: 'Settings & DB' }).click();
       await page.getByRole('heading', { level: 1 }).first().waitFor();
