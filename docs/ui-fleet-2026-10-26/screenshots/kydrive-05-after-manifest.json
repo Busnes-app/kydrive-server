@@ -1,0 +1,92 @@
+{
+  "prefix": "kydrive-05-after",
+  "product": "kydrive",
+  "branch": "ui/fleet-review-f7",
+  "head": "a949b9ac016090a604d2ecc2bd9631f921fffad4",
+  "uncommitted_diff_sha256": "d20aa423a353bbcbec3ef6766fdabd8816dae8acce909849d118bf7644d6e0aa",
+  "uncommitted_diff_bytes": 904,
+  "server_binary_sha256": "106940bcdb89b4d599109e8d66f020dfa5589f72982215d7945f5efb78b7bf10",
+  "embedded_index_sha256": "47800911f3b5f3917f57f2a6a4304ca0083fbe38d885b075cf594c9d0b649194",
+  "captured": "2026-10-26T14:54:08.941Z",
+  "os": "linux 7.2.10-1-cachyos",
+  "driver": "playwright chromium 156.0.8078.4 (headless)",
+  "device_scale_factor": 1,
+  "timezone": "America/Chicago",
+  "locale": "en-US",
+  "theme_source": "context colorScheme emulation with no saved theme choice (OS-following default)",
+  "fixture": "web built from this tree; fresh SQLite data dir (web/browser/server.mjs environment on port 5873); captcha none; no editor, directory or recovery configured; KY_ADMIN_PASSWORD bootstrap \"admin\" replaced through /api/auth/change-password; three synthetic text uploads (Quarterly plan.md, Supplier list.csv, Meeting notes.txt) in My files through the Upload files input",
+  "files": [
+    {
+      "file": "kydrive-05-after-delete-dialog-sky-desktop-light.png",
+      "sha256": "2a5ae63dc0199295b2bdd4aafc26511b59c7084854ab74a5d114d93b7c3fe0c7",
+      "surface": "delete-dialog-sky",
+      "viewport": "1280x900",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-forest-desktop-light.png",
+      "sha256": "79647b0f91b89c2ab3ec27c05517bbae3df85bba7aa74468b44e693c7490b349",
+      "surface": "delete-dialog-forest",
+      "viewport": "1280x900",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-sky-mobile-light.png",
+      "sha256": "ed7de79e9ba3d939b579d3ff44495c7419a6f76bac7469d9e30725ef6623fd2a",
+      "surface": "delete-dialog-sky",
+      "viewport": "390x844",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-forest-mobile-light.png",
+      "sha256": "89681f088833e6a30baa29de74e57345cdaf8495ba4643b5dbee457febc911e5",
+      "surface": "delete-dialog-forest",
+      "viewport": "390x844",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-sky-desktop-dark.png",
+      "sha256": "50d6c5068810dfca28a6535d98acc50238d7fbd75bde1e2aa61929835b646a78",
+      "surface": "delete-dialog-sky",
+      "viewport": "1280x900",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-forest-desktop-dark.png",
+      "sha256": "112e9cfa87cc043ed0c155912de9e73cf44fa91615cdcf2692f61a637de390bf",
+      "surface": "delete-dialog-forest",
+      "viewport": "1280x900",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-sky-mobile-dark.png",
+      "sha256": "ed7de79e9ba3d939b579d3ff44495c7419a6f76bac7469d9e30725ef6623fd2a",
+      "surface": "delete-dialog-sky",
+      "viewport": "390x844",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-05-after-delete-dialog-forest-mobile-dark.png",
+      "sha256": "89681f088833e6a30baa29de74e57345cdaf8495ba4643b5dbee457febc911e5",
+      "surface": "delete-dialog-forest",
+      "viewport": "390x844",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    }
+  ]
+}
