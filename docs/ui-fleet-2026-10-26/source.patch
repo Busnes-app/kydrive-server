@@ -24,7 +24,7 @@ index df3779d..2131c4c 100644
  ## Local Contracts
  - Document exact verified behavior; local fixtures do not establish live suite integration or production readiness.
 diff --git a/web/AGENTS.md b/web/AGENTS.md
-index 2c935e7..7db0ab7 100644
+index 2c935e7..0a404f2 100644
 --- a/web/AGENTS.md
 +++ b/web/AGENTS.md
 @@ -1,7 +1,7 @@
@@ -41,15 +41,15 @@ index 2c935e7..7db0ab7 100644
  - Strict TypeScript type safety without unused imports.
  - The authenticated shell uses a persistent sidebar; the selected page is marked by a quiet surface and slim accent rail, with a horizontal overflow navigation on small screens.
 -- Dynamic theme selection applies `data-theme` attribute to the root HTML document and persists to `localStorage`.
-+- Theme selection applies the catalog ID as `data-theme` on the root element and persists it under `ky_theme`. Every signed-in user has an Appearance page (primary navigation) with Match system and every catalog theme as the shared native radio cards (`ky-appearance`); the shell (sidebar, phone header) has no theme selector, by owner decision; the login page and the administrator Settings page keep a compact dropdown over the same saved choice. The five themes KyDrive shipped before the catalog keep their exact `styles/theme.css` values (no inline palette); the other named themes are applied inline by `applyThemeVariables`.
++- Theme selection applies the catalog ID as `data-theme` on the root element and persists it under `ky_theme`. Every signed-in user has an Appearance page (primary navigation) with Match system and every catalog theme as the shared native radio cards (`ky-appearance`); the shell (sidebar, phone header) has no theme selector, by owner decision; the login page and the administrator Settings page keep a compact dropdown over the same saved choice. The five themes KyDrive shipped before the catalog keep their exact `styles/theme.css` values (no inline palette); the other named themes are applied inline by `applyThemeVariables`. Their Appearance previews carry the theme's own `data-theme`, so those blocks colour the card (sidebar = `--panel`, as `.app-header` renders them); the unit and browser tests compare each preview with the applied palette.
  - Authenticated state-changing requests use `secureFetch` so the CSRF cookie (`__Host-ky_csrf` on HTTPS host-only deployments, else `ky_csrf`) is mirrored into `X-CSRF-Token`; the editor bootstrap script reads it the same way. Login and MFA posts send `Content-Type: application/json`.
  - A PoW solution buys one login attempt; `Login.tsx` remounts `CaptchaWidget` after every attempt.
  - Register the service worker from the production JS bundle; keep `script-src 'self'` intact.
 diff --git a/web/browser/ui.spec.mjs b/web/browser/ui.spec.mjs
-index dee0720..a0252b3 100644
+index dee0720..a8672d4 100644
 --- a/web/browser/ui.spec.mjs
 +++ b/web/browser/ui.spec.mjs
-@@ -32,23 +32,38 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
+@@ -32,23 +32,48 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
    await expect(nav).toBeVisible();
    await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
    await fits(page);
@@ -89,6 +89,16 @@ index dee0720..a0252b3 100644
 +  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
 +  await page.keyboard.press('ArrowRight');
 +  await expect(pick(page, 'Coffee')).toBeChecked();
++  // The shipped themes' previews show the colours the app applies (not the catalog's).
++  for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
++    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
++    const [preview, applied] = await page.evaluate((v) => {
++      const read = (el, names) => names.map((n) => getComputedStyle(el).getPropertyValue(n).trim().toLowerCase());
++      return [read(document.querySelector(`[data-ky-preview="${v}"]`), ['--ky-preview-bg', '--ky-preview-sidebar', '--ky-preview-ink', '--ky-preview-accent']),
++        read(document.documentElement, ['--bg', '--panel', '--ink-strong', '--accent'])];
++    }, id);
++    expect(preview, id).toEqual(applied);
++  }
 +  await pick(page, 'Match system').check();
    await nav.getByRole('button').first().focus();
    await page.keyboard.press('Tab');
@@ -181,10 +191,10 @@ index 2832c3e..39037ff 100644
  }
 diff --git a/web/src/pages/Appearance.test.tsx b/web/src/pages/Appearance.test.tsx
 new file mode 100644
-index 0000000..ec5815d
+index 0000000..e8c6810
 --- /dev/null
 +++ b/web/src/pages/Appearance.test.tsx
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,45 @@
 +import { afterEach, describe, expect, it } from 'vitest';
 +import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 +import { Appearance } from './Appearance';
@@ -218,6 +228,12 @@ index 0000000..ec5815d
 +    }
 +  });
 +
++  it('previews the shipped themes with their own styles/theme.css colours', () => {
++    const { container } = render(<Appearance />);
++    for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) expect(container.querySelector(`[data-ky-preview="${id}"]`)?.getAttribute('data-theme')).toBe(id);
++    expect(container.querySelector('[data-ky-preview="ocean"]')?.hasAttribute('data-theme')).toBe(false);
++  });
++
 +  it('follows the system until a choice is saved', () => {
 +    expect(storedTheme().id).toBe('system');
 +    applyTheme(storedTheme());
@@ -226,12 +242,12 @@ index 0000000..ec5815d
 +});
 diff --git a/web/src/pages/Appearance.tsx b/web/src/pages/Appearance.tsx
 new file mode 100644
-index 0000000..e9db9ac
+index 0000000..a23653b
 --- /dev/null
 +++ b/web/src/pages/Appearance.tsx
 @@ -0,0 +1,28 @@
 +import { useEffect, useState } from 'react';
-+import { THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
++import { LEGACY, THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
 +
 +const mode = (scheme: string) => scheme === 'system' ? 'Light or dark' : scheme === 'light' ? 'Light' : 'Dark';
 +
@@ -250,7 +266,7 @@ index 0000000..e9db9ac
 +      <div className="ky-appearance-grid">
 +        {THEME_OPTIONS.map(theme => <label key={theme.id} className="ky-appearance-option">
 +          <input className="ky-appearance-radio" type="radio" name="kydrive-theme" value={theme.id} checked={theme.id === selected.id} onChange={() => { setSelected(theme); applyTheme(theme, true); }} />
-+          <span className="ky-appearance-preview" aria-hidden="true" data-ky-preview={theme.id} />
++          <span className="ky-appearance-preview" aria-hidden="true" data-ky-preview={theme.id} data-theme={LEGACY.has(theme.id) ? theme.id : undefined} />
 +          <span className="ky-appearance-name">{theme.name}</span>
 +          <small className="ky-appearance-mode">{mode(theme.scheme)}</small>
 +        </label>)}
@@ -259,10 +275,28 @@ index 0000000..e9db9ac
 +  </section>;
 +}
 diff --git a/web/src/styles/theme.css b/web/src/styles/theme.css
-index b179be8..09a30ce 100644
+index b179be8..98146bc 100644
 --- a/web/src/styles/theme.css
 +++ b/web/src/styles/theme.css
-@@ -103,7 +103,7 @@
+@@ -65,6 +65,17 @@
+   --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
+ }
+ 
++/* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
++   catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes;
++   the hairline keeps the page's border colour like every other card. */
++.ky-appearance-preview[data-theme] {
++  --line-strong: inherit;
++  --ky-preview-bg: var(--bg);
++  --ky-preview-sidebar: var(--panel);
++  --ky-preview-ink: var(--ink-strong);
++  --ky-preview-accent: var(--accent);
++}
++
+ /* Busnes light/dark: every short alias reads the ky-ui token. */
+ :root[data-theme="busnes-light"], :root[data-theme="busnes-dark"], :root:not([data-theme]) {
+   --bg: var(--ky-bg);
+@@ -103,7 +114,7 @@
  
  body {
    font-family: var(--font-sans);
@@ -271,7 +305,7 @@ index b179be8..09a30ce 100644
    line-height: 1.5;
    background: var(--bg);
    color: var(--ink-strong);
-@@ -129,20 +129,19 @@ summary:focus-visible { outline-offset: 4px; }
+@@ -129,20 +140,19 @@ summary:focus-visible { outline-offset: 4px; }
  }
  
  /* ---------- App shell ---------- */
@@ -294,7 +328,7 @@ index b179be8..09a30ce 100644
  .app-preference { display: flex; align-items: center; gap: .55rem; font-size: .82rem; color: var(--ink); cursor: pointer; }
  .app-user { display: flex; align-items: center; gap: .55rem; border-top: 1px solid var(--line); padding-top: .8rem; }
  .app-user-copy { min-width: 0; flex: 1; font-size: .85rem; }
-@@ -155,7 +154,7 @@ summary:focus-visible { outline-offset: 4px; }
+@@ -155,7 +165,7 @@ summary:focus-visible { outline-offset: 4px; }
  .page { width: 100%; max-width: 80rem; margin: 0 auto; padding: 2.25rem 2.5rem 4rem; }
  .page-narrow { max-width: 52rem; }
  .page-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
@@ -303,7 +337,7 @@ index b179be8..09a30ce 100644
  .page-desc { color: var(--ink); margin-top: .2rem; max-width: 62ch; }
  .page-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
  .stack { display: grid; gap: 1.25rem; }
-@@ -483,10 +482,8 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
+@@ -483,10 +493,8 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
    .app-nav-label { display: none; }
    .app-nav-empty { display: none; }
    .app-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; gap: .5rem .75rem; }
@@ -315,7 +349,7 @@ index b179be8..09a30ce 100644
    .page, .dr-page { padding: 1.25rem 1rem 3rem; }
    .page-header h1, .page-title, .dr-header h1 { font-size: 1.4rem; }
 diff --git a/web/src/theme.ts b/web/src/theme.ts
-index 8016924..2b4f9ec 100644
+index 8016924..c91ead0 100644
 --- a/web/src/theme.ts
 +++ b/web/src/theme.ts
 @@ -1,19 +1,32 @@
@@ -332,7 +366,7 @@ index 8016924..2b4f9ec 100644
 +export type Theme = CatalogTheme | SystemTheme;
 +export const THEME_OPTIONS: readonly Theme[] = [SYSTEM_THEME, ...THEME_CATALOG];
 +// Themes KyDrive shipped before the suite catalog keep the exact values in styles/theme.css.
-+const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
++export const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
 +const KEY = 'ky_theme';
 +
 +export function storedTheme(): Theme {

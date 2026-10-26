@@ -8,6 +8,8 @@ Applies the approved Busnes look to KyDrive's web shell and gives it the shared 
 - **01 after**: suite shell scale (240px sidebar, 24px title, 40px controls and nav rows, shared field border and type) and the Appearance cards.
 - **02 after**: owner correction — shared description class and copy, consistent wrapping, preview hairline, no theme selector in the shell navigation. Only affected Appearance/shell views were recaptured.
 - **02 confirm**: one confirmation recapture after the single stage 02 fix batch, where a fix was needed.
+- **03 after**: owner decisions on the reported conflicts (phone inset for two card columns at 390px, preview fidelity for KyDrive's shipped themes, KyYard's Polished Ky kept), light/dark × desktop/phone Appearance only. Its before is the latest stage 02 batch of the same view (`previous_file` in `results.csv`). The in-app check gained three assertions: every named preview matches the applied palette, two columns with no overflow at 390px, and a keyboard choice survives a reload.
+- **03 confirm**: one confirmation recapture after the single stage 03 fix, where a fix was needed.
 
 Surfaces: My files (three synthetic uploads), Settings & DB (where the theme control lived before) and the new Appearance page.
 
@@ -19,7 +21,7 @@ Surfaces: My files (three synthetic uploads), Settings & DB (where the theme con
 ## Product notes
 
 - New Appearance page in the primary navigation for every role. By owner decision the sidebar (phone header) has no theme dropdown; login and the administrator Settings page keep a compact dropdown over the same saved choice.
-- The five themes KyDrive shipped keep their exact `styles/theme.css` values and are not overwritten inline. KyDrive's Paper Clean differs from the catalog's base `paper` (accent `#0369a1` vs `#0284c7`, button text `#ffffff` vs `#0d0f14`, danger and success), so the Paper Clean preview card shows the catalog accent, not KyDrive's.
+- The five themes KyDrive shipped keep their exact `styles/theme.css` values and are not overwritten inline. Their preview cards carry the theme's own `data-theme`, so those same blocks colour the card (sidebar = `--panel`, as `.app-header` renders them; the hairline keeps the page border). No second hex catalog is copied. Before stage 03 these five cards showed the catalog's colours; Paper Clean's accent was visibly wrong.
 
 ## Capture batches
 
@@ -31,6 +33,8 @@ Every manifest in `screenshots/` lists the source commit, a hash of any uncommit
 | `kydrive-01-after` | `f82abfa40a` | `9446f8bccea0…` | 12 | appearance, files, settings | 2026-10-26T11:20Z |
 | `kydrive-02-after` | `e9de227d32` | none | 12 | appearance, files, settings | 2026-10-26T11:38Z |
 | `kydrive-02-confirm` | `f34d876023` | none | 8 | appearance, files | 2026-10-26T11:40Z |
+| `kydrive-03-after` | `d5d2be112a` | `4fd571c39e5e…` | 4 | appearance | 2026-10-26T12:08Z |
+| `kydrive-03-confirm` | `ad49c4494a` | none | 4 | appearance | 2026-10-26T12:11Z |
 
 Conditions: linux 7.2.10-1-cachyos, playwright chromium 156.0.8078.4 (headless), device scale 1, 1280×900 and 390×844, light/dark by OS emulation with no saved choice, America/Chicago, en-US. Fixture: web built from this tree; fresh SQLite data dir (web/browser/server.mjs environment on port 5873); captcha none; no editor, directory or recovery configured; KY_ADMIN_PASSWORD bootstrap "admin" replaced through /api/auth/change-password; three synthetic text uploads (Quarterly plan.md, Supplier list.csv, Meeting notes.txt) in My files through the Upload files input.
 
@@ -42,20 +46,22 @@ Conditions: linux 7.2.10-1-cachyos, playwright chromium 156.0.8078.4 (headless),
 | --- | --- | --- |
 | `kydrive-01-after` | `f82abfa40a` | 16/16 |
 | `kydrive-02-after` | `e9de227d32` | 16/16 |
+| `kydrive-03-after` | `d5d2be112a` | 19/19 |
+| `kydrive-03-confirm` | `ad49c4494a` | 19/19 |
 
 ## Checks
 
 | Check | Result |
 | --- | --- |
-| Web unit tests (vitest) | 99/99 pass |
+| Web unit tests (vitest) | 100/100 pass at stage 03 |
 | Typecheck and web build | pass |
-| Production-server browser suite (`npm run test:browser`, 48 tests incl. the Appearance radios) | 48/48 pass after the dropdown removal |
+| Production-server browser suite (`npm run test:browser`, 48 tests, incl. Appearance radios and a preview-vs-applied check for the five shipped themes) | 48/48 pass at `ad49c44` (12:16–12:18Z on the shared 5391 slot) |
 | `npm audit` | 0 vulnerabilities |
 | `go mod verify` and `go mod tidy` clean | pass |
 | Vendored ky-ui check | pass at 4f83f34 |
 | restic, smoke, deploy unittest and Docker jobs | not run locally: CI runs them |
 
-Go: `go build ./...`, `go vet ./...`, gofmt and the full `go test -race -count=1 ./...` passed locally on this machine (CachyOS, Go 1.27.1); Go code is unchanged by this work. Docker image, publish and attestation jobs were not run locally: CI runs them on this PR.
+Go: `go build ./...`, `go vet ./...`, gofmt and the full `go test -race -count=1 ./...` passed locally (CachyOS, Go 1.27.1) at stage 02; Go code is unchanged since then and by this work (`go build ./...` re-run at stage 03), so those results stand. Docker image, publish and attestation jobs were not run locally: CI runs them.
 
 ## Reproduce
 
