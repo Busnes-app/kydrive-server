@@ -7,7 +7,7 @@ React 19 + TypeScript + Vite PWA frontend embedding the ky-ui suite theme catalo
 Owns user interface components, service worker caching, PWA installation manifests, and frontend theme switching.
 
 ## Local Contracts
-- Newly added suite palettes tint error/success text toward their ink for readable status text on light and dark surfaces; the five shipped base palettes retain their original status values. Browser regressions measure all six new light palettes against both page and panel surfaces.
+- Newly added suite palettes tint error/success text toward their ink for readable status text on light and dark surfaces; the five shipped base palettes retain their original status values. Browser regressions measure all six new light palettes against both page and panel surfaces. The filled `.btn-danger` takes the page colour (`--bg`) as its label under the same 15 suite palettes, because the tint makes the fill too dark for a dark `--button-text`. Busnes and the five base palettes keep `--button-text`. `browser/danger-button.spec.mjs` measures the rendered label in the real "Delete permanently" confirmation at rest, hover and focus.
 - Web themes default to the Busnes.app cream/light and charcoal/dark palettes with orange accents, following the OS until a browser-local choice is saved. Preserve existing named themes and saved choices.
 - Sign-out resets the shell (user, workspaces, selection, tab, settings, new-tab preference) only after the server confirms; a failed or unreachable logout keeps the session and shows an error.
 - A signed-in user with `must_change_password` sees only password replacement and sign-out. Replacement uses `secureFetch`, returns to login after session revocation, and never exposes the normal navigation before completion.
