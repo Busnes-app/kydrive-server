@@ -259,7 +259,7 @@ index 0000000..e9db9ac
 +  </section>;
 +}
 diff --git a/web/src/styles/theme.css b/web/src/styles/theme.css
-index b179be8..a3465e2 100644
+index b179be8..09a30ce 100644
 --- a/web/src/styles/theme.css
 +++ b/web/src/styles/theme.css
 @@ -103,7 +103,7 @@
@@ -303,14 +303,17 @@ index b179be8..a3465e2 100644
  .page-desc { color: var(--ink); margin-top: .2rem; max-width: 62ch; }
  .page-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
  .stack { display: grid; gap: 1.25rem; }
-@@ -483,7 +482,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
+@@ -483,10 +482,8 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
    .app-nav-label { display: none; }
    .app-nav-empty { display: none; }
    .app-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; gap: .5rem .75rem; }
 -  .app-header-actions .theme-selector { width: auto; flex: 1 1 9rem; }
    .app-user { border-top: 0; padding-top: 0; margin-left: auto; }
    .app-user-copy { display: none; }
-   .app-preference { order: 3; flex-basis: 100%; }
+-  .app-preference { order: 3; flex-basis: 100%; }
+   .app-notice { margin: 1rem 1rem 0; }
+   .page, .dr-page { padding: 1.25rem 1rem 3rem; }
+   .page-header h1, .page-title, .dr-header h1 { font-size: 1.4rem; }
 diff --git a/web/src/theme.ts b/web/src/theme.ts
 index 8016924..2b4f9ec 100644
 --- a/web/src/theme.ts
