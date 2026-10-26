@@ -4,7 +4,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { here, run, waitReady } from './capture-core.mjs';
+import { here, main, waitReady } from './capture-core.mjs';
 
 const repo = join(here(import.meta.url), '../..');
 const PORT = '5873';
@@ -20,7 +20,7 @@ const FILES = [
   { name: 'Meeting notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Weekly sync: agree the launch checklist and owners.\n') },
 ];
 
-await run({
+await main({
   product: 'kydrive',
   repo,
   dist: join(repo, 'web/dist/index.html'),
@@ -57,12 +57,18 @@ await run({
       seeded = true;
     }
   },
+  hoverTarget: (page) => page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Account' }),
   surfaces: {
     async files(page, { device }) {
       await page.goto('/');
       await page.getByRole('navigation', { name: 'Workspaces' }).waitFor();
       await page.getByText(FILES[0].name).first().waitFor();
       if (device === 'mobile') await page.waitForTimeout(300);
+    },
+    async appearance(page) {
+      if (!(await page.getByRole('button', { name: 'Appearance' }).count())) throw new Error('no Appearance destination at this revision');
+      await page.getByRole('button', { name: 'Appearance' }).click();
+      await page.getByRole('heading', { name: 'Appearance', level: 1 }).waitFor();
     },
     async settings(page) {
       await page.getByRole('button', { name: 'Settings & DB' }).click();
