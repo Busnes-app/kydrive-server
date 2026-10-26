@@ -1,0 +1,13 @@
+product,stage,phase,check,result,detail,source_commit,uncommitted_source_sha256,captured_at
+KyDrive-server,00,before,phone: header height,pass,202px,657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,00,before,"phone: workspaces, destinations, preference and sign-out stay reachable",fail,"locator.isVisible: Error: strict mode violation: getByRole('button', { name: 'My files', exact: true }) resolved to 2 elements:",657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,00,before,phone: choosing the last destination keeps it in view and the page still,pass,"{""label"":""Settings & DB"",""inView"":true,""y"":0}",657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,00,before,settings: no second theme selector,fail,1 theme select on Settings,657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,00,before,settings: the Appearance action opens the one theme picker,fail,locator.click: Timeout 30000ms exceeded.,657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,00,before,no console errors or CSP violations,pass,none,657a485f8fbf6ad7dac1dc51c585a565b357c2ee,,2026-10-26T16:28:03.347Z
+KyDrive-server,01,after,phone: header height,pass,141px,84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z
+KyDrive-server,01,after,"phone: workspaces, destinations, preference and sign-out stay reachable",pass,"My files, Shared with me, Account, Appearance, Recovery, Settings & DB; preference and Sign out in view",84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z
+KyDrive-server,01,after,phone: choosing the last destination keeps it in view and the page still,pass,"{""label"":""Settings & DB"",""inView"":true,""y"":0}",84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z
+KyDrive-server,01,after,settings: no second theme selector,pass,none,84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z
+KyDrive-server,01,after,settings: the Appearance action opens the one theme picker,pass,radios 23,84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z
+KyDrive-server,01,after,no console errors or CSP violations,pass,none,84102c612446b0b258b1e521d51faf49f031ad28,,2026-10-26T16:43:31.204Z

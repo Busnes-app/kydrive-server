@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Database, Trash2 } from 'lucide-react';
 import { Alert } from '../components/Alert';
-import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { change, record, response } from './drive/client';
 import { GuestLinkSettings } from './GuestLinkSettings';
 import { DevicePolicySettings } from './Devices';
@@ -76,9 +75,10 @@ export const TrashRetention: React.FC = () => {
 
 interface SettingsProps {
   settings: Record<string, unknown> | null;
+  onOpenAppearance: () => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ settings }) => {
+export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }) => {
   const driver = typeof settings?.db_driver === 'string' ? settings.db_driver : 'sqlite';
   return (
     <section className="page">
@@ -96,7 +96,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings }) => {
           <div className="panel-header"><div><Database size={20} aria-hidden="true" /><h2 id="system-heading" className="panel-title" style={{ margin: 0 }}>System</h2></div></div>
           <dl className="settings-facts">
             <dt>Database</dt><dd><span className="badge font-mono">{driver}</span> One SQLite database, one writer</dd>
-            <dt>Theme on this browser</dt><dd><ThemeSwitcher /></dd>
+            <dt>Theme on this browser</dt><dd><button type="button" className="btn-secondary" onClick={onOpenAppearance}>Open Appearance</button></dd>
           </dl>
           <p className="hint" style={{ marginTop: '.75rem' }}>The theme follows this device until someone picks one; each browser keeps its own choice.</p>
         </section>

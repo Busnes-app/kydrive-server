@@ -167,7 +167,7 @@ export const App: React.FC = () => {
         {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
         
         {activeTab === 'backup' && <Backup />}
-        {activeTab === 'settings' && <Settings settings={settings} />}
+        {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
         {activeTab === 'appearance' && <Appearance />}
         {activeTab === 'account' && <section className="page page-narrow">
           <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
