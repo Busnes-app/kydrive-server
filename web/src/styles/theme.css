@@ -65,6 +65,13 @@
   --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
 }
 
+/* The suite palettes (ky-ui themes.js sets their colours inline) have no status colours;
+   tint Busnes ones toward the palette's ink, as KyPost does, so they read on light and dark. */
+:root[data-theme]:not([data-theme^="busnes-"], [data-theme="patina"], [data-theme="cyber"], [data-theme="nord"], [data-theme="paper"], [data-theme="oled"]) {
+  --danger: color-mix(in srgb, var(--ky-danger) 50%, var(--ink-strong));
+  --success: color-mix(in srgb, var(--ky-success) 50%, var(--ink-strong));
+}
+
 /* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
    catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes;
    the hairline keeps the page's border colour like every other card. */
