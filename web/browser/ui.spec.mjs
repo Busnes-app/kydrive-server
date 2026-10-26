@@ -32,23 +32,48 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await expect(nav).toBeVisible();
   await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
   await fits(page);
-  const theme = page.getByLabel('Color theme');
-  await theme.selectOption('paper');
+  // Appearance is the only theme control in the shell: native radio cards, one saved choice.
+  const appearance = async (p) => {
+    await p.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Appearance' }).click();
+    await expect(p.getByRole('heading', { name: 'Appearance', level: 1 })).toBeVisible();
+  };
+  const pick = (p, name) => p.getByRole('radio', { name: new RegExp(`^${name}\\b`) });
+  await expect(page.getByLabel('Color theme')).toHaveCount(0);
+  await appearance(page);
+  await fits(page);
+  await pick(page, 'Paper Clean').check();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
-  await theme.selectOption('busnes-dark');
+  await pick(page, 'Busnes Dark').check();
   await page.reload();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
   const other = await context.newPage();
   await other.goto('/');
-  await other.getByLabel('Color theme').selectOption('busnes-light');
+  await appearance(other);
+  await pick(other, 'Busnes Light').check();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
   await other.close();
-  await theme.selectOption('system');
+  await appearance(page);
+  await pick(page, 'Match system').check();
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
   await page.emulateMedia({ colorScheme: testInfo.project.use.colorScheme });
+  await pick(page, 'Ocean').check();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
+  await page.keyboard.press('ArrowRight');
+  await expect(pick(page, 'Coffee')).toBeChecked();
+  // The shipped themes' previews show the colours the app applies (not the catalog's).
+  for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
+    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
+    const [preview, applied] = await page.evaluate((v) => {
+      const read = (el, names) => names.map((n) => getComputedStyle(el).getPropertyValue(n).trim().toLowerCase());
+      return [read(document.querySelector(`[data-ky-preview="${v}"]`), ['--ky-preview-bg', '--ky-preview-sidebar', '--ky-preview-ink', '--ky-preview-accent']),
+        read(document.documentElement, ['--bg', '--panel', '--ink-strong', '--accent'])];
+    }, id);
+    expect(preview, id).toEqual(applied);
+  }
+  await pick(page, 'Match system').check();
   await nav.getByRole('button').first().focus();
   await page.keyboard.press('Tab');
   await expect(nav.getByRole('button').nth(1)).toBeFocused();

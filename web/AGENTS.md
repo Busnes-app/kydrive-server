@@ -1,7 +1,7 @@
 # Web
 
 ## Purpose
-React 19 + TypeScript + Vite PWA frontend embedding KySecurity color tokens (Busnes light/dark defaults plus `Patina Ky`, `Cyber`, `Nord`, `Paper`, `OLED`), client-side WebCrypto PoW CAPTCHA, and administrative management panels.
+React 19 + TypeScript + Vite PWA frontend embedding the ky-ui suite theme catalog (Busnes light/dark defaults, the shipped `patina`, `cyber`, `nord`, `paper`, `oled` and the other suite palettes), client-side WebCrypto PoW CAPTCHA, and administrative management panels.
 
 ## Ownership
 Owns user interface components, service worker caching, PWA installation manifests, and frontend theme switching.
@@ -12,7 +12,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - A signed-in user with `must_change_password` sees only password replacement and sign-out. Replacement uses `secureFetch`, returns to login after session revocation, and never exposes the normal navigation before completion.
 - Strict TypeScript type safety without unused imports.
 - The authenticated shell uses a persistent sidebar; the selected page is marked by a quiet surface and slim accent rail, with a horizontal overflow navigation on small screens.
-- Dynamic theme selection applies `data-theme` attribute to the root HTML document and persists to `localStorage`.
+- Theme selection applies the catalog ID as `data-theme` on the root element and persists it under `ky_theme`. Every signed-in user has an Appearance page (primary navigation) with Match system and every catalog theme as the shared native radio cards (`ky-appearance`); the shell (sidebar, phone header) has no theme selector, by owner decision; the login page and the administrator Settings page keep a compact dropdown over the same saved choice. The five themes KyDrive shipped before the catalog keep their exact `styles/theme.css` values (no inline palette); the other named themes are applied inline by `applyThemeVariables`. Their Appearance previews carry the theme's own `data-theme`, so those blocks colour the card (sidebar = `--panel`, as `.app-header` renders them); the unit and browser tests compare each preview with the applied palette.
 - Authenticated state-changing requests use `secureFetch` so the CSRF cookie (`__Host-ky_csrf` on HTTPS host-only deployments, else `ky_csrf`) is mirrored into `X-CSRF-Token`; the editor bootstrap script reads it the same way. Login and MFA posts send `Content-Type: application/json`.
 - A PoW solution buys one login attempt; `Login.tsx` remounts `CaptchaWidget` after every attempt.
 - Register the service worker from the production JS bundle; keep `script-src 'self'` intact.

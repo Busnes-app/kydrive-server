@@ -1,0 +1,399 @@
+diff --git a/UI-VERIFICATION.md b/UI-VERIFICATION.md
+index 4fbbbbe..8e0ca20 100644
+--- a/UI-VERIFICATION.md
++++ b/UI-VERIFICATION.md
+@@ -35,3 +35,7 @@ Native KyIdentity sign-in after the explicit operator grant showed Yoshi / admin
+ ## Approved interface polish — 2026-10-19
+ 
+ See [UI-POLISH.md](UI-POLISH.md) for the implemented changes, preservation scope, checks, actual before/after screenshots and disposable capture conditions. Earlier captures above remain historical evidence.
++
++## Fleet Appearance — 2026-10-26
++
++Shared ky-ui 0.4 Appearance radio cards over the suite catalog, plus the suite shell scale. Staged before/after captures (light/dark × 1280×900/390×844, synthetic fixture), manifests with revisions and hashes, in-app theme transition checks, CSV results and the recorded check runs are in [docs/ui-fleet-2026-10-26](docs/ui-fleet-2026-10-26/README.md). Scores are not self-assigned; the council rates the captures separately.
+diff --git a/docs/AGENTS.md b/docs/AGENTS.md
+index df3779d..2131c4c 100644
+--- a/docs/AGENTS.md
++++ b/docs/AGENTS.md
+@@ -6,7 +6,7 @@ Own restore instructions, local acceptance evidence and captured product UI asse
+ ## Ownership
+ `EURO-DOCKER.md` owns the production Docker editor overlay, private JWT input (including the SELinux `container_file_t` label), named-volume persistence and proxy/acceptance runbook.
+ `INSTALLER-SETUP.md` owns the container-local setup schema, runtime activation and adapter limitations.
+-`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans and `superpowers/specs/` dated designs; its roadmap file records milestone decisions. `desktop-sync-options.md` is the desktop sync research note (options, server gaps, recommendation); its "What a Ky client looks like" section is the M7 design. `DESKTOP-ACCESS.md` is the user guide for desktop WebDAV clients (rclone, Cyberduck) and `KyDrive.cyberduckprofile` its connection profile. `DEPLOYMENT.md` owns deployment configuration; `PERMISSIONS.md`, `CLIENTS-AND-EDITOR.md`, `RECOVERY-AND-ENCRYPTION.md` and `DEVELOPMENT.md` own the detailed topics moved from the README. `VERIFYING-RELEASES.md` owns release-image verification and the binary rebuild; update it when `release-image.yml`, the Dockerfile's builds or the image layout change. `ASSURANCE-CASE.md` owns the threat model, trust boundaries and weakness → counter → code table; a change that moves a trust boundary, a security requirement or a listed code path updates it in the same change. Root README is the concise overview and navigation; root STATUS owns handoff.
++`RESTORE.md` is the recovery runbook. `ACCEPTANCE.md` distinguishes local evidence from production gates. `PILOT.md` records live deployment evidence and remaining gates. `superpowers/plans/` holds dated implementation plans and `superpowers/specs/` dated designs; its roadmap file records milestone decisions. `desktop-sync-options.md` is the desktop sync research note (options, server gaps, recommendation); its "What a Ky client looks like" section is the M7 design. `DESKTOP-ACCESS.md` is the user guide for desktop WebDAV clients (rclone, Cyberduck) and `KyDrive.cyberduckprofile` its connection profile. `DEPLOYMENT.md` owns deployment configuration; `PERMISSIONS.md`, `CLIENTS-AND-EDITOR.md`, `RECOVERY-AND-ENCRYPTION.md` and `DEVELOPMENT.md` own the detailed topics moved from the README. `VERIFYING-RELEASES.md` owns release-image verification and the binary rebuild; update it when `release-image.yml`, the Dockerfile's builds or the image layout change. `ASSURANCE-CASE.md` owns the threat model, trust boundaries and weakness → counter → code table; a change that moves a trust boundary, a security requirement or a listed code path updates it in the same change. `ui-fleet-2026-10-26/` holds the fleet Appearance staged captures, their manifests, the capture and in-app check driver (`capture.mjs`) and the CSV results. Root README is the concise overview and navigation; root STATUS owns handoff.
+ 
+ ## Local Contracts
+ - Document exact verified behavior; local fixtures do not establish live suite integration or production readiness.
+diff --git a/web/AGENTS.md b/web/AGENTS.md
+index 2c935e7..0a404f2 100644
+--- a/web/AGENTS.md
++++ b/web/AGENTS.md
+@@ -1,7 +1,7 @@
+ # Web
+ 
+ ## Purpose
+-React 19 + TypeScript + Vite PWA frontend embedding KySecurity color tokens (Busnes light/dark defaults plus `Patina Ky`, `Cyber`, `Nord`, `Paper`, `OLED`), client-side WebCrypto PoW CAPTCHA, and administrative management panels.
++React 19 + TypeScript + Vite PWA frontend embedding the ky-ui suite theme catalog (Busnes light/dark defaults, the shipped `patina`, `cyber`, `nord`, `paper`, `oled` and the other suite palettes), client-side WebCrypto PoW CAPTCHA, and administrative management panels.
+ 
+ ## Ownership
+ Owns user interface components, service worker caching, PWA installation manifests, and frontend theme switching.
+@@ -12,7 +12,7 @@ Owns user interface components, service worker caching, PWA installation manifes
+ - A signed-in user with `must_change_password` sees only password replacement and sign-out. Replacement uses `secureFetch`, returns to login after session revocation, and never exposes the normal navigation before completion.
+ - Strict TypeScript type safety without unused imports.
+ - The authenticated shell uses a persistent sidebar; the selected page is marked by a quiet surface and slim accent rail, with a horizontal overflow navigation on small screens.
+-- Dynamic theme selection applies `data-theme` attribute to the root HTML document and persists to `localStorage`.
++- Theme selection applies the catalog ID as `data-theme` on the root element and persists it under `ky_theme`. Every signed-in user has an Appearance page (primary navigation) with Match system and every catalog theme as the shared native radio cards (`ky-appearance`); the shell (sidebar, phone header) has no theme selector, by owner decision; the login page and the administrator Settings page keep a compact dropdown over the same saved choice. The five themes KyDrive shipped before the catalog keep their exact `styles/theme.css` values (no inline palette); the other named themes are applied inline by `applyThemeVariables`. Their Appearance previews carry the theme's own `data-theme`, so those blocks colour the card (sidebar = `--panel`, as `.app-header` renders them); the unit and browser tests compare each preview with the applied palette.
+ - Authenticated state-changing requests use `secureFetch` so the CSRF cookie (`__Host-ky_csrf` on HTTPS host-only deployments, else `ky_csrf`) is mirrored into `X-CSRF-Token`; the editor bootstrap script reads it the same way. Login and MFA posts send `Content-Type: application/json`.
+ - A PoW solution buys one login attempt; `Login.tsx` remounts `CaptchaWidget` after every attempt.
+ - Register the service worker from the production JS bundle; keep `script-src 'self'` intact.
+diff --git a/web/browser/ui.spec.mjs b/web/browser/ui.spec.mjs
+index dee0720..a8672d4 100644
+--- a/web/browser/ui.spec.mjs
++++ b/web/browser/ui.spec.mjs
+@@ -32,23 +32,48 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
+   await expect(nav).toBeVisible();
+   await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
+   await fits(page);
+-  const theme = page.getByLabel('Color theme');
+-  await theme.selectOption('paper');
++  // Appearance is the only theme control in the shell: native radio cards, one saved choice.
++  const appearance = async (p) => {
++    await p.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Appearance' }).click();
++    await expect(p.getByRole('heading', { name: 'Appearance', level: 1 })).toBeVisible();
++  };
++  const pick = (p, name) => p.getByRole('radio', { name: new RegExp(`^${name}\\b`) });
++  await expect(page.getByLabel('Color theme')).toHaveCount(0);
++  await appearance(page);
++  await fits(page);
++  await pick(page, 'Paper Clean').check();
+   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
+-  await theme.selectOption('busnes-dark');
++  await pick(page, 'Busnes Dark').check();
+   await page.reload();
+   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
+   const other = await context.newPage();
+   await other.goto('/');
+-  await other.getByLabel('Color theme').selectOption('busnes-light');
++  await appearance(other);
++  await pick(other, 'Busnes Light').check();
+   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
+   await other.close();
+-  await theme.selectOption('system');
++  await appearance(page);
++  await pick(page, 'Match system').check();
+   await page.emulateMedia({ colorScheme: 'dark' });
+   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
+   await page.emulateMedia({ colorScheme: 'light' });
+   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
+   await page.emulateMedia({ colorScheme: testInfo.project.use.colorScheme });
++  await pick(page, 'Ocean').check();
++  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
++  await page.keyboard.press('ArrowRight');
++  await expect(pick(page, 'Coffee')).toBeChecked();
++  // The shipped themes' previews show the colours the app applies (not the catalog's).
++  for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
++    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
++    const [preview, applied] = await page.evaluate((v) => {
++      const read = (el, names) => names.map((n) => getComputedStyle(el).getPropertyValue(n).trim().toLowerCase());
++      return [read(document.querySelector(`[data-ky-preview="${v}"]`), ['--ky-preview-bg', '--ky-preview-sidebar', '--ky-preview-ink', '--ky-preview-accent']),
++        read(document.documentElement, ['--bg', '--panel', '--ink-strong', '--accent'])];
++    }, id);
++    expect(preview, id).toEqual(applied);
++  }
++  await pick(page, 'Match system').check();
+   await nav.getByRole('button').first().focus();
+   await page.keyboard.press('Tab');
+   await expect(nav.getByRole('button').nth(1)).toBeFocused();
+diff --git a/web/src/App.tsx b/web/src/App.tsx
+index 87e4120..ec5ca17 100644
+--- a/web/src/App.tsx
++++ b/web/src/App.tsx
+@@ -10,6 +10,7 @@ import { ChangePassword } from './pages/ChangePassword';
+ import { Backup } from './pages/Backup';
+ 
+ import { Settings } from './pages/Settings';
++import { Appearance } from './pages/Appearance';
+ import { TwoFactor } from './pages/TwoFactor';
+ import { AppPasswords } from './pages/AppPasswords';
+ import { Devices } from './pages/Devices';
+@@ -17,6 +18,8 @@ import { LinkDevice, hasLinkRequest, takeLinkRequestFromURL } from './pages/Link
+ import './styles/theme.css';
+ import './ky-ui/tokens.css';
+ import './ky-ui/navigation.css';
++import './ky-ui/appearance.css';
++import './ky-ui/appearance-themes.css';
+ import { secureFetch } from './api';
+ import { Alert } from './components/Alert';
+ 
+@@ -165,6 +168,7 @@ export const App: React.FC = () => {
+         
+         {activeTab === 'backup' && <Backup />}
+         {activeTab === 'settings' && <Settings settings={settings} />}
++        {activeTab === 'appearance' && <Appearance />}
+         {activeTab === 'account' && <section className="page page-narrow">
+           <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
+           <div className="stack">
+diff --git a/web/src/components/AppHeader.tsx b/web/src/components/AppHeader.tsx
+index 62e1290..26a4271 100644
+--- a/web/src/components/AppHeader.tsx
++++ b/web/src/components/AppHeader.tsx
+@@ -1,8 +1,7 @@
+ import React from 'react';
+-import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users } from 'lucide-react';
++import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
+ import { SHARED_WITH_ME } from '../pages/drive/client';
+ import type { Workspace } from '../pages/Drive';
+-import { ThemeSwitcher } from './ThemeSwitcher';
+ 
+ interface AppHeaderProps {
+   appName: string;
+@@ -21,6 +20,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
+ 
+   const navItems = [
+     { id: 'account', label: 'Account', icon: UserRound },
++    { id: 'appearance', label: 'Appearance', icon: Palette },
+     ...(user.role === 'admin' ? [
+       { id: 'backup', label: 'Recovery', icon: Archive },
+       { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
+@@ -61,7 +61,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
+             })}
+           </nav>
+         <div className="app-header-actions">
+-          <ThemeSwitcher />
+           <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
+ 
+           {user && (
+diff --git a/web/src/components/ThemeSwitcher.tsx b/web/src/components/ThemeSwitcher.tsx
+index 2832c3e..39037ff 100644
+--- a/web/src/components/ThemeSwitcher.tsx
++++ b/web/src/components/ThemeSwitcher.tsx
+@@ -1,15 +1,16 @@
+ import { useEffect, useState } from 'react';
+ import { THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
+ 
++/** Compact shortcut to the Appearance choice, over the same catalog and saved value. */
+ export function ThemeSwitcher() {
+   const [theme, setTheme] = useState(storedTheme);
+   useEffect(() => {
+     const sync = () => setTheme(storedTheme());
+-    window.addEventListener('storage', sync);
+-    return () => window.removeEventListener('storage', sync);
++    window.addEventListener('ky:theme', sync);
++    return () => window.removeEventListener('ky:theme', sync);
+   }, []);
+-  return <select className="theme-selector" aria-label="Color theme" value={theme} onChange={event => {
+-    setTheme(event.target.value);
+-    applyTheme(event.target.value, true);
+-  }}>{THEME_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>;
++  return <select className="theme-selector" aria-label="Color theme" value={theme.id} onChange={event => {
++    const next = THEME_OPTIONS.find(option => option.id === event.target.value);
++    if (next) applyTheme(next, true);
++  }}>{THEME_OPTIONS.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select>;
+ }
+diff --git a/web/src/pages/Appearance.test.tsx b/web/src/pages/Appearance.test.tsx
+new file mode 100644
+index 0000000..e8c6810
+--- /dev/null
++++ b/web/src/pages/Appearance.test.tsx
+@@ -0,0 +1,45 @@
++import { afterEach, describe, expect, it } from 'vitest';
++import { cleanup, fireEvent, render, screen } from '@testing-library/react';
++import { Appearance } from './Appearance';
++import { applyTheme, storedTheme, THEME_OPTIONS } from '../theme';
++import { findTheme } from '../ky-ui/themes';
++
++const root = document.documentElement;
++afterEach(() => { cleanup(); localStorage.clear(); root.removeAttribute('style'); });
++
++describe('Appearance', () => {
++  it('offers Match system and the suite catalog as radios and saves the catalog ID', () => {
++    render(<Appearance />);
++    expect(screen.getAllByRole('radio')).toHaveLength(THEME_OPTIONS.length);
++    fireEvent.click(screen.getByRole('radio', { name: /^Ocean/ }));
++    expect(localStorage.getItem('ky_theme')).toContain('ocean');
++    expect(root.dataset.theme).toBe('ocean');
++    expect(root.style.getPropertyValue('--bg')).toBe('#0f1b24');
++    expect(screen.getByRole('radio', { name: /^Ocean/ })).toHaveProperty('checked', true);
++  });
++
++  it('keeps the shipped values of themes saved before the catalog', () => {
++    for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
++      localStorage.setItem('ky_theme', id);
++      expect(storedTheme().id).toBe(id);
++      applyTheme(findTheme('ocean')!);
++      applyTheme(storedTheme());
++      // styles/theme.css [data-theme] supplies the colours; nothing inline overrides them.
++      expect(root.dataset.theme).toBe(id);
++      expect(root.style.getPropertyValue('--bg')).toBe('');
++      expect(root.style.getPropertyValue('--accent')).toBe('');
++    }
++  });
++
++  it('previews the shipped themes with their own styles/theme.css colours', () => {
++    const { container } = render(<Appearance />);
++    for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) expect(container.querySelector(`[data-ky-preview="${id}"]`)?.getAttribute('data-theme')).toBe(id);
++    expect(container.querySelector('[data-ky-preview="ocean"]')?.hasAttribute('data-theme')).toBe(false);
++  });
++
++  it('follows the system until a choice is saved', () => {
++    expect(storedTheme().id).toBe('system');
++    applyTheme(storedTheme());
++    expect(['busnes-light', 'busnes-dark']).toContain(root.dataset.theme);
++  });
++});
+diff --git a/web/src/pages/Appearance.tsx b/web/src/pages/Appearance.tsx
+new file mode 100644
+index 0000000..a23653b
+--- /dev/null
++++ b/web/src/pages/Appearance.tsx
+@@ -0,0 +1,28 @@
++import { useEffect, useState } from 'react';
++import { LEGACY, THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
++
++const mode = (scheme: string) => scheme === 'system' ? 'Light or dark' : scheme === 'light' ? 'Light' : 'Dark';
++
++export function Appearance() {
++  const [selected, setSelected] = useState(storedTheme);
++  useEffect(() => {
++    const sync = () => setSelected(storedTheme());
++    window.addEventListener('ky:theme', sync);
++    return () => window.removeEventListener('ky:theme', sync);
++  }, []);
++  return <section className="page">
++    <header className="page-header"><h1>Appearance</h1></header>
++    <p className="ky-appearance-description">Pick a theme. It applies straight away and is saved in this browser only. Match system follows your device’s light or dark setting.</p>
++    <fieldset className="ky-appearance">
++      <legend className="ky-appearance-legend">Theme</legend>
++      <div className="ky-appearance-grid">
++        {THEME_OPTIONS.map(theme => <label key={theme.id} className="ky-appearance-option">
++          <input className="ky-appearance-radio" type="radio" name="kydrive-theme" value={theme.id} checked={theme.id === selected.id} onChange={() => { setSelected(theme); applyTheme(theme, true); }} />
++          <span className="ky-appearance-preview" aria-hidden="true" data-ky-preview={theme.id} data-theme={LEGACY.has(theme.id) ? theme.id : undefined} />
++          <span className="ky-appearance-name">{theme.name}</span>
++          <small className="ky-appearance-mode">{mode(theme.scheme)}</small>
++        </label>)}
++      </div>
++    </fieldset>
++  </section>;
++}
+diff --git a/web/src/styles/theme.css b/web/src/styles/theme.css
+index b179be8..98146bc 100644
+--- a/web/src/styles/theme.css
++++ b/web/src/styles/theme.css
+@@ -65,6 +65,17 @@
+   --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
+ }
+ 
++/* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
++   catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes;
++   the hairline keeps the page's border colour like every other card. */
++.ky-appearance-preview[data-theme] {
++  --line-strong: inherit;
++  --ky-preview-bg: var(--bg);
++  --ky-preview-sidebar: var(--panel);
++  --ky-preview-ink: var(--ink-strong);
++  --ky-preview-accent: var(--accent);
++}
++
+ /* Busnes light/dark: every short alias reads the ky-ui token. */
+ :root[data-theme="busnes-light"], :root[data-theme="busnes-dark"], :root:not([data-theme]) {
+   --bg: var(--ky-bg);
+@@ -103,7 +114,7 @@
+ 
+ body {
+   font-family: var(--font-sans);
+-  font-size: 0.95rem;
++  font-size: var(--ky-type-body);
+   line-height: 1.5;
+   background: var(--bg);
+   color: var(--ink-strong);
+@@ -129,20 +140,19 @@ summary:focus-visible { outline-offset: 4px; }
+ }
+ 
+ /* ---------- App shell ---------- */
+-.app-shell { min-height: 100vh; display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); }
++.app-shell { min-height: 100vh; display: grid; grid-template-columns: var(--ky-sidebar-size) minmax(0, 1fr); }
+ .app-header { display: flex; flex-direction: column; gap: 1.25rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1.25rem 1rem; background: linear-gradient(180deg, var(--sidebar-start, var(--panel)), var(--sidebar-end, var(--panel))); border-right: 1px solid var(--line); z-index: 10; }
+ .app-brand { display: flex; align-items: center; gap: .7rem; padding: .25rem .5rem .5rem; color: var(--ink-strong); font-size: 1.15rem; font-weight: 700; }
+ .app-brand img { border-radius: .45rem; flex: none; }
+ .app-nav { display: flex; flex-direction: column; gap: .15rem; }
+ .app-nav + .app-nav { padding-top: .75rem; border-top: 1px solid var(--line); }
+-.app-nav button { justify-content: flex-start; width: 100%; min-height: 2.4rem; border: 0; border-left: 3px solid transparent; border-radius: .45rem; padding: .5rem .65rem; background: transparent; color: var(--ink); font-size: .88rem; font-weight: 500; text-align: left; }
++.app-nav button { justify-content: flex-start; width: 100%; min-height: var(--ky-control-size); border: 0; border-left: 3px solid transparent; border-radius: var(--ky-control-radius); padding: .5rem .65rem; background: transparent; color: var(--ink); font-size: var(--ky-type-nav); font-weight: 500; text-align: left; }
+ .app-nav button:hover { background: var(--panel-hover); color: var(--ink-strong); }
+ .app-nav button span { min-width: 0; overflow-wrap: anywhere; }
+ /* Selected, hover and focus states are supplied by ky-ui/navigation.css. */
+ .app-nav-label { font-size: .78rem; font-weight: 600; color: var(--ink); padding: .6rem .65rem .25rem; }
+ .app-nav-empty { font-size: .8rem; color: var(--ink); padding: .4rem .65rem; }
+ .app-header-actions { display: flex; flex-direction: column; gap: .75rem; margin-top: auto; }
+-.app-header-actions .theme-selector { width: 100%; }
+ .app-preference { display: flex; align-items: center; gap: .55rem; font-size: .82rem; color: var(--ink); cursor: pointer; }
+ .app-user { display: flex; align-items: center; gap: .55rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+ .app-user-copy { min-width: 0; flex: 1; font-size: .85rem; }
+@@ -155,7 +165,7 @@ summary:focus-visible { outline-offset: 4px; }
+ .page { width: 100%; max-width: 80rem; margin: 0 auto; padding: 2.25rem 2.5rem 4rem; }
+ .page-narrow { max-width: 52rem; }
+ .page-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+-.page-header h1, .page-title { font-size: 1.75rem; font-weight: 600; letter-spacing: -.015em; }
++.page-header h1, .page-title { font-size: var(--ky-type-title); font-weight: 600; }
+ .page-desc { color: var(--ink); margin-top: .2rem; max-width: 62ch; }
+ .page-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+ .stack { display: grid; gap: 1.25rem; }
+@@ -483,10 +493,8 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
+   .app-nav-label { display: none; }
+   .app-nav-empty { display: none; }
+   .app-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; gap: .5rem .75rem; }
+-  .app-header-actions .theme-selector { width: auto; flex: 1 1 9rem; }
+   .app-user { border-top: 0; padding-top: 0; margin-left: auto; }
+   .app-user-copy { display: none; }
+-  .app-preference { order: 3; flex-basis: 100%; }
+   .app-notice { margin: 1rem 1rem 0; }
+   .page, .dr-page { padding: 1.25rem 1rem 3rem; }
+   .page-header h1, .page-title, .dr-header h1 { font-size: 1.4rem; }
+diff --git a/web/src/theme.ts b/web/src/theme.ts
+index 8016924..c91ead0 100644
+--- a/web/src/theme.ts
++++ b/web/src/theme.ts
+@@ -1,19 +1,32 @@
+ import { readChoice, saveChoice, watchChoice } from './ky-ui/theme';
+-// Busnes.app defaults; explicit choices are local to this browser.
+-export const THEME_OPTIONS = [{"id": "system", "label": "System (Busnes)"}, {"id": "busnes-light", "label": "Busnes Light"}, {"id": "busnes-dark", "label": "Busnes Dark"}, {"id": "patina", "label": "Patina Ky"}, {"id": "cyber", "label": "Cyber Dark"}, {"id": "nord", "label": "Nord Slate"}, {"id": "paper", "label": "Paper Clean"}, {"id": "oled", "label": "OLED Black"}];
+-export function storedTheme(): string {
+-  try { const value = readChoice('ky_theme'); return THEME_OPTIONS.find(t => t.id === value)?.id ?? 'system'; }
+-  catch { return 'system'; }
++import { SYSTEM_THEME, THEME_CATALOG, applyThemeVariables, findTheme } from './ky-ui/themes';
++import type { CatalogTheme, SystemTheme } from './ky-ui/themes';
++
++// Busnes.app defaults; explicit choices are local to this browser and saved by catalog ID.
++export type Theme = CatalogTheme | SystemTheme;
++export const THEME_OPTIONS: readonly Theme[] = [SYSTEM_THEME, ...THEME_CATALOG];
++// Themes KyDrive shipped before the suite catalog keep the exact values in styles/theme.css.
++export const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
++const KEY = 'ky_theme';
++
++export function storedTheme(): Theme {
++  try { return findTheme(readChoice(KEY)) ?? SYSTEM_THEME; }
++  catch { return SYSTEM_THEME; }
+ }
+ let current = storedTheme();
+ const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+-export function applyTheme(theme: string, persist = false) {
+-  if (!THEME_OPTIONS.some(t => t.id === theme)) return;
++export function applyTheme(theme: Theme, persist = false) {
+   current = theme;
+-  const resolved = theme === 'system' ? (media?.matches ? 'busnes-dark' : 'busnes-light') : theme;
+-  document.documentElement.dataset.theme = resolved;
+-  document.documentElement.style.colorScheme = ['busnes-light', 'paper'].includes(resolved) ? 'light' : 'dark';
+-  if (persist) try { saveChoice('ky_theme', theme); } catch { /* Storage is optional. */ }
++  const root = document.documentElement;
++  const named = applyThemeVariables(LEGACY.has(theme.id) ? SYSTEM_THEME.id : theme.id, root);
++  const resolved = theme.id === 'system' ? (media?.matches ? 'busnes-dark' : 'busnes-light') : theme.id;
++  root.dataset.theme = resolved;
++  root.style.colorScheme = named ?? (theme.scheme === 'system' ? (media?.matches ? 'dark' : 'light') : theme.scheme);
++  // The base :root warning is a dark-theme amber; light named themes take Paper's.
++  if (named === 'light') root.style.setProperty('--warning', '#a16207');
++  else root.style.removeProperty('--warning');
++  if (persist) try { saveChoice(KEY, theme.id); } catch { /* Storage is optional. */ }
++  window.dispatchEvent(new Event('ky:theme'));
+ }
+ applyTheme(current);
+-watchChoice('ky_theme', () => applyTheme(storedTheme()), () => current !== 'system');
++watchChoice(KEY, () => applyTheme(storedTheme()), () => current.id !== 'system');

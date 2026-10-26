@@ -1,0 +1,92 @@
+{
+  "prefix": "kydrive-00-before",
+  "product": "kydrive",
+  "branch": "ui/fleet-appearance",
+  "head": "e772e28629bddba9363550677343a86d5d0c0e88",
+  "uncommitted_diff_sha256": null,
+  "uncommitted_diff_bytes": 0,
+  "server_binary_sha256": "c0c966349a2dc0ba97d0bf23c2e32ee8f0d8ecfae9b9423aad45133ae27a4805",
+  "embedded_index_sha256": "4ab9d742c791ecc772ac045e84eaa19b54d7acf43da9793bc9be79cb2b5330e2",
+  "captured": "2026-10-26T11:02:54.636Z",
+  "os": "linux 7.2.10-1-cachyos",
+  "driver": "playwright chromium 156.0.8078.4 (headless)",
+  "device_scale_factor": 1,
+  "timezone": "America/Chicago",
+  "locale": "en-US",
+  "theme_source": "context colorScheme emulation with no saved theme choice (OS-following default)",
+  "fixture": "web built from this tree; fresh SQLite data dir (web/browser/server.mjs environment on port 5873); captcha none; no editor, directory or recovery configured; KY_ADMIN_PASSWORD bootstrap \"admin\" replaced through /api/auth/change-password; three synthetic text uploads (Quarterly plan.md, Supplier list.csv, Meeting notes.txt) in My files through the Upload files input",
+  "files": [
+    {
+      "file": "kydrive-00-before-files-desktop-light.png",
+      "sha256": "7795907cb014f8de6052de13880002e5c81e4fa69c8be19343622895487bc40a",
+      "surface": "files",
+      "viewport": "1280x900",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-settings-desktop-light.png",
+      "sha256": "567dc7781ab1f20747510754936f48381f7af7cb35ff01c9960d0ea1b43916b9",
+      "surface": "settings",
+      "viewport": "1280x900",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-files-mobile-light.png",
+      "sha256": "8ef3683445cd731bcd24f4ff322f376e29ddd3f0067a95de2d73c60be6b12ec3",
+      "surface": "files",
+      "viewport": "390x844",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-settings-mobile-light.png",
+      "sha256": "f06de4a9b34c84b42deaec7ac1141263606b4add931bccd9ad14ab354018c8f7",
+      "surface": "settings",
+      "viewport": "390x844",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-files-desktop-dark.png",
+      "sha256": "80af9edb39b977fe953ecde1e72f52bfc841815cabcd330e79e8bd4655bdecf7",
+      "surface": "files",
+      "viewport": "1280x900",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-settings-desktop-dark.png",
+      "sha256": "e0414fdb9ea65b88bb0f8221fc9d48a8673fc44ed910eee36d8ed922052b3670",
+      "surface": "settings",
+      "viewport": "1280x900",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-files-mobile-dark.png",
+      "sha256": "13cd02aa5ab7b3968e619cbc5162cc4c0e2f07df52c806b752ad4c228d226c07",
+      "surface": "files",
+      "viewport": "390x844",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-00-before-settings-mobile-dark.png",
+      "sha256": "e3964a1695571ec1c1b9ab1205d52d64555f057836bd188d970c319e69c4a842",
+      "surface": "settings",
+      "viewport": "390x844",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    }
+  ]
+}

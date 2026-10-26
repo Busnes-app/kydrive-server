@@ -10,6 +10,7 @@ import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
 
 import { Settings } from './pages/Settings';
+import { Appearance } from './pages/Appearance';
 import { TwoFactor } from './pages/TwoFactor';
 import { AppPasswords } from './pages/AppPasswords';
 import { Devices } from './pages/Devices';
@@ -17,6 +18,8 @@ import { LinkDevice, hasLinkRequest, takeLinkRequestFromURL } from './pages/Link
 import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
+import './ky-ui/appearance.css';
+import './ky-ui/appearance-themes.css';
 import { secureFetch } from './api';
 import { Alert } from './components/Alert';
 
@@ -165,6 +168,7 @@ export const App: React.FC = () => {
         
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} />}
+        {activeTab === 'appearance' && <Appearance />}
         {activeTab === 'account' && <section className="page page-narrow">
           <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
           <div className="stack">

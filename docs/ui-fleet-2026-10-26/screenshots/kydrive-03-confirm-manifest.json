@@ -1,0 +1,56 @@
+{
+  "prefix": "kydrive-03-confirm",
+  "product": "kydrive",
+  "branch": "ui/fleet-appearance",
+  "head": "ad49c4494a9cf036ac8fe1853f2908d8d184ac18",
+  "uncommitted_diff_sha256": null,
+  "uncommitted_diff_bytes": 0,
+  "server_binary_sha256": "48b3e2e3d91c1163170f1a59f9b42e4030b9e0d85bc3f52a4bde1aa6112e9f03",
+  "embedded_index_sha256": "751960f489ed7d12157c58afb701e0c9ce93a7aa3c92fabd1f0b599685b1eaa8",
+  "captured": "2026-10-26T12:11:30.488Z",
+  "os": "linux 7.2.10-1-cachyos",
+  "driver": "playwright chromium 156.0.8078.4 (headless)",
+  "device_scale_factor": 1,
+  "timezone": "America/Chicago",
+  "locale": "en-US",
+  "theme_source": "context colorScheme emulation with no saved theme choice (OS-following default)",
+  "fixture": "web built from this tree; fresh SQLite data dir (web/browser/server.mjs environment on port 5873); captcha none; no editor, directory or recovery configured; KY_ADMIN_PASSWORD bootstrap \"admin\" replaced through /api/auth/change-password; three synthetic text uploads (Quarterly plan.md, Supplier list.csv, Meeting notes.txt) in My files through the Upload files input",
+  "files": [
+    {
+      "file": "kydrive-03-confirm-appearance-desktop-light.png",
+      "sha256": "d1e3a71fc4a77f7d7e89c8d607568fb328cf4b3419daed270aa1a0446e2109c2",
+      "surface": "appearance",
+      "viewport": "1280x900",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-03-confirm-appearance-mobile-light.png",
+      "sha256": "65d94fffd5c4dde612f71a70d6345613b30691e3fdf9e236baf9dca284592479",
+      "surface": "appearance",
+      "viewport": "390x844",
+      "theme": "os-light (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-03-confirm-appearance-desktop-dark.png",
+      "sha256": "7e29ac29e91ad735808f2a7f44f63ecd0b2682334c441127188e4bd78a31c4b4",
+      "surface": "appearance",
+      "viewport": "1280x900",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    },
+    {
+      "file": "kydrive-03-confirm-appearance-mobile-dark.png",
+      "sha256": "6869bd8822caf0ac44f367b782cefbb6d999359fb17c6e882a9b974c8c429dcb",
+      "surface": "appearance",
+      "viewport": "390x844",
+      "theme": "os-dark (no saved choice)",
+      "overflow_px": 0,
+      "full_page": false
+    }
+  ]
+}
