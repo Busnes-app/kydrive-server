@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
 import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
@@ -17,6 +17,16 @@ interface AppHeaderProps {
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, openInNewTab, onOpenInNewTabChange }) => {
+  const navsRef = useRef<HTMLDivElement>(null);
+  // Phones scroll both navigations as one row: keep the current destination in view. Only the
+  // row scrolls; scrollIntoView would also move the page.
+  useEffect(() => {
+    const row = navsRef.current, cur = row?.querySelector('[aria-current="page"]');
+    if (!row || !cur || row.scrollWidth <= row.clientWidth) return;
+    const r = row.getBoundingClientRect(), i = cur.getBoundingClientRect();
+    if (i.left < r.left) row.scrollLeft -= r.left - i.left;
+    else if (i.right > r.right) row.scrollLeft += i.right - r.right;
+  }, [activeTab, selectedWorkspace]);
 
   const navItems = [
     { id: 'account', label: 'Account', icon: UserRound },
@@ -35,6 +45,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             <span>{appName || 'Busnes.app'}</span>
           </div>
 
+          <div ref={navsRef} className="app-navs">
           <nav className="app-nav" aria-label="Workspaces">
             <h2 className="app-nav-label">Personal</h2>
             {workspaces.filter(w => w.kind === 'personal').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>My files</span></button>)}
@@ -60,6 +71,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
               );
             })}
           </nav>
+          </div>
         <div className="app-header-actions">
           <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
 
