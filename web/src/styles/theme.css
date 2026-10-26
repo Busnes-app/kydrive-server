@@ -66,8 +66,10 @@
 }
 
 /* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
-   catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes. */
+   catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes;
+   the hairline keeps the page's border colour like every other card. */
 .ky-appearance-preview[data-theme] {
+  --line-strong: inherit;
   --ky-preview-bg: var(--bg);
   --ky-preview-sidebar: var(--panel);
   --ky-preview-ink: var(--ink-strong);
