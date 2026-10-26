@@ -49,6 +49,17 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
   await page.emulateMedia({ colorScheme: testInfo.project.use.colorScheme });
+  // Appearance: native radio cards over the same saved choice as the sidebar shortcut.
+  await nav.getByRole('button', { name: 'Appearance' }).click();
+  await expect(page.getByRole('heading', { name: 'Appearance', level: 1 })).toBeVisible();
+  await fits(page);
+  await page.getByRole('radio', { name: /^Ocean/ }).check();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
+  await expect(theme).toHaveValue('ocean');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: /^Coffee/ })).toBeChecked();
+  await page.getByRole('radio', { name: /^Match system/ }).check();
+  await expect(theme).toHaveValue('system');
   await nav.getByRole('button').first().focus();
   await page.keyboard.press('Tab');
   await expect(nav.getByRole('button').nth(1)).toBeFocused();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
 import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -21,6 +21,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
 
   const navItems = [
     { id: 'account', label: 'Account', icon: UserRound },
+    { id: 'appearance', label: 'Appearance', icon: Palette },
     ...(user.role === 'admin' ? [
       { id: 'backup', label: 'Recovery', icon: Archive },
       { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
