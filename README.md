@@ -1,6 +1,7 @@
 # KyDrive
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15939/badge)](https://www.bestpractices.dev/projects/15939)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Busnes-app/kydrive-server/badge)](https://scorecard.dev/viewer/?uri=github.com/Busnes-app/kydrive-server)
 
 **Start here:** [Standalone installation](INSTALL.md). Browse, upload, download and organize files in permissioned workspaces, share files, retain versions and trash, and link desktop sync clients. Staff sign-in and provisioning require KyIdentity; the local bootstrap account is for administration. Euro-Office is an optional separate editor service. Recovery needs both sealed metadata and the independent bulk repository.
 
