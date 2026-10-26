@@ -1,0 +1,647 @@
+{
+  "product": "KyDrive-server",
+  "stage": "F1",
+  "phase": "before",
+  "source_revision": "91c312b3136c64d00793f429fc9580c8caa962c3",
+  "captured_at": "2026-10-26T12:56:52.165Z",
+  "driver": "Product Playwright production-server harness, ui.spec.mjs; browser/version in earlier product manifest; same installed toolchain",
+  "fixture": "Disposable SQLite and synthetic admin account from web/browser/server.mjs and setup.mjs; authenticated actual app Appearance, Sky selected; no fixture DOM or CSS injected for image",
+  "viewport_note": "Browser regression project viewports use height900 at both widths, unlike the separate 390x844 design batch. Compare F1 only with its matching F1 image.",
+  "stats": {
+    "startTime": "2026-10-26T12:56:52.165Z",
+    "duration": 15863.534000000001,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 4,
+    "flaky": 0
+  },
+  "status_contrast": [
+    {
+      "project": "light-390",
+      "rows": [
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.2901428176582224
+        },
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5684431630884563
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.217826366064145
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4054236461783387
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.338139712267938
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.61699234470766
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.2501802133753674
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.438149780274409
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.5656729684022404
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.4035563075384334
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.4236753293243205
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5863500040743803
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.3078382413877296
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4174943270795914
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.3450701870560655
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.254851922345555
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.254874964872269
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5999676752480276
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.1940529379432254
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4266737554044693
+        }
+      ]
+    },
+    {
+      "project": "light-1280",
+      "rows": [
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.2901428176582224
+        },
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5684431630884563
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.217826366064145
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4054236461783387
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.338139712267938
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.61699234470766
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.2501802133753674
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.438149780274409
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.5656729684022404
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.4035563075384334
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.4236753293243205
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5863500040743803
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.3078382413877296
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4174943270795914
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.3450701870560655
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.254851922345555
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.254874964872269
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5999676752480276
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.1940529379432254
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4266737554044693
+        }
+      ]
+    },
+    {
+      "project": "dark-390",
+      "rows": [
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.2901428176582224
+        },
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5684431630884563
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.217826366064145
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4054236461783387
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.338139712267938
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.61699234470766
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.2501802133753674
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.438149780274409
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.5656729684022404
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.4035563075384334
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.4236753293243205
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5863500040743803
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.3078382413877296
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4174943270795914
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.3450701870560655
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.254851922345555
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.254874964872269
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5999676752480276
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.1940529379432254
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4266737554044693
+        }
+      ]
+    },
+    {
+      "project": "dark-1280",
+      "rows": [
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.2901428176582224
+        },
+        {
+          "theme": "light-matter",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5684431630884563
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.217826366064145
+        },
+        {
+          "theme": "light-matter",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4054236461783387
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.338139712267938
+        },
+        {
+          "theme": "tropics",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.61699234470766
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.2501802133753674
+        },
+        {
+          "theme": "tropics",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.438149780274409
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.5656729684022404
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.4035563075384334
+        },
+        {
+          "theme": "white-cliffs",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.4236753293243205
+        },
+        {
+          "theme": "sun",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5863500040743803
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.3078382413877296
+        },
+        {
+          "theme": "sun",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4174943270795914
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.3450701870560655
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.763127680148142
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.254851922345555
+        },
+        {
+          "theme": "polished-ky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.5366569934610426
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--bg",
+          "ratio": 3.254874964872269
+        },
+        {
+          "theme": "sky",
+          "status": "--danger",
+          "surface": "--panel",
+          "ratio": 3.5999676752480276
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--bg",
+          "ratio": 2.1940529379432254
+        },
+        {
+          "theme": "sky",
+          "status": "--success",
+          "surface": "--panel",
+          "ratio": 2.4266737554044693
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "file": "KyDrive-server-f1-before-sky-appearance-light-390.png",
+      "sha256": "2cde564acbba0db3032d1d2e343da496260774cf82a46deef507eac9e9cdef1a",
+      "surface": "appearance",
+      "viewport": "390x900",
+      "theme": "Sky; OS light"
+    },
+    {
+      "file": "KyDrive-server-f1-before-sky-appearance-light-1280.png",
+      "sha256": "ce374df649c7af7c854b596626a63f3e588c209e6e7d54a91b870360a51e6eae",
+      "surface": "appearance",
+      "viewport": "1280x900",
+      "theme": "Sky; OS light"
+    },
+    {
+      "file": "KyDrive-server-f1-before-sky-appearance-dark-390.png",
+      "sha256": "3eb7a119afb097a59240cc7f0a6c4a0de55da20f9ceae1acb8e8a7ced5ae97c1",
+      "surface": "appearance",
+      "viewport": "390x900",
+      "theme": "Sky; OS dark"
+    },
+    {
+      "file": "KyDrive-server-f1-before-sky-appearance-dark-1280.png",
+      "sha256": "388d76f8430b45b2c69454cd414efda6974d97306c4cbb15d412cbe2477a1483",
+      "surface": "appearance",
+      "viewport": "1280x900",
+      "theme": "Sky; OS dark"
+    }
+  ],
+  "expected_result": "All six new light themes >=4.5 for danger/success against page/panel. Before fails; after passes. Legacy palettes intentionally unchanged."
+}

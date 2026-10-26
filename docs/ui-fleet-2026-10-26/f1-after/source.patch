@@ -1,0 +1,70 @@
+diff --git a/web/AGENTS.md b/web/AGENTS.md
+index 0a404f2..685e5b6 100644
+--- a/web/AGENTS.md
++++ b/web/AGENTS.md
+@@ -7,6 +7,7 @@ React 19 + TypeScript + Vite PWA frontend embedding the ky-ui suite theme catalo
+ Owns user interface components, service worker caching, PWA installation manifests, and frontend theme switching.
+ 
+ ## Local Contracts
++- Newly added suite palettes tint error/success text toward their ink for readable status text on light and dark surfaces; the five shipped base palettes retain their original status values. Browser regressions measure all six new light palettes against both page and panel surfaces.
+ - Web themes default to the Busnes.app cream/light and charcoal/dark palettes with orange accents, following the OS until a browser-local choice is saved. Preserve existing named themes and saved choices.
+ - Sign-out resets the shell (user, workspaces, selection, tab, settings, new-tab preference) only after the server confirms; a failed or unreachable logout keeps the session and shows an error.
+ - A signed-in user with `must_change_password` sees only password replacement and sign-out. Replacement uses `secureFetch`, returns to login after session revocation, and never exposes the normal navigation before completion.
+diff --git a/web/browser/ui.spec.mjs b/web/browser/ui.spec.mjs
+index a8672d4..745cffc 100644
+--- a/web/browser/ui.spec.mjs
++++ b/web/browser/ui.spec.mjs
+@@ -83,6 +83,35 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
+   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+   await fits(page);
+   await expect(page.getByRole('button', { name: 'Pair Device' })).toHaveCount(0);
++  // New suite palettes must keep status text readable against both app surfaces.
++  await nav.getByRole('button', { name: 'Appearance' }).click();
++  const statusContrast = [];
++  for (const id of ['light-matter', 'tropics', 'white-cliffs', 'sun', 'polished-ky', 'sky']) {
++    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
++    statusContrast.push(...await page.evaluate((theme) => {
++      const root = document.documentElement;
++      const probe = document.createElement('span');
++      root.append(probe);
++      const luminance = (value) => {
++        probe.style.color = value;
++        const color = getComputedStyle(probe).color;
++        const scale = color.startsWith('color(') ? 1 : 255;
++        return color.match(/[\d.]+/g).slice(0, 3).map(Number)
++          .map(c => c / scale).map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
++          .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
++      };
++      const rows = ['--danger', '--success'].flatMap(status => ['--bg', '--panel'].map(surface => {
++        const [a, b] = [status, surface].map(v => luminance(`var(${v})`));
++        return { theme, status, surface, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
++      }));
++      probe.remove();
++      return rows;
++    }, id));
++  }
++  await page.mouse.move(0, 0);
++  await testInfo.attach('status-contrast', { body: JSON.stringify(statusContrast, null, 2), contentType: 'application/json' });
++  await page.screenshot({ path: testInfo.outputPath('sky-status-contrast.png'), fullPage: true });
++  for (const row of statusContrast) expect(row.ratio, JSON.stringify(row)).toBeGreaterThanOrEqual(4.5);
+   await page.evaluate(() => fetch('/browser-regression-uncached'));
+   const cachedDynamic = await page.evaluate(async () => {
+     const keys = await caches.keys();
+diff --git a/web/src/styles/theme.css b/web/src/styles/theme.css
+index 98146bc..f61d543 100644
+--- a/web/src/styles/theme.css
++++ b/web/src/styles/theme.css
+@@ -65,6 +65,13 @@
+   --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
+ }
+ 
++/* The suite palettes (ky-ui themes.js sets their colours inline) have no status colours;
++   tint Busnes ones toward the palette's ink, as KyPost does, so they read on light and dark. */
++:root[data-theme]:not([data-theme^="busnes-"], [data-theme="patina"], [data-theme="cyber"], [data-theme="nord"], [data-theme="paper"], [data-theme="oled"]) {
++  --danger: color-mix(in srgb, var(--ky-danger) 50%, var(--ink-strong));
++  --success: color-mix(in srgb, var(--ky-success) 50%, var(--ink-strong));
++}
++
+ /* Previews of the themes KyDrive shipped take the colours the blocks above apply, not the
+    catalog's. Their sidebar is the panel colour, as .app-header renders it for these themes;
+    the hairline keeps the page's border colour like every other card. */
