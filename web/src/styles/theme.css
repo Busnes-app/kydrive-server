@@ -142,7 +142,6 @@ summary:focus-visible { outline-offset: 4px; }
 .app-nav-label { font-size: .78rem; font-weight: 600; color: var(--ink); padding: .6rem .65rem .25rem; }
 .app-nav-empty { font-size: .8rem; color: var(--ink); padding: .4rem .65rem; }
 .app-header-actions { display: flex; flex-direction: column; gap: .75rem; margin-top: auto; }
-.app-header-actions .theme-selector { width: 100%; }
 .app-preference { display: flex; align-items: center; gap: .55rem; font-size: .82rem; color: var(--ink); cursor: pointer; }
 .app-user { display: flex; align-items: center; gap: .55rem; border-top: 1px solid var(--line); padding-top: .8rem; }
 .app-user-copy { min-width: 0; flex: 1; font-size: .85rem; }
@@ -483,7 +482,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
   .app-nav-label { display: none; }
   .app-nav-empty { display: none; }
   .app-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; gap: .5rem .75rem; }
-  .app-header-actions .theme-selector { width: auto; flex: 1 1 9rem; }
   .app-user { border-top: 0; padding-top: 0; margin-left: auto; }
   .app-user-copy { display: none; }
   .app-preference { order: 3; flex-basis: 100%; }

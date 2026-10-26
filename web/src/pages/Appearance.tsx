@@ -11,7 +11,8 @@ export function Appearance() {
     return () => window.removeEventListener('ky:theme', sync);
   }, []);
   return <section className="page">
-    <header className="page-header"><div><h1>Appearance</h1><p className="page-desc">Pick a theme. It applies straight away and is remembered by this browser only.</p></div></header>
+    <header className="page-header"><h1>Appearance</h1></header>
+    <p className="ky-appearance-description">Pick a theme. It applies straight away and is saved in this browser only. Match system follows your device’s light or dark setting.</p>
     <fieldset className="ky-appearance">
       <legend className="ky-appearance-legend">Theme</legend>
       <div className="ky-appearance-grid">

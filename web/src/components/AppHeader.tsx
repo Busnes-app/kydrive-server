@@ -2,7 +2,6 @@ import React from 'react';
 import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
 import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
-import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface AppHeaderProps {
   appName: string;
@@ -62,7 +61,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             })}
           </nav>
         <div className="app-header-actions">
-          <ThemeSwitcher />
           <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
 
           {user && (
