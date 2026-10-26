@@ -1,0 +1,136 @@
+{
+  "product": "KyDrive-server",
+  "stage": "01",
+  "phase": "after",
+  "captured_at": "2026-10-26T16:43:31.204Z",
+  "source_commit": "84102c612446b0b258b1e521d51faf49f031ad28",
+  "uncommitted_source_sha256": null,
+  "os": "Linux 7.2.10-1-cachyos",
+  "driver": "Playwright 1.64.1 Chromium 156.0.8078.4, device scale 1, service workers blocked, America/Chicago en-US",
+  "fonts": "self-hosted Space Grotesk bundled in web/dist; Space Grotesk loaded: true",
+  "server": "web/dist and kydrive-server built from this tree into a temporary directory, on 127.0.0.1:5391; fresh SQLite data removed after capture",
+  "server_binary_sha256": "758029fb5fda6c3268a7e3fad00264966f454e2d4a289760607e711ed4432e44",
+  "fixture": "synthetic: admin account (bootstrap password replaced through /api/auth/change-password); three text uploads (Quarterly plan.md, Supplier list.csv, Meeting notes.txt) in My files; no shared workspaces, editor, directory or recovery configured",
+  "shots": [
+    {
+      "file": "kydrive-01-after-files-desktop-light.png",
+      "sha256": "42c7290a4225a27528e5a51181bf2f994cc8ea5bf975ab4419efe8b42769e824",
+      "surface": "files",
+      "device": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme_source": "OS light (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-settings-desktop-light.png",
+      "sha256": "6682db3c705b5c77a35b6df975270b889a89f42c84d15288b51d56861450c3d7",
+      "surface": "settings",
+      "device": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme_source": "OS light (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-files-mobile-light.png",
+      "sha256": "57e4f03a1e4b95371a767a66638b72573e8e28de11597ef7c69b23b8a6f7735f",
+      "surface": "files",
+      "device": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme_source": "OS light (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-settings-mobile-light.png",
+      "sha256": "921185278ae2f110a2088d2942a9dc632cf0ac519e07c34f28734dc52879c2ba",
+      "surface": "settings",
+      "device": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme_source": "OS light (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-files-desktop-dark.png",
+      "sha256": "a1f007c5a8cd6d0fe07184c653ebc591a2ca1269cb41e2bcba785eddd8164aca",
+      "surface": "files",
+      "device": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme_source": "OS dark (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-settings-desktop-dark.png",
+      "sha256": "63058e0bc5b015bd4684ceac5b224abbc27c0ff607487344f34c887f4ec7cd8c",
+      "surface": "settings",
+      "device": "desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "theme_source": "OS dark (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-files-mobile-dark.png",
+      "sha256": "92146d93821befda478109e25a4ae39f004b56f9f170140958d3975f3102cab2",
+      "surface": "files",
+      "device": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme_source": "OS dark (prefers-color-scheme), no saved choice"
+    },
+    {
+      "file": "kydrive-01-after-settings-mobile-dark.png",
+      "sha256": "2b4d07450a99501d8eba7e96d44e1ff694de3c3b709c19513cffb363285361fd",
+      "surface": "settings",
+      "device": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme_source": "OS dark (prefers-color-scheme), no saved choice"
+    }
+  ],
+  "checks": [
+    {
+      "name": "phone: header height",
+      "pass": true,
+      "detail": "141px"
+    },
+    {
+      "name": "phone: workspaces, destinations, preference and sign-out stay reachable",
+      "pass": true,
+      "detail": "My files, Shared with me, Account, Appearance, Recovery, Settings & DB; preference and Sign out in view"
+    },
+    {
+      "name": "phone: choosing the last destination keeps it in view and the page still",
+      "pass": true,
+      "detail": "{\"label\":\"Settings & DB\",\"inView\":true,\"y\":0}"
+    },
+    {
+      "name": "settings: no second theme selector",
+      "pass": true,
+      "detail": "none"
+    },
+    {
+      "name": "settings: the Appearance action opens the one theme picker",
+      "pass": true,
+      "detail": "radios 23"
+    },
+    {
+      "name": "no console errors or CSP violations",
+      "pass": true,
+      "detail": "none"
+    }
+  ]
+}
