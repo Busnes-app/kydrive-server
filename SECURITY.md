@@ -17,6 +17,18 @@ and disclosure.
 - Service API tokens are credentials for the calling application; scope them to what that application needs and never log them.
 - Deactivating an identity in KyIdentity must remove its access; group-owned content remains after a member leaves.
 
+## TOTP key minimum and existing accounts
+
+TOTP generates 20 random decoded bytes and authentication requires at least 16 decoded
+secret bytes (RFC 4226). Existing shorter secrets remain sealed and readable but cannot
+authenticate. Before upgrading, retain an alternative enrolled factor/recovery code or
+verified local-administrator access. Use the existing authorized MFA reset, then enroll
+a fresh issuer-generated secret. Do not pad an old secret, delete its account, or replace
+the deployment encryption key. The update does not rotate stored file/row keys or the
+recovery pin, or change container/key/share formats. Retain existing capsules and original
+custodian shares; verify your normal backup/restore procedure when upgrading. This does
+not establish a whole-product TLS/key policy.
+
 ## Deployment requirements
 
 - Run behind authenticated HTTPS; never add a default that downgrades to cleartext.

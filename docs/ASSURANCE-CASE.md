@@ -94,6 +94,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Weakness | Counter | Where |
 |---|---|---|
 | Broken authentication, credential stuffing | Passwords of at least 12 characters, hashed by `ky-primitives/password`; per-client and per-account limits (10 per 15 minutes for one username); one answer for unknown, inactive and wrong-password attempts | `internal/auth/policy.go`, `internal/api/auth_handlers.go` |
+| Undersized TOTP secrets | Shared RFC 4226/6238 validator requires 16 decoded bytes; generates 20. Short sealed records remain readable for deliberate recovery/re-enrollment | `internal/auth/totp_strength_test.go`, [migration](../SECURITY.md#totp-key-minimum-and-existing-accounts) |
 | Session theft from storage | Only the SHA-256 of the session token is stored; cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed with `Secure` | `internal/auth/session.go`, `internal/store/sqlstore.go` |
 | CSRF | Token is `HMAC-SHA256(session secret, "ky-csrf:" + session token)`, recomputed on each check, so a planted cookie is worthless; `TestAgentTokenWritesRefuseForgedCrossSiteRequests` | `internal/auth/session.go` (`ValidateCSRF`), `internal/api/browser_origin_test.go` |
 | Cross-origin data theft | CORS reflects only the configured origin; `TestCORSNeverGrantsAnotherOrigin` walks the source | `internal/api/server.go`, `internal/api/browser_origin_test.go` |
