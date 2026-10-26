@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LEGACY, THEME_OPTIONS, applyTheme, storedTheme } from '../theme';
 
-const mode = (scheme: string) => scheme === 'system' ? 'Light or dark' : scheme === 'light' ? 'Light' : 'Dark';
+const mode = (scheme: string) => scheme === 'system' ? 'Follows device' : scheme === 'light' ? 'Light' : 'Dark';
 
 export function Appearance() {
   const [selected, setSelected] = useState(storedTheme);
