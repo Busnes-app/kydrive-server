@@ -1,0 +1,22 @@
+{
+  "tested_source": "ad0ae38d0435c288cf8b7999d43c74b28446d94f",
+  "pictured_source": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+  "raw_report_sha256": "3b8b25c26518436a277770704db6fd42df3240671756307515169ae9ce0b91e0",
+  "raw_json_sha256": "8971426a414fa1fb3c8e8bd63cc5f7b7b7e7cfca42496af61acf8f055f74db60",
+  "raw_verdict": "FAIL; zero-tolerance outer ring criterion",
+  "observed_result": {
+    "buttons_fit": 48,
+    "button_stops_tested": 48,
+    "rings_fit": 46,
+    "ring_stops_tested": 48,
+    "remaining_overflow_css_px": "0.1875",
+    "remaining_cases": "Appearance forward Tab in both phone OS schemes",
+    "prior_appearance_button_overflow_css_px": "117.6875",
+    "prior_settings_ring_overflow_css_px": "1.78125",
+    "page_scroll_or_task_change": "none"
+  },
+  "parent_disposition": "Material offscreen destination defect resolved; preserve strict failure and subpixel outer-ring residual. No extra build or capture cycle for this residual. Complete focus/accessibility gates remain unpassed.",
+  "provenance_qualification": "Binary revision matchesad0ae38 with vcs.modified=true due untracked concurrent review work; tracked runtime source, served/dist index and fixture pins verified. No clean/hermetic-build claim.",
+  "tests": "Sequential frontend and Go builds passed; targeted real Tab/Shift+Tab and selected-destination checks recorded. Full hosted CI and current-head security independent.",
+  "dox": "Evidence-only disposition. Existing root/web/browser/evidence contracts and indexes unchanged."
+}
