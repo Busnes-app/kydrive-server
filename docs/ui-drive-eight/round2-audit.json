@@ -20,7 +20,14 @@
     "sol": true
   },
   "quality_validation": "40image hashes/membership, integer vectors, weighted Decimal totals and canonical files-array digests reproduced for both final reports.",
-  "spread_audit": "Separate read-only audit in progress; immutable vectors retained.",
+  "spread_audit": {
+    "status": "complete",
+    "report": "round2-spread-audit.md",
+    "quality_spreads_ge_2": 18,
+    "affected_images": 14,
+    "brand_spreads_ge_2": 0,
+    "scores_changed": false
+  },
   "brand_arithmetic": "Opus explicitly averages rounded per-file brand means:8.54. Exact dimension-derived aggregate8.5375; both round8.5. Export preserves exact derived statistics and validates publisher presentation by its declared method. Never enters quality or progression.",
   "metadata_roles": "Parent index builder classified first40by arrayorder rather thanfilemembership, misclassifying4brand references and4historical images. Frozenartifacts-v2.json preserved; artifacts-v2-corrected.json corrects labels by explicit sets; imagehashes and40-quality membership unchanged.",
   "follow_up": [

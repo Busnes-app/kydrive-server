@@ -1,0 +1,23 @@
+{
+  "product_source": "e9fadaca6ad1aba9be1ded36895005ae42ba0fe8",
+  "manifest": "manifest-02-after.json",
+  "inventory": "inventory-v3.json",
+  "near_duplicates": "near-duplicate-audit-v3.json",
+  "provenance": [
+    "source-provenance-r3.json",
+    "capture-provenance-r3.json"
+  ],
+  "authority": "authority.json",
+  "brand_references": "brand-references.json",
+  "all_image_artifacts": "artifacts-v3.json",
+  "quality_inputs": 40,
+  "unscored": {
+    "historical": 80,
+    "brand_only": 4
+  },
+  "capture_scope": "Actual local recovery administrator initial views only, except signed-out login. Ordinary/shared/connected/editor/SSO workflows remain absent/unscored.",
+  "build_limitation": "Binary matches source e9fadac with vcs.modified=false, 390 product source hashes and 230 dist files verified. Minimal sequential frontend and Go builds only; full checks hosted CI.",
+  "restart": "Recreated fixture after hard lock/reboot. Same origin, synthetic content/role and capture conditions; new IDs, timestamps and sessions. Do not attribute relative age/raster changes to product improvement.",
+  "prohibited_before_freeze": "Prior quality images/reports, peer reports, parent scores/galleries/audits/delivery/acceptance/PR descriptions. After full immutable files-array freeze only own round2 report/images for drift.",
+  "behavior_gates": "Complete gates remain untested; screenshots cannot pass them."
+}
