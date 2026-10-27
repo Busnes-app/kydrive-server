@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
@@ -101,7 +102,11 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		s.writeError(w, 403, "Account is inactive")
 		return
 	}
-	_, _, err = s.sessions.IssueSession(r.Context(), w, r, user)
+	_, _, err = s.sessions.IssueSSOSession(r.Context(), w, r, user, claims.SessionID)
+	if errors.Is(err, store.ErrSSOSessionEnded) {
+		s.writeError(w, http.StatusUnauthorized, "SSO session already ended")
+		return
+	}
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Session creation failed")
 		return
@@ -142,4 +147,44 @@ func (s *Server) handleKySignOnSyncWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]bool{"synced": true})
+}
+
+// ssoLogoutFence outlives the 5-minute login callback window, so a logout that lands
+// while the browser is still finishing that login also ends it.
+const ssoLogoutFence = 10 * time.Minute
+
+// handleKySignOnBackchannelLogout is the OpenID Connect Back-Channel Logout receiver: KySignOn
+// POSTs a signed logout_token when a login ends, and every local session of it ends here.
+// Not rate-limited: a KyIdentity restore sends a burst, and a 429 spends its few retries.
+func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	claims, err := s.kysignon.VerifyLogoutToken(r.Context(), r.PostFormValue("logout_token"))
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	rec := &store.AuditRecord{Action: "auth.sso_backchannel_logout", Resource: "session", IPAddress: s.requestIP(r)}
+	if claims.SessionID != "" {
+		err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, time.Now().Add(ssoLogoutFence))
+	} else {
+		var user *store.User
+		user, err = store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject)
+		if errors.Is(err, store.ErrNotFound) {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err == nil {
+			rec.UserID = user.ID
+			// iat has whole-second precision: round up so a login from that same second ends too.
+			err = s.store.Sessions().DeleteUserSessionsBefore(r.Context(), user.ID, claims.IssuedAt.Add(time.Second))
+		}
+	}
+	if err != nil {
+		log.Printf("sso: back-channel logout: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "logout failed")
+		return
+	}
+	s.audit(r.Context(), rec)
+	w.WriteHeader(http.StatusOK)
 }

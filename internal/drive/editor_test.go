@@ -37,6 +37,15 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			}
 			return st.Sessions().EndSession(ctx, "h")
 		},
+		"back-channel logout": func(st store.Store) error {
+			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES('h','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00','sid')`); err != nil {
+				return err
+			}
+			return st.Sessions().EndSSOSession(ctx, "sid", time.Now().Add(time.Minute))
+		},
+		"subject-wide back-channel logout": func(st store.Store) error {
+			return st.Sessions().DeleteUserSessionsBefore(ctx, "worker", time.Now())
+		},
 		"directory disable": func(st store.Store) error {
 			_, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Email: "worker@local.test", Active: false})
 			return err

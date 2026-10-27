@@ -278,6 +278,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/sso/kysignon/login", s.handleKySignOnLogin)
 	s.mux.HandleFunc("/api/sso/kysignon/callback", s.handleKySignOnCallback)
 	s.mux.HandleFunc("/api/sso/kysignon/sync", s.handleKySignOnSyncWebhook)
+	s.mux.HandleFunc("POST /api/sso/kysignon/backchannel-logout", s.handleKySignOnBackchannelLogout)
 
 	// Feature 0 KyBackup & Restore Drills. Capsules carry site data and keys: admins only.
 	// Method patterns: only the declared method reaches a handler. Export is a POST so the

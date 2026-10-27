@@ -6,7 +6,7 @@ Commands and unlinked file paths below are relative to the repository root.
 
 ## Identity and permissions
 
-Register an OIDC application in KyIdentity using callback `<drive origin>/api/sso/kysignon/callback`. The route retains the base's name; set `KY_KYSIGNON_ISSUER` to the actual KyIdentity issuer, with its client ID/secret. Keep `KY_SSO_AUTO_PROVISION=false`. A verified OIDC `sub` must equal the user's SCIM `externalId`; username and email do not link accounts.
+Register an OIDC application in KyIdentity using callback `<drive origin>/api/sso/kysignon/callback` and back-channel logout URI `<drive origin>/api/sso/kysignon/backchannel-logout`. The routes retain the base's name; set `KY_KYSIGNON_ISSUER` to the actual KyIdentity issuer, with its client ID/secret. Keep `KY_SSO_AUTO_PROVISION=false`. A verified OIDC `sub` must equal the user's SCIM `externalId`; username and email do not link accounts.
 
 Configure a KyIdentity outbound SCIM system at `<drive origin>/scim/v2` with `KY_SCIM_TOKEN`. Enable group delivery and assign the required users/groups. KyDrive supports exact `externalId` reconciliation, user PUT/deactivation, groups PUT/delete and atomic membership replacement. An `externalId` is immutable. Application administrator privilege is separate from directory roles; incoming `roles=admin` cannot elevate it. The break-glass local administrator cannot be modified through SCIM.
 

@@ -5,12 +5,15 @@ import (
 	"errors"
 	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"time"
 )
 
 var (
 	ErrNotFound       = errors.New("record not found")
 	ErrAlreadyExists  = errors.New("record already exists")
 	ErrSessionExpired = errors.New("session expired")
+	// ErrSSOSessionEnded means the identity provider already ended the login being signed in.
+	ErrSSOSessionEnded = errors.New("SSO session already ended")
 	// ErrStale reports a directory event no newer than the last one applied to the account.
 	ErrStale           = errors.New("directory event is not newer than the applied state")
 	ErrInvalidUsername = errors.New("directory username must be 1-128 letters, digits or ._@+-")
@@ -81,6 +84,10 @@ type SessionStore interface {
 	GetSession(ctx context.Context, tokenHash string) (*Session, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
 	DeleteUserSessions(ctx context.Context, userID string) error
+	// DeleteUserSessionsBefore ends a user's sessions created before t.
+	DeleteUserSessionsBefore(ctx context.Context, userID string, t time.Time) error
+	// EndSSOSession ends every session of an SSO login and fences its sid until fenceUntil.
+	EndSSOSession(ctx context.Context, sid string, fenceUntil time.Time) error
 	EndSession(ctx context.Context, tokenHash string) error
 	CleanExpiredSessions(ctx context.Context) error
 	CleanExpiredMFAChallenges(ctx context.Context) error

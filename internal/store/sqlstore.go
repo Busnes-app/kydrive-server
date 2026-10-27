@@ -738,7 +738,7 @@ func (s *SQLStore) revokeGrants(ctx context.Context, tx *sql.Tx, userID string) 
 }
 
 func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expectedPasswordHash string, mfaEnabled bool) error {
-	return s.store.withPassword(ctx, sess.UserID, expectedPasswordHash, func(tx *sql.Tx) error {
+	err := s.store.withPassword(ctx, sess.UserID, expectedPasswordHash, func(tx *sql.Tx) error {
 		// withPassword holds the user row, so an MFA change either lands before this read or waits.
 		var enabled bool
 		if err := tx.QueryRowContext(ctx, s.store.rebind(`SELECT totp_enabled FROM users WHERE id = ?`), sess.UserID).Scan(&enabled); err != nil {
@@ -747,8 +747,65 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 		if enabled != mfaEnabled {
 			return ErrNotFound
 		}
-		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt)
+		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid) VALUES (?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID)
 		return err
+	})
+	if err != nil || sess.SSOSID == "" {
+		return err
+	}
+	// Check the fence only after the session committed: EndSSOSession commits the fence
+	// before deleting, so one of the two always sees the other under read committed.
+	var fenced int
+	if err := s.store.db.QueryRowContext(ctx, s.store.rebind(`SELECT COUNT(1) FROM sso_logouts WHERE sid = ? AND expires_at > ?`), sess.SSOSID, time.Now().UTC()).Scan(&fenced); err != nil || fenced > 0 {
+		_ = s.DeleteSession(ctx, sess.TokenHash)
+		if err != nil {
+			return err
+		}
+		return ErrSSOSessionEnded
+	}
+	return nil
+}
+
+func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil time.Time) error {
+	now := time.Now().UTC()
+	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logouts WHERE expires_at <= ?`), now); err != nil {
+		return err
+	}
+	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logouts (sid, expires_at) VALUES (?, ?) ON CONFLICT (sid) DO UPDATE SET expires_at = excluded.expires_at`), sid, fenceUntil.UTC()); err != nil {
+		return err
+	}
+	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, s.store.rebind(`DELETE FROM sessions WHERE sso_sid = ? RETURNING user_id`), sid)
+		if err != nil {
+			return err
+		}
+		var users []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			users = append(users, id)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+		for _, id := range users {
+			if err := s.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *sessionStore) DeleteUserSessionsBefore(ctx context.Context, userID string, t time.Time) error {
+	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, s.store.rebind("DELETE FROM sessions WHERE user_id = ? AND created_at < ?"), userID, t.UTC()); err != nil {
+			return err
+		}
+		return s.store.drive.RevokeUserEditors(ctx, tx, userID)
 	})
 }
 

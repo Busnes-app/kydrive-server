@@ -56,7 +56,8 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    (`internal/api/mcp.go`).
 3. **KyIdentity → KyDrive.** OIDC sign-in with PKCE `S256` and verified ID tokens; SCIM with a
    bearer token; a directory webhook that must carry a valid HMAC-SHA256 signature and a timestamp
-   within five minutes before anything is parsed further (`internal/sso`, `internal/scim`).
+   within five minutes before anything is parsed further; back-channel logout tokens verified
+   like ID tokens plus the logout-token claims (`internal/sso`, `internal/scim`).
 4. **KyDrive ↔ Euro-Office.** Editor configuration and callbacks are HS256 JWTs under a secret of
    at least 32 bytes; output is fetched only from the configured editor origin, without following
    redirects (`internal/editor/client.go`).
@@ -102,6 +103,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Stored XSS through uploaded files | Downloads are `attachment`; WebDAV `GET` adds `Content-Security-Policy: sandbox; default-src 'none'`; previews carry a sandbox CSP; the app CSP has `script-src 'self'` and `frame-ancestors 'none'`; no `dangerouslySetInnerHTML` in `web/src` | `internal/api/drive_handlers.go`, `internal/dav/serve.go`, `internal/api/drive_preview.go`, `internal/api/server.go` |
 | Path traversal | Disk paths are generated blob IDs, never user filenames | `internal/drive` |
 | SQL injection | `database/sql` with parameters; the only formatted statement is the PostgreSQL migration lock, built from a constant | `internal/store/migrations/migrations.go` |
+| Session outliving its identity-provider login | Back-channel logout token verified (signature, issuer, audience, expiry, `iat`, logout event, no nonce, `logout+jwt` when typed) before ending every session of its `sid`; the `sid` is fenced so an in-flight callback cannot revive it | `internal/sso/backchannel.go`, `internal/store/sqlstore.go`, `TestVerifyLogoutToken`, `TestBackchannelLogoutEndsTheSSOLogin` |
 | Forged directory events | HMAC-SHA256 checked in constant time before parsing; five-minute window; older events ignored; payload `role` ignored | `internal/sso/kysignon.go`, `internal/crypto/crypto.go` |
 | Forged editor callbacks, SSRF through the editor | Signed JWT callbacks; output fetched only from the editor origin with redirects refused | `internal/editor` |
 | SSRF through the recovery URL | `recoveryclient.ValidateURL` refuses private destinations unless explicitly allowed | `internal/api/backup_handlers.go` |
