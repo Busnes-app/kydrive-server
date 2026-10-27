@@ -1,0 +1,45 @@
+{
+  "round": 5,
+  "raw_reports": {
+    "opus-round5.json": "a5d85c3c8202f0868b531ba94a3c8b1a837dcc5fe6d11c63c39bf4ba2eef0e82",
+    "opus-round5.md": "33d13cf8be8f473982c6bc93ec4c854fc668193d29105a2c16822d48098aa741",
+    "sol-round5.json": "efc3b602422776d98392c5da138e7b54db28c49f9326662d3217ab74f6437d67",
+    "sol-round5.md": "1e3fb50afb69d979a9f6355fd354b920d7ee17837fdc6a657b75486f8c9752d2"
+  },
+  "progression": {
+    "opus_exact": "819/100",
+    "opus_decimal": "8.19",
+    "opus_half_up": "8.2",
+    "accepted": true,
+    "sol_exact": "867/100",
+    "sol_decimal": "8.67",
+    "sol_half_up": "8.7",
+    "rule": "Current-round Opus overall HALF_UP1decimal>=8.0. No peer/history/brand pooling or individualcohort veto."
+  },
+  "independent_satisfaction": {
+    "opus": true,
+    "sol": true
+  },
+  "brand": {
+    "opus_exact": "873/100",
+    "sol_exact": "887/100",
+    "note": "Separate unrounded per-file brand means; never quality/progression."
+  },
+  "verification": "Both complete files-array freezes,40image membership/hashes,weighted per-filetotals and exact overall/brand means reproduced. build-report.py validates10rawpairs andCSV/XLSX round-trip.",
+  "spread_audit": {
+    "quality_ge_2": 0,
+    "brand_ge_2": 0,
+    "action": "All comparable raw dimensions checked; no threshold reinspection needed."
+  },
+  "sol_metadata_errata": "Appearance state sparse\u2192populated documented outside frozen array; no score/mean change.",
+  "opus_drift": "Officialscore8.19. Reviewer separately attributes pixel-only diagnostic8.025 and calibration; diagnostic not officialgate, no pooling into current score.",
+  "residuals": [
+    "UnselectedAccountchoice-card2.3169:1light/3.4804dark; nativepaintedradio unmeasured.",
+    "0.1875pxAppearance outer-focus-ring residual; strictFAIL retained.",
+    "Minor layout observations preserved in raw reports; no further cosmetic iteration."
+  ],
+  "scope": "Captured local recovery administrator and signed-out initialviews only. Ordinary/shared/connected workflows absent; no fullaccessibility/alltheme/competitive/wholeproduct/9of10 claim.",
+  "gemini": "Both primaries satisfied, but knownquota exhausted; not retried and does not delayprogression.",
+  "next": "KyDNSfreshbaseline; keepPR87 CI/current-headsecurity tracked.",
+  "dox": "Evidence/status closeout; existing nearest contracts unchanged."
+}
