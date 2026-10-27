@@ -157,3 +157,48 @@ func signJWT(t *testing.T, key *rsa.PrivateKey, header map[string]string, claims
 	}
 	return input + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
+
+// Logout tokens share the ID-token verifier, so a weak signing key cannot end sessions.
+func TestVerifyLogoutTokenRSAKeyFloor(t *testing.T) {
+	for _, bits := range []int{2047, 2048} {
+		key, err := rsa.GenerateKey(rand.Reader, bits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var issuer string
+		idp := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/.well-known/openid-configuration":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"issuer": issuer, "authorization_endpoint": issuer + "/authorize",
+					"token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys",
+					"id_token_signing_alg_values_supported": []string{"RS256"},
+				})
+			case "/keys":
+				_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{map[string]any{
+					"kty": "RSA", "alg": "RS256", "kid": "fixture",
+					"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB",
+				}}})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		issuer = idp.URL
+		client := sso.NewKySignOnClient(config.SSOConfig{KySignOnIssuer: issuer, KySignOnClientID: "client"}, nil)
+		ctx := oidc.ClientContext(context.Background(), idp.Client())
+		token := signJWT(t, key, map[string]string{"alg": "RS256", "kid": "fixture", "typ": "logout+jwt"}, map[string]any{
+			"iss": issuer, "aud": "client", "sub": "subject", "sid": "sid-1", "jti": "jti-1",
+			"iat": time.Now().Unix(), "exp": time.Now().Add(2 * time.Minute).Unix(),
+			"events": map[string]any{logoutEvent: map[string]any{}},
+		})
+		got, err := client.VerifyLogoutToken(ctx, token)
+		idp.Close()
+		if bits < 2048 && (err == nil || got != nil) {
+			t.Fatalf("accepted RSA-%d logout token: %+v", bits, got)
+		}
+		if bits >= 2048 && (err != nil || got.SessionID != "sid-1") {
+			t.Fatalf("RSA-%d logout token: claims=%+v err=%v", bits, got, err)
+		}
+	}
+}
