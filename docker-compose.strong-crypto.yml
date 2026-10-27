@@ -1,0 +1,6 @@
+# Append to the existing Compose chain; retain data, image and network choices.
+# See docs/STRONG-CRYPTO.md.
+services:
+  app:
+    environment:
+      GODEBUG: fips140=on

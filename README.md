@@ -62,4 +62,5 @@ Euro-Office can also run on Docker with the optional [production editor Compose 
 - [Recovery and encryption](docs/RECOVERY-AND-ENCRYPTION.md) — Encryption at rest, Recovery. <a id="encryption-at-rest"></a><a id="recovery"></a>
 - [Verifying releases](docs/VERIFYING-RELEASES.md) — Check a release image's signature and source commit, and rebuild its binary to the same bytes.
 - [Assurance case](docs/ASSURANCE-CASE.md) — Threat model, trust boundaries, and why the security requirements are met.
+- [Key strength and TLS profile](docs/STRONG-CRYPTO.md) — Key-size rules, the optional `GODEBUG=fips140=on` overlay, the HTTPS edge and what stays out of scope.
 - [Contributing](CONTRIBUTING.md) — How to report bugs, propose changes, the test policy and the coding standard.

@@ -22,6 +22,12 @@ jobs:
       # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - run: go test -race ./... && go vet ./...
+      - name: test supported strong-key profile
+        env:
+          GODEBUG: fips140=on
+        run: go test -race -count=1 ./...
+      - name: profile preserves Compose configuration
+        run: python3 docs/check-strong-crypto-compose.py
       # The release binary must not depend on where it is built: build it the way the
       # Dockerfile does (no .git in the context, web/dist rebuilt from the lockfile, -trimpath)
       # from two directories and require identical bytes. docs/VERIFYING-RELEASES.md tells

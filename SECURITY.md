@@ -26,8 +26,15 @@ verified local-administrator access. Use the existing authorized MFA reset, then
 a fresh issuer-generated secret. Do not pad an old secret, delete its account, or replace
 the deployment encryption key. The update does not rotate stored file/row keys or the
 recovery pin, or change container/key/share formats. Retain existing capsules and original
-custodian shares; verify your normal backup/restore procedure when upgrading. This does
-not establish a whole-product TLS/key policy.
+custodian shares; verify your normal backup/restore procedure when upgrading.
+
+## Key strength and TLS
+
+[docs/STRONG-CRYPTO.md](docs/STRONG-CRYPTO.md) lists every key KyDrive generates or
+accepts, the minimums it enforces, and the optional `GODEBUG=fips140=on` profile that
+limits its outbound TLS to strong certificate keys. Startup refuses a `KY_SESSION_SECRET`
+or `KY_KYSIGNON_HMAC_SECRET` shorter than 16 bytes; replace only that value. Sign-in
+refuses an OIDC provider publishing an RSA key below 2048 bits until the provider rotates it.
 
 ## Deployment requirements
 
@@ -46,4 +53,5 @@ request.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution and review requirements
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community expectations
 - [README.md](README.md) — what this project is and how to run it
+- [docs/STRONG-CRYPTO.md](docs/STRONG-CRYPTO.md) — key-size rules and the strong-key TLS profile
 

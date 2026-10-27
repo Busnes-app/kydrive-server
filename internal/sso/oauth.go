@@ -2,9 +2,13 @@ package sso
 
 import (
 	"context"
+	"crypto/fips140"
 	"errors"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -16,6 +20,7 @@ type oauthFlow struct {
 	clientSecret string
 	mu           sync.Mutex
 	provider     *oidc.Provider
+	verifier     *oidc.IDTokenVerifier
 }
 
 func newOAuthFlow(issuer, clientID, clientSecret string) *oauthFlow {
@@ -28,10 +33,33 @@ func (f *oauthFlow) getProvider(ctx context.Context) (*oidc.Provider, error) {
 	if f.provider != nil {
 		return f.provider, nil
 	}
+	if err := requireStrongOIDCHTTPS(f.issuer); err != nil {
+		return nil, err
+	}
+	ctx = strongOIDCContext(ctx)
 	provider, err := oidc.NewProvider(ctx, f.issuer)
 	if err != nil {
 		return nil, err
 	}
+	var metadata struct {
+		JWKSURI string `json:"jwks_uri"`
+	}
+	if err := provider.Claims(&metadata); err != nil {
+		return nil, err
+	}
+	if err := requireStrongOIDCHTTPS(provider.Endpoint().AuthURL, provider.Endpoint().TokenURL, metadata.JWKSURI); err != nil {
+		return nil, err
+	}
+	jwksClient := *contextClient(ctx)
+	if jwksClient.Transport == nil {
+		jwksClient.Transport = http.DefaultTransport
+	}
+	jwksClient.Transport = strongJWKSTransport{base: jwksClient.Transport}
+	if jwksClient.Timeout == 0 {
+		jwksClient.Timeout = 20 * time.Second
+	}
+	// The verifier keeps go-oidc's key cache and rotation behind the JWKS key floor.
+	f.verifier = provider.VerifierContext(oidc.ClientContext(context.WithoutCancel(ctx), &jwksClient), &oidc.Config{ClientID: f.clientID})
 	f.provider = provider
 	return provider, nil
 }
@@ -56,10 +84,11 @@ func (f *oauthFlow) authCodeURL(ctx context.Context, redirectURI, state, verifie
 }
 
 func (f *oauthFlow) exchange(ctx context.Context, code, verifier, redirectURI, expectedNonce string) (*IdentityClaims, error) {
-	config, provider, err := f.config(ctx, redirectURI)
+	config, _, err := f.config(ctx, redirectURI)
 	if err != nil {
 		return nil, err
 	}
+	ctx = strongOIDCContext(ctx)
 	token, err := config.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, err
@@ -68,11 +97,49 @@ func (f *oauthFlow) exchange(ctx context.Context, code, verifier, redirectURI, e
 	if !ok || rawIDToken == "" {
 		return nil, errors.New("missing id_token in token response")
 	}
-	idToken, err := provider.Verifier(&oidc.Config{ClientID: f.clientID}).Verify(ctx, rawIDToken)
+	idToken, err := f.verifier.Verify(ctx, rawIDToken)
 	if err != nil || expectedNonce == "" || idToken.Nonce != expectedNonce {
 		return nil, ErrInvalidIDToken
 	}
 	return claimsFromIDToken(idToken)
+}
+
+func contextClient(ctx context.Context) *http.Client {
+	if client, ok := ctx.Value(oauth2.HTTPClient).(*http.Client); ok {
+		return client
+	}
+	return http.DefaultClient
+}
+
+// requireStrongOIDCHTTPS keeps the strong-key profile from falling back to
+// plaintext: every OIDC endpoint must be HTTPS without URL credentials.
+func requireStrongOIDCHTTPS(endpoints ...string) error {
+	if !fips140.Enabled() {
+		return nil
+	}
+	for _, raw := range endpoints {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+			return errors.New("strong-crypto mode requires HTTPS OIDC issuer and endpoints without URL credentials")
+		}
+	}
+	return nil
+}
+
+// strongOIDCContext keeps the caller's client (roots, timeouts) but refuses
+// discovery and token redirects in the strong-key profile.
+func strongOIDCContext(ctx context.Context) context.Context {
+	if !fips140.Enabled() {
+		return ctx
+	}
+	client := *contextClient(ctx)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return errors.New("OIDC redirects are refused in strong-crypto mode")
+	}
+	if client.Timeout == 0 {
+		client.Timeout = 20 * time.Second
+	}
+	return oidc.ClientContext(ctx, &client)
 }
 
 func claimsFromIDToken(idToken *oidc.IDToken) (*IdentityClaims, error) {

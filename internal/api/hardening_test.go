@@ -275,7 +275,7 @@ func TestSSOErrorsDoNotLeakDetail(t *testing.T) {
 
 func TestDirectoryWebhookStatusCodes(t *testing.T) {
 	_, st, cfg := setupTestServer(t)
-	cfg.SSO.KySignOnHMACSecret = "hook-secret"
+	cfg.SSO.KySignOnHMACSecret = "hook-secret-16-bytes"
 	srv := api.NewServer(cfg, st)
 	call := func(body []byte, secret string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/api/sso/kysignon/sync", bytes.NewReader(body))
@@ -288,14 +288,14 @@ func TestDirectoryWebhookStatusCodes(t *testing.T) {
 	if w := call(good, "wrong"); w.Code != http.StatusUnauthorized || w.Body.String() != `{"error":"Invalid webhook signature or timestamp"}`+"\n" {
 		t.Fatalf("bad signature: %d %s", w.Code, w.Body)
 	}
-	if w := call([]byte(`not json`), "hook-secret"); w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"Malformed webhook payload"}`+"\n" {
+	if w := call([]byte(`not json`), "hook-secret-16-bytes"); w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"Malformed webhook payload"}`+"\n" {
 		t.Fatalf("malformed: %d %s", w.Code, w.Body)
 	}
-	if w := call(good, "hook-secret"); w.Code != http.StatusOK {
+	if w := call(good, "hook-secret-16-bytes"); w.Code != http.StatusOK {
 		t.Fatalf("valid: %d %s", w.Code, w.Body)
 	}
 	st.Close() // an outage is a 500 so the sender retries
-	if w := call([]byte(fmt.Sprintf(`{"event":"user.created","id":"s2","username":"web2","timestamp":%d}`, time.Now().Unix())), "hook-secret"); w.Code != http.StatusInternalServerError {
+	if w := call([]byte(fmt.Sprintf(`{"event":"user.created","id":"s2","username":"web2","timestamp":%d}`, time.Now().Unix())), "hook-secret-16-bytes"); w.Code != http.StatusInternalServerError {
 		t.Fatalf("store outage: %d %s", w.Code, w.Body)
 	}
 }
