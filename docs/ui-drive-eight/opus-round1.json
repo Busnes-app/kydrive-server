@@ -1,0 +1,2914 @@
+{
+  "schema": "ky-ui-council-scores/2",
+  "round": "round1 (drive-eight focused pass, stage 00-before baseline)",
+  "reviewer": {
+    "model": "Claude Opus 5.5",
+    "model_id": "claude-opus-5-5",
+    "role": "Opus primary reviewer (owner progression reviewer)",
+    "harness": "Claude Code (T3 Code), single context, no sub-agents",
+    "method_note": "Impeccable critique lens applied inline. Degraded relative to its dual-agent flow: the brief forbids extra agents and writes beyond this pair, so the detector, overlay and .impeccable persistence were not run. No PRODUCT.md/DESIGN.md exists."
+  },
+  "rubric": {
+    "version": "ky-suite-v2",
+    "weights": {
+      "hierarchy": 0.2,
+      "typography": 0.15,
+      "density_layout": 0.2,
+      "color": 0.15,
+      "visible_affordances": 0.15,
+      "coherence": 0.15
+    },
+    "rounding": "Decimal(str(x)).quantize(Decimal('0.1'), ROUND_HALF_UP) per file; covered-set mean is exact over the 40 rounded file totals, then half-up 0.1",
+    "anchors": "3 broken / 5 fights you / 7 solid / 9 refined; 10 only with no visible defect",
+    "na_rule": "Missing or hidden content is N/A, never 0"
+  },
+  "authority": {
+    "file": "docs/ui-drive-eight/authority.json",
+    "sha256": "082c11359c5c01973f86f4e01579fc3ac4f5b256715d4c2179f69cd4527427ec",
+    "ky_ui_commit": "639e5882cada099dd189197beb2a3e3b4c188658",
+    "verified": "All 5 local authority/ objects match the authority.json hashes and git show 639e5882:<path> in /home/yoshi/git/busnes.app/ky-ui (ky-ui HEAD 947bf969 is incidental and not used)",
+    "files": {
+      "skills/ky-suite-ui/SKILL.md": "6010ea39ac6e4e21926eb2a45d8a5a4894cd9e5e6eec07aca4cf60423233dcc2",
+      "skills/ky-suite-ui/references/rubric.md": "ad3516620420fbdc30f5273f82b7c72c76e1365d1b6296fcaa56be3cbebf2c41",
+      "skills/ky-suite-ui/references/design-contract.md": "392afb88c51fb3cfad6c94d6b841804b194d107a0431c31f35ff81d3a7a444d3",
+      "src/tokens.css": "639f8e73259aca02119b98a5340539d5e8e16d65fd5f6124b939fdfe9c5f86af",
+      "src/navigation.css": "fbd0aea3e45fa818f916ad1bc35832f6ac26e37124208ffde029b809048b4380"
+    },
+    "runtime_vendor": "web/src/ky-ui/VERSION 0.4.1: all 12 recorded hashes match the working files. tokens.css is identical to the authority; navigation.css is cc6dbaa0… against authority fbd0aea3…, a legitimate runtime difference."
+  },
+  "source": {
+    "product_source_commit": "fd472e8035222ae38d8bb4b5c5cbd79c066879a1",
+    "evidence_commit": "0354de843b0503b9ff52b51318ab214867b9e0e8",
+    "branch": "ui/drive-eight",
+    "worktree": "/home/yoshi/git/busnes.app/KyDrive-server/.claude/worktrees/drive-eight",
+    "product_unchanged": "git diff fd472e80..0354de84 outside docs/ui-drive-eight touches only docs/AGENTS.md (+2 lines, child index); worktree clean at review start"
+  },
+  "input_hashes": {
+    "inventory-v1.json": "6c142d3d8f10914011763c38fb4b60fc794afd1c7f422fd60c7b7e423ab9781d",
+    "manifest-00-before.json": "6baeb16a621f473f83635a4cac1038c6b0a623fb0246c369051dcea37dee0957",
+    "artifacts.json": "1d91caad72e783de2bc361448b70a34ce80a4ef4070a4309f76a98c42cf0dfe6",
+    "brand-references.json": "254f93a4754dc75f97f361365342e1632c719cb389fe1fe9bd40bf6a581ec3cb",
+    "near-duplicate-audit-v1.json": "79e48e74369b87348a72fa7900d1d0e47d7febab8802bae17a9c01a4e14f7fd1",
+    "review-inputs-v1.json": "c0543a876d7c8fc3fea03e79051cbaa333953aa10e155194dbd78d490aab0b4b",
+    "baseline-setup.md": "db470512c6d84167c11757708d07594133b722931634b52cd411a3aabed5d22d",
+    "source-provenance.json": "c07cbd5f8c34271e0c821333e36516af89c8404cb8e60a8bc72f28e5801aa75d",
+    "SHA256SUMS": "b50345b5cb09f38e6b963e31d9f2facbdc636ea80fba4162d3bffe86ae3543e3",
+    "duplicate-audit-00-before.json": "383e7cccfdaaa061b3e4d2dceb0a44069c253aa814872cc63d18b7ea137452de",
+    "inventory-00-before.csv": "bc83ff7ad715ea3615b59285e8d9376e1a5d865b781933c5d171d1c2bb9a986a",
+    "fixture-files.json": "8718d28ebbb8ac0bb6419e639222e693a7a6485e039402037c19ffbb54cf020b",
+    "AGENTS.md": "7e8913643d4e30e6ccf839253e8c7cc440659bc10e76b96f45462da229acb38a"
+  },
+  "input_verification": {
+    "SHA256SUMS": "50/50 entries match the committed bytes",
+    "csv_line_endings": "inventory-00-before.csv has 41 CRLF and 0 bare LF lines (.gitattributes -text)",
+    "inventory_vs_manifest": "40 file→sha256 pairs identical; all bytes and dimensions match on disk",
+    "artifacts": "44 entries match (40 quality originals = inventory, plus 4 brand references)",
+    "brand_references": "4/4 match brand-references.json and git show d7f2a4b6:<source_file> in KyIdentity-server",
+    "exact_duplicates": "40 unique SHA-256",
+    "near_duplicates": "Reproduced in memory (Pillow/NumPy RGBA, same-size pairs): 380 comparisons, every changed_fraction and max_channel_delta identical to the audit, 0 near duplicates (minimum changed fraction 0.0243)",
+    "bundled_scripts_not_run": "verify-baseline.py and audit-near-duplicates.py rewrite tracked files, so their checks were reproduced read-only instead"
+  },
+  "capture_conditions": {
+    "browser": "Playwright 1.64.1, headless Chromium 156.0.8078.4",
+    "dpr": 1,
+    "viewports": [
+      "desktop 1280x900",
+      "mobile 390x844 (desktop Chromium at mobile CSS size, not a device claim)"
+    ],
+    "color_scheme": "OS light/dark emulation; fresh context per viewport/scheme; ky_theme absent (data-theme busnes-light/busnes-dark)",
+    "service_workers": "normal; /sw.js controller active on all 40",
+    "locale_tz": "en-US, America/New_York",
+    "full_page": false,
+    "overflow_px": "0 on all 40",
+    "captured": "2026-10-27T19:44:58Z to 19:45:29Z, single run, no recapture",
+    "fixture": "Disposable SQLite. The actual local recovery administrator after a real bootstrap password change. Synthetic files only (Project materials folder; Quarterly plan.md, Supplier list.csv, Meeting notes.txt live; Archive note.txt trashed). Share and new-folder forms unsubmitted.",
+    "native_prep": "T3 native browser prepared and inspected the fixture (Chrome 154, DPR 2 reconnaissance, outside the batch). The parent snapshot timed out twice, so the documented Playwright workflow produced the DPR 1 batch."
+  },
+  "inventory": {
+    "total_images": 44,
+    "quality_originals": 40,
+    "unique": 40,
+    "duplicates": 0,
+    "near_duplicates": 0,
+    "unscored": [
+      {
+        "file": "brand-references/kyidentity-02-after-users-manage-desktop-light.png",
+        "sha256": "f13eb7bdc897cf717441dfb5e5ed555efb034eb841fac3bf26f02a7a2de5cfe4",
+        "reason": "KyIdentity brand-only reference; excluded from quality"
+      },
+      {
+        "file": "brand-references/kyidentity-02-after-users-manage-desktop-dark.png",
+        "sha256": "c88074992215e2e10fbb0518cafb30d9043cc434713fff8fdc3de81687a1c873",
+        "reason": "KyIdentity brand-only reference; excluded from quality"
+      },
+      {
+        "file": "brand-references/kyidentity-02-after-appearance-mobile-light.png",
+        "sha256": "b82cb35eae6ead72c08291c04eb188a7549a84ce2e2cc27e7fd948698c6037b6",
+        "reason": "KyIdentity brand-only reference; excluded from quality"
+      },
+      {
+        "file": "brand-references/kyidentity-02-after-appearance-mobile-dark.png",
+        "sha256": "ea7033aea61cc689cc94cb5a362d5c9dd7dfbce798c27ed7ce89e8cbd3198fe1",
+        "reason": "KyIdentity brand-only reference; excluded from quality"
+      }
+    ]
+  },
+  "unavailable_or_missing": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary; staff require external OIDC)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)",
+    "Admin Settings & DB and Recovery pages (outside the capture batch)",
+    "Below-viewport content on mobile files/folder/Appearance/Account and desktop Account (initial-view captures only)"
+  ],
+  "unavailable_workflows": {
+    "gemini": "unused: advisory only after both primaries are genuinely satisfied; quota known unavailable, not retried",
+    "myslop": "no board post (known HTTP 401; not retried, per brief)",
+    "live_review": "not performed (optional, and must not alter fixture state)",
+    "impeccable_detector": "not run (brief limits tools and writes; scoring is screenshot-based)",
+    "sol_peer": "not read (independent)"
+  },
+  "files": [
+    {
+      "file": "screenshots/kydrive-00-before-login-desktop-light.png",
+      "sha256": "c2e55f4bfd21e534d91f4e5f738c3c71a0c90390a48b7376fce1409780fb94b7",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Sign-in",
+      "surface_key": "login",
+      "surface_detail": "Signed-out sign-in form: Username autofocused with shipped placeholder 'admin', Password shipped dot placeholder, 'Security check verified.', SSO button",
+      "cohort": "auth",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "signed-out",
+      "artifacts": "Shipped placeholders in both fields; Username autofocus ring; security check completed naturally.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Stamp icon, 'KyDrive' title and subtitle lead to one filled-accent 'Sign In'; SSO is a quieter outline button below a divider.",
+        "typography": "Clear steps: ~24px title, muted subtitle, 13px bold field labels, 15px inputs; Space Grotesk throughout.",
+        "density_layout": "Centered ~384px card with even 16-24px field rhythm; generous but intentional whitespace around it.",
+        "color": "Cream page, white card, orange Sign In and focus ring only; green security text is the single status hue.",
+        "visible_affordances": "Inputs, primary and SSO read clearly, but the bordered 'Security check verified.' box looks like another input, and the password's shipped dot placeholder reads like a filled value.",
+        "coherence": "The native theme select floats alone at the top right, detached from the card's component vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "7.70",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Busnes cream/charcoal surfaces, ink and orange accent match the token palette.",
+          "type_geometry": "Space Grotesk, ~40px fields/buttons, 8px radius; security check box is taller (~46px).",
+          "shell": "N/A: signed-out page has no app shell.",
+          "accent_discipline": "Accent only on Sign In and the focus ring.",
+          "suite_cohesion": "Card and controls fit the suite, but the floating native theme select and login-only chrome are unlike the KyIdentity references."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-files-desktop-light.png",
+      "sha256": "34ab1e6af25b21842f9ccb66562ebb795811b46779caac474f316c280bdac639",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "My files list",
+      "surface_key": "files",
+      "surface_detail": "My files root: 1 folder + 3 files (v1), admin Operations/Create workspace/Leavers accordions collapsed above search and list",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 8,
+        "density_layout": 6,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Title and Upload files are clear, but the three bordered admin accordions (Operations & audit, Create shared workspace, Leavers) sit between the title and the file list; the list repeats 'My files' as a panel title.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta).",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Restrained palette, but the folder icon tile is orange (decoration) and the new-tab checkbox is orange; the quota fill is invisible against its track.",
+        "visible_affordances": "Upload (filled), New (outline menu), refresh icon, Trash text button and boxed ⋯ row menus all read; the quota bar has no visible fill to read usage.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.60",
+      "total": "6.6",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Orange folder icon tile is decorative accent; checkbox and Upload also orange.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 34,
+        "mean_exact": "6.8",
+        "mean_half_up_0_1": "6.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-folder-desktop-light.png",
+      "sha256": "ee272279532cc412d951fe437cc4fef7ed22e9418c7f8b022abf70fef5437ef4",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Empty folder (breadcrumb)",
+      "surface_key": "folder",
+      "surface_detail": "Empty 'Project materials' folder via breadcrumb inside My files; empty state with guidance and Upload files CTA",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 8,
+        "density_layout": 6,
+        "color": 6,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 stays 'My files' while the folder is named only in the breadcrumb; two identical filled 'Upload files' buttons (toolbar and empty state) compete.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta).",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Two filled-accent Upload buttons plus the orange new-tab checkbox put three accent fills on one screen; quota fill is invisible.",
+        "visible_affordances": "Breadcrumb, toolbar and CTA are legible; the empty-state Upload icon renders fainter than the toolbar's identical button; quota bar shows no visible fill.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.45",
+      "total": "6.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 5,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Two filled Upload primaries plus orange checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 33,
+        "mean_exact": "6.6",
+        "mean_half_up_0_1": "6.6",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-new-folder-desktop-light.png",
+      "sha256": "596a163f6ff78b68edaec6884c38494f947826efed38893f076a86a19c5b0a9a",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "New folder dialog",
+      "surface_key": "new-folder",
+      "surface_detail": "New folder dialog over My files list, name 'Working drafts' typed and focused, unsubmitted",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Action title 'New folder' with 'Create in My files', one field, primary Create on the right after Cancel.",
+        "typography": "17px title, muted 13-15px subtitle, 13px bold label, 15px value; clean steps.",
+        "density_layout": "Compact ~510px dialog with 16/24px internal rhythm and a separated footer band.",
+        "color": "Only the focus ring and Create use accent; backdrop blur dims the page so background orange is muted.",
+        "visible_affordances": "Focused input with value, outlined Cancel, filled Create and a boxed Close are unambiguous.",
+        "coherence": "Dialog shares the house title/body/footer pattern; footer is a tinted band, consistent with other dialogs."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "8.00",
+      "total": "8.0",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Panel, line and accent from tokens.",
+          "type_geometry": "40px input/buttons, 8px radius, 17px title.",
+          "shell": "N/A: shell is blurred/dimmed behind the modal.",
+          "accent_discipline": "Accent only on focus and Create.",
+          "suite_cohesion": "Bordered overlay, outline/filled button pair resemble KyIdentity overlay and button styles."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-preview-desktop-light.png",
+      "sha256": "db01104ec71f9a7d6c680801a8cce2f3fd03052a633aa6c77ff720c3b6c8e90d",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Text file quick-look dialog",
+      "surface_key": "preview",
+      "surface_detail": "Quick-look dialog of Meeting notes.txt, three lines of plain text in monospace",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Filename title left; Open in new tab (text), Download (outline) and Close (icon) right; no false primary.",
+        "typography": "17px semibold title; file text in monospace at a readable size; action labels 13-14px.",
+        "density_layout": "Text sits in a bordered box inset inside the dialog body padding; a three-line file leaves a large empty pane (appropriate for a viewer, but the inner frame adds a nested layer).",
+        "color": "Fully neutral: no accent, dark/light surfaces match the theme; no decoration.",
+        "visible_affordances": "Download is an outline button ~32px tall next to a ~36px Close; Open in new tab reads as a link-button; all legible but sizes differ.",
+        "coherence": "Bordered content frame nested inside the dialog's tinted body is a box-in-a-box."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.50",
+      "total": "7.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 9,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Neutral token surfaces and ink only.",
+          "type_geometry": "Download ~32px and Close ~36px instead of 40px controls.",
+          "shell": "N/A: shell hidden behind the modal.",
+          "accent_discipline": "No accent used.",
+          "suite_cohesion": "Nested bordered frame inside the dialog has no KyIdentity counterpart."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-share-desktop-light.png",
+      "sha256": "a8efb7e10d175839511d388d5ad9151ca7875ba76f1ef02f8be8944a62488034",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Share dialog",
+      "surface_key": "share",
+      "surface_detail": "Share dialog for Meeting notes.txt: empty person search, Reader access, no shares, organisation link form (Reader, In 7 days) unsubmitted",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim; form unsubmitted.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title names the file and requirement; the filled primary is 'Done' (dismissal) while the real action, Create link, is secondary, and adding a person has no visible button.",
+        "typography": "17px title, 15-16px section headings, 13px labels, muted helper text; restrained.",
+        "density_layout": "Two-column person/access row and three-column link row align on one grid with dividers between sections.",
+        "color": "Only Done uses accent; dividers and fields are neutral; helper text muted.",
+        "visible_affordances": "Inputs and selects read as fields; native select chevrons; no Add button for the person search.",
+        "coherence": "Titled groups with dividers and one field style; native selects slightly break the custom-control vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.65",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token panel, field border and accent.",
+          "type_geometry": "Fields/selects/buttons 40px with 8px radius; 17px title.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "Accent only on Done.",
+          "suite_cohesion": "Titled groups and outline secondary match suite forms; native selects."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-versions-desktop-light.png",
+      "sha256": "860edf7a20db51bd06c052f86ada0ea5cdb1690bcffef63f29b651d3598e84cf",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Version history dialog",
+      "surface_key": "versions",
+      "surface_detail": "Version history dialog for Meeting notes.txt with one version marked Current",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 7,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title 'Version history' with filename subtitle; explanatory sentence; one row; single Close action.",
+        "typography": "Clear title/subtitle/body/table-header steps; date uses local time plus relative phrase.",
+        "density_layout": "Compact table with aligned Version/Saved/Size columns; footer separated.",
+        "color": "'Current' badge is an orange-outlined pill, an accent used for status rather than action/selection.",
+        "visible_affordances": "Close (outline) and icon Close are clear; Current badge reads as a label, not a control.",
+        "coherence": "Dialog follows the same header/body/footer pattern as New folder and Share."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 7,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces; orange pill tint for status.",
+          "type_geometry": "40px Close, 8px radius, contract type steps.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "'Current' status badge uses accent, where the KyIdentity status pill uses the success tint.",
+          "suite_cohesion": "Dialog pattern is consistent with suite overlays."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 31,
+        "mean_exact": "7.75",
+        "mean_half_up_0_1": "7.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-trash-desktop-light.png",
+      "sha256": "230f044a6b9a70c7cd39b59b09c2b2a2bf60c793aec08445fec4f82c20210476",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Trash view",
+      "surface_key": "trash",
+      "surface_detail": "Trash view inside My files: one trashed file (Archive note.txt) with Restore/Delete permanently, Empty trash, Back to files",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 6,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 still reads 'My files' while the task is Trash; the Trash title is a small panel heading below the admin accordions and search.",
+        "typography": "Scale steps hold; the Trash title is a small icon+heading inside a tinted band and row buttons use a smaller label than toolbar buttons.",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Danger red marks Empty trash and Delete permanently only; Restore stays neutral; no stray accent beyond nav and checkbox.",
+        "visible_affordances": "Danger and neutral buttons read correctly, but row buttons are ~32px against 40px header buttons, and the Trash header is a tinted band unlike the files toolbar.",
+        "coherence": "The Trash panel loses its rounded top corners under the tinted header band; two button heights; card-in-page stack."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.60",
+      "total": "6.6",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Danger colour carries destructive actions; accent limited to nav and checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right; clipped Trash panel border."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 36,
+        "mean_exact": "7.2",
+        "mean_half_up_0_1": "7.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-appearance-desktop-light.png",
+      "sha256": "181878dd68c3d4c4ded7c1a8011b5c009fc149588386def87fbb8506d2200d9d",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Appearance theme picker",
+      "surface_key": "appearance",
+      "surface_detail": "Appearance page: 23 theme preview radio cards, Match system selected",
+      "cohort": "settings",
+      "state": "populated",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "h1 'Appearance', one explanatory paragraph, 'Theme' label, then the card grid; the selected card is obvious.",
+        "typography": "24px title, 15px body, 14px card names, 13px light/dark meta; even.",
+        "density_layout": "Five-column grid of 23 cards on an even rhythm, all within the 900px viewport.",
+        "color": "Accent marks only the selected card border/radio and nav; theme previews carry their own palettes as data.",
+        "visible_affordances": "Selected card has accent border and filled radio; unselected cards show empty radios.",
+        "coherence": "Card picker matches the shared ky-appearance vocabulary; light selected nav uses a white fill while My files used accent-soft."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "8.00",
+      "total": "8.0",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 9
+        },
+        "observations": {
+          "palette_tokens": "Page uses token palette; other hues appear only as theme-preview data.",
+          "type_geometry": "Card geometry and 24px title match the shared picker.",
+          "shell": "Same sidebar shell; light selected item uses white fill rather than accent-soft.",
+          "accent_discipline": "Accent marks the selected card, radio and nav only.",
+          "suite_cohesion": "Near-identical to the KyIdentity Appearance mobile references (cards, names, radio placement)."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 41,
+        "mean_exact": "8.2",
+        "mean_half_up_0_1": "8.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-account-desktop-light.png",
+      "sha256": "f5fe08b94798f2dc0a74521da9ac5aea52ffea30061b4558d74a5491fb086525",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Account security and app passwords",
+      "surface_key": "account",
+      "surface_detail": "Account page: two-factor Off with enable button; app-password form (WebDAV kind selected, empty name, disabled create); no app passwords in use",
+      "cohort": "settings",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 7,
+        "color": 6,
+        "visible_affordances": 6,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Two accent-filled buttons on screen (enabled 'Turn on two-factor…' and faded disabled 'Create app password') blur the single primary.",
+        "typography": "~19px card headings above contract 17px; '(WebDAV)' wraps; 'In use' has a dashed underline rule that stops short of the card edge.",
+        "density_layout": "Narrow centered column starts at x≈384 rather than the x≈280 content edge used by other pages; inner rhythm is even; continues below.",
+        "color": "Accent used for the enable button, the faded disabled button, the selected choice fill and the checkbox.",
+        "visible_affordances": "Disabled 'Create app password' is just a faded primary, not a distinct disabled style.",
+        "coherence": "Dashed 'In use' rule and centered page column are stray relative to the rest of the app."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.35",
+      "total": "6.4",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 5,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and accent; disabled button is an off-token faded orange.",
+          "type_geometry": "Card headings ~19px vs 17px contract; dashed rule.",
+          "shell": "Same sidebar shell; light selected item uses white fill.",
+          "accent_discipline": "Accent on enable button, faded disabled button, selected choice fill and checkbox.",
+          "suite_cohesion": "Centered narrow column and dashed rule diverge from KyIdentity's left-aligned page."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 33,
+        "mean_exact": "6.6",
+        "mean_half_up_0_1": "6.6",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-login-mobile-light.png",
+      "sha256": "b66bf5cf38318e8bf1cc6383669e7e07a6564b98359ee8b0fa9e864379ff110f",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Sign-in",
+      "surface_key": "login",
+      "surface_detail": "Signed-out sign-in form: Username autofocused with shipped placeholder 'admin', Password shipped dot placeholder, 'Security check verified.', SSO button",
+      "cohort": "auth",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "signed-out",
+      "artifacts": "Shipped placeholders in both fields; Username autofocus ring; security check completed naturally.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Stamp icon, 'KyDrive' title and subtitle lead to one filled-accent 'Sign In'; SSO is a quieter outline button below a divider.",
+        "typography": "Clear steps: ~24px title, muted subtitle, 13px bold field labels, 15px inputs; Space Grotesk throughout.",
+        "density_layout": "Card fills the 390px width with 20px gutters; fields, check, primary and SSO stack on an even rhythm.",
+        "color": "Cream page, white card, orange Sign In and focus ring only; green security text is the single status hue.",
+        "visible_affordances": "Inputs, primary and SSO read clearly, but the bordered 'Security check verified.' box looks like another input, and the password's shipped dot placeholder reads like a filled value.",
+        "coherence": "The native theme select floats alone at the top right, detached from the card's component vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "7.70",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Busnes cream/charcoal surfaces, ink and orange accent match the token palette.",
+          "type_geometry": "Space Grotesk, ~40px fields/buttons, 8px radius; security check box is taller (~46px).",
+          "shell": "N/A: signed-out page has no app shell.",
+          "accent_discipline": "Accent only on Sign In and the focus ring.",
+          "suite_cohesion": "Card and controls fit the suite, but the floating native theme select and login-only chrome are unlike the KyIdentity references."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-files-mobile-light.png",
+      "sha256": "7850d8b244a0911cb91ad61105deefa201b856cc9ba31bfa0a92c0609faca733",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "My files list",
+      "surface_key": "files",
+      "surface_detail": "My files root: 1 folder + 3 files (v1), admin Operations/Create workspace/Leavers accordions collapsed above search and list",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 5,
+        "typography": 7,
+        "density_layout": 5,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Title and Upload files are clear, but the three bordered admin accordions (Operations & audit, Create shared workspace, Leavers) sit between the title and the file list, pushing the list below y≈710 so only two rows show.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta); 'Operations & audit' wraps to two lines beside a wrapped description.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; content continues below the fold.",
+        "color": "Restrained palette, but the folder icon tile is orange (decoration) and the new-tab checkbox is orange; the quota fill is invisible against its track.",
+        "visible_affordances": "Upload (filled), New (outline menu), refresh icon, Trash text button and boxed ⋯ row menus all read; the quota bar has no visible fill to read usage.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.05",
+      "total": "6.1",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "Orange folder icon tile is decorative accent; checkbox and Upload also orange.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 34,
+        "mean_exact": "6.8",
+        "mean_half_up_0_1": "6.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-folder-mobile-light.png",
+      "sha256": "e4464c4238d408da4c2b1b56c4f19feb2f7b7c2ad4efaf75d4741cfb64b190e4",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Empty folder (breadcrumb)",
+      "surface_key": "folder",
+      "surface_detail": "Empty 'Project materials' folder via breadcrumb inside My files; empty state with guidance and Upload files CTA",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 5,
+        "typography": 7,
+        "density_layout": 5,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 stays 'My files' while the folder is named only in the breadcrumb; the admin stack pushes the empty state below the fold, its guidance cut off at the viewport edge.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta); 'Operations & audit' wraps to two lines beside a wrapped description.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; content continues below the fold.",
+        "color": "Two filled-accent Upload buttons plus the orange new-tab checkbox put three accent fills on one screen; quota fill is invisible.",
+        "visible_affordances": "Breadcrumb, toolbar and CTA are legible; the empty-state Upload icon renders fainter than the toolbar's identical button; quota bar shows no visible fill.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.05",
+      "total": "6.1",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 7,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "One filled Upload visible plus checkbox and nav selection.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-new-folder-mobile-light.png",
+      "sha256": "2246011504d100526e80896bc611c3dd545cfe52179ea6a5a2cfbecb73186cec",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "New folder dialog",
+      "surface_key": "new-folder",
+      "surface_detail": "New folder dialog over My files list, name 'Working drafts' typed and focused, unsubmitted",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Action title 'New folder' with 'Create in My files', one field, primary Create on the right after Cancel.",
+        "typography": "17px title, muted 13-15px subtitle, 13px bold label, 15px value; clean steps.",
+        "density_layout": "Dialog uses the full 390 width minus gutters; Cancel/Create split the footer evenly.",
+        "color": "Only the focus ring and Create use accent; backdrop blur dims the page so background orange is muted.",
+        "visible_affordances": "Focused input with value, outlined Cancel, filled Create and a boxed Close are unambiguous.",
+        "coherence": "Dialog shares the house title/body/footer pattern; footer is a tinted band, consistent with other dialogs."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "8.00",
+      "total": "8.0",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Panel, line and accent from tokens.",
+          "type_geometry": "40px input/buttons, 8px radius, 17px title.",
+          "shell": "N/A: shell is blurred/dimmed behind the modal.",
+          "accent_discipline": "Accent only on focus and Create.",
+          "suite_cohesion": "Bordered overlay, outline/filled button pair resemble KyIdentity overlay and button styles."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-preview-mobile-light.png",
+      "sha256": "4038e41e5150f398343c76a54a43ae5e609a65850e4f0e2dcbd56f4f1bb93407",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Text file quick-look dialog",
+      "surface_key": "preview",
+      "surface_detail": "Quick-look dialog of Meeting notes.txt, three lines of plain text in monospace",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop dim over the shell.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Filename title is clear; actions wrap to a second row and Close sits in that row instead of the top-right corner.",
+        "typography": "17px semibold title; file text in monospace at a readable size; action labels 13-14px.",
+        "density_layout": "Text sits in a bordered box inset inside the dialog body padding; a three-line file leaves a large empty pane (appropriate for a viewer, but the inner frame adds a nested layer).",
+        "color": "Fully neutral: no accent, dark/light surfaces match the theme; no decoration.",
+        "visible_affordances": "Download is an outline button ~32px tall next to a ~36px Close; Open in new tab reads as a link-button; all legible but sizes differ.",
+        "coherence": "Bordered content frame nested inside the dialog's tinted body is a box-in-a-box."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.30",
+      "total": "7.3",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 9,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Neutral token surfaces and ink only.",
+          "type_geometry": "Download ~32px and Close ~36px instead of 40px controls.",
+          "shell": "N/A: shell hidden behind the modal.",
+          "accent_discipline": "No accent used.",
+          "suite_cohesion": "Nested bordered frame inside the dialog has no KyIdentity counterpart."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-share-mobile-light.png",
+      "sha256": "d80720966770ed591652e60d41852825ed8fbd6fab0e6a1614636edc434c636d",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Share dialog",
+      "surface_key": "share",
+      "surface_detail": "Share dialog for Meeting notes.txt: empty person search, Reader access, no shares, organisation link form (Reader, In 7 days) unsubmitted",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim; form unsubmitted.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 6,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Title names the file and requirement; the filled primary is 'Done' (dismissal) while the real action, Create link, is secondary, and adding a person has no visible button.",
+        "typography": "17px title, 15-16px section headings, 13px labels, muted helper text; restrained.",
+        "density_layout": "Single column stacks cleanly with dividers; the dialog fills almost the full height.",
+        "color": "Only Done uses accent; dividers and fields are neutral; helper text muted.",
+        "visible_affordances": "The header Close button is squeezed to a narrow ~24×36 sliver beside the wrapping subtitle; native selects show browser chevrons.",
+        "coherence": "Titled groups with dividers and one field style; native selects slightly break the custom-control vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.15",
+      "total": "7.2",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token panel, field border and accent.",
+          "type_geometry": "Fields 40px/8px radius, but the header Close is squeezed narrow.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "Accent only on Done.",
+          "suite_cohesion": "Titled groups and outline secondary match suite forms; native selects."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-versions-mobile-light.png",
+      "sha256": "d4ba6dca92f906761a4b99fefe377223c9a6848e22b8ce0b40fadffe8d9aeb5e",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Version history dialog",
+      "surface_key": "versions",
+      "surface_detail": "Version history dialog for Meeting notes.txt with one version marked Current",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 7,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title 'Version history' with filename subtitle; explanatory sentence; one row; single Close action.",
+        "typography": "Clear title/subtitle/body/table-header steps; date uses local time plus relative phrase.",
+        "density_layout": "Table collapses to a stacked version line; size is not shown on mobile.",
+        "color": "'Current' badge is an orange-outlined pill, an accent used for status rather than action/selection.",
+        "visible_affordances": "Close (outline) and icon Close are clear; Current badge reads as a label, not a control.",
+        "coherence": "Dialog follows the same header/body/footer pattern as New folder and Share."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 7,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces; orange pill tint for status.",
+          "type_geometry": "40px Close, 8px radius, contract type steps.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "'Current' status badge uses accent, where the KyIdentity status pill uses the success tint.",
+          "suite_cohesion": "Dialog pattern is consistent with suite overlays."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 31,
+        "mean_exact": "7.75",
+        "mean_half_up_0_1": "7.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-trash-mobile-light.png",
+      "sha256": "f7dc969cc7a69ee43e54f979a7028453e20cf51f89705b4e9d74130e320f8f44",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Trash view",
+      "surface_key": "trash",
+      "surface_detail": "Trash view inside My files: one trashed file (Archive note.txt) with Restore/Delete permanently, Empty trash, Back to files",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 6,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 5
+      },
+      "observations": {
+        "hierarchy": "Page h1 still reads 'My files' while the task is Trash; the Trash title is a small panel heading below the admin stack.",
+        "typography": "Scale steps hold, but 'Operations & audit' wraps to two lines and the Trash description wraps under a small heading.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; the one trashed row still fits.",
+        "color": "Danger red marks Empty trash and Delete permanently only; Restore stays neutral; no stray accent beyond nav and checkbox.",
+        "visible_affordances": "Danger and neutral buttons read correctly, but row buttons are ~32px against 40px header buttons, and the Trash header is a tinted band unlike the files toolbar.",
+        "coherence": "The Trash panel's top border is clipped/inset with missing top corners, plus a tinted header band and two button heights."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.45",
+      "total": "6.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 5
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "Danger colour carries destructive actions; accent limited to nav and checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right; clipped Trash panel border."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-appearance-mobile-light.png",
+      "sha256": "bc6ba3c97447a20ae463c1cad2aa9f371271cdeaa41dd1223e460415b1ac27f9",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Appearance theme picker",
+      "surface_key": "appearance",
+      "surface_detail": "Appearance page: 23 theme preview radio cards, Match system selected",
+      "cohort": "settings",
+      "state": "populated",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "h1 'Appearance', one explanatory paragraph, 'Theme' label, then the card grid; the selected card is obvious.",
+        "typography": "24px title, 15px body, 14px card names, 13px light/dark meta; even.",
+        "density_layout": "Two-column card grid with even 12px gaps; continues below the fold.",
+        "color": "Accent marks only the selected card border/radio and nav; theme previews carry their own palettes as data.",
+        "visible_affordances": "Selected card has accent border and filled radio; unselected cards show empty radios.",
+        "coherence": "Card picker matches the shared ky-appearance vocabulary; the 'Open files in a new tab' checkbox still occupies the phone header row."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 9
+        },
+        "observations": {
+          "palette_tokens": "Page uses token palette; other hues appear only as theme-preview data.",
+          "type_geometry": "Card geometry and 24px title match the shared picker.",
+          "shell": "Phone header and scroll nav match KyIdentity; extra checkbox row.",
+          "accent_discipline": "Accent marks the selected card, radio and nav only.",
+          "suite_cohesion": "Near-identical to the KyIdentity Appearance mobile references (cards, names, radio placement)."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 41,
+        "mean_exact": "8.2",
+        "mean_half_up_0_1": "8.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-account-mobile-light.png",
+      "sha256": "1156b1ddbbacd7f89f94c9b737fb4ebab3071b06b3dcdf6ab323fb6817389f1a",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Account security and app passwords",
+      "surface_key": "account",
+      "surface_detail": "Account page: two-factor Off with enable button; app-password form (WebDAV kind selected, empty name, disabled create); no app passwords in use",
+      "cohort": "settings",
+      "state": "empty",
+      "theme": "light (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Title and summary, then Two-factor with one filled primary; app-password section begins below; disabled create is below the fold.",
+        "typography": "24px title, ~19px card headings, 15px body; '(WebDAV)' fits on one line here.",
+        "density_layout": "Cards stack full-width with even gutters; long descriptions wrap to four lines; continues below the fold.",
+        "color": "Filled orange enable button plus accent-tinted selected choice card and orange checkbox: accent appears in three roles.",
+        "visible_affordances": "Off pill, primary button and radio choice cards read correctly.",
+        "coherence": "Bordered section cards and choice cards share radius; checkbox row persists in the header."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "7.15",
+      "total": "7.2",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and accent; disabled button is an off-token faded orange (below fold here).",
+          "type_geometry": "Card headings ~19px vs 17px contract; dashed rule below fold.",
+          "shell": "Phone header/nav as KyIdentity; checkbox row.",
+          "accent_discipline": "Accent on enable button, selected choice fill and checkbox.",
+          "suite_cohesion": "Stacked section cards read suite-like."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-login-desktop-dark.png",
+      "sha256": "9ecc174bd58b9c14adbb06a4616cecc2e434d14908e9b0cf594b32a1d06479fd",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Sign-in",
+      "surface_key": "login",
+      "surface_detail": "Signed-out sign-in form: Username autofocused with shipped placeholder 'admin', Password shipped dot placeholder, 'Security check verified.', SSO button",
+      "cohort": "auth",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "signed-out",
+      "artifacts": "Shipped placeholders in both fields; Username autofocus ring; security check completed naturally.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Stamp icon, 'KyDrive' title and subtitle lead to one filled-accent 'Sign In'; SSO is a quieter outline button below a divider.",
+        "typography": "Clear steps: ~24px title, muted subtitle, 13px bold field labels, 15px inputs; Space Grotesk throughout.",
+        "density_layout": "Centered ~384px card with even 16-24px field rhythm; generous but intentional whitespace around it.",
+        "color": "Charcoal page and panel card, orange-coral Sign In and Username focus ring, green-tinted security check text.",
+        "visible_affordances": "Inputs, primary and SSO read clearly, but the bordered 'Security check verified.' box looks like another input, and the password's shipped dot placeholder reads like a filled value.",
+        "coherence": "The native theme select floats alone at the top right outside the card's vocabulary; the stamp icon's dark tile disappears into the dark page, leaving a bare glyph."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "7.70",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Busnes cream/charcoal surfaces, ink and orange accent match the token palette.",
+          "type_geometry": "Space Grotesk, ~40px fields/buttons, 8px radius; security check box is taller (~46px).",
+          "shell": "N/A: signed-out page has no app shell.",
+          "accent_discipline": "Accent only on Sign In and the focus ring.",
+          "suite_cohesion": "Card and controls fit the suite, but the floating native theme select and the vanishing dark stamp tile are unlike the KyIdentity references."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-files-desktop-dark.png",
+      "sha256": "03a313c366f53916bcf7080decd2557805a610c8d3789d287ae8183a25632804",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "My files list",
+      "surface_key": "files",
+      "surface_detail": "My files root: 1 folder + 3 files (v1), admin Operations/Create workspace/Leavers accordions collapsed above search and list",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 8,
+        "density_layout": 6,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Title and Upload files are clear, but the three bordered admin accordions (Operations & audit, Create shared workspace, Leavers) sit between the title and the file list; the list repeats 'My files' as a panel title.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta).",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Restrained palette, but the folder icon tile is orange (decoration) and the new-tab checkbox is orange; the quota fill is invisible against its track.",
+        "visible_affordances": "Upload (filled), New (outline menu), refresh icon, Trash text button and boxed ⋯ row menus all read; the quota bar has no visible fill to read usage.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.60",
+      "total": "6.6",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Orange folder icon tile is decorative accent; checkbox and Upload also orange.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 34,
+        "mean_exact": "6.8",
+        "mean_half_up_0_1": "6.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-folder-desktop-dark.png",
+      "sha256": "9c31d7edd2ab40d18acc9c5c3a462625259ed67858f77a20a7ab38e0a77c42de",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Empty folder (breadcrumb)",
+      "surface_key": "folder",
+      "surface_detail": "Empty 'Project materials' folder via breadcrumb inside My files; empty state with guidance and Upload files CTA",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 8,
+        "density_layout": 6,
+        "color": 6,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 stays 'My files' while the folder is named only in the breadcrumb; two identical filled 'Upload files' buttons (toolbar and empty state) compete.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta).",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Two filled-accent Upload buttons plus the orange new-tab checkbox put three accent fills on one screen; quota fill is invisible.",
+        "visible_affordances": "Breadcrumb, toolbar and CTA are legible; the empty-state Upload icon renders fainter than the toolbar's identical button; quota bar shows no visible fill.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.45",
+      "total": "6.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 5,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Two filled Upload primaries plus orange checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 33,
+        "mean_exact": "6.6",
+        "mean_half_up_0_1": "6.6",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-new-folder-desktop-dark.png",
+      "sha256": "adeee03d4563ab3bed0fa632613f49595cd5a46173e3bc02f895fd861378e01a",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "New folder dialog",
+      "surface_key": "new-folder",
+      "surface_detail": "New folder dialog over My files list, name 'Working drafts' typed and focused, unsubmitted",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Action title 'New folder' with 'Create in My files', one field, primary Create on the right after Cancel.",
+        "typography": "17px title, muted 13-15px subtitle, 13px bold label, 15px value; clean steps.",
+        "density_layout": "Compact ~510px dialog with 16/24px internal rhythm and a separated footer band.",
+        "color": "Only the focus ring and Create use accent; backdrop blur dims the page so background orange is muted.",
+        "visible_affordances": "Focused input with value, outlined Cancel, filled Create and a boxed Close are unambiguous.",
+        "coherence": "Dialog shares the house title/body/footer pattern; footer is a tinted band, consistent with other dialogs."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "8.00",
+      "total": "8.0",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Panel, line and accent from tokens.",
+          "type_geometry": "40px input/buttons, 8px radius, 17px title.",
+          "shell": "N/A: shell is blurred/dimmed behind the modal.",
+          "accent_discipline": "Accent only on focus and Create.",
+          "suite_cohesion": "Bordered overlay, outline/filled button pair resemble KyIdentity overlay and button styles."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-preview-desktop-dark.png",
+      "sha256": "2437c4a92fa6e132aa071332749a57c60daebf0113453e635eb0da666750e0e3",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Text file quick-look dialog",
+      "surface_key": "preview",
+      "surface_detail": "Quick-look dialog of Meeting notes.txt, three lines of plain text in monospace",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Filename title left; Open in new tab (text), Download (outline) and Close (icon) right; no false primary.",
+        "typography": "17px semibold title; file text in monospace at a readable size; action labels 13-14px.",
+        "density_layout": "Text sits in a bordered box inset inside the dialog body padding; a three-line file leaves a large empty pane (appropriate for a viewer, but the inner frame adds a nested layer).",
+        "color": "Fully neutral: no accent, dark/light surfaces match the theme; no decoration.",
+        "visible_affordances": "Download is an outline button ~32px tall next to a ~36px Close; Open in new tab reads as a link-button; all legible but sizes differ.",
+        "coherence": "Bordered content frame nested inside the dialog's tinted body is a box-in-a-box."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.50",
+      "total": "7.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 9,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Neutral token surfaces and ink only.",
+          "type_geometry": "Download ~32px and Close ~36px instead of 40px controls.",
+          "shell": "N/A: shell hidden behind the modal.",
+          "accent_discipline": "No accent used.",
+          "suite_cohesion": "Nested bordered frame inside the dialog has no KyIdentity counterpart."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-share-desktop-dark.png",
+      "sha256": "dae17fb9b0de7c9bb80cee0d8b65fa944b2dab366b8594ee8b5a88a568412302",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Share dialog",
+      "surface_key": "share",
+      "surface_detail": "Share dialog for Meeting notes.txt: empty person search, Reader access, no shares, organisation link form (Reader, In 7 days) unsubmitted",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim; form unsubmitted.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title names the file and requirement; the filled primary is 'Done' (dismissal) while the real action, Create link, is secondary, and adding a person has no visible button.",
+        "typography": "17px title, 15-16px section headings, 13px labels, muted helper text; restrained.",
+        "density_layout": "Two-column person/access row and three-column link row align on one grid with dividers between sections.",
+        "color": "Only Done uses accent; dividers and fields are neutral; helper text muted.",
+        "visible_affordances": "Inputs and selects read as fields; native select chevrons; no Add button for the person search.",
+        "coherence": "Titled groups with dividers and one field style; native selects slightly break the custom-control vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.65",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token panel, field border and accent.",
+          "type_geometry": "Fields/selects/buttons 40px with 8px radius; 17px title.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "Accent only on Done.",
+          "suite_cohesion": "Titled groups and outline secondary match suite forms; native selects."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-versions-desktop-dark.png",
+      "sha256": "dc736cf9468c1aadd5b32e1639d4967622a8cf6df98ebd9eba67d0173be6fb5c",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Version history dialog",
+      "surface_key": "versions",
+      "surface_detail": "Version history dialog for Meeting notes.txt with one version marked Current",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 7,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title 'Version history' with filename subtitle; explanatory sentence; one row; single Close action.",
+        "typography": "Clear title/subtitle/body/table-header steps; date uses local time plus relative phrase.",
+        "density_layout": "Compact table with aligned Version/Saved/Size columns; footer separated.",
+        "color": "'Current' badge is an orange-outlined pill, an accent used for status rather than action/selection.",
+        "visible_affordances": "Close (outline) and icon Close are clear; Current badge reads as a label, not a control.",
+        "coherence": "Dialog follows the same header/body/footer pattern as New folder and Share."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 7,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces; orange pill tint for status.",
+          "type_geometry": "40px Close, 8px radius, contract type steps.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "'Current' status badge uses accent, where the KyIdentity status pill uses the success tint.",
+          "suite_cohesion": "Dialog pattern is consistent with suite overlays."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 31,
+        "mean_exact": "7.75",
+        "mean_half_up_0_1": "7.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-trash-desktop-dark.png",
+      "sha256": "02a3ba7fa144c1bfc55206308da57f19544f7c24f6b82baa63c398d8bee2b4a9",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Trash view",
+      "surface_key": "trash",
+      "surface_detail": "Trash view inside My files: one trashed file (Archive note.txt) with Restore/Delete permanently, Empty trash, Back to files",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 6,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 still reads 'My files' while the task is Trash; the Trash title is a small panel heading below the admin accordions and search.",
+        "typography": "Scale steps hold; the Trash title is a small icon+heading inside a tinted band and row buttons use a smaller label than toolbar buttons.",
+        "density_layout": "Search ends at ~888px while the list spans to 1240px; the quota meter floats orphaned at the right of the subtitle; stacked cards push content down.",
+        "color": "Danger red marks Empty trash and Delete permanently only; Restore stays neutral; no stray accent beyond nav and checkbox.",
+        "visible_affordances": "Danger and neutral buttons read correctly, but row buttons are ~32px against 40px header buttons, and the Trash header is a tinted band unlike the files toolbar.",
+        "coherence": "The Trash panel loses its rounded top corners under the tinted header band; two button heights; card-in-page stack."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.60",
+      "total": "6.6",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "240px sidebar, wordmark, rail+fill selection and bottom account region match; account shows 'Administrator' twice and a checkbox sits above it.",
+          "accent_discipline": "Danger colour carries destructive actions; accent limited to nav and checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right; clipped Trash panel border."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 36,
+        "mean_exact": "7.2",
+        "mean_half_up_0_1": "7.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-appearance-desktop-dark.png",
+      "sha256": "614b7d4375815e29ab1a979761e97e037b441e352929a625bbc93c588adff151",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Appearance theme picker",
+      "surface_key": "appearance",
+      "surface_detail": "Appearance page: 23 theme preview radio cards, Match system selected",
+      "cohort": "settings",
+      "state": "populated",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "h1 'Appearance', one explanatory paragraph, 'Theme' label, then the card grid; the selected card is obvious.",
+        "typography": "24px title, 15px body, 14px card names, 13px light/dark meta; even.",
+        "density_layout": "Five-column grid of 23 cards on an even rhythm, all within the 900px viewport.",
+        "color": "Accent marks only the selected card border/radio and nav; theme previews carry their own palettes as data.",
+        "visible_affordances": "Selected radio is clear, but unselected radios render as filled grey dots that can read as disabled.",
+        "coherence": "Card picker matches the shared ky-appearance vocabulary; light selected nav uses a white fill while My files used accent-soft."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 9
+        },
+        "observations": {
+          "palette_tokens": "Page uses token palette; other hues appear only as theme-preview data.",
+          "type_geometry": "Card geometry and 24px title match the shared picker.",
+          "shell": "Same sidebar shell; light selected item uses white fill rather than accent-soft.",
+          "accent_discipline": "Accent marks the selected card, radio and nav only.",
+          "suite_cohesion": "Near-identical to the KyIdentity Appearance mobile references (cards, names, radio placement)."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 41,
+        "mean_exact": "8.2",
+        "mean_half_up_0_1": "8.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-account-desktop-dark.png",
+      "sha256": "89ae85ca04fd51748e024c5feeb512a8cf1e73d7d2d5d9bf6e1211e941af1b13",
+      "width": 1280,
+      "height": 900,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Account security and app passwords",
+      "surface_key": "account",
+      "surface_detail": "Account page: two-factor Off with enable button; app-password form (WebDAV kind selected, empty name, disabled create); no app passwords in use",
+      "cohort": "settings",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "desktop 1280x900 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 7,
+        "color": 6,
+        "visible_affordances": 6,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Two accent-filled buttons on screen (enabled 'Turn on two-factor…' and faded disabled 'Create app password') blur the single primary.",
+        "typography": "~19px card headings above contract 17px; '(WebDAV)' wraps; 'In use' has a dashed underline rule that stops short of the card edge.",
+        "density_layout": "Narrow centered column starts at x≈384 rather than the x≈280 content edge used by other pages; inner rhythm is even; continues below.",
+        "color": "Accent used for the enable button, the faded disabled button, the selected choice fill and the checkbox.",
+        "visible_affordances": "Disabled 'Create app password' is a muddy faded orange with dark text, not distinct from an enabled button style.",
+        "coherence": "Dashed 'In use' rule and centered page column are stray relative to the rest of the app."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.35",
+      "total": "6.4",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 5,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and accent; disabled button is an off-token faded orange.",
+          "type_geometry": "Card headings ~19px vs 17px contract; dashed rule.",
+          "shell": "Same sidebar shell; light selected item uses white fill.",
+          "accent_discipline": "Accent on enable button, faded disabled button, selected choice fill and checkbox.",
+          "suite_cohesion": "Centered narrow column and dashed rule diverge from KyIdentity's left-aligned page."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 33,
+        "mean_exact": "6.6",
+        "mean_half_up_0_1": "6.6",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-login-mobile-dark.png",
+      "sha256": "f94d60c999307162dae01e887bb9b6337af4d7e9989babd19e6454e838cce696",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Sign-in",
+      "surface_key": "login",
+      "surface_detail": "Signed-out sign-in form: Username autofocused with shipped placeholder 'admin', Password shipped dot placeholder, 'Security check verified.', SSO button",
+      "cohort": "auth",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "signed-out",
+      "artifacts": "Shipped placeholders in both fields; Username autofocus ring; security check completed naturally.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Stamp icon, 'KyDrive' title and subtitle lead to one filled-accent 'Sign In'; SSO is a quieter outline button below a divider.",
+        "typography": "Clear steps: ~24px title, muted subtitle, 13px bold field labels, 15px inputs; Space Grotesk throughout.",
+        "density_layout": "Card fills the 390px width with 20px gutters; fields, check, primary and SSO stack on an even rhythm.",
+        "color": "Charcoal page and panel card, orange-coral Sign In and Username focus ring, green-tinted security check text.",
+        "visible_affordances": "Inputs, primary and SSO read clearly, but the bordered 'Security check verified.' box looks like another input, and the password's shipped dot placeholder reads like a filled value.",
+        "coherence": "The native theme select floats alone at the top right outside the card's vocabulary; the stamp icon's dark tile disappears into the dark page, leaving a bare glyph."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "7.70",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Busnes cream/charcoal surfaces, ink and orange accent match the token palette.",
+          "type_geometry": "Space Grotesk, ~40px fields/buttons, 8px radius; security check box is taller (~46px).",
+          "shell": "N/A: signed-out page has no app shell.",
+          "accent_discipline": "Accent only on Sign In and the focus ring.",
+          "suite_cohesion": "Card and controls fit the suite, but the floating native theme select and the vanishing dark stamp tile are unlike the KyIdentity references."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-files-mobile-dark.png",
+      "sha256": "e490341350fa4271703196edc82860a9f09d697a7739fda8e92241becfa193f7",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "My files list",
+      "surface_key": "files",
+      "surface_detail": "My files root: 1 folder + 3 files (v1), admin Operations/Create workspace/Leavers accordions collapsed above search and list",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 5,
+        "typography": 7,
+        "density_layout": 5,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Title and Upload files are clear, but the three bordered admin accordions (Operations & audit, Create shared workspace, Leavers) sit between the title and the file list, pushing the list below y≈710 so only two rows show.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta); 'Operations & audit' wraps to two lines beside a wrapped description.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; content continues below the fold.",
+        "color": "Restrained palette, but the folder icon tile is orange (decoration) and the new-tab checkbox is orange; the quota fill is invisible against its track.",
+        "visible_affordances": "Upload (filled), New (outline menu), refresh icon, Trash text button and boxed ⋯ row menus all read; the quota bar has no visible fill to read usage.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.05",
+      "total": "6.1",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "Orange folder icon tile is decorative accent; checkbox and Upload also orange.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 34,
+        "mean_exact": "6.8",
+        "mean_half_up_0_1": "6.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-folder-mobile-dark.png",
+      "sha256": "a1e946b69a06dbb58f84b37c0a3232e58d8ece48a36a3f79451c20deb1abdc0b",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Empty folder (breadcrumb)",
+      "surface_key": "folder",
+      "surface_detail": "Empty 'Project materials' folder via breadcrumb inside My files; empty state with guidance and Upload files CTA",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 5,
+        "typography": 7,
+        "density_layout": 5,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 6
+      },
+      "observations": {
+        "hierarchy": "Page h1 stays 'My files' while the folder is named only in the breadcrumb; the admin stack pushes the empty state below the fold, its guidance cut off at the viewport edge.",
+        "typography": "Space Grotesk scale steps are consistent (24px title, 15px rows, 13px meta); 'Operations & audit' wraps to two lines beside a wrapped description.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; content continues below the fold.",
+        "color": "Two filled-accent Upload buttons plus the orange new-tab checkbox put three accent fills on one screen; quota fill is invisible.",
+        "visible_affordances": "Breadcrumb, toolbar and CTA are legible; the empty-state Upload icon renders fainter than the toolbar's identical button; quota bar shows no visible fill.",
+        "coherence": "Bordered accordion cards, a bordered list card with its own header row and boxed per-row ⋯ buttons stack several box styles on one surface."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "6.05",
+      "total": "6.1",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 7,
+          "suite_cohesion": 6
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "One filled Upload visible plus checkbox and nav selection.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-new-folder-mobile-dark.png",
+      "sha256": "0ebdd616622daffbbe18457e2fa1627fea6b0b80d4f7670cb000f36840885b41",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "New folder dialog",
+      "surface_key": "new-folder",
+      "surface_detail": "New folder dialog over My files list, name 'Working drafts' typed and focused, unsubmitted",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim over the shell.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Action title 'New folder' with 'Create in My files', one field, primary Create on the right after Cancel.",
+        "typography": "17px title, muted 13-15px subtitle, 13px bold label, 15px value; clean steps.",
+        "density_layout": "Dialog uses the full 390 width minus gutters; Cancel/Create split the footer evenly.",
+        "color": "Only the focus ring and Create use accent; backdrop blur dims the page so background orange is muted.",
+        "visible_affordances": "Focused input with value, outlined Cancel, filled Create and a boxed Close are unambiguous.",
+        "coherence": "Dialog shares the house title/body/footer pattern; footer is a tinted band, consistent with other dialogs."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "8.00",
+      "total": "8.0",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Panel, line and accent from tokens.",
+          "type_geometry": "40px input/buttons, 8px radius, 17px title.",
+          "shell": "N/A: shell is blurred/dimmed behind the modal.",
+          "accent_discipline": "Accent only on focus and Create.",
+          "suite_cohesion": "Bordered overlay, outline/filled button pair resemble KyIdentity overlay and button styles."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 33,
+        "mean_exact": "8.25",
+        "mean_half_up_0_1": "8.3",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-preview-mobile-dark.png",
+      "sha256": "5ca9d445ad6efdc15df4fc617922120366bc1bb8217944eede622fc3cca70116",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Text file quick-look dialog",
+      "surface_key": "preview",
+      "surface_detail": "Quick-look dialog of Meeting notes.txt, three lines of plain text in monospace",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop dim over the shell.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Filename title is clear; actions wrap to a second row and Close sits in that row instead of the top-right corner.",
+        "typography": "17px semibold title; file text in monospace at a readable size; action labels 13-14px.",
+        "density_layout": "Text sits in a bordered box inset inside the dialog body padding; a three-line file leaves a large empty pane (appropriate for a viewer, but the inner frame adds a nested layer).",
+        "color": "Fully neutral: no accent, dark/light surfaces match the theme; no decoration.",
+        "visible_affordances": "Download is an outline button ~32px tall next to a ~36px Close; Open in new tab reads as a link-button; all legible but sizes differ.",
+        "coherence": "Bordered content frame nested inside the dialog's tinted body is a box-in-a-box."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.30",
+      "total": "7.3",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 9,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Neutral token surfaces and ink only.",
+          "type_geometry": "Download ~32px and Close ~36px instead of 40px controls.",
+          "shell": "N/A: shell hidden behind the modal.",
+          "accent_discipline": "No accent used.",
+          "suite_cohesion": "Nested bordered frame inside the dialog has no KyIdentity counterpart."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-share-mobile-dark.png",
+      "sha256": "f0eb4ac391e1d2248cbca73a6a3342842b1d9ab3dda0fe019bac52949a1e2c3c",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Share dialog",
+      "surface_key": "share",
+      "surface_detail": "Share dialog for Meeting notes.txt: empty person search, Reader access, no shares, organisation link form (Reader, In 7 days) unsubmitted",
+      "cohort": "drive",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim; form unsubmitted.",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 8,
+        "visible_affordances": 6,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Title names the file and requirement; the filled primary is 'Done' (dismissal) while the real action, Create link, is secondary, and adding a person has no visible button.",
+        "typography": "17px title, 15-16px section headings, 13px labels, muted helper text; restrained.",
+        "density_layout": "Single column stacks cleanly with dividers; the dialog fills almost the full height.",
+        "color": "Only Done uses accent; dividers and fields are neutral; helper text muted.",
+        "visible_affordances": "The header Close button is squeezed to a narrow ~24×36 sliver beside the wrapping subtitle; native selects show browser chevrons.",
+        "coherence": "Titled groups with dividers and one field style; native selects slightly break the custom-control vocabulary."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.15",
+      "total": "7.2",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 7,
+          "shell": null,
+          "accent_discipline": 8,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token panel, field border and accent.",
+          "type_geometry": "Fields 40px/8px radius, but the header Close is squeezed narrow.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "Accent only on Done.",
+          "suite_cohesion": "Titled groups and outline secondary match suite forms; native selects."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 32,
+        "mean_exact": "8",
+        "mean_half_up_0_1": "8.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-versions-mobile-dark.png",
+      "sha256": "ab9adf6a35502f9b9dbe33982e5b4ce0b5226273fa4f35f68dce9247ce6d152d",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Version history dialog",
+      "surface_key": "versions",
+      "surface_detail": "Version history dialog for Meeting notes.txt with one version marked Current",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "Product modal backdrop blur/dim.",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 7,
+        "visible_affordances": 8,
+        "coherence": 8
+      },
+      "observations": {
+        "hierarchy": "Title 'Version history' with filename subtitle; explanatory sentence; one row; single Close action.",
+        "typography": "Clear title/subtitle/body/table-header steps; date uses local time plus relative phrase.",
+        "density_layout": "Table collapses to a stacked version line; size is not shown on mobile.",
+        "color": "'Current' badge is an orange-outlined pill, an accent used for status rather than action/selection.",
+        "visible_affordances": "Close (outline) and icon Close are clear; Current badge reads as a label, not a control.",
+        "coherence": "Dialog follows the same header/body/footer pattern as New folder and Share."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Shell obscured by modal.",
+      "weighted_raw": "7.85",
+      "total": "7.9",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 8,
+          "shell": null,
+          "accent_discipline": 7,
+          "suite_cohesion": 8
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces; orange pill tint for status.",
+          "type_geometry": "40px Close, 8px radius, contract type steps.",
+          "shell": "N/A: shell obscured by modal backdrop.",
+          "accent_discipline": "'Current' status badge uses accent, where the KyIdentity status pill uses the success tint.",
+          "suite_cohesion": "Dialog pattern is consistent with suite overlays."
+        },
+        "na_excluded": [
+          "shell"
+        ],
+        "n": 4,
+        "sum": 31,
+        "mean_exact": "7.75",
+        "mean_half_up_0_1": "7.8",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-trash-mobile-dark.png",
+      "sha256": "c834d3fe10940e2aea5ae4ee96455b4e3d3a41d54ad34b4c274057c29262375b",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Trash view",
+      "surface_key": "trash",
+      "surface_detail": "Trash view inside My files: one trashed file (Archive note.txt) with Restore/Delete permanently, Empty trash, Back to files",
+      "cohort": "drive",
+      "state": "sparse",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI.",
+      "scores": {
+        "hierarchy": 6,
+        "typography": 7,
+        "density_layout": 6,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 5
+      },
+      "observations": {
+        "hierarchy": "Page h1 still reads 'My files' while the task is Trash; the Trash title is a small panel heading below the admin stack.",
+        "typography": "Scale steps hold, but 'Operations & audit' wraps to two lines and the Trash description wraps under a small heading.",
+        "density_layout": "Accordions, search and toolbar consume ~560px of the 844px viewport; the one trashed row still fits.",
+        "color": "Danger red marks Empty trash and Delete permanently only; Restore stays neutral; no stray accent beyond nav and checkbox.",
+        "visible_affordances": "Danger and neutral buttons read correctly, but row buttons are ~32px against 40px header buttons, and the Trash header is a tinted band unlike the files toolbar.",
+        "coherence": "The Trash panel's top border is clipped/inset with missing top corners, plus a tinted header band and two button heights."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown.",
+      "weighted_raw": "6.45",
+      "total": "6.5",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 5
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and ink; quota meter fill is too faint to read as a token colour.",
+          "type_geometry": "24px/600 title and 14px nav match; row ⋯/row action buttons are ~32-36px, not 40px.",
+          "shell": "Phone header with wordmark/sign-out and scrolling nav mirrors KyIdentity mobile, plus an extra checkbox row.",
+          "accent_discipline": "Danger colour carries destructive actions; accent limited to nav and checkbox.",
+          "suite_cohesion": "Admin accordion stack and card-wrapped list with in-card toolbar differ from KyIdentity's flat page header with the primary at top right; clipped Trash panel border."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-appearance-mobile-dark.png",
+      "sha256": "1ce14f4fdda120f4511a3677223ce758ca3145ec241312d5b762d25d8d33646b",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Appearance theme picker",
+      "surface_key": "appearance",
+      "surface_detail": "Appearance page: 23 theme preview radio cards, Match system selected",
+      "cohort": "settings",
+      "state": "populated",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 8,
+        "typography": 8,
+        "density_layout": 8,
+        "color": 8,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "h1 'Appearance', one explanatory paragraph, 'Theme' label, then the card grid; the selected card is obvious.",
+        "typography": "24px title, 15px body, 14px card names, 13px light/dark meta; even.",
+        "density_layout": "Two-column card grid with even 12px gaps; continues below the fold.",
+        "color": "Accent marks only the selected card border/radio and nav; theme previews carry their own palettes as data.",
+        "visible_affordances": "Selected radio is clear, but unselected radios render as filled grey dots that can read as disabled.",
+        "coherence": "Card picker matches the shared ky-appearance vocabulary; the 'Open files in a new tab' checkbox still occupies the phone header row."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "7.70",
+      "total": "7.7",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 9,
+          "type_geometry": 8,
+          "shell": 7,
+          "accent_discipline": 8,
+          "suite_cohesion": 9
+        },
+        "observations": {
+          "palette_tokens": "Page uses token palette; other hues appear only as theme-preview data.",
+          "type_geometry": "Card geometry and 24px title match the shared picker.",
+          "shell": "Phone header and scroll nav match KyIdentity; extra checkbox row.",
+          "accent_discipline": "Accent marks the selected card, radio and nav only.",
+          "suite_cohesion": "Near-identical to the KyIdentity Appearance mobile references (cards, names, radio placement)."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 41,
+        "mean_exact": "8.2",
+        "mean_half_up_0_1": "8.2",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    },
+    {
+      "file": "screenshots/kydrive-00-before-account-mobile-dark.png",
+      "sha256": "cce22bb5b8248eed13eda8823c3f7f5090a9d0a6ad299fbdb63f7e7a9ae9af95",
+      "width": 390,
+      "height": 844,
+      "duplicate_of": null,
+      "filename_matches_content": true,
+      "observed_product": "KyDrive web UI",
+      "observed_surface": "Account security and app passwords",
+      "surface_key": "account",
+      "surface_detail": "Account page: two-factor Off with enable button; app-password form (WebDAV kind selected, empty name, disabled create); no app passwords in use",
+      "cohort": "settings",
+      "state": "empty",
+      "theme": "dark (OS scheme, no saved ky_theme)",
+      "viewport": "mobile 390x844 DPR1",
+      "account_role": "local recovery administrator",
+      "artifacts": "None beyond product UI. Content continues below the viewport (not full-page).",
+      "scores": {
+        "hierarchy": 7,
+        "typography": 8,
+        "density_layout": 7,
+        "color": 7,
+        "visible_affordances": 7,
+        "coherence": 7
+      },
+      "observations": {
+        "hierarchy": "Title and summary, then Two-factor with one filled primary; app-password section begins below; disabled create is below the fold.",
+        "typography": "24px title, ~19px card headings, 15px body; '(WebDAV)' fits on one line here.",
+        "density_layout": "Cards stack full-width with even gutters; long descriptions wrap to four lines; continues below the fold.",
+        "color": "Filled orange enable button plus accent-tinted selected choice card and orange checkbox: accent appears in three roles.",
+        "visible_affordances": "Off pill, primary button and radio choice cards read correctly.",
+        "coherence": "Bordered section cards and choice cards share radius; checkbox row persists in the header."
+      },
+      "confidence": "high",
+      "caveat": "Static initial view: no keyboard, focus traversal, computed contrast, hover/loading/error states or ordinary-staff role shown. Below-fold content unscored.",
+      "weighted_raw": "7.15",
+      "total": "7.2",
+      "ky_fit": {
+        "scores": {
+          "palette_tokens": 8,
+          "type_geometry": 7,
+          "shell": 7,
+          "accent_discipline": 6,
+          "suite_cohesion": 7
+        },
+        "observations": {
+          "palette_tokens": "Token surfaces and accent; disabled button is an off-token faded orange (below fold here).",
+          "type_geometry": "Card headings ~19px vs 17px contract; dashed rule below fold.",
+          "shell": "Phone header/nav as KyIdentity; checkbox row.",
+          "accent_discipline": "Accent on enable button, selected choice fill and checkbox.",
+          "suite_cohesion": "Stacked section cards read suite-like."
+        },
+        "na_excluded": [],
+        "n": 5,
+        "sum": 35,
+        "mean_exact": "7",
+        "mean_half_up_0_1": "7.0",
+        "weighting": "equal over non-N/A dimensions"
+      }
+    }
+  ],
+  "surface_summaries": {
+    "login": {
+      "n": 4,
+      "sum": "30.8",
+      "fraction": "77/10",
+      "decimal": "7.7",
+      "half_up_0_1": "7.7",
+      "cohort": "auth",
+      "label": "descriptive, not a ranking"
+    },
+    "files": {
+      "n": 4,
+      "sum": "25.4",
+      "fraction": "127/20",
+      "decimal": "6.35",
+      "half_up_0_1": "6.4",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "folder": {
+      "n": 4,
+      "sum": "25.2",
+      "fraction": "63/10",
+      "decimal": "6.3",
+      "half_up_0_1": "6.3",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "new-folder": {
+      "n": 4,
+      "sum": "32.0",
+      "fraction": "8/1",
+      "decimal": "8.0",
+      "half_up_0_1": "8.0",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "preview": {
+      "n": 4,
+      "sum": "29.6",
+      "fraction": "37/5",
+      "decimal": "7.4",
+      "half_up_0_1": "7.4",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "share": {
+      "n": 4,
+      "sum": "29.8",
+      "fraction": "149/20",
+      "decimal": "7.45",
+      "half_up_0_1": "7.5",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "versions": {
+      "n": 4,
+      "sum": "31.6",
+      "fraction": "79/10",
+      "decimal": "7.9",
+      "half_up_0_1": "7.9",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "trash": {
+      "n": 4,
+      "sum": "26.2",
+      "fraction": "131/20",
+      "decimal": "6.55",
+      "half_up_0_1": "6.6",
+      "cohort": "drive",
+      "label": "descriptive, not a ranking"
+    },
+    "appearance": {
+      "n": 4,
+      "sum": "31.5",
+      "fraction": "63/8",
+      "decimal": "7.875",
+      "half_up_0_1": "7.9",
+      "cohort": "settings",
+      "label": "descriptive, not a ranking"
+    },
+    "account": {
+      "n": 4,
+      "sum": "27.2",
+      "fraction": "34/5",
+      "decimal": "6.8",
+      "half_up_0_1": "6.8",
+      "cohort": "settings",
+      "label": "descriptive, not a ranking"
+    }
+  },
+  "cohort_rankings": {
+    "drive": {
+      "n": 28,
+      "sum": "199.8",
+      "fraction": "999/140",
+      "decimal": "7.135714285714285714285714286",
+      "half_up_0_1": "7.1",
+      "surfaces": "files, folder, new-folder, preview, share, versions, trash",
+      "matched": true,
+      "ranking": "not a ranking; covered-set summary only"
+    },
+    "auth": {
+      "n": 4,
+      "sum": "30.8",
+      "fraction": "77/10",
+      "decimal": "7.7",
+      "half_up_0_1": "7.7",
+      "surfaces": "login",
+      "matched": true,
+      "ranking": "not a ranking; covered-set summary only"
+    },
+    "settings": {
+      "n": 8,
+      "sum": "58.7",
+      "fraction": "587/80",
+      "decimal": "7.3375",
+      "half_up_0_1": "7.3",
+      "surfaces": "Appearance, Account",
+      "matched": true,
+      "ranking": "not a ranking; covered-set summary only"
+    }
+  },
+  "overall_covered_set": {
+    "n": 40,
+    "sum": "289.3",
+    "fraction": "2893/400",
+    "decimal": "7.2325",
+    "half_up_0_1": "7.2",
+    "label": "Opus covered-set quality mean over 40 unique current originals; not a ranking or whole-product rating"
+  },
+  "brand": {
+    "method": "Per file: equal weight over non-N/A dimensions (shell N/A where the shell is absent or hidden by a modal). Summary: mean of per-file exact means. Separate from quality; never added to totals or used for progression.",
+    "references": "Four verified KyIdentity brand-only captures (brand-references.json, KyIdentity-server d7f2a4b67a50c6d36829c3653a8ad5b2eb40e517), used for suite_cohesion context only; suite_cohesion therefore scored (two Ky products).",
+    "overall": {
+      "n": 40,
+      "sum_of_file_means": "303.30",
+      "decimal": "7.5825",
+      "half_up_0_1": "7.6"
+    },
+    "by_cohort": {
+      "drive": {
+        "n": 28,
+        "sum_of_file_means": "211.30",
+        "decimal": "7.546428571428571428571428571",
+        "half_up_0_1": "7.5"
+      },
+      "auth": {
+        "n": 4,
+        "sum_of_file_means": "32",
+        "decimal": "8",
+        "half_up_0_1": "8.0"
+      },
+      "settings": {
+        "n": 8,
+        "sum_of_file_means": "60.0",
+        "decimal": "7.5",
+        "half_up_0_1": "7.5"
+      }
+    },
+    "by_dimension": {
+      "palette_tokens": {
+        "n": 40,
+        "na": 0,
+        "sum": 340,
+        "decimal": "8.5",
+        "half_up_0_1": "8.5"
+      },
+      "type_geometry": {
+        "n": 40,
+        "na": 0,
+        "sum": 298,
+        "decimal": "7.45",
+        "half_up_0_1": "7.5"
+      },
+      "shell": {
+        "n": 20,
+        "na": 20,
+        "sum": 140,
+        "decimal": "7",
+        "half_up_0_1": "7.0"
+      },
+      "accent_discipline": {
+        "n": 40,
+        "na": 0,
+        "sum": 294,
+        "decimal": "7.35",
+        "half_up_0_1": "7.4"
+      },
+      "suite_cohesion": {
+        "n": 40,
+        "na": 0,
+        "sum": 284,
+        "decimal": "7.1",
+        "half_up_0_1": "7.1"
+      }
+    },
+    "pinned_typeface": "Space Grotesk observed throughout and preserved as user-pinned; no recommendation to change it."
+  },
+  "drift": {
+    "status": "N/A (baseline)",
+    "note": "No prior own round loaded; no historical review needed for this baseline."
+  },
+  "gates": {
+    "keyboard": {
+      "result": "untested",
+      "evidence": "No keyboard traversal performed or recorded; screenshots cannot show order, traps or focus return."
+    },
+    "focus": {
+      "result": "untested",
+      "evidence": "Only the autofocused Username (login) and focused Folder name (dialog) rings are visible; no per-element focus sweep in both themes."
+    },
+    "contrast": {
+      "result": "untested",
+      "evidence": "No computed-style measurement; visual impressions only (e.g. faint quota meter, faded disabled button)."
+    },
+    "states": {
+      "result": "untested",
+      "evidence": "Empty folder, empty share list, no app passwords captured; loading and error states not captured."
+    },
+    "responsive": {
+      "result": "untested",
+      "evidence": "Manifest records overflow_px 0 at 390x844 and 1280x900 for all 40, but navigation reachability and target usability were not exercised."
+    },
+    "role_security_integration": {
+      "result": "untested",
+      "evidence": "All authenticated captures are the local recovery administrator; ordinary-staff role, SSO, editor and recovery integrations not exercised."
+    }
+  },
+  "findings": {
+    "material": [
+      {
+        "id": "M1",
+        "files": "files/folder/trash, all 12",
+        "finding": "Administrator Operations & audit / Create shared workspace / Leavers accordions sit above search and the file list in every drive view; on 390px they push the list or empty state below the fold (two rows visible).",
+        "smallest_fix": "Move the three admin panels to one administrator destination (a nav item or the existing Settings & DB page) so drive views open on search + list. Keep the contract: administrators only."
+      },
+      {
+        "id": "M2",
+        "files": "files/folder/trash, all 12",
+        "finding": "The page h1 stays 'My files' in a folder and in Trash, while the list panel repeats 'My files' or carries a small 'Trash' heading; Upload sits in the in-card toolbar rather than the page header.",
+        "smallest_fix": "Make the h1 the current location (workspace, Trash) with the breadcrumb under it; drop the duplicate panel title; put the single primary at the page header's right."
+      },
+      {
+        "id": "M3",
+        "files": "account-desktop-light/dark (and mobile below fold)",
+        "finding": "Disabled 'Create app password' renders as a faded primary; with the enabled 2FA button that is two accent-filled buttons on the view. The centered narrow column starts at x≈384 instead of the shared x≈280 content edge, and 'In use' carries a stray dashed rule.",
+        "smallest_fix": "Give disabled buttons a neutral, distinct style; keep one primary per view (make the 2FA enable the primary or a secondary); left-align .page-narrow to the content edge; remove the dashed rule."
+      },
+      {
+        "id": "M4",
+        "files": "folder-desktop-light/dark",
+        "finding": "The empty folder shows two identical filled 'Upload files' buttons (toolbar and empty-state CTA).",
+        "smallest_fix": "Make one of them secondary. The empty-state CTA can be the only filled one when the folder is empty."
+      },
+      {
+        "id": "M5",
+        "files": "trash, all 4 (most visible on mobile)",
+        "finding": "The Trash panel's tinted header band clips the card's top border and rounded corners.",
+        "smallest_fix": "Apply the panel radius/overflow to the header band (or drop the tint) so the card border is continuous."
+      },
+      {
+        "id": "M6",
+        "files": "files (folder icon), versions (Current badge), files/folder (checkbox)",
+        "finding": "Accent appears outside action/selection/focus: an orange folder icon tile and an orange 'Current' status pill.",
+        "smallest_fix": "Neutral ink for folder icons; use a neutral or success-tinted pill for 'Current', as KyIdentity does for status."
+      }
+    ],
+    "optional": [
+      {
+        "id": "O1",
+        "finding": "Quota meter fill is invisible at 350 B of 10 GiB; the bar reads as an empty rule.",
+        "smallest_fix": "Give the fill a visible minimum width or drop the bar in favour of the text."
+      },
+      {
+        "id": "O2",
+        "finding": "Login: the native theme select floats at the top right; the 'Security check verified.' box is styled like an input; the stamp icon's dark tile vanishes on the dark page.",
+        "smallest_fix": "Quiet inline status (no field border); keep the select but align it with page chrome; give the dark stamp a visible tile or border."
+      },
+      {
+        "id": "O3",
+        "finding": "Preview: a bordered text frame nested in the dialog body; Download ~32px vs Close ~36px; on mobile Close drops to the action row.",
+        "smallest_fix": "Render the text directly on the dialog body; use 40px controls; keep Close in the title row."
+      },
+      {
+        "id": "O4",
+        "finding": "Share: 'Done' is the filled primary while the real action, Create link, is secondary; on mobile the header Close is squeezed narrow.",
+        "smallest_fix": "Make Done secondary/neutral; give Close a fixed 40px square with flex-shrink 0."
+      },
+      {
+        "id": "O5",
+        "finding": "In dark Appearance/Account, unselected radios render as filled grey dots.",
+        "smallest_fix": "Use an outlined, unfilled ring for unselected radios in dark themes."
+      },
+      {
+        "id": "O6",
+        "finding": "Light theme selected nav uses accent-soft on My files but white on Appearance/Account; the account region repeats 'Administrator'; on phones the new-tab checkbox takes a header row on every page.",
+        "smallest_fix": "Use one selected treatment; show username + role; move the preference to Account."
+      }
+    ]
+  },
+  "progression": {
+    "rule": "Opus current overall, rounded half-up to 0.1, >= 8.0 accepts; not averaged with Sol or history; cohort shortfalls do not veto",
+    "value_half_up": "7.2",
+    "meets_8_0": false,
+    "longer_term_9": "unproven"
+  },
+  "verdict": {
+    "satisfied": false,
+    "genuinely_satisfied": false,
+    "reason": "Opus covered-set overall is 7.2325, which rounds half-up to 7.2, below the 8.0 progression line. The shortfall comes mostly from M1-M3, which repeat across the 12 drive list views and the Account page. Dialogs, Appearance and login are already near 7.7-8.0. No target is forced: 9/10 remains unproven, and all behaviour gates are untested."
+  },
+  "independent_satisfaction": {
+    "satisfied": false,
+    "genuinely_satisfied": false
+  },
+  "blind_exposure_audit": {
+    "read_before_freeze": [
+      "AGENTS chain: suite root, product root (worktree), docs/, web/, docs/ui-drive-eight/",
+      "council skill; impeccable SKILL.md and reference/critique.md; impeccable context output (no PRODUCT/DESIGN)",
+      "pinned authority: ky-suite-ui SKILL.md, rubric.md, design-contract.md (its 'Historical baseline notes' describe other products' pre-redesign source structure; no scores), tokens.css grep",
+      "review inputs: authority.json, review-inputs-v1.json, baseline-setup.md, inventory-v1.json, manifest-00-before.json, artifacts.json (first entries), brand-references.json, near-duplicate-audit/duplicate-audit/source-provenance/fixture-files structure, SHA256SUMS, inventory CSV header and first rows (capture-inspection notes, no scores)",
+      "40 originals and 4 brand references, viewed individually"
+    ],
+    "not_read": "No previous product review, peer (Sol) output, competitive ranking, PR, acceptance/delivery record, HANDOFF, STATUS, COUNCIL, workbook, CSV score export, gallery, ky-ui/reviews or other apps' scores, before or after the freeze. The ui-fleet-2026-10-26 and ui-visual-refinement-2026-10-26 evidence directories were not opened.",
+    "post_freeze_reads": "manifest capture fields only (overflow, dpr, theme, service worker, user agent, fixture)",
+    "exposure": "none",
+    "peer_files_observed": "After both report files were written, a final git status listed peer filenames docs/ui-drive-eight/sol-round1.json and sol-round1.md. Only the names were seen; neither file was opened, read or hashed."
+  },
+  "blind_freeze": {
+    "frozen_at": "2026-10-27T20:03:11.333372Z",
+    "files_sha256": "d4b1745a41634e1b90dbaa3c138e31a7a3e68c7b7e4a737302148c4c456355da",
+    "canonicalization": "sha256(json.dumps(files, sort_keys=True, separators=(',',':'), ensure_ascii=False).encode('utf-8'))",
+    "files_count": 40,
+    "note": "Frozen before reading any prior review, peer report, ranking, PR, acceptance, HANDOFF, COUNCIL, workbook, CSV score export or gallery."
+  },
+  "published_files": [
+    "docs/ui-drive-eight/opus-round1.json",
+    "docs/ui-drive-eight/opus-round1.md"
+  ]
+}

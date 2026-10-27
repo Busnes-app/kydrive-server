@@ -96,7 +96,7 @@ export function AppPasswords() {
       <div className="field"><label htmlFor="app-password-name">{agent ? 'Agent name' : 'Device or app name'}</label>
         <input id="app-password-name" required maxLength={100} placeholder={agent ? 'Hermes' : 'Work laptop'} value={name} onChange={e => setName(e.target.value)} /></div>
       {name.trim() && <p aria-live="polite" className="hint">{grant(name.trim(), pendingScope, agent ? folder.trim() || undefined : undefined)}</p>}
-      <div><button type="submit" disabled={busy || !name.trim()}>{agent ? 'Create agent token' : 'Create app password'}</button></div>
+      <div><button type="submit" className="btn-secondary" disabled={busy || !name.trim()}>{agent ? 'Create agent token' : 'Create app password'}</button></div>
     </form>
     {error && <div style={{ marginTop: '1rem' }}><Alert>{error}</Alert></div>}
     <div className="panel-section">

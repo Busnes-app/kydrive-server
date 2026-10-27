@@ -38,6 +38,7 @@ test('rename, move, trash a folder, restore it and delete it permanently', async
   await page.getByRole('dialog').getByLabel('Folder').selectOption({ label: folderName });
   await page.getByRole('dialog').getByRole('button', { name: 'Move', exact: true }).click();
   await page.getByRole('button', { name: folderName, exact: true }).click();
+  await expect(page.getByRole('heading', { name: folderName, level: 1, exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: `moved ${tag}.md` })).toBeVisible();
 
   await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: mine.name }).click();

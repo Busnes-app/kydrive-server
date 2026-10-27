@@ -61,6 +61,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [confirm, confirmNode] = useConfirm();
   const current = workspaces.find(w => w.id === selected);
+  const path = breadcrumb(folders, parent);
+  const pageTitle = view === 'settings' ? 'Workspace settings' : trash ? 'Trash' : path.at(-1)?.name ?? current?.name ?? 'Workspaces';
   const visibleFolders = trash ? folders : folders.filter(d => d.parent === parent);
   const visibleFiles = files.filter(f => trash || f.parent === parent);
   const canEdit = current?.role === 'editor' || current?.role === 'manager';
@@ -171,7 +173,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
     onDrop={e => { setDragging(false); if (!canDrop(e.dataTransfer)) return; e.preventDefault(); upload(fromDataTransfer(e.dataTransfer)); }}>
     {trash ? <div className="drive-trash-banner">
-      <div><h2><Trash2 size={18} aria-hidden="true" />Trash</h2><p>{current.trash_days > 0 ? `Items here are deleted permanently after ${current.trash_days} days.` : 'Deleted items stay here until they are restored or deleted permanently.'}</p></div>
+      <p>{current.trash_days > 0 ? `Items here are deleted permanently after ${current.trash_days} days.` : 'Deleted items stay here until they are restored or deleted permanently.'}</p>
       <div className="drive-toolbar-actions">
         {canPurge && <button className="btn-danger-quiet" disabled={busy || visibleFiles.length + visibleFolders.length === 0} onClick={() => void emptyTrash()}>Empty trash</button>}
         <button className="btn-secondary" aria-pressed={trash} onClick={() => { setFiles([]); setFolders([]); setTrash(false); }}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
@@ -179,7 +181,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     </div> : <div className="drive-toolbar">
       <nav className="drive-breadcrumb" aria-label="Folder path">
         <button className="btn-link" onClick={() => setParent('')} aria-current={parent === '' ? 'page' : undefined}>{current.name}</button>
-        {breadcrumb(folders, parent).map(f => <span key={f.id} style={{ display: 'contents' }}><ChevronRight className="drive-breadcrumb-sep" size={16} aria-hidden="true" /><button className="btn-link" onClick={() => setParent(f.id)} aria-current={f.id === parent ? 'page' : undefined}>{f.name}</button></span>)}
+        {path.map(f => <span key={f.id} style={{ display: 'contents' }}><ChevronRight className="drive-breadcrumb-sep" size={16} aria-hidden="true" /><button className="btn-link" onClick={() => setParent(f.id)} aria-current={f.id === parent ? 'page' : undefined}>{f.name}</button></span>)}
       </nav>
       <div className="drive-toolbar-actions">
         <button className="btn-ghost" aria-pressed={trash} onClick={() => { setFiles([]); setFolders([]); setTrash(true); }}><Trash2 size={16} aria-hidden="true" />Trash</button>
@@ -188,7 +190,6 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
           <Menu label="New" trigger="text" items={newMenu} />
           <input ref={uploadInput} type="file" multiple hidden aria-label="Choose files to upload" onChange={e => { const chosen = Array.from(e.target.files ?? []); e.target.value = ''; upload({ dirs: [], files: chosen.map(file => ({ dirs: [], file })) }); }} />
           <input ref={folderInput} type="file" hidden aria-label="Choose folder to upload" {...{ webkitdirectory: '' }} onChange={e => { const chosen = e.target.files; if (chosen) { const tree = fromFolderInput(chosen); e.target.value = ''; upload(tree); } }} />
-          <button className="drive-upload-button" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>
         </>}
       </div>
     </div>}
@@ -214,7 +215,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
       {trash ? <Trash2 size={32} aria-hidden="true" /> : <FolderOpen size={32} aria-hidden="true" />}
       <h3>{trash ? 'Trash is empty' : parent ? 'This folder is empty' : 'No files here yet'}</h3>
       <p>{trash ? 'Deleted items appear here until restored or deleted permanently.' : canEdit ? 'Drop files here, upload them, or create a document from New.' : 'Files shared with this workspace will appear here.'}</p>
-      {!trash && canEdit && <div className="button-row"><button disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button></div>}
+      {!trash && canEdit && <div className="button-row"><button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button></div>}
     </div>}
   </div>;
 
@@ -254,14 +255,28 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
 
   return <section className="page drive-page">
     <header className="page-header">
-      <div><h1>{current?.name || 'Workspaces'}</h1><p className="page-desc">{current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces'}</p></div>
-      <div className="page-actions">
+      <div><h1>{pageTitle}</h1><p className="page-desc">{trash || view === 'settings' ? current?.name : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces'}</p>
         {current && <span className="drive-storage"><meter min={0} max={current.quota || 1} value={current.used} aria-label="Storage used" />{bytes(current.used)} of {bytes(current.quota)} used</span>}
+      </div>
+      <div className="page-actions">
+        {canEdit && view === 'files' && !trash && <button className="drive-upload-button" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>}
         {identityURL && <a className="btn btn-secondary btn-sm" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity<ExternalLink size={14} aria-hidden="true" /></a>}
       </div>
     </header>
     {message && !newDocument && !newFolderOpen && <div style={{ marginBottom: '1rem' }}><Alert>{message}</Alert></div>}
-    {admin && <div className="drive-admin">
+    {current && <Search workspaces={workspaces} onOpen={openHit} />}
+    {current ? <>
+      {canManage && <div className="tabs" role="tablist" aria-label="Workspace views">
+        <button role="tab" className="tab" aria-selected={view === 'files'} onClick={() => setView('files')}>Files</button>
+        <button role="tab" className="tab" aria-selected={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button>
+      </div>}
+      {view === 'files' && (current.role ? filesPanel : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>No access to files yet</h3><p>Assign a group permission in Workspace settings to open this workspace's files.</p></div>)}
+      {view === 'settings' && settingsPanel}
+    </> : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>Your shared drive</h3><p>Create a workspace and assign a KyIdentity group to start.</p></div>}
+
+    {admin && <details className="drive-admin">
+      <summary>Administration</summary>
+      <div className="drive-admin-panels">
       <details className="panel"><summary>Operations &amp; audit <small>Directory, editor and backup status</small></summary><div className="details-body">
         <p role="status" className="hint">{operations || 'Loading…'}</p>
         {audit.length > 0 && <ul className="drive-audit" aria-label="Recent audit events">{audit.map((e, i) => <li key={i}><When value={e.created} /><code>{e.action}</code></li>)}</ul>}
@@ -274,16 +289,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
         </form>
       </div></details>
       <Leavers workspaces={workspaces} onDone={() => void reload().catch(() => {})} />
-    </div>}
-    {current && <Search workspaces={workspaces} onOpen={openHit} />}
-    {current ? <>
-      {canManage && <div className="tabs" role="tablist" aria-label="Workspace views">
-        <button role="tab" className="tab" aria-selected={view === 'files'} onClick={() => setView('files')}>Files</button>
-        <button role="tab" className="tab" aria-selected={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button>
-      </div>}
-      {view === 'files' && (current.role ? filesPanel : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>No access to files yet</h3><p>Assign a group permission in Workspace settings to open this workspace's files.</p></div>)}
-      {view === 'settings' && settingsPanel}
-    </> : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>Your shared drive</h3><p>Create a workspace and assign a KyIdentity group to start.</p></div>}
+      </div>
+    </details>}
 
     {newDocument && <Dialog title={`New ${documentKinds.find(([k]) => k === newDocument.kind)?.[1].slice(4) ?? newDocument.kind}`} description={`Create in ${current?.name ?? 'this workspace'}`} onClose={() => setNewDocument(null)}
       onSubmit={() => {

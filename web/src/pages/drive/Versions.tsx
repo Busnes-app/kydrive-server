@@ -18,7 +18,7 @@ export function Versions({ file, versions, busy, canRestore, canDelete, onRestor
       <tbody>{sorted.map(v => {
         const current = v.revision === file.revision;
         return <tr key={v.revision}>
-          <td>Version {v.revision}{current && <> <span className="badge badge-accent">Current</span></>}</td>
+          <td>Version {v.revision}{current && <> <span className="badge">Current</span></>}</td>
           <td><When value={v.created} /></td>
           <td className="num">{bytes(v.size)}</td>
           <td><div className="button-row end" style={{ marginTop: 0 }}>

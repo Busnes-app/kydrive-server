@@ -23,6 +23,7 @@ Keep staged KyDrive captures, independent reviews and visual progression evidenc
 - Stage00 is 40 initial-view captures at1280×900 and390×844, DPR1, OS light/dark, from a disposable fixture.
 - Authenticated captures show the real local administrator. Ordinary users require external OIDC; ordinary/shared/connected-editor workflows remain missing and unscored. Do not describe this set as whole-product acceptance.
 - Keep fixture credentials, database and keys private. Capture conditions, build warnings and unavailable surfaces are recorded in `baseline-setup.md` and the manifest.
+- Stage01 records round2 after-views from the same owned fixture and matched surface/size/theme set; keep stage00 and raw round1 reports unchanged. Preserve any superseded initial batch and permit only one confirmation recapture per refinement batch.
 - Product checks follow root/web contracts. Screenshots do not establish complete behavior, accessibility, role or integration gates.
 
 ## Verification

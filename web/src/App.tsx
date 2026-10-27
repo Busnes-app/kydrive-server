@@ -169,7 +169,7 @@ export const App: React.FC = () => {
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
         {activeTab === 'appearance' && <Appearance />}
-        {activeTab === 'account' && <section className="page page-narrow">
+        {activeTab === 'account' && <section className="page page-narrow account-page">
           <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
           <div className="stack">
             <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />

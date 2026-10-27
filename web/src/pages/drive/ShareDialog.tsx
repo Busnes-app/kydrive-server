@@ -69,7 +69,7 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
 
   const cap = (r: string) => r[0].toUpperCase() + r.slice(1);
   return <Dialog wide title={`Share ${name}`} description={`${kind === 'folder' ? 'People you add can open everything in this folder.' : 'People you add can open this file.'} They need a KyDrive account.`} onClose={onClose}
-    footer={<button type="button" onClick={onClose}>Done</button>}>
+    footer={<button type="button" className="btn-secondary" onClick={onClose}>Done</button>}>
     <div className="form-row">
       <label className="field grow">Find a person<input type="search" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} /></label>
       <label className="field">Access<select value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select></label>

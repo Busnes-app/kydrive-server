@@ -30,7 +30,9 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   expect((await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${name}&parent=&revision=0`, { headers, data: 'item,amount\n' })).status()).toBe(201);
   await page.reload();
   const choose = async (body, button) => {
-    await page.locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(body) });
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true }).click();
+    await (await chooser).setFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(body) });
     const ask = page.getByRole('dialog', { name: `${name} already exists` });
     await expect(ask).toBeVisible();
     await expect(page.getByText('revision conflict')).toHaveCount(0);
@@ -71,8 +73,19 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
 test('the trash has a title and the Account page has the app layout', async ({ page }, testInfo) => {
   await signIn(page);
   await page.reload();
+  const admin = page.locator('details.drive-admin');
+  await expect(admin).not.toHaveAttribute('open');
+  await expect(page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();
+  const task = await page.locator('.drive-files-panel').boundingBox();
+  const management = await admin.boundingBox();
+  expect(task.y + task.height).toBeLessThanOrEqual(management.y);
+  await admin.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Create shared workspace', { exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(admin).not.toHaveAttribute('open');
   await page.getByRole('button', { name: 'Trash', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trash', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trash', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Back to files' }).click();
 
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Account' }).click();
@@ -114,6 +127,7 @@ test('a second shared workspace with the same name is refused', async ({ page },
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name, quota: 1048576 } })).status()).toBe(201);
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name: name.toLowerCase(), quota: 1048576 } })).status()).toBe(409);
   await page.reload();
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByText('Create shared workspace').click();
   await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Create workspace' }).click();
