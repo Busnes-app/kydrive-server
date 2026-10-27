@@ -7,7 +7,9 @@ Provides KySignOn (KyIdentity) OIDC sign-on, back-channel logout token verificat
 Owns the application adapters around OAuth/OIDC login and KySignOn HMAC-SHA256 signed directory sync webhooks.
 
 ## Local Contracts
-- `KySignOnClient.HandleSyncWebhook` verifies HMAC-SHA256 signatures before modifying local user state.
+- `KySignOnClient.HandleSyncWebhook` refuses secrets below `crypto.MinHMACKeyBytes` and verifies HMAC-SHA256 signatures before modifying local user state.
+- The verifier fetches JWKS through `strongJWKSTransport`: 1 MiB cap, no redirects, every RSA modulus at least 2048 bits, parsed with go-oidc's envelope and go-jose's case-sensitive members so it checks the key the verifier uses. Provider and verifier are built together under the discovery mutex; go-oidc keeps caching and rotation.
+- With `GODEBUG=fips140=on`, issuer, authorization, token and JWKS URLs must be HTTPS without credentials and discovery/token redirects are refused; the caller's `oauth2.HTTPClient` (roots, transport) is kept. `docs/STRONG-CRYPTO.md` owns the profile.
 - PKCE with `S256` is enforced on all OAuth/OIDC authorization requests.
 - ID tokens require provider signature, issuer, audience, expiry, and one-time nonce verification before claims are trusted.
 - OAuth discovery, authorization URLs, PKCE parameters, code exchange, and token verification are delegated to `golang.org/x/oauth2` and `coreos/go-oidc`; application code only maps verified claims.
@@ -25,7 +27,7 @@ Owns the application adapters around OAuth/OIDC login and KySignOn HMAC-SHA256 s
 - KyDrive links verified OIDC `sub` to SCIM `externalId`, never email/username. Disabled accounts cannot receive a session. The base-named KySignOn callback can point at the actual KyIdentity issuer.
 
 ## Verification
-- `go test -v ./internal/sso/...` (`TestVerifyLogoutToken` holds one rejection case per logout-token rule)
+- `go test -v ./internal/sso/...`, and again with `GODEBUG=fips140=on`: `strong_crypto_test.go` signs real RS256 tokens at 1024/2047/2048 bits and checks a weak trusted TLS root against a strong-leaf control; `TestVerifyLogoutToken` holds one rejection case per logout-token rule.
 
 ## Child DOX Index
 None.

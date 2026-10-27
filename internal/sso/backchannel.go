@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-
-	"github.com/coreos/go-oidc/v3/oidc"
 )
 
 const backchannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout"
@@ -24,11 +22,11 @@ type LogoutClaims struct {
 // provider signature, issuer, audience and expiry, then the claims that keep an ID
 // token from being replayed as one.
 func (f *oauthFlow) verifyLogout(ctx context.Context, raw string) (*LogoutClaims, error) {
-	_, provider, err := f.config(ctx, "")
-	if err != nil {
+	if _, _, err := f.config(ctx, ""); err != nil {
 		return nil, err
 	}
-	token, err := provider.Verifier(&oidc.Config{ClientID: f.clientID}).Verify(ctx, raw)
+	// Same verifier as ID tokens, so logout tokens share the JWKS key floor.
+	token, err := f.verifier.Verify(ctx, raw)
 	if err != nil {
 		return nil, ErrInvalidLogoutToken
 	}

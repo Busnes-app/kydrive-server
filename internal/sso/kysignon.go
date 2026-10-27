@@ -69,7 +69,7 @@ var ErrWebhookMalformed = errors.New("malformed webhook payload")
 // Events apply only when newer than the account's last applied event; a replay or an
 // out-of-order older event is acknowledged without effect.
 func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, body []byte, signature string) error {
-	if k.config.KySignOnHMACSecret == "" || !crypto.VerifyHMACSHA256(body, k.config.KySignOnHMACSecret, signature) {
+	if len(k.config.KySignOnHMACSecret) < crypto.MinHMACKeyBytes || !crypto.VerifyHMACSHA256(body, k.config.KySignOnHMACSecret, signature) {
 		return ErrWebhookUnauthorized
 	}
 
