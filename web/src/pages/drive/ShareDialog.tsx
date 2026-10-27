@@ -76,7 +76,10 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
         <input id="share-person-search" type="search" aria-describedby="share-person-help" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} />
         <p id="share-person-help" className="hint">Type at least two characters, then choose Add as {role} beside a matching person.</p>
       </div>
-      <label className="field">Access<select value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select></label>
+      <div className="field">
+        <label htmlFor="share-person-role">Access</label>
+        <select id="share-person-role" value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select>
+      </div>
     </div>
     {people.length > 0 && <ul aria-label="People" className="item-list">{people.map(p => <li key={p.id}><div className="item-main"><span className="item-title">{p.name}</span><span className="item-meta">{p.username}</span></div><div className="item-actions"><button type="button" className="btn-secondary btn-sm" disabled={busy} onClick={() => void add('user', p.id)}>Add as {role}</button></div></li>)}</ul>}
     {groups.length > 0 && <form className="form-row" onSubmit={e => { e.preventDefault(); if (group) void add('group', group); }}>
