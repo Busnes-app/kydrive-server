@@ -43,7 +43,8 @@ locking/fsync; do not put its database on SMB.
 
 In `.env.runtime`, set the real HTTPS `KY_APP_URL`, a generated durable
 `KY_SESSION_SECRET`, and your KyIdentity issuer/client secret and matching SCIM token.
-Register callback `<drive origin>/api/sso/kysignon/callback`, keep
+Register callback `<drive origin>/api/sso/kysignon/callback` and back-channel logout URI
+`<drive origin>/api/sso/kysignon/backchannel-logout`, keep
 `KY_SSO_AUTO_PROVISION=false`, and follow [identity and permissions](docs/PERMISSIONS.md#identity-and-permissions)
 for subjects, groups and administrator grants. Configure a TLS proxy with exact trusted
 peers (`KY_TRUSTED_PROXIES` in `.env.runtime`) as described in the README. Configure the separate editor and its JWT secret only

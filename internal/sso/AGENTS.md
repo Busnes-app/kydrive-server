@@ -1,7 +1,7 @@
 # SSO
 
 ## Purpose
-Provides KySignOn (KyIdentity) OIDC sign-on and its signed directory-sync webhook.
+Provides KySignOn (KyIdentity) OIDC sign-on, back-channel logout token verification and its signed directory-sync webhook.
 
 ## Ownership
 Owns the application adapters around OAuth/OIDC login and KySignOn HMAC-SHA256 signed directory sync webhooks.
@@ -16,10 +16,16 @@ Owns the application adapters around OAuth/OIDC login and KySignOn HMAC-SHA256 s
 - The webhook never sets the application role: a payload `role` is ignored, new accounts are `user`, and an operator grant survives updates. It writes only through `store.ApplyDirectoryUser`/`DeleteDirectoryUser` (username validation, session/MFA revocation on disable in the same transaction) and resolves subjects with `store.DirectorySubject` (KySignOn row, then SCIM row) like the sign-on callback, so it updates a SCIM-provisioned account instead of duplicating it.
 - `ErrWebhookUnauthorized` (secret, signature, timestamp) maps to 401, `ErrWebhookMalformed` to 400, anything else to 500 with the detail logged, so the sender retries outages only. Deleted accounts leave no tombstone: a late event older than the deletion can recreate one.
 
+- `VerifyLogoutToken` (`backchannel.go`) reuses the ID-token verifier, then requires
+  `iat`, `sub` or `sid`, the back-channel logout event as a JSON object and no `nonce`;
+  a present `typ` must be `logout+jwt` or `application/logout+jwt`. Every failure is
+  `ErrInvalidLogoutToken`. `IdentityClaims.SessionID` and `IssuedAt` carry the ID token
+  `sid` and `iat` so sessions can be ended by them. KySignOn is the only provider, so a `sid` is never
+  ambiguous between issuers.
 - KyDrive links verified OIDC `sub` to SCIM `externalId`, never email/username. Disabled accounts cannot receive a session. The base-named KySignOn callback can point at the actual KyIdentity issuer.
 
 ## Verification
-- `go test -v ./internal/sso/...`
+- `go test -v ./internal/sso/...` (`TestVerifyLogoutToken` holds one rejection case per logout-token rule)
 
 ## Child DOX Index
 None.

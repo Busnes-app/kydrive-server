@@ -71,6 +71,15 @@ ALTER TABLE drive_app_passwords ADD COLUMN root_folder TEXT NOT NULL DEFAULT '';
 	// Blobs sealed as KYB1, which UpgradeBlobs rewrites as KYB2; every new blob is KYB2.
 	`CREATE TABLE drive_blob_kyb1(blob TEXT PRIMARY KEY);
 INSERT INTO drive_blob_kyb1(blob) SELECT DISTINCT blob FROM drive_versions WHERE sealed=1;`,
+	// Editor sessions record the sign-in they were opened through (login_at in Unix
+	// nanoseconds), so a back-channel logout reaches them after the browser session is gone.
+	// Open editor sessions of directory accounts predate that binding, so no logout could
+	// reach them: revoke them once, here.
+	`ALTER TABLE drive_editor_sessions ADD COLUMN sso_sid TEXT NOT NULL DEFAULT '';
+ALTER TABLE drive_editor_sessions ADD COLUMN login_at INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX drive_editor_sids ON drive_editor_sessions(sso_sid) WHERE revoked=false AND sso_sid!='';
+UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND user_id IN (SELECT id FROM users WHERE sso_provider!='local'));
+UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND user_id IN (SELECT id FROM users WHERE sso_provider!='local');`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
