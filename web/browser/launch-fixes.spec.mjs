@@ -71,6 +71,13 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
   const sharing = page.getByRole('dialog', { name: `Share ${name}`, exact: true });
   await expect(sharing.getByLabel('Find a person', { exact: true })).toHaveAccessibleDescription(/choose Add as reader beside a matching person/);
+  const help = await sharing.locator('#share-person-help').boundingBox();
+  const person = await sharing.getByLabel('Find a person', { exact: true }).boundingBox();
+  expect(help.y).toBeGreaterThanOrEqual(person.y + person.height);
+  if (testInfo.project.use.viewport.width < 720) {
+    const access = await sharing.getByLabel('Access', { exact: true }).boundingBox();
+    expect(help.y + help.height).toBeLessThan(access.y);
+  }
   const close = sharing.getByRole('button', { name: 'Close', exact: true });
   const closeBox = await close.boundingBox();
   expect(closeBox.width).toBeGreaterThanOrEqual(40);
@@ -87,6 +94,10 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
 test('the trash has a title and the Account page has the app layout', async ({ page }, testInfo) => {
   await signIn(page);
   await page.reload();
+  await expect(page.locator('.app-user-name')).toBeVisible();
+  await expect(page.locator('.app-user-role')).toBeVisible();
+  await expect(page.locator('.app-header').getByLabel('Open files in a new tab')).toHaveCount(0);
+  if (testInfo.project.use.viewport.width < 720) await expect(page.getByText('Scroll for more destinations', { exact: true })).toBeVisible();
   const admin = page.locator('details.drive-admin');
   await expect(admin).not.toHaveAttribute('open');
   await expect(page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();
@@ -104,6 +115,7 @@ test('the trash has a title and the Account page has the app layout', async ({ p
 
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Account' }).click();
   await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+  await expect(page.getByLabel('Open files in a new tab')).toBeVisible();
   const card = page.getByRole('region', { name: 'Two-factor authentication' });
   const main = await page.locator('.app-main').boundingBox();
   const box = await card.boundingBox();

@@ -157,8 +157,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     { label: 'Version history', icon: <History size={16} />, onSelect: () => showHistory(f) },
     ...(canEdit ? ['separator' as const, { label: 'Move to trash', icon: <Trash2 size={16} />, danger: true, onSelect: () => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: true })) }] : []),
   ];
-  const restoreButton = (onClick: () => void) => canEdit && <button className="btn-secondary btn-sm" disabled={busy} onClick={onClick}>Restore</button>;
-  const purgeButton = (onClick: () => void) => canPurge && <button className="btn-danger-quiet btn-sm" disabled={busy} onClick={onClick}>Delete permanently</button>;
+  const restoreButton = (onClick: () => void) => canEdit && <button className="btn-secondary" disabled={busy} onClick={onClick}>Restore</button>;
+  const purgeButton = (onClick: () => void) => canPurge && <button className="btn-danger-quiet" disabled={busy} onClick={onClick}>Delete permanently</button>;
 
   const newMenu: MenuEntry[] = [
     { label: 'New folder', icon: <FolderPlus size={16} />, onSelect: () => { setNewFolder(''); setNewFolderOpen(true); } },
@@ -175,8 +175,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     {trash ? <div className="drive-trash-banner">
       <p>{current.trash_days > 0 ? `Items here are deleted permanently after ${current.trash_days} days.` : 'Deleted items stay here until they are restored or deleted permanently.'}</p>
       <div className="drive-toolbar-actions">
+        <button className="btn-secondary" onClick={() => { setFiles([]); setFolders([]); setTrash(false); }}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
         {canPurge && <button className="btn-danger-quiet" disabled={busy || visibleFiles.length + visibleFolders.length === 0} onClick={() => void emptyTrash()}>Empty trash</button>}
-        <button className="btn-secondary" aria-pressed={trash} onClick={() => { setFiles([]); setFolders([]); setTrash(false); }}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
       </div>
     </div> : <div className="drive-toolbar">
       <nav className="drive-breadcrumb" aria-label="Folder path">
@@ -255,7 +255,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
 
   return <section className="page drive-page">
     <header className="page-header">
-      <div><h1>{pageTitle}</h1><p className="page-desc">{trash || view === 'settings' ? current?.name : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces'}</p>
+      <div><h1>{pageTitle}</h1><p className="page-desc">{trash || parent || view === 'settings' ? current?.name : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces'}</p>
         {current && <span className="drive-storage"><meter min={0} max={current.quota || 1} value={current.used} aria-label="Storage used" />{bytes(current.used)} of {bytes(current.quota)} used</span>}
       </div>
       <div className="page-actions">

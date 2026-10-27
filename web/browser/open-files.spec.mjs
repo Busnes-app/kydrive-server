@@ -12,9 +12,11 @@ test('files open in a new tab or in place, per saved user preference', async ({ 
   // The server is shared by every project; start from the default.
   expect((await page.request.put('/api/auth/preferences', { headers, data: { open_in_new_tab: true } })).ok()).toBe(true);
   await page.goto('/');
+  await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('button', { name: 'Account', exact: true }).click();
   const preference = page.getByLabel('Open files in a new tab');
   await expect(preference).toBeChecked();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'My files', exact: true }).click();
 
   // Creating a file opens the editor in a new tab and leaves the drive in place.
   const name = `tab-${testInfo.project.name}`;
@@ -38,11 +40,13 @@ test('files open in a new tab or in place, per saved user preference', async ({ 
 
   // Turning it off is saved for the account, not the browser: a context with the session
   // cookie but no local storage still sees it (a second sign-in would trip the login limit).
+  await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('button', { name: 'Account', exact: true }).click();
   await preference.uncheck();
   await expect.poll(async () => (await (await page.request.get('/api/auth/me')).json()).open_in_new_tab).toBe(false);
   const other = await browser.newContext({ storageState: { cookies: await page.context().cookies(), origins: [] } });
   const otherPage = await other.newPage();
   await otherPage.goto('/');
+  await otherPage.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('button', { name: 'Account', exact: true }).click();
   await expect(otherPage.getByLabel('Open files in a new tab')).not.toBeChecked();
   await other.close();
 

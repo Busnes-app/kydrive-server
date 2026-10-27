@@ -59,6 +59,10 @@ test('quick look previews images, text and PDFs, and refuses HTML', async ({ pag
 
   await page.getByRole('button', { name: `log ${tag}.log`, exact: true }).click();
   await expect(page.getByRole('dialog').locator('pre')).toHaveText('first line\n<b>not bold</b>\n');
+  for (const control of await page.getByRole('dialog').locator('header a, header button').all()) {
+    expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(40);
+  }
+  await expect(page.getByRole('dialog').locator('pre')).toHaveCSS('border-top-width', '0px');
   await page.screenshot({ path: testInfo.outputPath('text-preview.png') });
   await page.keyboard.press('Escape');
 

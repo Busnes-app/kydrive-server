@@ -12,11 +12,9 @@ interface AppHeaderProps {
   workspaces: Workspace[];
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
-  openInNewTab: boolean;
-  onOpenInNewTabChange: (value: boolean) => void;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, openInNewTab, onOpenInNewTabChange }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect }) => {
   const navsRef = useRef<HTMLDivElement>(null);
   // Phones scroll both navigations as one row: keep the current destination in view. Only the
   // row scrolls; scrollIntoView would also move the page.
@@ -72,9 +70,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             })}
           </nav>
           </div>
+        <p className="app-nav-hint">Scroll for more destinations</p>
         <div className="app-header-actions">
-          <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
-
           {user && (
             <div className="app-user">
               <div className="app-user-copy">
