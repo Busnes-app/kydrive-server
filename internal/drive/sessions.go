@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -58,6 +59,21 @@ const editorGrace = 7 * 24 * time.Hour
 // sessionKey is DocumentKey in SQL over a drive_editor_sessions row.
 const sessionKey = `drive_editor_sessions.file_id||'-'||drive_editor_sessions.revision||CASE WHEN drive_editor_sessions.epoch>0 THEN 'e'||drive_editor_sessions.epoch ELSE '' END`
 
+type loginKey struct{}
+
+// Login is the browser sign-in a request acts through: its session token hash, the identity
+// provider's sid ("" for a local sign-in) and when its credentials were verified.
+type Login struct {
+	TokenHash, SSOSID string
+	At                time.Time
+}
+
+// WithLogin binds the editor sessions opened through ctx to l, so a back-channel logout of
+// that sign-in revokes them even after its browser session expired and was removed.
+func WithLogin(ctx context.Context, l Login) context.Context {
+	return context.WithValue(ctx, loginKey{}, l)
+}
+
 // EditorSession opens the file for user. A document a force-save left open at the current
 // revision and epoch is joined, so co-editors always share one key.
 func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSession, error) {
@@ -70,9 +86,22 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 	}
 	e := EditorSession{ID: uuid.NewString(), FileID: id, User: user, Revision: f.Revision, Expires: time.Now().Add(12 * time.Hour).Unix()}
 	editable := s.AuthorizeItem(ctx, user, f.Workspace, f.Parent, f.ID, 2) == nil
+	login, _ := ctx.Value(loginKey{}).(Login)
+	var loginAt int64
+	if !login.At.IsZero() {
+		loginAt = login.At.UnixNano()
+	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 1); err != nil {
 			return err
+		}
+		// A logout that ended the browser session first finds no grant to revoke, so refuse
+		// to create one; a later logout finds it by sid or login time.
+		if login.TokenHash != "" {
+			var live int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE token_hash=?`, login.TokenHash).Scan(&live); err != nil || live == 0 {
+				return cmp.Or(err, ErrDenied)
+			}
 		}
 		var epoch int64
 		if err := tx.QueryRowContext(ctx, `SELECT editor_epoch FROM drive_files WHERE id=? AND workspace=? AND revision=? AND trashed=false`, id, f.Workspace, e.Revision).Scan(&epoch); err != nil {
@@ -91,7 +120,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 				e.Key, e.Revision = key, base
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable,epoch) VALUES(?,?,?,?,'',?,?,?)`, e.ID, id, e.Revision, user, e.Expires, editable, epoch); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable,epoch,sso_sid,login_at) VALUES(?,?,?,?,'',?,?,?,?,?)`, e.ID, id, e.Revision, user, e.Expires, editable, epoch, login.SSOSID, loginAt); err != nil {
 			return err
 		}
 		// A key closed without saves (status 4) names unchanged content and opens again.
@@ -148,13 +177,32 @@ func (s *Store) CloseEditor(ctx context.Context, key string) error {
 // key epoch on their files, so a saved editor configuration cannot rejoin the old document.
 // Nil (no drive store) is a no-op.
 func (s *Store) RevokeUserEditors(ctx context.Context, tx *sql.Tx, user string) error {
+	return s.revokeEditors(ctx, tx, `user_id=?`, user)
+}
+
+// RevokeSSOEditors revokes, like RevokeUserEditors, the editor sessions opened through the
+// SSO login sid, whether or not its browser session still exists.
+func (s *Store) RevokeSSOEditors(ctx context.Context, tx *sql.Tx, sid string) error {
+	if sid == "" {
+		return nil
+	}
+	return s.revokeEditors(ctx, tx, `sso_sid=?`, sid)
+}
+
+// RevokeUserEditorsBefore revokes, like RevokeUserEditors, user's editor sessions opened
+// through a sign-in verified before cutoff. Sessions from before login binding count as 0.
+func (s *Store) RevokeUserEditorsBefore(ctx context.Context, tx *sql.Tx, user string, cutoff time.Time) error {
+	return s.revokeEditors(ctx, tx, `user_id=? AND login_at<?`, user, cutoff.UnixNano())
+}
+
+func (s *Store) revokeEditors(ctx context.Context, tx *sql.Tx, where string, args ...any) error {
 	if s == nil {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE user_id=? AND revoked=false)`, user); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND `+where+`)`, args...); err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE user_id=? AND revoked=false`, user)
+	_, err := tx.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND `+where, args...)
 	return err
 }
 

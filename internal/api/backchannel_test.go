@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -222,5 +226,78 @@ func TestBackchannelLogoutEndsTheSSOLogin(t *testing.T) {
 	}
 	if audits == 0 {
 		t.Fatal("back-channel logout was not audited")
+	}
+}
+
+// An editor opened through an SSO login stays bound to it: a back-channel logout revokes it
+// even after the login's browser session expired and was pruned.
+func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
+	editorFixture(t)
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	f := newFakeKySignOn(t)
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
+	srv = api.NewServer(cfg, st)
+	loginAs(t, srv, st, "boss", "admin")
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_boss", "Team", 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", cfg.Database.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for i, logout := range []func() string{
+		func() string { return f.logoutToken(t, "alice", "sid-e0") },
+		func() string { return f.logoutToken(t, "alice", "") },
+	} {
+		cookie := sessionCookie(ssoLogin(t, srv, f, "alice", fmt.Sprintf("sid-e%d", i)))
+		alice, err := store.DirectorySubject(ctx, st.Users(), "alice")
+		if cookie == nil || err != nil {
+			t.Fatalf("SSO login: %v", err)
+		}
+		if i == 0 {
+			if err = st.Groups().ReplaceGroup(ctx, &store.Group{ID: "writers", DisplayName: "Writers", Members: []string{alice.ID}}, true); err != nil {
+				t.Fatal(err)
+			}
+			if err = st.Drive().Grant(ctx, "usr_boss", w.ID, "writers", "editor"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var file struct{ ID string }
+		out := send(t, srv, "POST", fmt.Sprintf("/api/drive/workspaces/%s/uploads?name=%d.docx&revision=0", w.ID, i), "hello", cookie, "")
+		if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &file) != nil {
+			t.Fatalf("upload %d %s", out.Code, out.Body.String())
+		}
+		var opened struct {
+			Config struct {
+				Document struct{ Key string } `json:"document"`
+			} `json:"config"`
+		}
+		out = send(t, srv, "POST", "/api/drive/files/"+file.ID+"/editor", "", cookie, "")
+		if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &opened) != nil {
+			t.Fatalf("open %d %s", out.Code, out.Body.String())
+		}
+		// The session expires and the sweep removes it; the editor stays open.
+		if _, err = db.ExecContext(ctx, `UPDATE sessions SET expires_at=? WHERE user_id=?`, time.Now().Add(-time.Minute).UTC(), alice.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err = st.Sessions().CleanExpiredSessions(ctx); err != nil {
+			t.Fatal(err)
+		}
+		id, revision, epoch, _ := drive.ParseDocumentKey(opened.Config.Document.Key)
+		if _, err = st.Drive().CallbackActor(ctx, id, revision, epoch); err != nil {
+			t.Fatalf("editor ended with its browser session: %v", err)
+		}
+		if out := postLogout(srv, logout()); out.Code != http.StatusOK {
+			t.Fatalf("logout %d", out.Code)
+		}
+		if _, err = st.Drive().CallbackActor(ctx, id, revision, epoch); !errors.Is(err, drive.ErrDenied) {
+			t.Fatalf("logout %d left the editor authorized: %v", i, err)
+		}
 	}
 }

@@ -783,7 +783,9 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logouts (sid, expires_at) VALUES (?, ?) ON CONFLICT (sid) DO UPDATE SET expires_at = excluded.expires_at`), sid, fenceUntil.UTC()); err != nil {
 		return err
 	}
-	return s.deleteSessions(ctx, `sso_sid = ?`, sid)
+	return s.deleteSessions(ctx, func(tx *sql.Tx) error {
+		return s.store.drive.RevokeSSOEditors(ctx, tx, sid)
+	}, `sso_sid = ?`, sid)
 }
 
 func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
@@ -795,13 +797,41 @@ func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject stri
 ON CONFLICT (provider, subject) DO UPDATE SET cutoff = excluded.cutoff, expires_at = excluded.expires_at WHERE sso_subject_logouts.cutoff < excluded.cutoff`), provider, subject, cutoff.UTC(), fenceUntil.UTC()); err != nil {
 		return err
 	}
-	return s.deleteSessions(ctx, `created_at < ? AND user_id IN (SELECT u.id FROM users u, sso_subject_logouts f WHERE f.provider = ? AND f.subject = ? AND `+ssoSubjectUser+`)`, cutoff.UTC(), provider, subject)
+	subjectUsers := `SELECT u.id FROM users u, sso_subject_logouts f WHERE f.provider = ? AND f.subject = ? AND ` + ssoSubjectUser
+	return s.deleteSessions(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, s.store.rebind(subjectUsers), provider, subject)
+		if err != nil {
+			return err
+		}
+		var users []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			users = append(users, id)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+		for _, id := range users {
+			if err := s.store.drive.RevokeUserEditorsBefore(ctx, tx, id, cutoff); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, `created_at < ? AND user_id IN (`+subjectUsers+`)`, cutoff.UTC(), provider, subject)
 }
 
 // deleteSessions deletes the sessions matching where and, in the same transaction, the
-// editor sessions of their accounts.
-func (s *sessionStore) deleteSessions(ctx context.Context, where string, args ...any) error {
+// editor sessions of their accounts. revokeLogin also revokes, in that transaction, the
+// editor sessions bound to the logged-out login, which outlive its expired browser sessions.
+func (s *sessionStore) deleteSessions(ctx context.Context, revokeLogin func(*sql.Tx) error, where string, args ...any) error {
 	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		if err := revokeLogin(tx); err != nil {
+			return err
+		}
 		rows, err := tx.QueryContext(ctx, s.store.rebind(`DELETE FROM sessions WHERE `+where+` RETURNING user_id`), args...)
 		if err != nil {
 			return err
@@ -880,13 +910,13 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 
 func (s *sessionStore) GetSession(ctx context.Context, tokenHash string) (*Session, error) {
 	q := s.store.rebind(`
-SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at
+SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid
 FROM sessions WHERE token_hash = ?
 `)
 	var sess Session
 	err := s.store.db.QueryRowContext(ctx, q, tokenHash).Scan(
 		&sess.TokenHash, &sess.UserID, &sess.UserAgent, &sess.IPAddress,
-		&sess.CreatedAt, &sess.ExpiresAt,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID,
 	)
 	if err != nil {
 		if errorsIs(err, sql.ErrNoRows) {

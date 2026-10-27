@@ -369,7 +369,7 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 			h(w, r.WithContext(context.WithValue(ctx, driveUserKey{}, user)))
 			return
 		}
-		user, _, err := s.sessions.AuthenticateRequest(r)
+		user, sess, err := s.sessions.AuthenticateRequest(r)
 		if err != nil {
 			if errors.Is(err, auth.ErrPasswordChangeRequired) {
 				s.writeJSON(w, http.StatusForbidden, map[string]string{"error": "Change your password before continuing", "code": "password_change_required"})
@@ -381,7 +381,8 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 		if !s.allowInstallerActor(w, r, user) {
 			return
 		}
-		h(w, r.WithContext(context.WithValue(r.Context(), driveUserKey{}, user)))
+		ctx := drive.WithLogin(r.Context(), drive.Login{TokenHash: sess.TokenHash, SSOSID: sess.SSOSID, At: sess.CreatedAt})
+		h(w, r.WithContext(context.WithValue(ctx, driveUserKey{}, user)))
 	}
 }
 

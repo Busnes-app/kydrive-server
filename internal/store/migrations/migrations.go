@@ -269,7 +269,8 @@ CREATE TABLE sso_subject_logouts (
     cutoff DATETIME NOT NULL,
     expires_at DATETIME NOT NULL,
     PRIMARY KEY (provider, subject)
-);`,
+);
+` + endUnboundSSOLogins,
 		Postgres: `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS sso_sid TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_sessions_sso_sid ON sessions(sso_sid) WHERE sso_sid <> '';
 CREATE TABLE IF NOT EXISTS sso_logouts (
@@ -282,9 +283,16 @@ CREATE TABLE IF NOT EXISTS sso_subject_logouts (
     cutoff TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (provider, subject)
-);`,
+);
+` + endUnboundSSOLogins,
 	},
 }
+
+// endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of
+// directory accounts issued before sessions carried a sid: no logout could reach them. Drive
+// schema 17 does the same for editor sessions.
+const endUnboundSSOLogins = `DELETE FROM sessions WHERE sso_sid = '' AND user_id IN (SELECT id FROM users WHERE sso_provider <> 'local');
+DELETE FROM mfa_challenges WHERE user_id IN (SELECT id FROM users WHERE sso_provider <> 'local');`
 
 // refuseCaseDuplicateUsernames fails closed: which account keeps a name is an operator decision.
 func refuseCaseDuplicateUsernames(ctx context.Context, tx *sql.Tx) error {

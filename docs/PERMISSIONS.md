@@ -8,6 +8,8 @@ Commands and unlinked file paths below are relative to the repository root.
 
 Register an OIDC application in KyIdentity using callback `<drive origin>/api/sso/kysignon/callback` and back-channel logout URI `<drive origin>/api/sso/kysignon/backchannel-logout`. The routes retain the base's name; set `KY_KYSIGNON_ISSUER` to the actual KyIdentity issuer, with its client ID/secret. Keep `KY_SSO_AUTO_PROVISION=false`. A verified OIDC `sub` must equal the user's SCIM `externalId`; username and email do not link accounts.
 
+The upgrade that adds back-channel logout signs KyIdentity users out once and closes their open editors: sessions from before it carry no KyIdentity login ID, so no logout could reach them. Local accounts stay signed in.
+
 Configure a KyIdentity outbound SCIM system at `<drive origin>/scim/v2` with `KY_SCIM_TOKEN`. Enable group delivery and assign the required users/groups. KyDrive supports exact `externalId` reconciliation, user PUT/deactivation, groups PUT/delete and atomic membership replacement. An `externalId` is immutable. Application administrator privilege is separate from directory roles; incoming `roles=admin` cannot elevate it. The break-glass local administrator cannot be modified through SCIM.
 
 Create a workspace in KyDrive and grant a KyIdentity group reader, editor or manager access. Grants inherit throughout the workspace. An administrator can configure quotas/grants and view audits, but needs a group grant to read document content. Workspace files survive deletion of any employee or group. A manager can issue reader/editor service credentials scoped to their workspace, expiring after 90 days and invalidated when that user's membership or account ceases to authorize them.
