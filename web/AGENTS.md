@@ -43,7 +43,7 @@ Owns user interface components, service worker caching, PWA installation manifes
 - KyDrive owns files, folders, versions/trash, workspace permissions/quotas and operational status/audit. People/group management links to KyIdentity; no separate local directory editor.
 - Hide privileged navigation from staff. Directory-managed group membership and workspace access are distinct. Managers can configure group grants; only administrators set quota or see global operations.
 
-- Phone headers retain signed-in name/role beside sign-out and a plain scroll hint for the single navigation row. Account owns the file-opening preference; moving it never changes its per-account persistence or failed-save rollback. Drive search spans the content width; Upload aligns to the page heading. Trash restoration/deletion actions use40px controls with Back to files before Empty trash.
+- Phone headers retain signed-in name/role beside sign-out and a plain scroll hint for the single navigation row. Selection and keyboard focus reveal the destination plus its4px outer focus-ring margin by scrolling only that row. Account owns the file-opening preference; moving it never changes its per-account persistence or failed-save rollback. Drive search spans the content width; Upload aligns to the page heading. Trash restoration/deletion actions use40px controls with Back to files before Empty trash.
 
 ## Verification
 - Completed uploads have a compact receipt; keep every finished item and failed/retry row until the existing explicit Clear finished action removes completed rows.

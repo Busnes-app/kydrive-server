@@ -98,6 +98,21 @@ test('the trash has a title and the Account page has the app layout', async ({ p
   await expect(page.locator('.app-user-role')).toBeVisible();
   await expect(page.locator('.app-header').getByLabel('Open files in a new tab')).toHaveCount(0);
   if (testInfo.project.use.viewport.width < 720) await expect(page.getByText('Scroll for more destinations', { exact: true })).toBeVisible();
+  if (testInfo.project.use.viewport.width < 720) {
+    const destinations = page.locator('.app-nav button');
+    await destinations.first().focus();
+    for (let index = 0; index < await destinations.count(); index++) {
+      await expect(destinations.nth(index)).toBeFocused();
+      await expect.poll(() => destinations.nth(index).evaluate(button => {
+        const row = button.closest('.app-navs').getBoundingClientRect();
+        const box = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        const ring = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+        return box.left - ring >= row.left - 1 && box.right + ring <= row.right + 1;
+      })).toBe(true);
+      if (index + 1 < await destinations.count()) await page.keyboard.press('Tab');
+    }
+  }
   const admin = page.locator('details.drive-admin');
   await expect(admin).not.toHaveAttribute('open');
   await expect(page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();

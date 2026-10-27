@@ -3,6 +3,14 @@ import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Pa
 import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
 
+function revealNavItem(row: HTMLElement, item: Element) {
+  if (row.scrollWidth <= row.clientWidth) return;
+  const r = row.getBoundingClientRect(), i = item.getBoundingClientRect();
+  // Include the shared 2px focus outline and its 2px offset without scrolling the page.
+  if (i.left < r.left + 4) row.scrollLeft -= r.left + 4 - i.left;
+  else if (i.right > r.right - 4) row.scrollLeft += i.right - r.right + 4;
+}
+
 interface AppHeaderProps {
   appName: string;
   activeTab: string;
@@ -20,10 +28,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
   // row scrolls; scrollIntoView would also move the page.
   useEffect(() => {
     const row = navsRef.current, cur = row?.querySelector('[aria-current="page"]');
-    if (!row || !cur || row.scrollWidth <= row.clientWidth) return;
-    const r = row.getBoundingClientRect(), i = cur.getBoundingClientRect();
-    if (i.left < r.left) row.scrollLeft -= r.left - i.left;
-    else if (i.right > r.right) row.scrollLeft += i.right - r.right;
+    if (row && cur) revealNavItem(row, cur);
   }, [activeTab, selectedWorkspace]);
 
   const navItems = [
@@ -43,7 +48,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             <span>{appName || 'Busnes.app'}</span>
           </div>
 
-          <div ref={navsRef} className="app-navs">
+          <div ref={navsRef} className="app-navs" onFocusCapture={e => {
+            if (e.target instanceof HTMLButtonElement) revealNavItem(e.currentTarget, e.target);
+          }}>
           <nav className="app-nav" aria-label="Workspaces">
             <h2 className="app-nav-label">Personal</h2>
             {workspaces.filter(w => w.kind === 'personal').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>My files</span></button>)}
