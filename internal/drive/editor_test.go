@@ -37,6 +37,21 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			}
 			return st.Sessions().EndSession(ctx, "h")
 		},
+		"back-channel logout": func(st store.Store) error {
+			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES('h','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00','sid')`); err != nil {
+				return err
+			}
+			return st.Sessions().EndSSOSession(ctx, "sid", time.Now().Add(time.Minute))
+		},
+		"subject-wide back-channel logout": func(st store.Store) error {
+			if err := drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET sso_provider='kysignon',sso_subject='worker-sub' WHERE id='worker'`); err != nil {
+				return err
+			}
+			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at) VALUES('h','worker','','','2000-01-01 00:00:00','2999-01-01 00:00:00')`); err != nil {
+				return err
+			}
+			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", time.Now(), time.Now().Add(time.Minute))
+		},
 		"directory disable": func(st store.Store) error {
 			_, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Email: "worker@local.test", Active: false})
 			return err
@@ -356,5 +371,116 @@ func TestGlobalTrashRetention(t *testing.T) {
 	}
 	if _, err = d.ApplyRetention(ctx, time.Now().Add(91*day), 90); err != nil || !exists(open) {
 		t.Fatalf("purged before the editor drop: %v", err)
+	}
+}
+
+// A back-channel logout revokes the editor sessions opened through that sign-in even after
+// its browser session expired and was pruned; other sign-ins keep theirs.
+func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
+	ctx := context.Background()
+	loginAt := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for name, logout := range map[string]func(store.Store) error{
+		"sid": func(st store.Store) error {
+			return st.Sessions().EndSSOSession(ctx, "sid-old", time.Now().Add(time.Minute))
+		},
+		"subject": func(st store.Store) error {
+			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", loginAt.Add(time.Second), time.Now().Add(time.Minute))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, w, root := fixture(t)
+			d := st.Drive()
+			if err := drive.ExecSQL(ctx, d, `UPDATE users SET sso_subject='worker-sub' WHERE id='worker'`); err != nil {
+				t.Fatal(err)
+			}
+			open := func(sid string, at time.Time, name string) drive.EditorSession {
+				t.Helper()
+				if err := drive.ExecSQL(ctx, d, `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES(?,'worker','','',?,?,?)`, "h-"+sid, at, time.Now().Add(time.Hour), sid); err != nil {
+					t.Fatal(err)
+				}
+				f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: name}, blob(t, root, name), 0)
+				e, err := d.EditorSession(drive.WithLogin(ctx, drive.Login{TokenHash: "h-" + sid, SSOSID: sid, At: at}), "worker", f.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return e
+			}
+			ended, kept := open("sid-old", loginAt, "a.docx"), open("sid-new", loginAt.Add(time.Second), "b.docx")
+			if err := drive.ExecSQL(ctx, d, `DELETE FROM sessions`); err != nil {
+				t.Fatal(err)
+			}
+			if err := logout(st); err != nil {
+				t.Fatal(err)
+			}
+			if !revoked(t, d, ended.ID) || revoked(t, d, kept.ID) {
+				t.Fatalf("revoked: ended %v, kept %v", revoked(t, d, ended.ID), revoked(t, d, kept.ID))
+			}
+			file, revision, epoch, _ := drive.ParseDocumentKey(ended.Key)
+			if _, err := d.CallbackActor(ctx, file, revision, epoch); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("logged-out editor saved: %v", err)
+			}
+		})
+	}
+}
+
+// A sign-in whose browser session a logout already ended cannot open an editor afterwards.
+func TestEditorSessionNeedsALiveLogin(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.docx"}, blob(t, root, "a"), 0)
+	gone := drive.WithLogin(ctx, drive.Login{TokenHash: "h", SSOSID: "sid", At: time.Now()})
+	if _, err := d.EditorSession(gone, "worker", f.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("editor opened without a live session: %v", err)
+	}
+	if err := drive.ExecSQL(ctx, d, `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES('h','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00','sid')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.EditorSession(gone, "worker", f.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Drive schema 17 revokes, once, the open editor sessions of directory accounts from before
+// editor sessions recorded their sign-in; a local account's stay open.
+func TestLoginSchemaRevokesUnboundDirectoryEditors(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "team", DisplayName: "Team", ExternalID: "external-team", Members: []string{"worker", "stranger"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE users SET sso_provider='local' WHERE id='stranger'`); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.docx"}, blob(t, root, "a"), 0)
+	directory, err := d.EditorSession(ctx, "worker", f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := d.EditorSession(ctx, "stranger", f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As before schema 17.
+	if err = drive.ExecSQL(ctx, d, `DROP INDEX drive_editor_sids; ALTER TABLE drive_editor_sessions DROP COLUMN sso_sid; ALTER TABLE drive_editor_sessions DROP COLUMN login_at; DELETE FROM drive_schema WHERE version=?`, drive.LoginSchemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.Migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if !revoked(t, d, directory.ID) || revoked(t, d, local.ID) {
+		t.Fatalf("revoked: directory %v, local %v", revoked(t, d, directory.ID), revoked(t, d, local.ID))
+	}
+	if pending, err := d.PendingRevocations(ctx); err != nil || len(pending) != 1 || pending[0].Key != directory.Key {
+		t.Fatalf("drop not queued for the old key: %v %v", pending, err)
+	}
+	again, err := d.EditorSession(ctx, "worker", f.ID)
+	if err != nil || again.Key == directory.Key {
+		t.Fatalf("document key not rotated: %v", err)
+	}
+	// It runs once: a later start keeps the new session.
+	if err = drive.Migrate(ctx, d); err != nil || revoked(t, d, again.ID) {
+		t.Fatalf("second start revoked a later editor session: %v", err)
 	}
 }

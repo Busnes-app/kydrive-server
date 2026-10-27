@@ -47,7 +47,7 @@ func kyb1Files(t *testing.T, d *drive.Store, w drive.Workspace, root string) ([]
 	}
 	files, blobs = append(files, c.ID), append(blobs, v.Blob)
 	// Rerun the schema step that fills the queue, as on an upgraded database.
-	if err = drive.ExecSQL(ctx, d, `DROP TABLE drive_blob_kyb1; DELETE FROM drive_schema WHERE version=?`, drive.SchemaVersion); err != nil {
+	if err = drive.ExecSQL(ctx, d, `DROP TABLE drive_blob_kyb1; DELETE FROM drive_schema WHERE version=?`, drive.KYB1SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	if err = drive.Migrate(ctx, d); err != nil {
