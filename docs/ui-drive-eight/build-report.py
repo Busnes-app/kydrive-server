@@ -154,7 +154,7 @@ def read_report(path, inventories):
             require(duplicate in files and not files[duplicate].get('duplicate_of'), f'{name}: invalid duplicate target')
             require(row['scores'] == files[duplicate]['scores'] and row['total'] == files[duplicate]['total']
                     and row.get('ky_fit') == files[duplicate].get('ky_fit'), f'{name}: duplicate did not inherit scores')
-        surface = row.get('surface_key', row.get('surface', pin.get('surface')))
+        surface = pin.get('surface') or row.get('surface_key', row.get('surface'))
         require(surface and row['cohort'], f'{name}: missing surface/cohort')
         included = not duplicate and row['total'] not in NA
         if row['total'] in NA:
