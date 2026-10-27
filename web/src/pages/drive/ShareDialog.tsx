@@ -71,9 +71,10 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
   return <Dialog wide title={`Share ${name}`} description={`${kind === 'folder' ? 'People you add can open everything in this folder.' : 'People you add can open this file.'} They need a KyDrive account.`} onClose={onClose}
     footer={<button type="button" className="btn-secondary" onClick={onClose}>Done</button>}>
     <div className="form-row">
-      <label className="field grow">Find a person<input type="search" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} /></label>
+      <label className="field grow">Find a person<input type="search" aria-describedby="share-person-help" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} /></label>
       <label className="field">Access<select value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select></label>
     </div>
+    <p id="share-person-help" className="hint">Type at least two characters, then choose Add as {role} beside a matching person.</p>
     {people.length > 0 && <ul aria-label="People" className="item-list">{people.map(p => <li key={p.id}><div className="item-main"><span className="item-title">{p.name}</span><span className="item-meta">{p.username}</span></div><div className="item-actions"><button type="button" className="btn-secondary btn-sm" disabled={busy} onClick={() => void add('user', p.id)}>Add as {role}</button></div></li>)}</ul>}
     {groups.length > 0 && <form className="form-row" onSubmit={e => { e.preventDefault(); if (group) void add('group', group); }}>
       <label className="field grow">Or a group<select value={group} onChange={e => setGroup(e.target.value)}><option value="">Choose group</option>{groups.map(g => <option key={g.id} value={g.id}>{g.display_name}</option>)}</select></label>

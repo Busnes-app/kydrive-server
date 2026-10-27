@@ -310,6 +310,8 @@ dialog.dialog-wide { width: min(46rem, calc(100vw - 2rem)); }
 dialog.dialog::backdrop, dialog.drive-preview-dialog::backdrop { background: rgba(15, 20, 22, .55); backdrop-filter: blur(3px); }
 .dialog > form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--line); }
+.dialog-header > div { min-width: 0; }
+.dialog-header > .icon-btn { flex: none; width: var(--control-h); min-height: var(--control-h); }
 .dialog-header h2 { font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }
 .dialog-header p { color: var(--ink); font-size: .88rem; margin-top: .15rem; }
 .dialog-body { padding: 1.25rem 1.5rem; overflow-y: auto; display: grid; gap: 1rem; align-content: start; }
@@ -351,7 +353,6 @@ dialog.dialog::backdrop, dialog.drive-preview-dialog::backdrop { background: rgb
 .drive-files-panel { padding: 0; overflow: visible; }
 .drive-drop-active { outline: 2px dashed var(--accent); outline-offset: -6px; }
 .drive-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
-.drive-toolbar-actions:only-child { margin-left: auto; }
 .drive-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .drive-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .35rem; font-size: .95rem; min-width: 0; }
 .drive-breadcrumb .btn-link { text-decoration: none; color: var(--ink); font-weight: 500; }
@@ -521,6 +522,7 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
   .drive-files-panel { padding: 0; }
   .drive-toolbar { padding: .85rem 1rem; }
   .drive-toolbar-actions { width: 100%; }
+  .drive-toolbar .drive-toolbar-actions > .btn-ghost:first-child { padding-left: 0; }
   .drive-trash-banner .drive-toolbar-actions > * { flex: 1 1 auto; }
   /* Rows become name + actions; actions that do not fit (trash) wrap under the name. */
   .drive-table thead { display: none; }

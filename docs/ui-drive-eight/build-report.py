@@ -130,7 +130,7 @@ def read_report(path, inventories):
     matches = [(name, pins) for name, pins in inventories if pins.keys() == files.keys()]
     require(matches, f'{path.name}: file list differs from every inventory-v*.json')
     inventory_name, pins = matches[0]
-    declared_inventory = report.get('inventory', {}).get('quality_source')
+    declared_inventory = report['inventory'].get('quality_source') if isinstance(report['inventory'], dict) else None
     if declared_inventory:
         require(any(name == declared_inventory for name, _ in matches), f'{path.name}: wrong inventory')
         inventory_name, pins = next(item for item in matches if item[0] == declared_inventory)
@@ -215,14 +215,25 @@ def read_report(path, inventories):
     if 'brand_covered_set' in report:
         validate_summary(report['brand_covered_set'], brands, path.name + '/brand')
     if 'brand' in report:
-        validate_summary(report['brand']['overall'], brands, path.name + '/brand')
-        require(set(report['brand']['by_cohort']) == set(brand_cohorts) and
-                set(report['brand']['by_dimension']) == set(brand_dimensions),
-                f'{path.name}: brand summary dimensions/cohorts mismatch')
+        # Preserve publishers that explicitly aggregate rounded per-file brand means;
+        # the exported brand statistics still use the exact dimension-derived values.
+        rounded_brand = 'Summary = mean of per-file rounded means' in report['brand'].get('method', '')
+        published_values = lambda values: [number(rounded(v)) for v in values] if rounded_brand else values
+        if rounded_brand:
+            for row in files.values():
+                values = [number(v) for v in row['ky_fit']['scores'].values() if v not in NA]
+                require(number(row['ky_fit']['mean']) == number(rounded(sum(values, Fraction()) / len(values))),
+                        f'{path.name}: published rounded brand mean mismatch')
+        validate_summary(report['brand']['overall'], published_values(brands), path.name + '/brand')
+        require(set(report['brand']['by_cohort']) == set(brand_cohorts),
+                f'{path.name}: brand summary cohorts mismatch')
         for key, values in brand_cohorts.items():
-            validate_summary(report['brand']['by_cohort'][key], values, path.name + '/brand/' + key)
-        for key, values in brand_dimensions.items():
-            summary = report['brand']['by_dimension'][key]
+            validate_summary(report['brand']['by_cohort'][key], published_values(values), path.name + '/brand/' + key)
+        if 'by_dimension' in report['brand']:
+            require(set(report['brand']['by_dimension']) == set(brand_dimensions),
+                    f'{path.name}: brand summary dimensions mismatch')
+        for key, summary in report['brand'].get('by_dimension', {}).items():
+            values = brand_dimensions[key]
             validate_summary(summary, values, path.name + '/brand/' + key)
             require(summary['na'] == len(brands) - len(values), f'{key}: brand N/A count mismatch')
     verdict = report['verdict']

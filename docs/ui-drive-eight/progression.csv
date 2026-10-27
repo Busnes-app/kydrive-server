@@ -2,6 +2,6 @@ Round,Current,Reviewer,Status,n,Sum fraction,Sum exact decimal,Mean fraction,Mea
 1,False,opus,Published,40,2893/10,289.3,2893/400,7.2325,7.2,False,False,False,N/A
 1,False,sol,Published,40,1603/5,320.6,1603/200,8.015,8.0,False,False,N/A,N/A
 1,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
-2,True,opus,Pending,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,Pending,Pending
-2,True,sol,Pending,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+2,True,opus,Published,40,1573/5,314.6,1573/200,7.865,7.9,False,False,False,False
+2,True,sol,Published,40,1701/5,340.2,1701/200,8.505,8.5,True,True,N/A,N/A
 2,True,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A

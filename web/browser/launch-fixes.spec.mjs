@@ -67,6 +67,20 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   await expect(history.locator('time').first()).toHaveAttribute('datetime', /Z$/);
   await history.getByRole('button', { name: 'Restore' }).click();
   await expect.poll(async () => (await files()).find(f => f.name === name)?.revision).toBe(3);
+  await page.getByLabel(`Actions for ${name}`).click();
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+  const sharing = page.getByRole('dialog', { name: `Share ${name}`, exact: true });
+  await expect(sharing.getByLabel('Find a person', { exact: true })).toHaveAccessibleDescription(/choose Add as reader beside a matching person/);
+  const close = sharing.getByRole('button', { name: 'Close', exact: true });
+  const closeBox = await close.boundingBox();
+  expect(closeBox.width).toBeGreaterThanOrEqual(40);
+  expect(closeBox.height).toBeGreaterThanOrEqual(40);
+  await close.click();
+  if (testInfo.project.use.viewport.width < 720) {
+    const root = await page.getByRole('navigation', { name: 'Folder path' }).boundingBox();
+    const trashIcon = await page.getByRole('button', { name: 'Trash', exact: true }).locator('svg').boundingBox();
+    expect(Math.abs(trashIcon.x - root.x)).toBeLessThanOrEqual(1);
+  }
   expect(await fits(page)).toBe(true);
 });
 
