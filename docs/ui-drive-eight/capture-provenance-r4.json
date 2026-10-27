@@ -1,0 +1,3758 @@
+{
+  "stage": "03-after",
+  "source_commit": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+  "confirmation_of_preserved_initial_stage03": true,
+  "superseded_initial_source": "24f667e61ca2802dabf4cbdf8a71117512203d6a",
+  "initial_artifacts_preserved_byte_for_byte": 46,
+  "same_instance_as_stage02": true,
+  "fixture_recreated": false,
+  "identity_and_timestamps_changed": false,
+  "relative_ages_advanced_naturally": true,
+  "origin": "http://127.0.0.1:5878",
+  "owned_process": {
+    "pid": 181143,
+    "exe": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4-confirm",
+    "start_ticks": "412713",
+    "binary": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4-confirm",
+    "binary_sha256": "8f24ccca5e02c1548504658201487145b8b7e751eb9c02bece3572e424c6b6bb",
+    "source_commit": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+    "credentials_file": "/tmp/kydrive-r3-recreated-sgjfh9md/credentials.json",
+    "base_url": "http://127.0.0.1:5878",
+    "fixture_directory": "/tmp/kydrive-r3-recreated-sgjfh9md",
+    "created_at": "2026-10-27T21:35:07.803750+00:00",
+    "environment_keys": [
+      "GOMAXPROCS",
+      "KY_ADMIN_PASSWORD",
+      "KY_APP_URL",
+      "KY_BACKUP_DIR",
+      "KY_CAPTCHA_PROVIDER",
+      "KY_DATA_DIR",
+      "KY_DB_DRIVER",
+      "KY_EXCALIDRAW_FONTS_DIR",
+      "KY_HOST",
+      "KY_PORT",
+      "PATH"
+    ],
+    "preferred_port_used": true
+  },
+  "old_owned_process_verification": {
+    "owned": {
+      "pid": 154767,
+      "exe": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4",
+      "start_ticks": "341610",
+      "binary": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4",
+      "binary_sha256": "9bac08cbd4dd3e4c1c91dea608f6dca94dc7925c02da1f93427e558521d4daa9",
+      "source_commit": "24f667e61ca2802dabf4cbdf8a71117512203d6a",
+      "credentials_file": "/tmp/kydrive-r3-recreated-sgjfh9md/credentials.json",
+      "base_url": "http://127.0.0.1:5878",
+      "fixture_directory": "/tmp/kydrive-r3-recreated-sgjfh9md",
+      "created_at": "2026-10-27T21:23:16.748105+00:00",
+      "environment_keys": [
+        "GOMAXPROCS",
+        "KY_ADMIN_PASSWORD",
+        "KY_APP_URL",
+        "KY_BACKUP_DIR",
+        "KY_CAPTCHA_PROVIDER",
+        "KY_DATA_DIR",
+        "KY_DB_DRIVER",
+        "KY_EXCALIDRAW_FONTS_DIR",
+        "KY_HOST",
+        "KY_PORT",
+        "PATH"
+      ],
+      "preferred_port_used": true
+    },
+    "exe_startticks_binary_hash_matched": true,
+    "signal": "SIGTERM",
+    "graceful_exit_observed": true,
+    "preserved_record": "/tmp/kydrive-r3-recreated-sgjfh9md/owned-process-r4-initial-preserved.json",
+    "preserved_binary": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4-initial-preserved"
+  },
+  "private_directory_mode": "0o700",
+  "credentials_mode": "0o600",
+  "fixture_identity": {
+    "user": {
+      "authenticated": true,
+      "open_in_new_tab": true,
+      "user": {
+        "id": "usr_cab44ae1a10359530d02072a",
+        "username": "admin",
+        "email": "",
+        "display_name": "Administrator",
+        "role": "admin",
+        "status": "active",
+        "sso_provider": "local",
+        "totp_enabled": false,
+        "must_change_password": false,
+        "created_at": "2026-10-27T20:52:58.901058979Z",
+        "updated_at": "2026-10-27T20:53:28.169114747Z"
+      }
+    },
+    "workspaces": [
+      {
+        "kind": "personal",
+        "id": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "name": "My files",
+        "quota": 10737418240,
+        "used": 350,
+        "role": "manager",
+        "trash_days": 0,
+        "keep_versions": 0,
+        "editors_share": false,
+        "head": 6
+      }
+    ]
+  },
+  "fixture_listings": {
+    "files": [
+      {
+        "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Meeting notes.txt",
+        "revision": 1,
+        "trashed": false,
+        "size": 81,
+        "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+        "modified": "2026-10-27T20:53:45.057754139Z",
+        "mtime": "2026-10-27T20:53:45.057754139Z"
+      },
+      {
+        "id": "e11d10aa-072b-4287-8add-3e612e941895",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Quarterly plan.md",
+        "revision": 1,
+        "trashed": false,
+        "size": 135,
+        "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+        "modified": "2026-10-27T20:53:45.03719324Z",
+        "mtime": "2026-10-27T20:53:45.03719324Z"
+      },
+      {
+        "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Supplier list.csv",
+        "revision": 1,
+        "trashed": false,
+        "size": 79,
+        "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+        "modified": "2026-10-27T20:53:45.050281637Z",
+        "mtime": "2026-10-27T20:53:45.050281637Z"
+      }
+    ],
+    "folders": [
+      {
+        "id": "b3e396cf-7eee-4e2d-a971-b7e11263a739",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Project materials",
+        "trashed": false
+      }
+    ],
+    "trash": [
+      {
+        "id": "4746befe-5d07-4390-9a8d-7c5dd425adc4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Archive note.txt",
+        "revision": 1,
+        "trashed": true,
+        "size": 55,
+        "digest": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+        "modified": "2026-10-27T20:53:45.066405037Z",
+        "mtime": "2026-10-27T20:53:45.066405037Z"
+      }
+    ]
+  },
+  "live_download_and_version_checks": [
+    {
+      "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+      "status": 200,
+      "bytes": 81,
+      "sha256": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+      "versions": [
+        {
+          "file_id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+          "revision": 1,
+          "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+          "size": 81,
+          "created": "2026-10-27T20:53:45.057754139Z",
+          "mtime": "2026-10-27T20:53:45.057754139Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    },
+    {
+      "id": "e11d10aa-072b-4287-8add-3e612e941895",
+      "status": 200,
+      "bytes": 135,
+      "sha256": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+      "versions": [
+        {
+          "file_id": "e11d10aa-072b-4287-8add-3e612e941895",
+          "revision": 1,
+          "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+          "size": 135,
+          "created": "2026-10-27T20:53:45.03719324Z",
+          "mtime": "2026-10-27T20:53:45.03719324Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    },
+    {
+      "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+      "status": 200,
+      "bytes": 79,
+      "sha256": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+      "versions": [
+        {
+          "file_id": "76417062-2d42-4435-8a58-32860e23a5c4",
+          "revision": 1,
+          "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+          "size": 79,
+          "created": "2026-10-27T20:53:45.050281637Z",
+          "mtime": "2026-10-27T20:53:45.050281637Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    }
+  ],
+  "identity_listings_and_live_bytes_exact_match_initial_and_r3": true,
+  "archive_digest_size_revision_state_match_initial": true,
+  "archive_download_not_repeated": true,
+  "post_capture_readonly_sql_verification": {
+    "files": [
+      {
+        "id": "4746befe-5d07-4390-9a8d-7c5dd425adc4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 1,
+        "digest": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+        "size": 55,
+        "created": "2026-10-27T20:53:45.066405037Z",
+        "mtime": "2026-10-27T20:53:45.066405037Z"
+      },
+      {
+        "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+        "size": 79,
+        "created": "2026-10-27T20:53:45.050281637Z",
+        "mtime": "2026-10-27T20:53:45.050281637Z"
+      },
+      {
+        "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+        "size": 81,
+        "created": "2026-10-27T20:53:45.057754139Z",
+        "mtime": "2026-10-27T20:53:45.057754139Z"
+      },
+      {
+        "id": "e11d10aa-072b-4287-8add-3e612e941895",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+        "size": 135,
+        "created": "2026-10-27T20:53:45.03719324Z",
+        "mtime": "2026-10-27T20:53:45.03719324Z"
+      }
+    ],
+    "folders": [
+      {
+        "id": "b3e396cf-7eee-4e2d-a971-b7e11263a739",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "trashed": 0
+      }
+    ],
+    "versions": [
+      {
+        "file_id": "4746befe-5d07-4390-9a8d-7c5dd425adc4",
+        "revision": 1,
+        "digest": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+        "size": 55,
+        "created": "2026-10-27T20:53:45.066405037Z",
+        "mtime": ""
+      },
+      {
+        "file_id": "76417062-2d42-4435-8a58-32860e23a5c4",
+        "revision": 1,
+        "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+        "size": 79,
+        "created": "2026-10-27T20:53:45.050281637Z",
+        "mtime": ""
+      },
+      {
+        "file_id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+        "revision": 1,
+        "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+        "size": 81,
+        "created": "2026-10-27T20:53:45.057754139Z",
+        "mtime": ""
+      },
+      {
+        "file_id": "e11d10aa-072b-4287-8add-3e612e941895",
+        "revision": 1,
+        "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+        "size": 135,
+        "created": "2026-10-27T20:53:45.03719324Z",
+        "mtime": ""
+      }
+    ],
+    "zero_counts": {
+      "drive_shares": 0,
+      "drive_links": 0,
+      "drive_grants": 0,
+      "drive_service_tokens": 0,
+      "drive_app_passwords": 0,
+      "drive_devices": 0,
+      "drive_editor_sessions": 0,
+      "drive_editor_documents": 0,
+      "drive_upload_sessions": 0
+    },
+    "user": {
+      "id": "usr_cab44ae1a10359530d02072a",
+      "username": "admin",
+      "display_name": "Administrator",
+      "role": "admin",
+      "status": "active",
+      "sso_provider": "local",
+      "created_at": "2026-10-27 20:52:58.901058979 +0000 UTC",
+      "updated_at": "2026-10-27 20:53:28.169114747 +0000 UTC",
+      "open_in_new_tab": 1
+    },
+    "project_materials_empty": true,
+    "before_after_equal": true,
+    "mode": "SQLite mode=ro; no writes; all four file IDs/revisions/digests/sizes/timestamps, folder and version rows unchanged; no grants, links, uploads, editor sessions or credential issuance"
+  },
+  "native_method": "One owned T3 incognito tab, real type/click login. Waited for signed-in Workspaces shell and zero password fields before first snapshot. Native keyboard/resize/OS schemes and read-only DOM/authenticated GET checks; nativeDPR2 excluded from formalDPR1.",
+  "native_tab_closed_before_formal_capture": true,
+  "native_errors": [
+    "preview_open with about:blank rejected Invalid preview URL; omitted URL succeeded. No login snapshot until signed-in shell and zero password fields.",
+    "Native My files click with role [exact=true] failed validation; CSS :text-is locator timed out. Refreshed snapshot and used snapshot aria-ref. No fallback browser used.",
+    "Switching My files while Trash was active retained Trash; wait for live Meeting notes action timed out. Used existing Back to files before continuing; no content change."
+  ],
+  "native_probes": [
+    {
+      "device": "desktop",
+      "theme": "light",
+      "preview": {
+        "dialog": {
+          "x": 90,
+          "y": 20,
+          "width": 1100,
+          "height": 860,
+          "top": 20,
+          "right": 1190,
+          "bottom": 880,
+          "left": 90
+        },
+        "header": {
+          "x": 91,
+          "y": 21,
+          "width": 1098,
+          "height": 68.1875,
+          "top": 21,
+          "right": 1189,
+          "bottom": 89.1875,
+          "left": 91
+        },
+        "grid": {
+          "columns": "681.625px 312.375px 40px",
+          "rows": "40px"
+        },
+        "title": {
+          "text": "Meeting notes.txt",
+          "box": {
+            "x": 111,
+            "y": 44.09375,
+            "width": 681.625,
+            "height": 20.9921875,
+            "top": 44.09375,
+            "right": 792.625,
+            "bottom": 65.0859375,
+            "left": 111
+          },
+          "overflowWrap": "anywhere"
+        },
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "aria": null,
+            "box": {
+              "x": 804.625,
+              "y": 34.59375,
+              "width": 173.6875,
+              "height": 40,
+              "top": 34.59375,
+              "right": 978.3125,
+              "bottom": 74.59375,
+              "left": 804.625
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 172,
+            "clientWidth": 172
+          },
+          {
+            "text": "Download",
+            "aria": null,
+            "box": {
+              "x": 986.3125,
+              "y": 34.59375,
+              "width": 130.6875,
+              "height": 40,
+              "top": 34.59375,
+              "right": 1117,
+              "bottom": 74.59375,
+              "left": 986.3125
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 129,
+            "clientWidth": 129
+          },
+          {
+            "text": "",
+            "aria": "Close",
+            "box": {
+              "x": 1129,
+              "y": 34.59375,
+              "width": 40,
+              "height": 40,
+              "top": 34.59375,
+              "right": 1169,
+              "bottom": 74.59375,
+              "left": 1129
+            },
+            "gridColumn": "3",
+            "gridRow": "1",
+            "scrollWidth": 38,
+            "clientWidth": 38
+          }
+        ],
+        "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+        "textBox": {
+          "x": 107,
+          "y": 105.1875,
+          "width": 1066,
+          "height": 81.59375,
+          "top": 105.1875,
+          "right": 1173,
+          "bottom": 186.78125,
+          "left": 107
+        },
+        "textStyle": {
+          "border": "0px none rgb(24, 35, 38)",
+          "background": "rgba(0, 0, 0, 0)",
+          "whiteSpace": "pre-wrap"
+        },
+        "textOverflow": 0,
+        "bodyOverflow": 0,
+        "documentOverflow": 0,
+        "bodyBox": {
+          "x": 91,
+          "y": 89.1875,
+          "width": 1098,
+          "height": 789.8125,
+          "top": 89.1875,
+          "right": 1189,
+          "bottom": 879,
+          "left": 91
+        },
+        "dpr": 2,
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "theme": "busnes-light"
+      },
+      "share": {
+        "dialog": {
+          "x": 272,
+          "y": 176.0390625,
+          "width": 736,
+          "height": 547.921875,
+          "top": 176.0390625,
+          "right": 1008,
+          "bottom": 723.9609375,
+          "left": 272
+        },
+        "input": {
+          "box": {
+            "x": 297,
+            "y": 305,
+            "width": 417.3359375,
+            "height": 40.078125,
+            "top": 305,
+            "right": 714.3359375,
+            "bottom": 345.078125,
+            "left": 297
+          },
+          "value": "",
+          "describedBy": "share-person-help"
+        },
+        "help": {
+          "text": "Type at least two characters, then choose Add as reader beside a matching person.",
+          "box": {
+            "x": 297,
+            "y": 350.671875,
+            "width": 417.3359375,
+            "height": 38.03125,
+            "top": 350.671875,
+            "right": 714.3359375,
+            "bottom": 388.703125,
+            "left": 297
+          }
+        },
+        "access": {
+          "box": {
+            "x": 726.3359375,
+            "y": 305,
+            "width": 256.6640625,
+            "height": 40,
+            "top": 305,
+            "right": 983,
+            "bottom": 345,
+            "left": 726.3359375
+          },
+          "value": "reader"
+        },
+        "close": {
+          "x": 943,
+          "y": 194.6328125,
+          "width": 40,
+          "height": 40,
+          "top": 194.6328125,
+          "right": 983,
+          "bottom": 234.6328125,
+          "left": 943
+        },
+        "overflow": 0
+      },
+      "closeAndEscapeDismissed": true,
+      "shell": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "dpr": 2,
+        "theme": "busnes-light",
+        "identity": {
+          "text": "AdministratorAdministrator",
+          "box": {
+            "x": 16,
+            "y": 827.8046875,
+            "width": 207,
+            "height": 52.1953125,
+            "top": 827.8046875,
+            "right": 223,
+            "bottom": 880,
+            "left": 16
+          },
+          "hint": [
+            {
+              "text": "Scroll for more destinations",
+              "visible": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        "heading": {
+          "x": 280,
+          "y": 36,
+          "width": 263.09375,
+          "height": 30,
+          "top": 36,
+          "right": 543.09375,
+          "bottom": 66,
+          "left": 280
+        },
+        "upload": {
+          "x": 1096.8125,
+          "y": 36,
+          "width": 143.1875,
+          "height": 40,
+          "top": 36,
+          "right": 1240,
+          "bottom": 76,
+          "left": 1096.8125
+        },
+        "search": {
+          "x": 280,
+          "y": 148.171875,
+          "width": 960,
+          "height": 40.078125,
+          "top": 148.171875,
+          "right": 1240,
+          "bottom": 188.25,
+          "left": 280
+        },
+        "table": {
+          "x": 281,
+          "y": 282.25,
+          "width": 958,
+          "height": 258.265625,
+          "top": 282.25,
+          "right": 1239,
+          "bottom": 540.515625,
+          "left": 281
+        },
+        "panel": {
+          "x": 281,
+          "y": 282.25,
+          "width": 958,
+          "height": 258.265625,
+          "top": 282.25,
+          "right": 1239,
+          "bottom": 540.515625,
+          "left": 281
+        },
+        "overflow": 0
+      },
+      "trash": {
+        "heading": "Trash",
+        "controls": [
+          {
+            "text": "Back to files",
+            "box": {
+              "x": 941.125,
+              "y": 222.84375,
+              "width": 147.1875,
+              "height": 40,
+              "top": 222.84375,
+              "right": 1088.3125,
+              "bottom": 262.84375,
+              "left": 941.125
+            },
+            "class": "btn-secondary",
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(24, 35, 38)",
+            "border": "rgba(24, 35, 38, 0.38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "box": {
+              "x": 1096.3125,
+              "y": 222.84375,
+              "width": 122.6875,
+              "height": 40,
+              "top": 222.84375,
+              "right": 1219,
+              "bottom": 262.84375,
+              "left": 1096.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(180, 35, 24)",
+            "border": "color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "box": {
+              "x": 948.625,
+              "y": 326.8203125,
+              "width": 90.6875,
+              "height": 40,
+              "top": 326.8203125,
+              "right": 1039.3125,
+              "bottom": 366.8203125,
+              "left": 948.625
+            },
+            "class": "btn-secondary",
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(24, 35, 38)",
+            "border": "rgba(24, 35, 38, 0.38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "box": {
+              "x": 1047.3125,
+              "y": 326.8203125,
+              "width": 175.6875,
+              "height": 40,
+              "top": 326.8203125,
+              "right": 1223,
+              "bottom": 366.8203125,
+              "left": 1047.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(180, 35, 24)",
+            "border": "color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "hover": false
+          }
+        ],
+        "overflow": 0
+      }
+    },
+    {
+      "device": "mobile",
+      "theme": "light",
+      "preview": {
+        "dialog": {
+          "x": 18,
+          "y": 18,
+          "width": 354,
+          "height": 808,
+          "top": 18,
+          "right": 372,
+          "bottom": 826,
+          "left": 18
+        },
+        "header": {
+          "x": 19,
+          "y": 19,
+          "width": 352,
+          "height": 125,
+          "top": 19,
+          "right": 371,
+          "bottom": 144,
+          "left": 19
+        },
+        "grid": {
+          "columns": "268px 40px",
+          "rows": "40px 40px"
+        },
+        "title": {
+          "text": "Meeting notes.txt",
+          "box": {
+            "x": 35,
+            "y": 44.5,
+            "width": 268,
+            "height": 20.9921875,
+            "top": 44.5,
+            "right": 303,
+            "bottom": 65.4921875,
+            "left": 35
+          },
+          "overflowWrap": "anywhere"
+        },
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "aria": null,
+            "box": {
+              "x": 35,
+              "y": 87,
+              "width": 156.09375,
+              "height": 40,
+              "top": 87,
+              "right": 191.09375,
+              "bottom": 127,
+              "left": 35
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 154,
+            "clientWidth": 154
+          },
+          {
+            "text": "Download",
+            "aria": null,
+            "box": {
+              "x": 199.09375,
+              "y": 87,
+              "width": 130.6875,
+              "height": 40,
+              "top": 87,
+              "right": 329.78125,
+              "bottom": 127,
+              "left": 199.09375
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 129,
+            "clientWidth": 129
+          },
+          {
+            "text": "",
+            "aria": "Close",
+            "box": {
+              "x": 315,
+              "y": 35,
+              "width": 40,
+              "height": 40,
+              "top": 35,
+              "right": 355,
+              "bottom": 75,
+              "left": 315
+            },
+            "gridColumn": "2",
+            "gridRow": "1",
+            "scrollWidth": 38,
+            "clientWidth": 38
+          }
+        ],
+        "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+        "textBox": {
+          "x": 35,
+          "y": 160,
+          "width": 320,
+          "height": 81.59375,
+          "top": 160,
+          "right": 355,
+          "bottom": 241.59375,
+          "left": 35
+        },
+        "textStyle": {
+          "border": "0px none rgb(24, 35, 38)",
+          "background": "rgba(0, 0, 0, 0)",
+          "whiteSpace": "pre-wrap"
+        },
+        "textOverflow": 0,
+        "bodyOverflow": 0,
+        "documentOverflow": 0,
+        "bodyBox": {
+          "x": 19,
+          "y": 144,
+          "width": 352,
+          "height": 681,
+          "top": 144,
+          "right": 371,
+          "bottom": 825,
+          "left": 19
+        },
+        "dpr": 2,
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "busnes-light"
+      },
+      "shell": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "dpr": 2,
+        "theme": "busnes-light",
+        "identity": {
+          "text": "AdministratorAdministrator",
+          "box": {
+            "x": 249.703125,
+            "y": 12,
+            "width": 124.296875,
+            "height": 36,
+            "top": 12,
+            "right": 374,
+            "bottom": 48,
+            "left": 249.703125
+          },
+          "hint": [
+            {
+              "text": "Scroll for more destinations",
+              "visible": true,
+              "box": {
+                "x": 16,
+                "y": 112,
+                "width": 358,
+                "height": 18,
+                "top": 112,
+                "right": 374,
+                "bottom": 130,
+                "left": 16
+              }
+            }
+          ]
+        },
+        "heading": {
+          "x": 16,
+          "y": 159,
+          "width": 263.09375,
+          "height": 27.9921875,
+          "top": 159,
+          "right": 279.09375,
+          "bottom": 186.9921875,
+          "left": 16
+        },
+        "upload": {
+          "x": 16,
+          "y": 261.1640625,
+          "width": 143.1875,
+          "height": 40,
+          "top": 261.1640625,
+          "right": 159.1875,
+          "bottom": 301.1640625,
+          "left": 16
+        },
+        "search": {
+          "x": 16,
+          "y": 325.1640625,
+          "width": 358,
+          "height": 40.078125,
+          "top": 325.1640625,
+          "right": 374,
+          "bottom": 365.2421875,
+          "left": 16
+        },
+        "table": {
+          "x": 17,
+          "y": 489.234375,
+          "width": 356,
+          "height": 230.15625,
+          "top": 489.234375,
+          "right": 373,
+          "bottom": 719.390625,
+          "left": 17
+        },
+        "panel": {
+          "x": 17,
+          "y": 489.234375,
+          "width": 356,
+          "height": 230.15625,
+          "top": 489.234375,
+          "right": 373,
+          "bottom": 719.390625,
+          "left": 17
+        },
+        "overflow": 0
+      },
+      "share": {
+        "dialog": {
+          "x": 18,
+          "y": 50.015625,
+          "width": 354,
+          "height": 743.96875,
+          "top": 50.015625,
+          "right": 372,
+          "bottom": 793.984375,
+          "left": 18
+        },
+        "input": {
+          "box": {
+            "x": 35,
+            "y": 200.09375,
+            "width": 320,
+            "height": 40.078125,
+            "top": 200.09375,
+            "right": 355,
+            "bottom": 240.171875,
+            "left": 35
+          },
+          "value": "",
+          "describedBy": "share-person-help"
+        },
+        "help": {
+          "text": "Type at least two characters, then choose Add as reader beside a matching person.",
+          "box": {
+            "x": 35,
+            "y": 245.765625,
+            "width": 320,
+            "height": 38.03125,
+            "top": 245.765625,
+            "right": 355,
+            "bottom": 283.796875,
+            "left": 35
+          }
+        },
+        "access": {
+          "box": {
+            "x": 35,
+            "y": 321.0625,
+            "width": 320,
+            "height": 40,
+            "top": 321.0625,
+            "right": 355,
+            "bottom": 361.0625,
+            "left": 35
+          },
+          "value": "reader"
+        },
+        "close": {
+          "x": 315,
+          "y": 68.609375,
+          "width": 40,
+          "height": 40,
+          "top": 68.609375,
+          "right": 355,
+          "bottom": 108.609375,
+          "left": 315
+        },
+        "overflow": 0
+      },
+      "trash": {
+        "heading": "Trash",
+        "controls": [
+          {
+            "text": "Back to files",
+            "box": {
+              "x": 37,
+              "y": 396.6328125,
+              "width": 166.25,
+              "height": 40,
+              "top": 396.6328125,
+              "right": 203.25,
+              "bottom": 436.6328125,
+              "left": 37
+            },
+            "class": "btn-secondary",
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(24, 35, 38)",
+            "border": "rgba(24, 35, 38, 0.38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "box": {
+              "x": 211.25,
+              "y": 396.6328125,
+              "width": 141.75,
+              "height": 40,
+              "top": 396.6328125,
+              "right": 353,
+              "bottom": 436.6328125,
+              "left": 211.25
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(180, 35, 24)",
+            "border": "color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "box": {
+              "x": 86.625,
+              "y": 504.015625,
+              "width": 90.6875,
+              "height": 40,
+              "top": 504.015625,
+              "right": 177.3125,
+              "bottom": 544.015625,
+              "left": 86.625
+            },
+            "class": "btn-secondary",
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(24, 35, 38)",
+            "border": "rgba(24, 35, 38, 0.38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "box": {
+              "x": 185.3125,
+              "y": 504.015625,
+              "width": 175.6875,
+              "height": 40,
+              "top": 504.015625,
+              "right": 361,
+              "bottom": 544.015625,
+              "left": 185.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(180, 35, 24)",
+            "border": "color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "hover": false
+          }
+        ],
+        "overflow": 0
+      },
+      "closeAndEscapeDismissed": true
+    },
+    {
+      "device": "mobile",
+      "theme": "dark",
+      "shell": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "dpr": 2,
+        "theme": "busnes-dark",
+        "identity": {
+          "text": "AdministratorAdministrator",
+          "box": {
+            "x": 249.703125,
+            "y": 12,
+            "width": 124.296875,
+            "height": 36,
+            "top": 12,
+            "right": 374,
+            "bottom": 48,
+            "left": 249.703125
+          },
+          "hint": [
+            {
+              "text": "Scroll for more destinations",
+              "visible": true,
+              "box": {
+                "x": 16,
+                "y": 112,
+                "width": 358,
+                "height": 18,
+                "top": 112,
+                "right": 374,
+                "bottom": 130,
+                "left": 16
+              }
+            }
+          ]
+        },
+        "heading": {
+          "x": 16,
+          "y": 159,
+          "width": 263.09375,
+          "height": 27.9921875,
+          "top": 159,
+          "right": 279.09375,
+          "bottom": 186.9921875,
+          "left": 16
+        },
+        "upload": {
+          "x": 16,
+          "y": 261.1640625,
+          "width": 143.1875,
+          "height": 40,
+          "top": 261.1640625,
+          "right": 159.1875,
+          "bottom": 301.1640625,
+          "left": 16
+        },
+        "search": {
+          "x": 16,
+          "y": 325.1640625,
+          "width": 358,
+          "height": 40.078125,
+          "top": 325.1640625,
+          "right": 374,
+          "bottom": 365.2421875,
+          "left": 16
+        },
+        "table": {
+          "x": 17,
+          "y": 489.234375,
+          "width": 356,
+          "height": 230.15625,
+          "top": 489.234375,
+          "right": 373,
+          "bottom": 719.390625,
+          "left": 17
+        },
+        "panel": {
+          "x": 17,
+          "y": 489.234375,
+          "width": 356,
+          "height": 230.15625,
+          "top": 489.234375,
+          "right": 373,
+          "bottom": 719.390625,
+          "left": 17
+        },
+        "overflow": 0
+      },
+      "preview": {
+        "dialog": {
+          "x": 18,
+          "y": 18,
+          "width": 354,
+          "height": 808,
+          "top": 18,
+          "right": 372,
+          "bottom": 826,
+          "left": 18
+        },
+        "header": {
+          "x": 19,
+          "y": 19,
+          "width": 352,
+          "height": 125,
+          "top": 19,
+          "right": 371,
+          "bottom": 144,
+          "left": 19
+        },
+        "grid": {
+          "columns": "268px 40px",
+          "rows": "40px 40px"
+        },
+        "title": {
+          "text": "Meeting notes.txt",
+          "box": {
+            "x": 35,
+            "y": 44.5,
+            "width": 268,
+            "height": 20.9921875,
+            "top": 44.5,
+            "right": 303,
+            "bottom": 65.4921875,
+            "left": 35
+          },
+          "overflowWrap": "anywhere"
+        },
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "aria": null,
+            "box": {
+              "x": 35,
+              "y": 87,
+              "width": 156.09375,
+              "height": 40,
+              "top": 87,
+              "right": 191.09375,
+              "bottom": 127,
+              "left": 35
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 154,
+            "clientWidth": 154
+          },
+          {
+            "text": "Download",
+            "aria": null,
+            "box": {
+              "x": 199.09375,
+              "y": 87,
+              "width": 130.6875,
+              "height": 40,
+              "top": 87,
+              "right": 329.78125,
+              "bottom": 127,
+              "left": 199.09375
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 129,
+            "clientWidth": 129
+          },
+          {
+            "text": "",
+            "aria": "Close",
+            "box": {
+              "x": 315,
+              "y": 35,
+              "width": 40,
+              "height": 40,
+              "top": 35,
+              "right": 355,
+              "bottom": 75,
+              "left": 315
+            },
+            "gridColumn": "2",
+            "gridRow": "1",
+            "scrollWidth": 38,
+            "clientWidth": 38
+          }
+        ],
+        "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+        "textBox": {
+          "x": 35,
+          "y": 160,
+          "width": 320,
+          "height": 81.59375,
+          "top": 160,
+          "right": 355,
+          "bottom": 241.59375,
+          "left": 35
+        },
+        "textStyle": {
+          "border": "0px none rgb(242, 239, 232)",
+          "background": "rgba(0, 0, 0, 0)",
+          "whiteSpace": "pre-wrap"
+        },
+        "textOverflow": 0,
+        "bodyOverflow": 0,
+        "documentOverflow": 0,
+        "bodyBox": {
+          "x": 19,
+          "y": 144,
+          "width": 352,
+          "height": 681,
+          "top": 144,
+          "right": 371,
+          "bottom": 825,
+          "left": 19
+        },
+        "dpr": 2,
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "theme": "busnes-dark"
+      },
+      "share": {
+        "dialog": {
+          "x": 18,
+          "y": 50.015625,
+          "width": 354,
+          "height": 743.96875,
+          "top": 50.015625,
+          "right": 372,
+          "bottom": 793.984375,
+          "left": 18
+        },
+        "input": {
+          "box": {
+            "x": 35,
+            "y": 200.09375,
+            "width": 320,
+            "height": 40.078125,
+            "top": 200.09375,
+            "right": 355,
+            "bottom": 240.171875,
+            "left": 35
+          },
+          "value": "",
+          "describedBy": "share-person-help"
+        },
+        "help": {
+          "text": "Type at least two characters, then choose Add as reader beside a matching person.",
+          "box": {
+            "x": 35,
+            "y": 245.765625,
+            "width": 320,
+            "height": 38.03125,
+            "top": 245.765625,
+            "right": 355,
+            "bottom": 283.796875,
+            "left": 35
+          }
+        },
+        "access": {
+          "box": {
+            "x": 35,
+            "y": 321.0625,
+            "width": 320,
+            "height": 40,
+            "top": 321.0625,
+            "right": 355,
+            "bottom": 361.0625,
+            "left": 35
+          },
+          "value": "reader"
+        },
+        "close": {
+          "x": 315,
+          "y": 68.609375,
+          "width": 40,
+          "height": 40,
+          "top": 68.609375,
+          "right": 355,
+          "bottom": 108.609375,
+          "left": 315
+        },
+        "overflow": 0
+      },
+      "trash": {
+        "heading": "Trash",
+        "controls": [
+          {
+            "text": "Back to files",
+            "box": {
+              "x": 37,
+              "y": 396.6328125,
+              "width": 166.25,
+              "height": 40,
+              "top": 396.6328125,
+              "right": 203.25,
+              "bottom": 436.6328125,
+              "left": 37
+            },
+            "class": "btn-secondary",
+            "background": "rgb(31, 43, 46)",
+            "color": "rgb(242, 239, 232)",
+            "border": "rgba(242, 239, 232, 0.42)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "box": {
+              "x": 211.25,
+              "y": 396.6328125,
+              "width": 141.75,
+              "height": 40,
+              "top": 396.6328125,
+              "right": 353,
+              "bottom": 436.6328125,
+              "left": 211.25
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 129, 118)",
+            "border": "color(srgb 1 0.505882 0.462745 / 0.45)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "box": {
+              "x": 86.625,
+              "y": 504.015625,
+              "width": 90.6875,
+              "height": 40,
+              "top": 504.015625,
+              "right": 177.3125,
+              "bottom": 544.015625,
+              "left": 86.625
+            },
+            "class": "btn-secondary",
+            "background": "rgb(31, 43, 46)",
+            "color": "rgb(242, 239, 232)",
+            "border": "rgba(242, 239, 232, 0.42)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "box": {
+              "x": 185.3125,
+              "y": 504.015625,
+              "width": 175.6875,
+              "height": 40,
+              "top": 504.015625,
+              "right": 361,
+              "bottom": 544.015625,
+              "left": 185.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 129, 118)",
+            "border": "color(srgb 1 0.505882 0.462745 / 0.45)",
+            "hover": false
+          }
+        ],
+        "overflow": 0
+      },
+      "closeAndEscapeDismissed": true
+    },
+    {
+      "device": "desktop",
+      "theme": "dark",
+      "shell": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "dpr": 2,
+        "theme": "busnes-dark",
+        "identity": {
+          "text": "AdministratorAdministrator",
+          "box": {
+            "x": 16,
+            "y": 827.8046875,
+            "width": 207,
+            "height": 52.1953125,
+            "top": 827.8046875,
+            "right": 223,
+            "bottom": 880,
+            "left": 16
+          },
+          "hint": [
+            {
+              "text": "Scroll for more destinations",
+              "visible": false,
+              "box": {
+                "x": 0,
+                "y": 0,
+                "width": 0,
+                "height": 0,
+                "top": 0,
+                "right": 0,
+                "bottom": 0,
+                "left": 0
+              }
+            }
+          ]
+        },
+        "heading": {
+          "x": 280,
+          "y": 36,
+          "width": 263.09375,
+          "height": 30,
+          "top": 36,
+          "right": 543.09375,
+          "bottom": 66,
+          "left": 280
+        },
+        "upload": {
+          "x": 1096.8125,
+          "y": 36,
+          "width": 143.1875,
+          "height": 40,
+          "top": 36,
+          "right": 1240,
+          "bottom": 76,
+          "left": 1096.8125
+        },
+        "search": {
+          "x": 280,
+          "y": 148.171875,
+          "width": 960,
+          "height": 40.078125,
+          "top": 148.171875,
+          "right": 1240,
+          "bottom": 188.25,
+          "left": 280
+        },
+        "table": {
+          "x": 281,
+          "y": 282.25,
+          "width": 958,
+          "height": 258.265625,
+          "top": 282.25,
+          "right": 1239,
+          "bottom": 540.515625,
+          "left": 281
+        },
+        "panel": {
+          "x": 281,
+          "y": 282.25,
+          "width": 958,
+          "height": 258.265625,
+          "top": 282.25,
+          "right": 1239,
+          "bottom": 540.515625,
+          "left": 281
+        },
+        "overflow": 0
+      },
+      "preview": {
+        "dialog": {
+          "x": 90,
+          "y": 20,
+          "width": 1100,
+          "height": 860,
+          "top": 20,
+          "right": 1190,
+          "bottom": 880,
+          "left": 90
+        },
+        "header": {
+          "x": 91,
+          "y": 21,
+          "width": 1098,
+          "height": 68.1875,
+          "top": 21,
+          "right": 1189,
+          "bottom": 89.1875,
+          "left": 91
+        },
+        "grid": {
+          "columns": "681.625px 312.375px 40px",
+          "rows": "40px"
+        },
+        "title": {
+          "text": "Meeting notes.txt",
+          "box": {
+            "x": 111,
+            "y": 44.09375,
+            "width": 681.625,
+            "height": 20.9921875,
+            "top": 44.09375,
+            "right": 792.625,
+            "bottom": 65.0859375,
+            "left": 111
+          },
+          "overflowWrap": "anywhere"
+        },
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "aria": null,
+            "box": {
+              "x": 804.625,
+              "y": 34.59375,
+              "width": 173.6875,
+              "height": 40,
+              "top": 34.59375,
+              "right": 978.3125,
+              "bottom": 74.59375,
+              "left": 804.625
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 172,
+            "clientWidth": 172
+          },
+          {
+            "text": "Download",
+            "aria": null,
+            "box": {
+              "x": 986.3125,
+              "y": 34.59375,
+              "width": 130.6875,
+              "height": 40,
+              "top": 34.59375,
+              "right": 1117,
+              "bottom": 74.59375,
+              "left": 986.3125
+            },
+            "gridColumn": "auto",
+            "gridRow": "auto",
+            "scrollWidth": 129,
+            "clientWidth": 129
+          },
+          {
+            "text": "",
+            "aria": "Close",
+            "box": {
+              "x": 1129,
+              "y": 34.59375,
+              "width": 40,
+              "height": 40,
+              "top": 34.59375,
+              "right": 1169,
+              "bottom": 74.59375,
+              "left": 1129
+            },
+            "gridColumn": "3",
+            "gridRow": "1",
+            "scrollWidth": 38,
+            "clientWidth": 38
+          }
+        ],
+        "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+        "textBox": {
+          "x": 107,
+          "y": 105.1875,
+          "width": 1066,
+          "height": 81.59375,
+          "top": 105.1875,
+          "right": 1173,
+          "bottom": 186.78125,
+          "left": 107
+        },
+        "textStyle": {
+          "border": "0px none rgb(242, 239, 232)",
+          "background": "rgba(0, 0, 0, 0)",
+          "whiteSpace": "pre-wrap"
+        },
+        "textOverflow": 0,
+        "bodyOverflow": 0,
+        "documentOverflow": 0,
+        "bodyBox": {
+          "x": 91,
+          "y": 89.1875,
+          "width": 1098,
+          "height": 789.8125,
+          "top": 89.1875,
+          "right": 1189,
+          "bottom": 879,
+          "left": 91
+        },
+        "dpr": 2,
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "theme": "busnes-dark"
+      },
+      "share": {
+        "dialog": {
+          "x": 272,
+          "y": 176.0390625,
+          "width": 736,
+          "height": 547.921875,
+          "top": 176.0390625,
+          "right": 1008,
+          "bottom": 723.9609375,
+          "left": 272
+        },
+        "input": {
+          "box": {
+            "x": 297,
+            "y": 305,
+            "width": 417.3359375,
+            "height": 40.078125,
+            "top": 305,
+            "right": 714.3359375,
+            "bottom": 345.078125,
+            "left": 297
+          },
+          "value": "",
+          "describedBy": "share-person-help"
+        },
+        "help": {
+          "text": "Type at least two characters, then choose Add as reader beside a matching person.",
+          "box": {
+            "x": 297,
+            "y": 350.671875,
+            "width": 417.3359375,
+            "height": 38.03125,
+            "top": 350.671875,
+            "right": 714.3359375,
+            "bottom": 388.703125,
+            "left": 297
+          }
+        },
+        "access": {
+          "box": {
+            "x": 726.3359375,
+            "y": 305,
+            "width": 256.6640625,
+            "height": 40,
+            "top": 305,
+            "right": 983,
+            "bottom": 345,
+            "left": 726.3359375
+          },
+          "value": "reader"
+        },
+        "close": {
+          "x": 943,
+          "y": 194.6328125,
+          "width": 40,
+          "height": 40,
+          "top": 194.6328125,
+          "right": 983,
+          "bottom": 234.6328125,
+          "left": 943
+        },
+        "overflow": 0
+      },
+      "trash": {
+        "heading": "Trash",
+        "controls": [
+          {
+            "text": "Back to files",
+            "box": {
+              "x": 941.125,
+              "y": 222.84375,
+              "width": 147.1875,
+              "height": 40,
+              "top": 222.84375,
+              "right": 1088.3125,
+              "bottom": 262.84375,
+              "left": 941.125
+            },
+            "class": "btn-secondary",
+            "background": "rgb(31, 43, 46)",
+            "color": "rgb(242, 239, 232)",
+            "border": "rgba(242, 239, 232, 0.42)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "box": {
+              "x": 1096.3125,
+              "y": 222.84375,
+              "width": 122.6875,
+              "height": 40,
+              "top": 222.84375,
+              "right": 1219,
+              "bottom": 262.84375,
+              "left": 1096.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 129, 118)",
+            "border": "color(srgb 1 0.505882 0.462745 / 0.45)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "box": {
+              "x": 948.625,
+              "y": 326.8203125,
+              "width": 90.6875,
+              "height": 40,
+              "top": 326.8203125,
+              "right": 1039.3125,
+              "bottom": 366.8203125,
+              "left": 948.625
+            },
+            "class": "btn-secondary",
+            "background": "rgb(31, 43, 46)",
+            "color": "rgb(242, 239, 232)",
+            "border": "rgba(242, 239, 232, 0.42)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "box": {
+              "x": 1047.3125,
+              "y": 326.8203125,
+              "width": 175.6875,
+              "height": 40,
+              "top": 326.8203125,
+              "right": 1223,
+              "bottom": 366.8203125,
+              "left": 1047.3125
+            },
+            "class": "btn-danger-quiet",
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 129, 118)",
+            "border": "color(srgb 1 0.505882 0.462745 / 0.45)",
+            "hover": false
+          }
+        ],
+        "overflow": 0
+      },
+      "closeAndEscapeDismissed": true
+    }
+  ],
+  "native_keyboard_navigation": [
+    {
+      "device": "desktop",
+      "theme": "light",
+      "settling_ms_each": 500,
+      "rows": [
+        {
+          "focused": "My files",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 111.5859375,
+            "width": 207,
+            "height": 40,
+            "top": 111.5859375,
+            "right": 223,
+            "bottom": 151.5859375,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": false,
+          "outline": {
+            "width": "3px",
+            "offset": "0px",
+            "color": "rgb(24, 35, 38)",
+            "style": "none"
+          },
+          "boxShadow": "rgb(191, 63, 24) 3px 0px 0px 0px inset",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 226,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Shared with me",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 153.984375,
+            "width": 207,
+            "height": 40,
+            "top": 153.984375,
+            "right": 223,
+            "bottom": 193.984375,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 227,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Account",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 312.15625,
+            "width": 207,
+            "height": 40,
+            "top": 312.15625,
+            "right": 223,
+            "bottom": 352.15625,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 227,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Appearance",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 354.5546875,
+            "width": 207,
+            "height": 40,
+            "top": 354.5546875,
+            "right": 223,
+            "bottom": 394.5546875,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 227,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Recovery",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 396.953125,
+            "width": 207,
+            "height": 40,
+            "top": 396.953125,
+            "right": 223,
+            "bottom": 436.953125,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 227,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Settings & DB",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 439.3515625,
+            "width": 207,
+            "height": 40,
+            "top": 439.3515625,
+            "right": 223,
+            "bottom": 479.3515625,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 223,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 227,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        }
+      ],
+      "measurement_note": "Initial desktop .app-navs is display:contents and has zero box. Raw computed clipping fields are not actual clipping; effective clipping ancestor is app-header x0..240, y0..900 from signed-in snapshot. All focused buttons and 4px rings are inside that ancestor. Dark desktop probe records effective ancestor directly. No focused destinations activated; page remained My files.",
+      "effective_row_bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 240,
+        "height": 900,
+        "left": 0,
+        "right": 240,
+        "top": 0,
+        "bottom": 900
+      }
+    },
+    {
+      "device": "mobile",
+      "theme": "light",
+      "settling_ms_each": 500,
+      "rows": [
+        {
+          "focused": "My files",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 60,
+            "width": 97.296875,
+            "height": 40,
+            "top": 60,
+            "right": 113.296875,
+            "bottom": 100,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": false,
+          "outline": {
+            "width": "3px",
+            "offset": "0px",
+            "color": "rgb(24, 35, 38)",
+            "style": "none"
+          },
+          "boxShadow": "rgb(191, 63, 24) 0px -3px 0px 0px inset",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Shared with me",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 117.296875,
+            "y": 60,
+            "width": 148.296875,
+            "height": 40,
+            "top": 60,
+            "right": 265.59375,
+            "bottom": 100,
+            "left": 117.296875
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Account",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 274.59375,
+            "y": 60,
+            "width": 102.796875,
+            "height": 40,
+            "top": 60,
+            "right": 377.390625,
+            "bottom": 100,
+            "left": 274.59375
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Appearance",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 381.390625,
+            "y": 60,
+            "width": 126.296875,
+            "height": 40,
+            "top": 60,
+            "right": 507.6875,
+            "bottom": 100,
+            "left": 381.390625
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 117.6875,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 121.6875,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Recovery",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 140.6875,
+            "y": 60,
+            "width": 108.296875,
+            "height": 40,
+            "top": 60,
+            "right": 248.984375,
+            "bottom": 100,
+            "left": 140.6875
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 371,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Settings & DB",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 252.984375,
+            "y": 60,
+            "width": 134.796875,
+            "height": 40,
+            "top": 60,
+            "right": 387.78125,
+            "bottom": 100,
+            "left": 252.984375
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 371,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(191, 63, 24)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 1.78125,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        }
+      ]
+    },
+    {
+      "device": "mobile",
+      "theme": "dark",
+      "settling_ms_each": 500,
+      "rows": [
+        {
+          "focused": "My files",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 60,
+            "width": 97.296875,
+            "height": 40,
+            "top": 60,
+            "right": 113.296875,
+            "bottom": 100,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": false,
+          "outline": {
+            "width": "3px",
+            "offset": "0px",
+            "color": "rgb(242, 239, 232)",
+            "style": "none"
+          },
+          "boxShadow": "rgb(245, 134, 95) 0px -3px 0px 0px inset",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Shared with me",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 117.296875,
+            "y": 60,
+            "width": 148.296875,
+            "height": 40,
+            "top": 60,
+            "right": 265.59375,
+            "bottom": 100,
+            "left": 117.296875
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Account",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 274.59375,
+            "y": 60,
+            "width": 102.796875,
+            "height": 40,
+            "top": 60,
+            "right": 377.390625,
+            "bottom": 100,
+            "left": 274.59375
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Appearance",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 381.390625,
+            "y": 60,
+            "width": 126.296875,
+            "height": 40,
+            "top": 60,
+            "right": 507.6875,
+            "bottom": 100,
+            "left": 381.390625
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 0,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 117.6875,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 121.6875,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Recovery",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 140.6875,
+            "y": 60,
+            "width": 108.296875,
+            "height": 40,
+            "top": 60,
+            "right": 248.984375,
+            "bottom": 100,
+            "left": 140.6875
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 371,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Settings & DB",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 252.984375,
+            "y": 60,
+            "width": 134.796875,
+            "height": 40,
+            "top": 60,
+            "right": 387.78125,
+            "bottom": 100,
+            "left": 252.984375
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 56,
+            "width": 390,
+            "height": 48,
+            "top": 56,
+            "right": 390,
+            "bottom": 104,
+            "left": 0
+          },
+          "appNavsDisplay": "flex",
+          "scrollLeft": 371,
+          "scrollWidth": 775,
+          "clientWidth": 390,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 1.78125,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        }
+      ]
+    },
+    {
+      "device": "desktop",
+      "theme": "dark",
+      "settling_ms_each": 500,
+      "rows": [
+        {
+          "focused": "My files",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 111.5859375,
+            "width": 207,
+            "height": 40,
+            "top": 111.5859375,
+            "right": 223,
+            "bottom": 151.5859375,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": false,
+          "outline": {
+            "width": "3px",
+            "offset": "0px",
+            "color": "rgb(242, 239, 232)",
+            "style": "none"
+          },
+          "boxShadow": "rgb(245, 134, 95) 3px 0px 0px 0px inset",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Shared with me",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 153.984375,
+            "width": 207,
+            "height": 40,
+            "top": 153.984375,
+            "right": 223,
+            "bottom": 193.984375,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Account",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 312.15625,
+            "width": 207,
+            "height": 40,
+            "top": 312.15625,
+            "right": 223,
+            "bottom": 352.15625,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Appearance",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 354.5546875,
+            "width": 207,
+            "height": 40,
+            "top": 354.5546875,
+            "right": 223,
+            "bottom": 394.5546875,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Recovery",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 396.953125,
+            "width": 207,
+            "height": 40,
+            "top": 396.953125,
+            "right": 223,
+            "bottom": 436.953125,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        },
+        {
+          "focused": "Settings & DB",
+          "tag": "BUTTON",
+          "aria": null,
+          "inNavigation": true,
+          "focusedBounds": {
+            "x": 16,
+            "y": 439.3515625,
+            "width": 207,
+            "height": 40,
+            "top": 439.3515625,
+            "right": 223,
+            "bottom": 479.3515625,
+            "left": 16
+          },
+          "rowBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 900,
+            "top": 0,
+            "right": 240,
+            "bottom": 900,
+            "left": 0
+          },
+          "appNavsRawBox": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "appNavsDisplay": "contents",
+          "scrollLeft": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "focusVisible": true,
+          "outline": {
+            "width": "2px",
+            "offset": "2px",
+            "color": "rgb(245, 134, 95)",
+            "style": "solid"
+          },
+          "boxShadow": "none",
+          "clippedLeft": 0,
+          "clippedRight": 0,
+          "ringClippedLeft": 0,
+          "ringClippedRight": 0,
+          "pageScroll": {
+            "x": 0,
+            "y": 0
+          },
+          "heading": "My files"
+        }
+      ]
+    }
+  ],
+  "native_focus_evidence": {
+    "path": "/home/yoshi/.t3/userdata/browser-artifacts/browser-screenshot-127-0-0-1-mvr7hxqa-120e767b.png",
+    "dimensions": {
+      "mimeType": "image/png",
+      "width": 780,
+      "height": 1688
+    },
+    "condition": "390x844 light native DPR2; Appearance after Tab+500ms; My files unchanged",
+    "accessibilityTree": "- generic [ref=t3-c88d9aeb-q-e3] [box=0,0,390,844]:\n  - banner [ref=t3-c88d9aeb-q-e4] [box=0,0,390,139]:\n    - generic [ref=t3-c88d9aeb-q-e6] [box=55,16,68,28]: KyDrive\n    - generic [ref=t3-c88d9aeb-q-e7] [box=0,56,390,48]:\n      - navigation \"Workspaces\" [ref=t3-c88d9aeb-q-e8] [box=16,60,250,40]:\n        - button \"My files\" [ref=t3-c88d9aeb-q-e10] [cursor=pointer] [box=16,60,97,40]:\n          - img [ref=t3-c88d9aeb-q-e11] [box=26,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e13] [box=50,70,53,17]: My files\n        - button \"Shared with me\" [ref=t3-c88d9aeb-q-e14] [cursor=pointer] [box=117,60,148,40]:\n          - img [ref=t3-c88d9aeb-q-e15] [box=128,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e20] [box=152,70,104,17]: Shared with me\n      - navigation \"Primary\" [ref=t3-c88d9aeb-q-e23] [box=270,60,489,40]:\n        - button \"Account\" [ref=t3-c88d9aeb-q-e24] [cursor=pointer] [box=275,60,103,40]:\n          - img [ref=t3-c88d9aeb-q-e25] [box=285,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e28] [box=309,70,58,17]: Account\n        - button \"Appearance\" [active] [ref=t3-c88d9aeb-q-e29] [cursor=pointer] [box=381,60,126,40]:\n          - img [ref=t3-c88d9aeb-q-e30] [box=392,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e36] [box=416,70,82,17]: Appearance\n        - button \"Recovery\" [ref=t3-c88d9aeb-q-e37] [cursor=pointer] [box=512,60,108,40]:\n          - img [ref=t3-c88d9aeb-q-e38] [box=522,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e41] [box=546,70,64,17]: Recovery\n        - button \"Settings & DB\" [ref=t3-c88d9aeb-q-e42] [cursor=pointer] [box=624,60,135,40]:\n          - img [ref=t3-c88d9aeb-q-e43] [box=634,71,16,16]\n          - generic [ref=t3-c88d9aeb-q-e46] [box=658,70,90,17]: Settings & DB\n    - paragraph [ref=t3-c88d9aeb-q-e169] [box=16,112,358,18]: Scroll for more destinations\n    - generic [ref=t3-c88d9aeb-q-e48] [box=250,12,124,36]:\n      - generic [ref=t3-c88d9aeb-q-e49] [box=250,13,80,35]:\n        - generic [ref=t3-c88d9aeb-q-e50] [box=250,13,80,18]: Administrator\n        - generic [ref=t3-c88d9aeb-q-e51] [box=250,31,80,17]: Administrator\n      - button \"Sign out\" [ref=t3-c88d9aeb-q-e52] [cursor=pointer] [box=338,12,36,36]:\n        - img [ref=t3-c88d9aeb-q-e53] [box=348,22,16,16]\n  - main [ref=t3-c88d9aeb-q-e56] [box=0,139,390,704]:\n    - generic [ref=t3-c88d9aeb-q-e170] [box=0,139,390,704]:\n      - generic [ref=t3-c88d9aeb-q-e171] [box=16,159,358,142]:\n        - generic [ref=t3-c88d9aeb-q-e172] [box=16,159,263,86]:\n          - heading \"My files\" [level=1] [ref=t3-c88d9aeb-q-e173] [box=16,159,263,28]\n          - paragraph [ref=t3-c88d9aeb-q-e174] [box=16,195,263,23]: Private files for your account\n          - generic [ref=t3-c88d9aeb-q-e175] [box=16,225,263,20]:\n            - meter \"Storage used\" [ref=t3-c88d9aeb-q-e176] [box=16,232,112,6]\n            - text: 350 B of 10.0 GiB used\n        - button \"Upload files\" [ref=t3-c88d9aeb-q-e178] [cursor=pointer] [box=16,261,143,40]:\n          - img [ref=t3-c88d9aeb-q-e179] [box=35,273,16,16]\n          - text: Upload files\n      - search [ref=t3-c88d9aeb-q-e182] [box=16,325,358,40]:\n        - img [box=29,336,18,18]\n        - searchbox \"Search files\" [ref=t3-c88d9aeb-q-e183] [box=16,325,358,40]\n      - generic [ref=t3-c88d9aeb-q-e184] [box=16,385,358,335]:\n        - generic [ref=t3-c88d9aeb-q-e185] [box=17,386,356,103]:\n          - navigation \"Folder path\" [ref=t3-c88d9aeb-q-e186] [box=33,400,58,23]:\n            - button \"My files\" [ref=t3-c88d9aeb-q-e187] [cursor=pointer] [box=33,400,58,23]\n          - generic [ref=t3-c88d9aeb-q-e188] [box=33,435,324,40]:\n            - button \"Trash\" [ref=t3-c88d9aeb-q-e189] [cursor=pointer] [box=33,435,82,40]:\n              - img [ref=t3-c88d9aeb-q-e190] [box=34,447,16,16]\n              - text: Trash\n            - button \"Refresh\" [ref=t3-c88d9aeb-q-e193] [cursor=pointer] [box=123,437,36,36]:\n              - img [ref=t3-c88d9aeb-q-e194] [box=133,447,16,16]\n            - button \"New\" [ref=t3-c88d9aeb-q-e200] [cursor=pointer] [box=167,435,91,40]:\n              - text: New\n              - img [ref=t3-c88d9aeb-q-e201] [box=223,447,16,16]\n        - table [ref=t3-c88d9aeb-q-e204] [box=17,489,356,230]:\n          - rowgroup [ref=t3-c88d9aeb-q-e205] [box=17,489,356,230]:\n            - row \"Project materials Folder Actions for folder Project materials\" [ref=t3-c88d9aeb-q-e206] [box=17,489,356,58]:\n              - cell \"Project materials Folder\" [ref=t3-c88d9aeb-q-e207] [box=29,497,288,41]:\n                - generic [ref=t3-c88d9aeb-q-e208] [box=29,497,163,41]:\n                  - img [ref=t3-c88d9aeb-q-e209] [box=29,502,32,32]\n                  - generic [ref=t3-c88d9aeb-q-e211] [box=73,497,119,41]:\n                    - button \"Project materials\" [ref=t3-c88d9aeb-q-e212] [cursor=pointer] [box=73,497,119,22]\n                    - generic [ref=t3-c88d9aeb-q-e213] [box=73,519,119,19]: Folder\n              - cell \"Actions for folder Project materials\" [ref=t3-c88d9aeb-q-e214] [box=325,500,36,36]:\n                - button \"Actions for folder Project materials\" [ref=t3-c88d9aeb-q-e216] [cursor=pointer] [box=325,500,36,36]:\n                  - img [ref=t3-c88d9aeb-q-e217] [box=334,509,18,18]\n            - row \"Meeting notes.txt 81 B \u00b7 version 1 Actions for Meeting notes.txt\" [ref=t3-c88d9aeb-q-e221] [box=17,547,356,58]:\n              - cell \"Meeting notes.txt 81 B \u00b7 version 1\" [ref=t3-c88d9aeb-q-e222] [box=29,555,288,41]:\n                - generic [ref=t3-c88d9aeb-q-e223] [box=29,555,171,41]:\n                  - img [ref=t3-c88d9aeb-q-e224] [box=29,559,32,32]\n                  - generic [ref=t3-c88d9aeb-q-e227] [box=73,555,127,41]:\n                    - link \"Meeting notes.txt\" [ref=t3-c88d9aeb-q-e228] [cursor=pointer] [box=73,555,127,22]:\n                      - /url: /editor.html?file=b4fa9192-928a-43bb-832f-6774ec4f7442\n                    - generic [ref=t3-c88d9aeb-q-e229] [box=73,577,127,19]: 81 B \u00b7 version 1\n              - cell \"Actions for Meeting notes.txt\" [ref=t3-c88d9aeb-q-e230] [box=325,557,36,36]:\n                - button \"Actions for Meeting notes.txt\" [ref=t3-c88d9aeb-q-e232] [cursor=pointer] [box=325,557,36,36]:\n                  - img [ref=t3-c88d9aeb-q-e233] [box=334,566,18,18]\n            - row \"Quarterly plan.md 135 B \u00b7 version 1 Actions for Quarterly plan.md\" [ref=t3-c88d9aeb-q-e237] [box=17,605,356,58]:\n              - cell \"Quarterly plan.md 135 B \u00b7 version 1\" [ref=t3-c88d9aeb-q-e238] [box=29,613,288,41]:\n                - generic [ref=t3-c88d9aeb-q-e239] [box=29,613,171,41]:\n                  - img [ref=t3-c88d9aeb-q-e240] [box=29,617,32,32]\n                  - generic [ref=t3-c88d9aeb-q-e243] [box=73,613,127,41]:\n                    - link \"Quarterly plan.md\" [ref=t3-c88d9aeb-q-e244] [cursor=pointer] [box=73,613,127,22]:\n                      - /url: /editor.html?file=e11d10aa-072b-4287-8add-3e612e941895\n                    - generic [ref=t3-c88d9aeb-q-e245] [box=73,635,127,19]: 135 B \u00b7 version 1\n              - cell \"Actions for Quarterly plan.md\" [ref=t3-c88d9aeb-q-e246] [box=325,615,36,36]:\n                - button \"Actions for Quarterly plan.md\" [ref=t3-c88d9aeb-q-e248] [cursor=pointer] [box=325,615,36,36]:\n                  - img [ref=t3-c88d9aeb-q-e249] [box=334,624,18,18]\n            - row \"Supplier list.csv 79 B \u00b7 version 1 Actions for Supplier list.csv\" [ref=t3-c88d9aeb-q-e253] [box=17,663,356,57]:\n              - cell \"Supplier list.csv 79 B \u00b7 version 1\" [ref=t3-c88d9aeb-q-e254] [box=29,671,288,41]:\n                - generic [ref=t3-c88d9aeb-q-e255] [box=29,671,157,41]:\n                  - img [ref=t3-c88d9aeb-q-e256] [box=29,675,32,32]\n                  - generic [ref=t3-c88d9aeb-q-e259] [box=73,671,113,41]:\n                    - link \"Supplier list.csv\" [ref=t3-c88d9aeb-q-e260] [cursor=pointer] [box=73,671,113,22]:\n                      - /url: /editor.html?file=76417062-2d42-4435-8a58-32860e23a5c4\n                    - generic [ref=t3-c88d9aeb-q-e261] [box=73,693,113,19]: 79 B \u00b7 version 1\n              - cell \"Actions for Supplier list.csv\" [ref=t3-c88d9aeb-q-e262] [box=325,673,36,36]:\n                - button \"Actions for Supplier list.csv\" [ref=t3-c88d9aeb-q-e264] [cursor=pointer] [box=325,673,36,36]:\n                  - img [ref=t3-c88d9aeb-q-e265] [box=334,682,18,18]\n      - group [ref=t3-c88d9aeb-q-e269] [box=16,744,358,50]:\n        - generic \"Administration\" [ref=t3-c88d9aeb-q-e270] [cursor=pointer] [box=16,745,358,49]",
+    "consoleEntries": [],
+    "failedNetwork": [
+      {
+        "url": "http://127.0.0.1:5878/api/drive/files/b4fa9192-928a-43bb-832f-6774ec4f7442/preview",
+        "method": "HEAD",
+        "status": null,
+        "failed": true,
+        "errorText": "net::ERR_ABORTED",
+        "timestamp": "2026-10-27T21:36:57.129Z"
+      }
+    ]
+  },
+  "native_diagnostics": {
+    "consoleEntries": [],
+    "failedNetwork": [
+      {
+        "url": "http://127.0.0.1:5878/api/drive/files/b4fa9192-928a-43bb-832f-6774ec4f7442/preview",
+        "method": "HEAD",
+        "status": null,
+        "failed": true,
+        "errorText": "net::ERR_ABORTED",
+        "timestamp": "2026-10-27T21:38:51.041Z"
+      }
+    ]
+  },
+  "preference": {
+    "original_on": true,
+    "on_fresh_ui_and_authenticated_read_before_and_after": true,
+    "on_post_capture_readonly_sql": true,
+    "changed_this_confirmation": false,
+    "off_reload_restore_check": "Reused initial limited check only: unchanged relevant AppHeader/TwoFactor source and unchanged preference rules; no repeat toggle; not fresh full behavior evidence",
+    "editors_opened": false
+  },
+  "share": {
+    "help_associated": "aria-describedby=share-person-help",
+    "phone_order": "person input, help, Access",
+    "all_four_conditions_fresh": true,
+    "reader_editor_manager_wording": "Reader observed fresh; initial editor/manager wording checks reused only with identical ShareDialog source",
+    "person_query_empty": true,
+    "no_grants_or_links": true,
+    "close_square_css_px": 40
+  },
+  "preview": {
+    "header_controls_css_height": 40,
+    "close_css_square": 40,
+    "title_and_close_first_row_all_four_conditions": true,
+    "phone_links_second_row_fit": true,
+    "desktop_single_header_row": true,
+    "text_border": "0px none",
+    "all_four_viewport_scheme_probes": true,
+    "escape_and_close_dismissed": true,
+    "overflow_px": 0,
+    "long_title_limit": "Fixture title Meeting notes.txt fits on one line; observed minmax(0,1fr) columns and overflow-wrap:anywhere, title/Close separation and link fit. No long file/title inserted or DOM override; arbitrary long-title runtime behavior was not separately exercised. Parent reports six QuickLook unit tests and syntax check; not rerun or treated as full suite."
+  },
+  "desktop_alignment": {
+    "search_edges": [
+      280,
+      1240
+    ],
+    "table_edges": [
+      281,
+      1239
+    ],
+    "panel_outer_edges": [
+      280,
+      1240
+    ],
+    "table_border_inset_px": 1,
+    "heading_and_upload_top": 36
+  },
+  "trash_hover": {
+    "fresh_rest_checks_all_four_conditions": true,
+    "idle_background": "transparent",
+    "idle_border": "danger45% / transparent",
+    "hover_checks": "Initial limited hover checks reused: current commit changes only QuickLook rules within theme.css; danger selectors and tokens unchanged. No new hover claim.",
+    "capture_state_correction_not_product_gain": true
+  },
+  "formal_capture": {
+    "driver": "docs/ui-drive-eight/capture-round4.mjs",
+    "runs": 1,
+    "confirmation_recapture": true,
+    "confirmation_number": 1,
+    "command": "node docs/ui-drive-eight/capture-round4.mjs /tmp/kydrive-r3-recreated-sgjfh9md/owned-process-r4-confirm.json",
+    "unmodified_committed_driver": true,
+    "atomic_manifest": true,
+    "browser": {
+      "engine": "Chromium",
+      "version": "156.0.8078.4",
+      "mode": "headless",
+      "playwright": "1.64.1"
+    },
+    "started_at": "2026-10-27T21:39:19.311Z",
+    "finished_at": "2026-10-27T21:39:52.020Z",
+    "browser_closed": true,
+    "count": 40,
+    "dpr": 1,
+    "locale": "en-US",
+    "timezone": "America/New_York",
+    "service_workers": "allow (normal registration and lifecycle)",
+    "conditions_match_initial_and_stage02": true,
+    "pointer_change": "pointer0,0 BEFORE500ms settling, same as initialstage03; stage02 AFTER delay. Capture-state correction is not product gain.",
+    "hovered_controls_all_empty": true,
+    "saved_theme_absent_all": true,
+    "service_worker_controller_present_all": true,
+    "max_document_horizontal_overflow_px": 0,
+    "pageerrors_and_http_failures": [],
+    "diagnostic_limit": "Driver records pageerrors and HTTP>=400, not every console warning/cancellation. Native snapshot includes aborted preview HEAD requests during rapid dismissal."
+  },
+  "inspections": [
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-light.png",
+      "sha256": "c2e55f4bfd21e534d91f4e5f738c3c71a0c90390a48b7376fce1409780fb94b7",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped username/password placeholders, verified security check and Match system; no current credentials entered before image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-light.png",
+      "sha256": "dc1c7b2b957d300c376bc5b4396b36a2d58dbed6cb1e12439cf68cebf0d4e749",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files and Project materials; name/role in shell, phone hint, full-width search, Upload and collapsed Administration."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-light.png",
+      "sha256": "2a3cffa35aac50cc1ecb68c4ca4893b5a0bd007103d070be581f716826a2c7fb",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials heading/breadcrumb and empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-light.png",
+      "sha256": "06440d2307478e6226fe7db24b79a1f356489371916d47faf1391067e6ccccf2",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts is unsubmitted input only; 40px Close, normal product backdrop blur/dimming; no folder created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-light.png",
+      "sha256": "53ecf89b671ae79e9d557bdc735600ff641ec520dbc9eab7319b42dcbaa9d44c",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact flat Meeting notes.txt text; Close beside title, all controls40px; desktop one row, phone links together on second row; no clipping or overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-light.png",
+      "sha256": "77fb17d1ebdb76561c39c1dc6bcb78eb2e82e52b9266900d751423b5e3aa4473",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Unsubmitted Reader form; person help below input before Access on phone; square Close; no shares/links created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-light.png",
+      "sha256": "c1580ecae2dedb27cc8dc58729f40cdd479d19706bd06eebcb24c4a6a858e360",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version with original instant; relative age naturally advanced to46minutes, no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-light.png",
+      "sha256": "0dba4a2e5bc961621b3387417af75563bd211df43dae9e27a2ce95bcb11e2d46",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; transparent idle danger buttons; no restore/delete."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-light.png",
+      "sha256": "6e39de0ec7f92b9752710bc3d20719444724559056b14ed3450686b2e9914ad2",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; preview cards; phone continues below viewport, no browser theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-light.png",
+      "sha256": "dda236a56e358ed3e877458b1232708123e49f0f0fe879c6ee8d3e10384e9fe9",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Files preference ON; local recovery administrator/MFA Off; no credentials issued; page continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-light.png",
+      "sha256": "b66bf5cf38318e8bf1cc6383669e7e07a6564b98359ee8b0fa9e864379ff110f",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped username/password placeholders, verified security check and Match system; no current credentials entered before image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-light.png",
+      "sha256": "3d813cc694ee728d17c410cff5b03e21bca6dba9ef20462a43ca8ddf7490eab6",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files and Project materials; name/role in shell, phone hint, full-width search, Upload and collapsed Administration."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-light.png",
+      "sha256": "987886ee4463fef3096539a6b218f09a856128a2d4057dce84e94dd486cfa837",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials heading/breadcrumb and empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-light.png",
+      "sha256": "d97ff1ff4c566fa0692bfb46891ca4c33e414115868bfc8716f964b313aaa2d7",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts is unsubmitted input only; 40px Close, normal product backdrop blur/dimming; no folder created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-light.png",
+      "sha256": "0e8640351cba66c531b05e9665119521f741d280e2debb452fc639f0780b4a3b",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact flat Meeting notes.txt text; Close beside title, all controls40px; desktop one row, phone links together on second row; no clipping or overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-light.png",
+      "sha256": "8a555c98b990dc65c9445cb9eafd5a8187eda8275876605c2434ce996fa82397",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Unsubmitted Reader form; person help below input before Access on phone; square Close; no shares/links created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-light.png",
+      "sha256": "185e1d9a22d963bd484fd9ef78bf7a8eacb9b4ba459e1d84b0fdd33bf486c86a",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version with original instant; relative age naturally advanced to46minutes, no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-light.png",
+      "sha256": "f802c2db62e130592c41e898580a6542ba1a63fddcb935c37d055782e08512bb",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; transparent idle danger buttons; no restore/delete."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-light.png",
+      "sha256": "adf04e4e11880dc49605f900f7ed0bef206defaa4b1ec05ddac8108c33eb4cf4",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; preview cards; phone continues below viewport, no browser theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-light.png",
+      "sha256": "93f6835e07dfae8844d8fe7f8bbab5c23ca87c2e0a4a3599097faeffa9de8ae3",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Files preference ON; local recovery administrator/MFA Off; no credentials issued; page continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-dark.png",
+      "sha256": "9ecc174bd58b9c14adbb06a4616cecc2e434d14908e9b0cf594b32a1d06479fd",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped username/password placeholders, verified security check and Match system; no current credentials entered before image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-dark.png",
+      "sha256": "8b05bb55ef4a4682dc6e723e5dcd813fe8072d267449da69337f378e731f36f5",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files and Project materials; name/role in shell, phone hint, full-width search, Upload and collapsed Administration."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-dark.png",
+      "sha256": "2d216a80bbd3de20a3e8160e245309e0306bd50ae0994d54e07c6f0ac8ca3f58",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials heading/breadcrumb and empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-dark.png",
+      "sha256": "aee33842c6944ae15866442669f2dfd39a8c6449e8d3036421032cdcaf278268",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts is unsubmitted input only; 40px Close, normal product backdrop blur/dimming; no folder created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-dark.png",
+      "sha256": "17b6bbdc74e1dfaebc7033a09f59b1a06577f0ebc2eadcb00c8c64ee55f88d90",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact flat Meeting notes.txt text; Close beside title, all controls40px; desktop one row, phone links together on second row; no clipping or overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-dark.png",
+      "sha256": "187441c4dd97382e8146d58bb7e3ca420159e50db1099c4cfde4a3d00edefd94",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Unsubmitted Reader form; person help below input before Access on phone; square Close; no shares/links created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-dark.png",
+      "sha256": "e912e26a4a659c2fb8df533e6190199a42a65449edb95a57bc9fed3b1580e1ba",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version with original instant; relative age naturally advanced to46minutes, no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-dark.png",
+      "sha256": "74cae80a8db0d8b7d4e44c12ac7eef8f0a1164c38844543af9f4bd6a2fca8ded",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; transparent idle danger buttons; no restore/delete."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-dark.png",
+      "sha256": "620234112c7c39ca7ab46959c36eee5b984d0d5c1d69b28c06d52301e3deb2ca",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; preview cards; phone continues below viewport, no browser theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-dark.png",
+      "sha256": "e596c7c4d454f26ceec3cc6bde1ff32e9b9bee4312966428f3b37507442c95e3",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Files preference ON; local recovery administrator/MFA Off; no credentials issued; page continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-dark.png",
+      "sha256": "f94d60c999307162dae01e887bb9b6337af4d7e9989babd19e6454e838cce696",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped username/password placeholders, verified security check and Match system; no current credentials entered before image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-dark.png",
+      "sha256": "28d77ee1dbd9a31a42aeefb9cc70cff983149d247c210bb6189a0db9d5ba9526",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files and Project materials; name/role in shell, phone hint, full-width search, Upload and collapsed Administration."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-dark.png",
+      "sha256": "3c7a845b6f106b461b6ad54ba2177e843aa717107540ef06ffa11b744b72d318",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials heading/breadcrumb and empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-dark.png",
+      "sha256": "be5afa2a3a67735ef462ca174814b59bbbce2426a60296273adad695fa5430a5",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts is unsubmitted input only; 40px Close, normal product backdrop blur/dimming; no folder created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-dark.png",
+      "sha256": "719b841399aed1695499ae373603bcf8e815770612d2d661463a43cbc2e9ee2f",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact flat Meeting notes.txt text; Close beside title, all controls40px; desktop one row, phone links together on second row; no clipping or overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-dark.png",
+      "sha256": "183a9dbe17741db8e1d45f46e30a7c1fcb3bbdd45cb7e1c429896cbeb2cf1763",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Unsubmitted Reader form; person help below input before Access on phone; square Close; no shares/links created."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-dark.png",
+      "sha256": "121fde4e2f72aa2b150c62c542ede8cc3037ab199bd475811fbaa573207cf88d",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version with original instant; relative age naturally advanced to46minutes, no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-dark.png",
+      "sha256": "6f439a8cc34a3f86a5a4c4bfbdfbf8ec20f92a99daecd8361f6ae21738e74125",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; transparent idle danger buttons; no restore/delete."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-dark.png",
+      "sha256": "c9ee79d3357c5d7ba089558f43af19a232649513fdee2a48376c349e15515529",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; preview cards; phone continues below viewport, no browser theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-dark.png",
+      "sha256": "cf51451f94a3a7ed0c01ad9d361cf82840f82818e6004ad13d0cdb7b22a0f7e0",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened with native view_image(detail=original); no contact sheet/rescaling",
+      "result": "No capture defect observed",
+      "notes": "Files preference ON; local recovery administrator/MFA Off; no credentials issued; page continues below viewport."
+    }
+  ],
+  "duplicates": {
+    "comparisons": 380,
+    "exact_png_unique": 40,
+    "exact_rgba_unique": 40,
+    "near_duplicate_count": 0
+  },
+  "defects": [
+    {
+      "kind": "product keyboard focus visibility",
+      "surface": "phone navigation Appearance",
+      "condition": "390x844 native DPR2 in both OS themes, real Tab from My files, explicit500ms after each Tab",
+      "observed": "Appearance focused bounds x381.390625..507.6875,y60..100; row x0..390,y56..104; scrollLeft0. Button clipped117.6875px;2px outline+2px offset clipped121.6875px. Recovery next scrolls row to371. Task remains My files; no destination activation.",
+      "screenshot": "/home/yoshi/.t3/userdata/browser-artifacts/browser-screenshot-127-0-0-1-mvr7hxqa-120e767b.png",
+      "action": "Reported without source fix or further confirmation capture."
+    },
+    {
+      "kind": "product keyboard focus ring edge",
+      "surface": "phone navigation Settings & DB",
+      "condition": "390x844 native DPR2 both themes, Tab after Recovery plus500ms",
+      "observed": "Button x252.984375..387.78125 is visible at scrollLeft371;2px outline+2px offset extends to391.78125 past row right390, clipping1.78125px of outer focus ring.",
+      "action": "Reported from settled geometry; no extra screenshot or recapture."
+    }
+  ],
+  "missing_unscored": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)",
+    "Complete accessibility and behavior gates",
+    "Arbitrary long-title runtime fixture outside frozen content"
+  ],
+  "full_behavior_accessibility_role_sso_editor_shared_production_acceptance": false,
+  "product_test_docs_contract_driver_edits": false,
+  "commits_or_subagents": false,
+  "parent_reported_checks": "Six QuickLook unit tests plus syntax check reported by parent; not rerun here and not a full test claim",
+  "myslop": "Known401; explicit no-retry/no-post honored, no board request; HANDOFF_TOKEN present",
+  "dox": "Re-read root/web/browser/docs/ui-drive-eight chains; final DOX pass: existing stage03 evidence contract covers outputs. AGENTS and all other contracts intentionally unchanged under explicit no-edit scope.",
+  "artifact_sha256": {
+    "manifest-03-after.json": "935bfb1e884bffee771bf049714d79d77e40dac388031f84c0cb89d4ace4f7ab",
+    "inventory-v4.json": "3d2cc7e43a4319b8657b6593955ef7dc3458d72285fa2c90df43f641aec44c2b",
+    "near-duplicate-audit-v4.json": "afda4452be9a0feef93e2c9663bac82ff3323136ccf03b2d9ee781a86eb88a72",
+    "source-provenance-r4.json": "af995578480f3e7dbe4a2500f09f38e6915fdd38e0a41184272b3b19db85bbd1",
+    "round4-capture-checks.md": "35939013ca9b9a532f9ea913ba4d580e66fb799c81db1204f7074a6ccebae476"
+  }
+}
