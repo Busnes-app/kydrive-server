@@ -166,7 +166,15 @@
       ]
     }
   },
-  "spread_audit": "Separate read-only audit active: kydrive-r4-disagreement-audit-20261027",
+  "spread_audit": {
+    "status": "complete",
+    "report": "round4-spread-audit.md",
+    "quality_spreads": 8,
+    "brand_spreads": 14,
+    "affected_originals": 18,
+    "originals_inspected": 20,
+    "raw_scores_changed": false
+  },
   "next_batch": "Only adopt shared field-border token for fields/secondary/icon outlines and40px icon dimensions. Do not broaden to optional layout/polish recommendations.",
   "findings_qualification": "F1 pixel contrast is a useful lead, not a browser-computed complete contrast gate. Existing CSS uses line-strong instead of field-border. F2 source36px size is confirmed. Native before/after measurements requested with next capture.",
   "behavior": "round4-focus-disposition.json retains all48destinations visible and strict0.1875px outerring residual; no further loop for that residual.",

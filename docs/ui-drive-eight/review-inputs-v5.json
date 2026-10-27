@@ -1,0 +1,29 @@
+{
+  "product_source": "c320daf27d06bfadce82225f615a0323fca9f9a6",
+  "manifest": "manifest-04-after.json",
+  "inventory": "inventory-v5.json",
+  "near_duplicates": "near-duplicate-audit-v5.json",
+  "provenance": [
+    "source-provenance-r5.json",
+    "capture-provenance-r5.json"
+  ],
+  "authority": "authority.json",
+  "brand_references": "brand-references.json",
+  "all_image_artifacts": "artifacts-v5.json",
+  "quality_inputs": 40,
+  "unscored": {
+    "historical": 160,
+    "superseded_initial": 40,
+    "brand_only": 4,
+    "behavior_probe_only": 2
+  },
+  "capture_scope": "Actual local recovery administrator initial views only, except signed-out login. Ordinary/shared/connected/editor/SSO workflows remain absent/unscored.",
+  "build_limitation": "Binary revision c320daf,vcs.modified=true documented. Tracked source/dist/servedindex pins and948prior tracked files verified. Minimal sequential frontend/Go builds passed; fullCI separate.",
+  "restart": "Same recreated R3 runtime fixture retained through R4 initial and confirmation: sameIDs/timestamps/content; sessions and relativeages naturally change.",
+  "prohibited_before_freeze": "Prior/peer reviews, historical/superseded/behavior-probe PNGs, parent audits/checkpoints/COUNCIL/CSV/XLSX/galleries/PR/acceptance. After entire files-array freeze only own round4 report and stage03 originals for drift.",
+  "behavior_gates": "Complete gates remain untested; screenshots cannot pass them.",
+  "capture_correction": "Pointer-before500ms settling unchanged fromstage03; no new capture-state correction versusownround4. SameIDs/timestamps/content,relativeages naturallyadvance.",
+  "bounded_confirmation": "Stage04 captured once, no capture defect, no confirmation recapture chosen. Stage03 initial40images remain superseded history, not current.",
+  "known_behavior_defect": "Separate focus-only fix is included in c320daf. Prior ad0 native48/48destinations visible,46/48ringsfit; current limited10/10destinationsfit8/10ringsfit withsame0.1875pxAppearance outer-ring residual retained. Strictzero-tolerancefocusFAIL, notcompletea11ypass.",
+  "measured_scope": "Busnes sampled search,Share fields/selects,secondary/icon boundaries exceed3:1 against measured fill/adjacent surfaces; icon40px. UnselectedAccountchoice-card2.3169:1light/3.4804dark; nativeUA radioindicator unmeasured. No allcontrol/allstate/alltheme gate."
+}

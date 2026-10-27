@@ -26,6 +26,7 @@ Keep staged KyDrive captures, independent reviews and visual progression evidenc
 - Stage01 records round2 after-views from the same owned fixture and matched surface/size/theme set; keep stage00 and raw round1 reports unchanged. Preserve any superseded initial batch and permit only one confirmation recapture per refinement batch.
 - Recreated fixtures disclose changed instance identity and timestamps; match declared synthetic content/roles rather than claiming identical runtime state. Keep corrected metadata roles in a supplemental index so frozen input hashes remain reproducible.
 - Stage03 retains the recreated stage02 fixture where available. Its driver moves the pointer before the settling delay and records hovered controls; capture-state corrections are disclosed separately from product improvements. Preserve earlier drivers and originals. `stage03-initial/` stores the superseded initial46artifacts byte-for-byte; `stage03-initial-preservation.json` maps original paths/hashes. Canonical stage03 paths hold the single confirmation only.
+- Stage04 preserves the same fixture and records sampled actual browser border contrast before/after shared-token adoption. Keep choice-card/native-radio and focus-ring residuals separate; sampled controls never establish the complete contrast/accessibility gate.
 - Product checks follow root/web contracts. Screenshots do not establish complete behavior, accessibility, role or integration gates.
 
 ## Verification
