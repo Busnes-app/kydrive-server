@@ -11,5 +11,8 @@
   "decision": "One bounded correction and confirmation: move Preview Close out of the wrapping action group and keep it beside title. Preserve this complete initial batch under stage03-initial before confirmation.",
   "navigation_focus": "Immediate native clipping has insufficient settling evidence; recheck with a bounded settled native probe before judging persistence.",
   "scores": "No round4scores yet; do not score initial and confirmation as separate rounds.",
-  "dox": "Evidence-only firstbatch and audit closeout; nearest evidence contract applies."
+  "dox": "Evidence-only firstbatch and audit closeout; nearest evidence contract applies.",
+  "initial_artifacts": "stage03-initial/;46unchanged files mapped in stage03-initial-preservation.json",
+  "correction": "QuickLook Close moved outside wrapping action row. Header grid keeps title/Close in first row on phone; existing two links in second. Desktop retains one header row.",
+  "targeted_check": "6QuickLook unit tests passed; browser specification syntax passed; geometry assertions extended for Close/title row."
 }
