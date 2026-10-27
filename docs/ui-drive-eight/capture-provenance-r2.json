@@ -1,0 +1,562 @@
+{
+  "stage": "01-after",
+  "verified_at": "2026-10-27T20:21:21.365819+00:00",
+  "manifest": "manifest-01-after.json",
+  "manifest_sha256": "52af67455bdffa814f86c33a6755be523cfe1ffd908bcc7e4fdb63191abcce0d",
+  "source_commit": "7dd862e4fab842c234e828754c101a56ebab322f",
+  "binary_sha256": "6e0559e16d9b89baf6be8b8a60d9f38065c437751be0277f26311eef8462edec",
+  "capture_driver_sha256": "362336b2d23f8ba31c1fb1e2257a6af039d585942d143b2c8dfda620e6f3f32f",
+  "owned_process_record": "/tmp/kydrive-drive-eight-ecm8peut/round2-owned-process.json",
+  "pid": 2319319,
+  "proc_exe": "/tmp/kydrive-drive-eight-ecm8peut/server-round2-7dd862e",
+  "proc_start_ticks": "26709047",
+  "previous_identity_validated_before_sigterm": true,
+  "fixture_environment_keys": [
+    "PATH",
+    "KY_APP_URL",
+    "KY_HOST",
+    "KY_PORT",
+    "KY_DB_DRIVER",
+    "KY_DATA_DIR",
+    "KY_BACKUP_DIR",
+    "KY_CAPTCHA_PROVIDER",
+    "KY_EXCALIDRAW_FONTS_DIR",
+    "KY_ADMIN_PASSWORD"
+  ],
+  "fixture_state": "Same private data/backups/encryption key/current credentials; no intentional fixture writes except real sign-in/session lifecycle and product idempotent personal-workspace initialization. No content, grant, recovery, MFA or credential changes.",
+  "base_url": "http://127.0.0.1:5878",
+  "native_reconnaissance": {
+    "tool_system": "T3 collaborative browser",
+    "tab_id": "tab_3u_2e419d46-7b07-427f-bf30-1831131b4cba",
+    "profile": "incognito",
+    "own_tab": true,
+    "sequence": [
+      "preview_status",
+      "preview_open(reuseExistingTab=false, profileId=incognito)",
+      "preview_navigate(loopback owned fixture)",
+      "preview_snapshot",
+      "preview_type(real current username/password; values suppressed)",
+      "preview_click(Sign In)",
+      "preview_snapshot(actual local Administrator, unchanged synthetic files)",
+      "preview_click(Project materials)",
+      "preview_snapshot(empty folder)",
+      "preview_click(Administration summary)",
+      "preview_snapshot(expanded administration)",
+      "preview_evaluate(read-only conditions)"
+    ],
+    "same_step_failures": [],
+    "native_fallback_needed": false,
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "dpr": 2,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "saved_theme": null,
+    "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+    "overflow_px": 0,
+    "scored_capture": false
+  },
+  "reproducible_batch_browser": {
+    "engine": "Chromium",
+    "version": "156.0.8078.4",
+    "mode": "headless",
+    "playwright": "1.64.1"
+  },
+  "started_at": "2026-10-27T20:19:05.526Z",
+  "finished_at": "2026-10-27T20:19:41.033Z",
+  "capture_invocations": 1,
+  "confirmation_recaptures": 0,
+  "matched_baseline_memberships": 40,
+  "device_scale_factor": 1,
+  "sizes": [
+    [
+      1280,
+      900
+    ],
+    [
+      390,
+      844
+    ]
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "locale": "en-US",
+  "timezone": "America/New_York",
+  "full_page": false,
+  "normal_service_workers_all_40": true,
+  "saved_theme_absent_all_40": true,
+  "zero_document_horizontal_overflow_all_40": true,
+  "all_images_hash_size_dimensions_verified": true,
+  "png_unique_count": 40,
+  "decoded_pixel_unique_count": 40,
+  "decoded_pixel_duplicates": [],
+  "same_size_rgba_pair_count": 380,
+  "near_duplicate_count": 0,
+  "diagnostics": [],
+  "individual_inspection_count": 40,
+  "individual_inspections": [
+    {
+      "file": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "sha256": "c2e55f4bfd21e534d91f4e5f738c3c71a0c90390a48b7376fce1409780fb94b7",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Signed out; security check verified; empty input placeholders, no credentials visible."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "sha256": "50c36f9420d1759c7610a679842d018e70315ea7c4e5b197a14cbee421facf55",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials folder and three version-1 live files; row actions visible; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "sha256": "58c53dc3e6f2397b41f35f6d733c0f53a5c7ca5c742f8853c9e1f324aeb6ccb7",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials heading/breadcrumb and empty-folder state; no content created."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "sha256": "c2ad7f53d136460f10bbc65adf94948a3681115345b853e80ae1a5a526f0b96a",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Working drafts entered; form unsubmitted; controls visible; backdrop dim/blur is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "sha256": "79623098c5e31eb1e7114b51d3d3b8547b0756680e9105337853721792cb263e",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Meeting notes.txt synthetic text visible; header actions and Close fit; text wraps on mobile."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "sha256": "67489b253b4a75b73ae8b8b2f5de4ffefc6d12ee93b7e05792f0520c112e326d",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Empty people/share state and organisation-link form; no grant/link created; controls fit."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "sha256": "e8ec6e779a293bc79080f86e9f2bfe732d0f9a2298f3cc3216f36e7ae2821bcf",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "One current version; local date/time and relative age visible; no open row menu."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "sha256": "0e2607199be990da6068785247146830ae48565c92a09d64dd805e50c21d1b23",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Trash heading; Archive note.txt retained; Restore/delete controls visible; no action submitted."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "sha256": "181878dd68c3d4c4ded7c1a8011b5c009fc149588386def87fbb8506d2200d9d",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Match system selected; theme previews visible; mobile page continues below initial viewport; saved choice absent."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "sha256": "d9321cd917822f3f1c624d524daf45816c7d75a7777b4300969890ea3c052a26",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Actual Administrator account; MFA off; credential form unsubmitted; page continues below initial viewport."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "sha256": "b66bf5cf38318e8bf1cc6383669e7e07a6564b98359ee8b0fa9e864379ff110f",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Signed out; security check verified; empty input placeholders, no credentials visible."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "sha256": "8dd76cae22192a6d527a213489c90df9b76f2ae0e656b95466474d1674f27f4e",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials folder and three version-1 live files; row actions visible; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "sha256": "323529bc45a503ee3114018ff221bf04051625ee911711089e1a06ee4b7bcb06",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials heading/breadcrumb and empty-folder state; no content created."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "sha256": "e53b646d3e106fcc52b82c40f796dbf7829b419d2ff33663368a5d54a55130f7",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Working drafts entered; form unsubmitted; controls visible; backdrop dim/blur is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "sha256": "0a9c846564d7466eb0d32f9bb278e44cf804b93fd5e2155922b8a6b9f0aa8e92",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Meeting notes.txt synthetic text visible; header actions and Close fit; text wraps on mobile."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "sha256": "e6fd9724e610bf825662e058064baba985cb651d1e42d59352cf2bec0175d644",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Empty people/share state and organisation-link form; no grant/link created; controls fit."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "sha256": "300a08b726c806306d6c32903c7fef6277e2fecdabc2d6f3e5e6d9313ee1ea79",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "One current version; local date/time and relative age visible; no open row menu."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "sha256": "7c1380f87a6d8018cb4926b7aefe21ceafb4971cda10a04f03e5e3bf67c336cb",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Trash heading; Archive note.txt retained; Restore/delete controls visible; no action submitted."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "sha256": "bc6ba3c97447a20ae463c1cad2aa9f371271cdeaa41dd1223e460415b1ac27f9",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Match system selected; theme previews visible; mobile page continues below initial viewport; saved choice absent."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "sha256": "c23b393c78816585e9522da38f9e4e3b395f6a0b58476770b6697975c0620f33",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Actual Administrator account; MFA off; credential form unsubmitted; page continues below initial viewport."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "sha256": "9ecc174bd58b9c14adbb06a4616cecc2e434d14908e9b0cf594b32a1d06479fd",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Signed out; security check verified; empty input placeholders, no credentials visible."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "sha256": "bf023847bc29842f79d11b4f7992b8d21681231df5a2b6c5f84c7600ee003759",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials folder and three version-1 live files; row actions visible; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "sha256": "9aff7d05a26450ce5e167e3b07824f8337deaa2e6128d3044d516c699a0a5dfc",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials heading/breadcrumb and empty-folder state; no content created."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "sha256": "63a96be06ac65be1dedb97a0ccfb12fa5a26d54f825d871e8c44f8408e5c190b",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Working drafts entered; form unsubmitted; controls visible; backdrop dim/blur is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "sha256": "1be7375b3ef8b26e4308f81d7c4c1099eb57f0921d0c35311c28af1805914b9a",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Meeting notes.txt synthetic text visible; header actions and Close fit; text wraps on mobile."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "sha256": "49e6a566504a854bb9d3097107de01e5462fba1d468a87440298dfd3ee293d60",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Empty people/share state and organisation-link form; no grant/link created; controls fit."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "sha256": "8802382aa1db6eb2764954ce310feebc294574b785f11e363b7f6f0d5aee4d46",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "One current version; local date/time and relative age visible; no open row menu."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "sha256": "fff9db7c2b33a0ec1c538987778fcc12dac0f70bea8334748e78bbbf57ad1628",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Trash heading; Archive note.txt retained; Restore/delete controls visible; no action submitted."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "sha256": "81e74857842da6d46176899696df07e300beecd623c8b67745691ae41e347c68",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Match system selected; theme previews visible; mobile page continues below initial viewport; saved choice absent."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "sha256": "85d5683f8f6b9db4af5a1803a72c1a544d8f71da7b80fd980dc59934af94c1c6",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        1280,
+        900
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Actual Administrator account; MFA off; credential form unsubmitted; page continues below initial viewport."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "sha256": "f94d60c999307162dae01e887bb9b6337af4d7e9989babd19e6454e838cce696",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Signed out; security check verified; empty input placeholders, no credentials visible."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "sha256": "70352e6e02a42b227305cd0e0301271aafdbf45cad9091e47bdb4003ebd60435",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials folder and three version-1 live files; row actions visible; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "sha256": "5136a6f879763b52f86a6853d8bac12d4b544b0b82d6ddcc3b1c66bdfe39db23",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Project materials heading/breadcrumb and empty-folder state; no content created."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "sha256": "25b0a62486e496054e08dd0da95392e71b238b19a51a47526e408a73a495dccf",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Working drafts entered; form unsubmitted; controls visible; backdrop dim/blur is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "sha256": "0499de54d57fb55a10aed60c96651b97597634642827e882a305042e866fe671",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Meeting notes.txt synthetic text visible; header actions and Close fit; text wraps on mobile."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "sha256": "a1d0701920715f2db896ceb1938a09d89d16091341ec2bfc69aa25091cee91f3",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Empty people/share state and organisation-link form; no grant/link created; controls fit."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "sha256": "98d108f7cda73b4c44dc93c15b62958102d53a32a2cdfa5fbcef71e05f7407a8",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "One current version; local date/time and relative age visible; no open row menu."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "sha256": "8d2b327c2dc65d360303dadb882d5f4b912c9030fe3938eca8014f89c95b5475",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Trash heading; Archive note.txt retained; Restore/delete controls visible; no action submitted."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "sha256": "0189f6a307a325442ddd16159e008ad344a2b4dc0aabf402c64b73b1c2bc5f32",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Match system selected; theme previews visible; mobile page continues below initial viewport; saved choice absent."
+    },
+    {
+      "file": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "sha256": "41d6bf32c86343e9f97dcf444652e78d3686d17b8983fe16393c9219a64ff5fd",
+      "inspection": "individually viewed original at native resolution via view_image(detail=original)",
+      "dimensions": [
+        390,
+        844
+      ],
+      "result": "No capture or product defect observed in this initial viewport.",
+      "notes": "Actual Administrator account; MFA off; credential form unsubmitted; page continues below initial viewport."
+    }
+  ],
+  "capture_defects": [],
+  "product_defects_observed": [],
+  "proposed_fixes": [],
+  "limitations": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)",
+    "Initial viewport visual evidence only; no exhaustive functionality, accessibility, keyboard or named-theme persistence assurance.",
+    "Parent owns product edits, full checks, acceptance, review inputs and broader documentation.",
+    "Native one-off reconnaissance is DPR2 at1280x800 and is outside the formal scored setup.",
+    "No scoring or peer review/acceptance interpretation."
+  ],
+  "dox_pass": "Root/docs/evidence/web/browser chain re-read. AGENTS.md intentionally unchanged: only scoped evidence added; parent owns durable contract/index updates.",
+  "myslop": "Not retried or posted: known HTTP401 and explicit user instruction.",
+  "served_dist_sha256_verified": {
+    "/": "f549302a4bd6d0ef600c0bb89b56c7f2a00417fc15736f39bc0039af49b66e73",
+    "/sw.js": "5de8f359240a0d913eac87fd9a845715fde5338da42a36f30b6a5ea9545f4fbb"
+  },
+  "credentials_file": "/tmp/kydrive-drive-eight-ecm8peut/credentials.json"
+}

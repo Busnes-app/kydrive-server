@@ -1,0 +1,13 @@
+Round,Reviewer,Cohort,Measure,n,Sum fraction,Sum exact decimal,Mean fraction,Mean exact decimal (parentheses repeat),Half-up 0.1,Satisfied,Genuinely satisfied
+1,opus,auth,Quality,4,154/5,30.8,77/10,7.7,7.7,False,False
+1,opus,drive,Quality,28,999/5,199.8,999/140,7.13(571428),7.1,False,False
+1,opus,settings,Quality,8,587/10,58.7,587/80,7.3375,7.3,False,False
+1,opus,auth,Brand,4,32,32,8,8,8.0,False,False
+1,opus,drive,Brand,28,2113/10,211.3,2113/280,7.546(428571),7.5,False,False
+1,opus,settings,Brand,8,60,60,15/2,7.5,7.5,False,False
+1,sol,auth,Quality,4,164/5,32.8,41/5,8.2,8.2,False,False
+1,sol,drive,Quality,28,1112/5,222.4,278/35,7.9(428571),7.9,False,False
+1,sol,settings,Quality,8,327/5,65.4,327/40,8.175,8.2,False,False
+1,sol,auth,Brand,4,34,34,17/2,8.5,8.5,False,False
+1,sol,drive,Brand,28,1184/5,236.8,296/35,8.4(571428),8.5,False,False
+1,sol,settings,Brand,8,346/5,69.2,173/20,8.65,8.7,False,False

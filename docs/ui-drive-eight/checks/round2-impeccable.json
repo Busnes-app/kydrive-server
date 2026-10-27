@@ -1,0 +1,22 @@
+[
+  {
+    "antipattern": "border-accent-on-rounded",
+    "name": "Border accent on rounded element",
+    "description": "Thick accent border on a rounded card — the border clashes with the rounded corners. Remove the border or the border-radius.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/home/yoshi/git/busnes.app/KyDrive-server/.claude/worktrees/drive-eight/web/src/styles/theme.css",
+    "line": 508,
+    "snippet": "border-bottom: 3px solid"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/home/yoshi/git/busnes.app/KyDrive-server/.claude/worktrees/drive-eight/web/src/styles/theme.css",
+    "line": 6,
+    "snippet": "font-family: \"Space Grotesk"
+  }
+]

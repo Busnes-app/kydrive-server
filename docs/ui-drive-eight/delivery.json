@@ -1,0 +1,21 @@
+{
+  "repository": "Busnes-app/KyDrive-server",
+  "branch": "ui/drive-eight",
+  "url": null,
+  "ui_source": "7dd862e4fab842c234e828754c101a56ebab322f",
+  "baseline_source": "fd472e8035222ae38d8bb4b5c5cbd79c066879a1",
+  "baseline_evidence": "0354de843b0503b9ff52b51318ab214867b9e0e8",
+  "review_round": 2,
+  "status": "round2 static primary reviews pending; fresh hosted CI required after reboot",
+  "accepted_visual_progression": false,
+  "opus_raw": "7.2325",
+  "opus_half_up": "7.2",
+  "sol_raw": "8.015",
+  "gemini": "Unused; primaries unsatisfied; quota unavailable",
+  "scope": "real local recovery administrator only; ordinary/shared/connected workflows missing and unscored",
+  "merge_deploy_authorized": false,
+  "myslop": "Known HTTP401; no board post succeeded",
+  "after_manifest": "manifest-01-after.json",
+  "fixture": "offline after reboot; no live credentials",
+  "local_full_checks": "interrupted; no completed full pass claimed"
+}
