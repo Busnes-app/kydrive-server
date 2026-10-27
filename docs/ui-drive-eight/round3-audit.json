@@ -244,7 +244,15 @@
       ]
     }
   },
-  "spread_audit": "Separate read-only inspection active: kydrive-r3-disagreement-audit-20261027; immutable vectors retained.",
+  "spread_audit": {
+    "status": "complete",
+    "report": "round3-spread-audit.md",
+    "quality_spreads": 27,
+    "brand_spreads": 8,
+    "affected_originals": 20,
+    "originals_inspected": 30,
+    "raw_scores_changed": false
+  },
   "source_audit": "round3-opus-audit.json",
   "sol_exposure": "Sol discloses post-freeze incidental older own-history embedded in round2 Markdown; arrays unchanged and historical pooling excluded.",
   "next_batch": [
