@@ -1,6 +1,9 @@
 package sso
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	ErrInvalidState       = errors.New("invalid or expired SSO state")
@@ -19,4 +22,6 @@ type IdentityClaims struct {
 	Provider          string `json:"provider"` // "kysignon", "oidc", "saml"
 	// SessionID is the provider's ID token `sid`; back-channel logout names the login by it.
 	SessionID string `json:"sid,omitempty"`
+	// IssuedAt is the ID token's iat: when the provider vouched for this login.
+	IssuedAt time.Time `json:"-"`
 }

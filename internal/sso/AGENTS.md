@@ -19,8 +19,8 @@ Owns the application adapters around OAuth/OIDC login and KySignOn HMAC-SHA256 s
 - `VerifyLogoutToken` (`backchannel.go`) reuses the ID-token verifier, then requires
   `iat`, `sub` or `sid`, the back-channel logout event as a JSON object and no `nonce`;
   a present `typ` must be `logout+jwt` or `application/logout+jwt`. Every failure is
-  `ErrInvalidLogoutToken`. `IdentityClaims.SessionID` carries the ID token `sid` so
-  sessions can be ended by it. KySignOn is the only provider, so a `sid` is never
+  `ErrInvalidLogoutToken`. `IdentityClaims.SessionID` and `IssuedAt` carry the ID token
+  `sid` and `iat` so sessions can be ended by them. KySignOn is the only provider, so a `sid` is never
   ambiguous between issuers.
 - KyDrive links verified OIDC `sub` to SCIM `externalId`, never email/username. Disabled accounts cannot receive a session. The base-named KySignOn callback can point at the actual KyIdentity issuer.
 

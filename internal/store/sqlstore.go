@@ -750,13 +750,18 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid) VALUES (?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID)
 		return err
 	})
-	if err != nil || sess.SSOSID == "" {
+	if err != nil {
 		return err
 	}
-	// Check the fence only after the session committed: EndSSOSession commits the fence
-	// before deleting, so one of the two always sees the other under read committed.
+	// Check the fences only after the session committed: EndSSOSession and EndSSOSubject
+	// commit their fence before deleting, so under read committed one of the two always
+	// sees the other.
+	now := time.Now().UTC()
 	var fenced int
-	if err := s.store.db.QueryRowContext(ctx, s.store.rebind(`SELECT COUNT(1) FROM sso_logouts WHERE sid = ? AND expires_at > ?`), sess.SSOSID, time.Now().UTC()).Scan(&fenced); err != nil || fenced > 0 {
+	if err := s.store.db.QueryRowContext(ctx, s.store.rebind(`SELECT
+ (SELECT COUNT(1) FROM sso_logouts WHERE sid = ? AND sid <> '' AND expires_at > ?) +
+ (SELECT COUNT(1) FROM sso_subject_logouts f JOIN users u ON `+ssoSubjectUser+`
+  WHERE u.id = ? AND f.cutoff > ? AND f.expires_at > ?)`), sess.SSOSID, now, sess.UserID, sess.CreatedAt.UTC(), now).Scan(&fenced); err != nil || fenced > 0 {
 		_ = s.DeleteSession(ctx, sess.TokenHash)
 		if err != nil {
 			return err
@@ -766,6 +771,10 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 	return nil
 }
 
+// ssoSubjectUser joins a subject fence f to the accounts u its subject signs in as. Like
+// DirectorySubject, a KySignOn subject also names the SCIM account with that subject.
+const ssoSubjectUser = `u.sso_subject = f.subject AND (u.sso_provider = f.provider OR (f.provider = 'kysignon' AND u.sso_provider = 'scim'))`
+
 func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil time.Time) error {
 	now := time.Now().UTC()
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logouts WHERE expires_at <= ?`), now); err != nil {
@@ -774,38 +783,47 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logouts (sid, expires_at) VALUES (?, ?) ON CONFLICT (sid) DO UPDATE SET expires_at = excluded.expires_at`), sid, fenceUntil.UTC()); err != nil {
 		return err
 	}
+	return s.deleteSessions(ctx, `sso_sid = ?`, sid)
+}
+
+func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
+	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_subject_logouts WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
+		return err
+	}
+	// Keyed by subject, not user, so it also fences a first login that is still provisioning.
+	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_subject_logouts (provider, subject, cutoff, expires_at) VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, subject) DO UPDATE SET cutoff = excluded.cutoff, expires_at = excluded.expires_at WHERE sso_subject_logouts.cutoff < excluded.cutoff`), provider, subject, cutoff.UTC(), fenceUntil.UTC()); err != nil {
+		return err
+	}
+	return s.deleteSessions(ctx, `created_at < ? AND user_id IN (SELECT u.id FROM users u, sso_subject_logouts f WHERE f.provider = ? AND f.subject = ? AND `+ssoSubjectUser+`)`, cutoff.UTC(), provider, subject)
+}
+
+// deleteSessions deletes the sessions matching where and, in the same transaction, the
+// editor sessions of their accounts.
+func (s *sessionStore) deleteSessions(ctx context.Context, where string, args ...any) error {
 	return s.store.inTx(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, s.store.rebind(`DELETE FROM sessions WHERE sso_sid = ? RETURNING user_id`), sid)
+		rows, err := tx.QueryContext(ctx, s.store.rebind(`DELETE FROM sessions WHERE `+where+` RETURNING user_id`), args...)
 		if err != nil {
 			return err
 		}
-		var users []string
+		users := map[string]bool{}
 		for rows.Next() {
 			var id string
 			if err := rows.Scan(&id); err != nil {
 				rows.Close()
 				return err
 			}
-			users = append(users, id)
+			users[id] = true
 		}
 		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 			return err
 		}
-		for _, id := range users {
+		for id := range users {
 			if err := s.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
 				return err
 			}
 		}
 		return nil
-	})
-}
-
-func (s *sessionStore) DeleteUserSessionsBefore(ctx context.Context, userID string, t time.Time) error {
-	return s.store.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, s.store.rebind("DELETE FROM sessions WHERE user_id = ? AND created_at < ?"), userID, t.UTC()); err != nil {
-			return err
-		}
-		return s.store.drive.RevokeUserEditors(ctx, tx, userID)
 	})
 }
 
