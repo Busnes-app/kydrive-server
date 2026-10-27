@@ -1,0 +1,16 @@
+{
+  "event": "Owner-reported system hard lock and restart; cause not diagnosed",
+  "source_survived": "7dd862e4fab842c234e828754c101a56ebab322f",
+  "after_capture": "complete; all40 image hashes/membership/dimensions checked after restart",
+  "baseline": "all50 publisher checksums intact",
+  "local_fixture": "lost; old PIDs/credentials paths are historical and must not be reused or signaled",
+  "tests_before_restart": {
+    "frontend": "Observed100tests/23files passed; temp log lost",
+    "browser": "Observed50passed/2intentional skips; temp log lost",
+    "build": "Observedpass; existing chunk warning recorded; temp log lost",
+    "go_race": "Interrupted/incomplete; no full pass claimed",
+    "vet_modverify_deploy_smoke": "No surviving completed result; require fresh checks"
+  },
+  "next_checks": "Fresh hosted CI at PR current head; avoid restarting heavyweight local suites after owner hard-lock report",
+  "source_changes_after_observed_frontend_browser_checks": false
+}

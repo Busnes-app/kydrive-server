@@ -1,0 +1,27 @@
+{
+  "product_source": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+  "manifest": "manifest-03-after.json",
+  "inventory": "inventory-v4.json",
+  "near_duplicates": "near-duplicate-audit-v4.json",
+  "provenance": [
+    "source-provenance-r4.json",
+    "capture-provenance-r4.json"
+  ],
+  "authority": "authority.json",
+  "brand_references": "brand-references.json",
+  "all_image_artifacts": "artifacts-v4.json",
+  "quality_inputs": 40,
+  "unscored": {
+    "historical": 120,
+    "superseded_initial": 40,
+    "brand_only": 4
+  },
+  "capture_scope": "Actual local recovery administrator initial views only, except signed-out login. Ordinary/shared/connected/editor/SSO workflows remain absent/unscored.",
+  "build_limitation": "Captured binary pins8a23d75,vcs.modified=false. Minimal sequential frontend/Go builds passed; full CI gates separate.",
+  "restart": "Same recreated R3 runtime fixture retained through R4 initial and confirmation: sameIDs/timestamps/content; sessions and relativeages naturally change.",
+  "prohibited_before_freeze": "No prior/peer rawreports, historical/superseded qualityimages, parentaudits/COUNCIL/exports/galleries/PRdescription/acceptance. After entire files-array freeze only own round3 report and stage02images for drift.",
+  "behavior_gates": "Complete gates remain untested; screenshots cannot pass them.",
+  "capture_correction": "Pointer moved BEFORE500ms settling rather than after; hover differences fromstage02 are capture-state corrections, not product improvements.",
+  "bounded_confirmation": "Initial46artifacts atstage03-initial preservedunchanged. Only current canonical40stage03 confirmationimages scored; oneinitial+oneconfirmation completed.",
+  "known_behavior_defect": "Native settledphoneTab leavesAppearance117.69pxclipped andSettingsouterring1.78pxclipped in bothschemes. Parent fixes focus-only row scrolling separately aftercapture; source8a remains screenshot authority. Do not claim complete keyboard/focus/responsive gate pass. Initial-layout score is independent of focused-state bugfix."
+}

@@ -1,0 +1,16 @@
+{
+  "source": "7dd862e",
+  "findings": 2,
+  "zero_findings_claim": false,
+  "decisions": [
+    {
+      "finding": "overused-font",
+      "resolution": "Retain owner-pinned Space Grotesk, required by the Ky suite design contract. Detector preference does not override it."
+    },
+    {
+      "finding": "border-accent-on-rounded",
+      "resolution": "Existing selected phone-navigation accent rail is an explicit shared Ky navigation contract. It is not a content-card ornament; preserve selected-state behavior."
+    }
+  ],
+  "build_warning": "Existing >500kB chunk warning belongs to bundled Excalidraw. No new dependency or chunking change; recorded in baseline and current build logs."
+}

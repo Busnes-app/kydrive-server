@@ -1,0 +1,40 @@
+{
+  "round": 2,
+  "raw_reports": {
+    "opus-round2.md": "cfeebd2efdea33c490c760d944ae30a62e613c39d5491d10a381865616ec6b36",
+    "opus-round2.json": "36f7df6c2f33ccdd804221c031737d1f1badb21319d27687ffb2017eec611cff",
+    "sol-round2.md": "07e659ef386287352d8ba2107a1f95b04095cfa9c6ec2db04665db9c03153535",
+    "sol-round2.json": "d382df8fd2da3463405c58cb470c17ff0d5b1fe9453d42c59aac1706d541ace3"
+  },
+  "progression": {
+    "opus_exact": "1573/200",
+    "opus_decimal": "7.865",
+    "opus_half_up": "7.9",
+    "accepted": false,
+    "sol_exact": "1701/200",
+    "sol_decimal": "8.505",
+    "rule": "Opus current overall only, half-up1decimal; no peer/historical/brand pooling or cohort veto"
+  },
+  "independent_satisfaction": {
+    "opus": false,
+    "sol": true
+  },
+  "quality_validation": "40image hashes/membership, integer vectors, weighted Decimal totals and canonical files-array digests reproduced for both final reports.",
+  "spread_audit": {
+    "status": "complete",
+    "report": "round2-spread-audit.md",
+    "quality_spreads_ge_2": 18,
+    "affected_images": 14,
+    "brand_spreads_ge_2": 0,
+    "scores_changed": false
+  },
+  "brand_arithmetic": "Opus explicitly averages rounded per-file brand means:8.54. Exact dimension-derived aggregate8.5375; both round8.5. Export preserves exact derived statistics and validates publisher presentation by its declared method. Never enters quality or progression.",
+  "metadata_roles": "Parent index builder classified first40by arrayorder rather thanfilemembership, misclassifying4brand references and4historical images. Frozenartifacts-v2.json preserved; artifacts-v2-corrected.json corrects labels by explicit sets; imagehashes and40-quality membership unchanged.",
+  "follow_up": [
+    "Prevent native shared-dialog close control shrinking below40px.",
+    "Explain existing search-results Addas workflow; no new sharing operation.",
+    "Align phone toolbar ink by adjusting ghostbuttonpadding; preserve toolbar/handlers."
+  ],
+  "limits": "Actual local administrator capture set only; ordinary/shared/connected/complete behavior/role/contrast gates untested. Localtempfixture/logslostinownerreportedhardlock; fullchecksremoteCI.",
+  "gemini": "Unused; Opus not genuinely satisfied; quota unavailable."
+}

@@ -1,0 +1,2528 @@
+{
+  "stage": "03-after",
+  "source_commit": "24f667e61ca2802dabf4cbdf8a71117512203d6a",
+  "same_instance_as_stage02": true,
+  "fixture_recreated": false,
+  "identity_and_timestamps_changed": false,
+  "relative_ages_advanced_naturally": true,
+  "origin": "http://127.0.0.1:5878",
+  "owned_process": {
+    "pid": 154767,
+    "exe": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4",
+    "start_ticks": "341610",
+    "binary": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r4",
+    "binary_sha256": "9bac08cbd4dd3e4c1c91dea608f6dca94dc7925c02da1f93427e558521d4daa9",
+    "source_commit": "24f667e61ca2802dabf4cbdf8a71117512203d6a",
+    "credentials_file": "/tmp/kydrive-r3-recreated-sgjfh9md/credentials.json",
+    "base_url": "http://127.0.0.1:5878",
+    "fixture_directory": "/tmp/kydrive-r3-recreated-sgjfh9md",
+    "created_at": "2026-10-27T21:23:16.748105+00:00",
+    "environment_keys": [
+      "GOMAXPROCS",
+      "KY_ADMIN_PASSWORD",
+      "KY_APP_URL",
+      "KY_BACKUP_DIR",
+      "KY_CAPTCHA_PROVIDER",
+      "KY_DATA_DIR",
+      "KY_DB_DRIVER",
+      "KY_EXCALIDRAW_FONTS_DIR",
+      "KY_HOST",
+      "KY_PORT",
+      "PATH"
+    ],
+    "preferred_port_used": true
+  },
+  "old_owned_process_verification": {
+    "pid": 65645,
+    "exe": "/tmp/kydrive-r3-recreated-sgjfh9md/server",
+    "start_ticks": "159822",
+    "binary_sha256": "fbe85c5f6613244303b26714f490d38ef85c8325c78621da208a340340297b09",
+    "all_matched_before_signal": true,
+    "signal": "SIGTERM",
+    "exit_observed": true,
+    "preserved_record": "/tmp/kydrive-r3-recreated-sgjfh9md/owned-process-r3-preserved.json",
+    "preserved_binary": "/tmp/kydrive-r3-recreated-sgjfh9md/server-r3-preserved"
+  },
+  "private_directory_mode": "0o700",
+  "credentials_mode": "0o600",
+  "fixture_identity": {
+    "user": {
+      "authenticated": true,
+      "open_in_new_tab": true,
+      "user": {
+        "id": "usr_cab44ae1a10359530d02072a",
+        "username": "admin",
+        "email": "",
+        "display_name": "Administrator",
+        "role": "admin",
+        "status": "active",
+        "sso_provider": "local",
+        "totp_enabled": false,
+        "must_change_password": false,
+        "created_at": "2026-10-27T20:52:58.901058979Z",
+        "updated_at": "2026-10-27T20:53:28.169114747Z"
+      }
+    },
+    "workspaces": [
+      {
+        "kind": "personal",
+        "id": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "name": "My files",
+        "quota": 10737418240,
+        "used": 350,
+        "role": "manager",
+        "trash_days": 0,
+        "keep_versions": 0,
+        "editors_share": false,
+        "head": 6
+      }
+    ]
+  },
+  "fixture_listings": {
+    "files": [
+      {
+        "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Meeting notes.txt",
+        "revision": 1,
+        "trashed": false,
+        "size": 81,
+        "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+        "modified": "2026-10-27T20:53:45.057754139Z",
+        "mtime": "2026-10-27T20:53:45.057754139Z"
+      },
+      {
+        "id": "e11d10aa-072b-4287-8add-3e612e941895",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Quarterly plan.md",
+        "revision": 1,
+        "trashed": false,
+        "size": 135,
+        "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+        "modified": "2026-10-27T20:53:45.03719324Z",
+        "mtime": "2026-10-27T20:53:45.03719324Z"
+      },
+      {
+        "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Supplier list.csv",
+        "revision": 1,
+        "trashed": false,
+        "size": 79,
+        "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+        "modified": "2026-10-27T20:53:45.050281637Z",
+        "mtime": "2026-10-27T20:53:45.050281637Z"
+      }
+    ],
+    "folders": [
+      {
+        "id": "b3e396cf-7eee-4e2d-a971-b7e11263a739",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Project materials",
+        "trashed": false
+      }
+    ],
+    "trash": [
+      {
+        "id": "4746befe-5d07-4390-9a8d-7c5dd425adc4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "name": "Archive note.txt",
+        "revision": 1,
+        "trashed": true,
+        "size": 55,
+        "digest": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+        "modified": "2026-10-27T20:53:45.066405037Z",
+        "mtime": "2026-10-27T20:53:45.066405037Z"
+      }
+    ]
+  },
+  "live_download_and_version_checks": [
+    {
+      "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+      "status": 200,
+      "bytes": 81,
+      "sha256": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+      "versions": [
+        {
+          "file_id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+          "revision": 1,
+          "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+          "size": 81,
+          "created": "2026-10-27T20:53:45.057754139Z",
+          "mtime": "2026-10-27T20:53:45.057754139Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    },
+    {
+      "id": "e11d10aa-072b-4287-8add-3e612e941895",
+      "status": 200,
+      "bytes": 135,
+      "sha256": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+      "versions": [
+        {
+          "file_id": "e11d10aa-072b-4287-8add-3e612e941895",
+          "revision": 1,
+          "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+          "size": 135,
+          "created": "2026-10-27T20:53:45.03719324Z",
+          "mtime": "2026-10-27T20:53:45.03719324Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    },
+    {
+      "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+      "status": 200,
+      "bytes": 79,
+      "sha256": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+      "versions": [
+        {
+          "file_id": "76417062-2d42-4435-8a58-32860e23a5c4",
+          "revision": 1,
+          "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+          "size": 79,
+          "created": "2026-10-27T20:53:45.050281637Z",
+          "mtime": "2026-10-27T20:53:45.050281637Z"
+        }
+      ],
+      "shares": [],
+      "links": []
+    }
+  ],
+  "identity_listings_and_live_bytes_exact_match_r3": true,
+  "archive_digest_size_revision_state_match_r3": true,
+  "archive_download_not_repeated": true,
+  "post_capture_readonly_sql_verification": {
+    "rows": [
+      {
+        "id": "4746befe-5d07-4390-9a8d-7c5dd425adc4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 1,
+        "digest": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+        "size": 55,
+        "created": "2026-10-27T20:53:45.066405037Z",
+        "mtime": "2026-10-27T20:53:45.066405037Z"
+      },
+      {
+        "id": "76417062-2d42-4435-8a58-32860e23a5c4",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+        "size": 79,
+        "created": "2026-10-27T20:53:45.050281637Z",
+        "mtime": "2026-10-27T20:53:45.050281637Z"
+      },
+      {
+        "id": "b4fa9192-928a-43bb-832f-6774ec4f7442",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+        "size": 81,
+        "created": "2026-10-27T20:53:45.057754139Z",
+        "mtime": "2026-10-27T20:53:45.057754139Z"
+      },
+      {
+        "id": "e11d10aa-072b-4287-8add-3e612e941895",
+        "workspace": "53db721b-3882-49c1-bca1-a39b8d6b4975",
+        "parent": "",
+        "revision": 1,
+        "trashed": 0,
+        "digest": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+        "size": 135,
+        "created": "2026-10-27T20:53:45.03719324Z",
+        "mtime": "2026-10-27T20:53:45.03719324Z"
+      }
+    ],
+    "versions": 4,
+    "folders": 1,
+    "project_materials_empty": true,
+    "zero_counts": {
+      "drive_shares": 0,
+      "drive_links": 0,
+      "drive_grants": 0,
+      "drive_service_tokens": 0,
+      "drive_app_passwords": 0,
+      "drive_devices": 0,
+      "drive_editor_sessions": 0,
+      "drive_editor_documents": 0,
+      "drive_upload_sessions": 0
+    },
+    "mode": "SQLite mode=ro; no database writes; checks IDs, revisions, bytes/digests and timestamps against authenticated pre-capture API evidence; blank stored mtime uses created time, matching API fallback"
+  },
+  "native_method": "One owned T3 incognito tab, real UI login, click/type/navigation/keyboard/resize/OS appearance; read-only DOM/API probes; DPR2 separate from formal DPR1.",
+  "native_tab_closed_before_formal_capture": true,
+  "native_errors": [
+    "preview_open about:blank: Invalid preview URL (parse: https:; input length 11); omitted URL succeeded.",
+    "Two read-only role probes hit TypeError: Cannot read properties of null (reading 'value') after unsuccessful selector/keyboard sequence dismissed dialog; reopened with real UI, used Tab to Access and ArrowDown to verify editor/manager wording.",
+    "Post-login snapshot was taken while sign-in was pending and exposed filled disposable password in tool history; secret never copied into committed evidence or formal images. Credential file remains current for parent.",
+    "Initial private native-check JSON serialization failed before formal batch; corrected private writer while batch continued. Driver was not rerun.",
+    "Two source-locator rg reads named nonexistent Drive/Files/Trash.tsx paths; no files changed."
+  ],
+  "native_probes": [
+    {
+      "check": "preference_off_after_reload",
+      "value": {
+        "me": {
+          "authenticated": true,
+          "open_in_new_tab": false,
+          "user": {
+            "id": "usr_cab44ae1a10359530d02072a",
+            "username": "admin",
+            "email": "",
+            "display_name": "Administrator",
+            "role": "admin",
+            "status": "active",
+            "sso_provider": "local",
+            "totp_enabled": false,
+            "must_change_password": false,
+            "created_at": "2026-10-27T20:52:58.901058979Z",
+            "updated_at": "2026-10-27T20:53:28.169114747Z"
+          }
+        },
+        "checked": false
+      }
+    },
+    {
+      "check": "preference_on_restored_after_reload",
+      "value": {
+        "me": {
+          "authenticated": true,
+          "open_in_new_tab": true,
+          "user": {
+            "id": "usr_cab44ae1a10359530d02072a",
+            "username": "admin",
+            "email": "",
+            "display_name": "Administrator",
+            "role": "admin",
+            "status": "active",
+            "sso_provider": "local",
+            "totp_enabled": false,
+            "must_change_password": false,
+            "created_at": "2026-10-27T20:52:58.901058979Z",
+            "updated_at": "2026-10-27T20:53:28.169114747Z"
+          }
+        },
+        "checked": true
+      }
+    },
+    {
+      "check": "share_and_identity",
+      "width": 1280,
+      "theme": "light",
+      "value": {
+        "viewport": [
+          1280,
+          900
+        ],
+        "dpr": 2,
+        "theme": "busnes-light",
+        "saved": null,
+        "close": {
+          "x": 943,
+          "y": 194.6328125,
+          "width": 40,
+          "height": 40,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "0"
+        },
+        "person": {
+          "x": 297,
+          "y": 305,
+          "width": 417.3359375,
+          "height": 40.078125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "describedby": "share-person-help",
+        "help": {
+          "x": 297,
+          "y": 350.671875,
+          "width": 417.3359375,
+          "height": 38.03125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Type at least two characters, then choose Add as reader beside a matching person."
+        },
+        "access": {
+          "x": 726.3359375,
+          "y": 305,
+          "width": 256.6640625,
+          "height": 40,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "identity": {
+          "name": {
+            "x": 16,
+            "y": 841.6015625,
+            "width": 162.203125,
+            "height": 20.3984375,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "role": {
+            "x": 16,
+            "y": 862,
+            "width": 162.203125,
+            "height": 18,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "text": "Administrator\nAdministrator"
+        },
+        "navs": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "contents",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "hint": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Scroll for more destinations"
+        }
+      }
+    },
+    {
+      "check": "share_and_identity",
+      "width": 390,
+      "theme": "light",
+      "value": {
+        "viewport": [
+          390,
+          844
+        ],
+        "dpr": 2,
+        "theme": "busnes-light",
+        "saved": null,
+        "close": {
+          "x": 315,
+          "y": 68.609375,
+          "width": 40,
+          "height": 40,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "0"
+        },
+        "person": {
+          "x": 35,
+          "y": 200.09375,
+          "width": 320,
+          "height": 40.078125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "describedby": "share-person-help",
+        "help": {
+          "x": 35,
+          "y": 245.765625,
+          "width": 320,
+          "height": 38.03125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Type at least two characters, then choose Add as reader beside a matching person."
+        },
+        "access": {
+          "x": 35,
+          "y": 321.0625,
+          "width": 320,
+          "height": 40,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "identity": {
+          "name": {
+            "x": 249.703125,
+            "y": 12.59375,
+            "width": 79.5,
+            "height": 18,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "role": {
+            "x": 249.703125,
+            "y": 30.59375,
+            "width": 79.5,
+            "height": 16.8046875,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "text": "Administrator\nAdministrator"
+        },
+        "navs": {
+          "x": 0,
+          "y": 56,
+          "width": 390,
+          "height": 48,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "hint": {
+          "x": 16,
+          "y": 112,
+          "width": 358,
+          "height": 18,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Scroll for more destinations"
+        }
+      }
+    },
+    {
+      "check": "share_and_identity",
+      "width": 1280,
+      "theme": "dark",
+      "value": {
+        "viewport": [
+          1280,
+          900
+        ],
+        "dpr": 2,
+        "theme": "busnes-dark",
+        "saved": null,
+        "close": {
+          "x": 943,
+          "y": 194.6328125,
+          "width": 40,
+          "height": 40,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "0"
+        },
+        "person": {
+          "x": 297,
+          "y": 305,
+          "width": 417.3359375,
+          "height": 40.078125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "describedby": "share-person-help",
+        "help": {
+          "x": 297,
+          "y": 350.671875,
+          "width": 417.3359375,
+          "height": 38.03125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Type at least two characters, then choose Add as reader beside a matching person."
+        },
+        "access": {
+          "x": 726.3359375,
+          "y": 305,
+          "width": 256.6640625,
+          "height": 40,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "identity": {
+          "name": {
+            "x": 16,
+            "y": 841.6015625,
+            "width": 162.203125,
+            "height": 20.3984375,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "role": {
+            "x": 16,
+            "y": 862,
+            "width": 162.203125,
+            "height": 18,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "text": "Administrator\nAdministrator"
+        },
+        "navs": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "contents",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "hint": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Scroll for more destinations"
+        }
+      }
+    },
+    {
+      "check": "share_and_identity",
+      "width": 390,
+      "theme": "dark",
+      "value": {
+        "viewport": [
+          390,
+          844
+        ],
+        "dpr": 2,
+        "theme": "busnes-dark",
+        "saved": null,
+        "close": {
+          "x": 315,
+          "y": 68.609375,
+          "width": 40,
+          "height": 40,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "0"
+        },
+        "person": {
+          "x": 35,
+          "y": 200.09375,
+          "width": 320,
+          "height": 40.078125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "describedby": "share-person-help",
+        "help": {
+          "x": 35,
+          "y": 245.765625,
+          "width": 320,
+          "height": 38.03125,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Type at least two characters, then choose Add as reader beside a matching person."
+        },
+        "access": {
+          "x": 35,
+          "y": 321.0625,
+          "width": 320,
+          "height": 40,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "identity": {
+          "name": {
+            "x": 249.703125,
+            "y": 12.59375,
+            "width": 79.5,
+            "height": 18,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "role": {
+            "x": 249.703125,
+            "y": 30.59375,
+            "width": 79.5,
+            "height": 16.8046875,
+            "display": "block",
+            "visibility": "visible",
+            "flexShrink": "1"
+          },
+          "text": "Administrator\nAdministrator"
+        },
+        "navs": {
+          "x": 0,
+          "y": 56,
+          "width": 390,
+          "height": 48,
+          "display": "flex",
+          "visibility": "visible",
+          "flexShrink": "1"
+        },
+        "hint": {
+          "x": 16,
+          "y": 112,
+          "width": 358,
+          "height": 18,
+          "display": "block",
+          "visibility": "visible",
+          "flexShrink": "1",
+          "text": "Scroll for more destinations"
+        }
+      }
+    },
+    {
+      "check": "share_editor_wording"
+    },
+    {
+      "check": "share_manager_wording"
+    },
+    {
+      "check": "share_wording_corrected_keyboard",
+      "value": {
+        "reader": "Type at least two characters, then choose Add as reader beside a matching person.",
+        "editor": "Type at least two characters, then choose Add as editor beside a matching person.",
+        "manager": "Type at least two characters, then choose Add as manager beside a matching person.",
+        "person_search_untouched": true,
+        "close_clicked": true
+      }
+    },
+    {
+      "check": "preview",
+      "width": 1280,
+      "theme": "light",
+      "value": {
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 808.625,
+            "y": 34.59375,
+            "width": 173.6875,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 990.3125,
+            "y": 34.59375,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(171, 173, 169, 0.408)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 1129,
+            "y": 34.59375,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(170, 172, 168, 0.23)",
+            "overflowX": 0
+          }
+        ],
+        "all_controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 808.625,
+            "y": 34.59375,
+            "width": 173.6875,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 990.3125,
+            "y": 34.59375,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(171, 173, 169, 0.408)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 1129,
+            "y": 34.59375,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(170, 172, 168, 0.23)",
+            "overflowX": 0
+          }
+        ],
+        "text": {
+          "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 107,
+          "y": 105.1875,
+          "width": 1066,
+          "height": 81.59375,
+          "border": "0px none rgb(24, 35, 38)",
+          "overflowX": 0
+        },
+        "dialog": {
+          "text": "Meeting notes.txtOpen in new tabDownloadProject meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 90,
+          "y": 20,
+          "width": 1100,
+          "height": 860,
+          "border": "1px solid rgba(24, 35, 38, 0.38)",
+          "overflowX": 0
+        },
+        "documentOverflow": 0
+      }
+    },
+    {
+      "check": "preview",
+      "width": 390,
+      "theme": "light",
+      "value": {
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 35,
+            "y": 67.9921875,
+            "width": 156.09375,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 199.09375,
+            "y": 67.9921875,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(42, 52, 54, 0.384)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 35,
+            "y": 115.9921875,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(42, 52, 54, 0.22)",
+            "overflowX": 0
+          }
+        ],
+        "all_controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 35,
+            "y": 67.9921875,
+            "width": 156.09375,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 199.09375,
+            "y": 67.9921875,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(42, 52, 54, 0.384)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 35,
+            "y": 115.9921875,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(42, 52, 54, 0.22)",
+            "overflowX": 0
+          }
+        ],
+        "text": {
+          "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 35,
+          "y": 188.9921875,
+          "width": 320,
+          "height": 81.59375,
+          "border": "0px none rgb(24, 35, 38)",
+          "overflowX": 0
+        },
+        "dialog": {
+          "text": "Meeting notes.txtOpen in new tabDownloadProject meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 18,
+          "y": 18,
+          "width": 354,
+          "height": 808,
+          "border": "1px solid rgba(24, 35, 38, 0.38)",
+          "overflowX": 0
+        },
+        "documentOverflow": 0
+      }
+    },
+    {
+      "check": "preview",
+      "width": 1280,
+      "theme": "dark",
+      "value": {
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 808.625,
+            "y": 34.59375,
+            "width": 173.6875,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 990.3125,
+            "y": 34.59375,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(106, 112, 111, 0.396)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 1129,
+            "y": 34.59375,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(106, 111, 111, 0.227)",
+            "overflowX": 0
+          }
+        ],
+        "all_controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 808.625,
+            "y": 34.59375,
+            "width": 173.6875,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 990.3125,
+            "y": 34.59375,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(106, 112, 111, 0.396)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 1129,
+            "y": 34.59375,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(106, 111, 111, 0.227)",
+            "overflowX": 0
+          }
+        ],
+        "text": {
+          "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 107,
+          "y": 105.1875,
+          "width": 1066,
+          "height": 81.59375,
+          "border": "0px none rgb(242, 239, 232)",
+          "overflowX": 0
+        },
+        "dialog": {
+          "text": "Meeting notes.txtOpen in new tabDownloadProject meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 90,
+          "y": 20,
+          "width": 1100,
+          "height": 860,
+          "border": "1px solid rgba(242, 239, 232, 0.42)",
+          "overflowX": 0
+        },
+        "documentOverflow": 0
+      }
+    },
+    {
+      "check": "preview",
+      "width": 390,
+      "theme": "dark",
+      "value": {
+        "controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 35,
+            "y": 67.9921875,
+            "width": 156.09375,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 199.09375,
+            "y": 67.9921875,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(213, 212, 206, 0.416)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 35,
+            "y": 115.9921875,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(213, 212, 206, 0.235)",
+            "overflowX": 0
+          }
+        ],
+        "all_controls": [
+          {
+            "text": "Open in new tab",
+            "label": null,
+            "x": 35,
+            "y": 67.9921875,
+            "width": 156.09375,
+            "height": 40,
+            "border": "1px solid rgba(0, 0, 0, 0)",
+            "overflowX": 0
+          },
+          {
+            "text": "Download",
+            "label": null,
+            "x": 199.09375,
+            "y": 67.9921875,
+            "width": 130.6875,
+            "height": 40,
+            "border": "1px solid rgba(213, 212, 206, 0.416)",
+            "overflowX": 0
+          },
+          {
+            "text": "",
+            "label": "Close",
+            "x": 35,
+            "y": 115.9921875,
+            "width": 40,
+            "height": 40,
+            "border": "1px solid rgba(213, 212, 206, 0.235)",
+            "overflowX": 0
+          }
+        ],
+        "text": {
+          "text": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 35,
+          "y": 188.9921875,
+          "width": 320,
+          "height": 81.59375,
+          "border": "0px none rgb(242, 239, 232)",
+          "overflowX": 0
+        },
+        "dialog": {
+          "text": "Meeting notes.txtOpen in new tabDownloadProject meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+          "label": null,
+          "x": 18,
+          "y": 18,
+          "width": 354,
+          "height": 808,
+          "border": "1px solid rgba(242, 239, 232, 0.42)",
+          "overflowX": 0
+        },
+        "documentOverflow": 0
+      }
+    },
+    {
+      "check": "preview_escape",
+      "value": {
+        "preview_absent": true
+      }
+    },
+    {
+      "check": "preview_close",
+      "value": {
+        "preview_absent": true
+      }
+    },
+    {
+      "check": "trash_idle",
+      "theme": "light",
+      "width": 1280,
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "light",
+      "width": 1280,
+      "target": "Empty trash",
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "color(srgb 0.705882 0.137255 0.0941176 / 0.12)",
+            "border": "1px solid rgb(180, 35, 24)",
+            "color": "rgb(180, 35, 24)",
+            "hover": true
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "light",
+      "width": 1280,
+      "target": "Delete permanently",
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "color(srgb 0.705882 0.137255 0.0941176 / 0.12)",
+            "border": "1px solid rgb(180, 35, 24)",
+            "color": "rgb(180, 35, 24)",
+            "hover": true
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_idle",
+      "theme": "light",
+      "width": 390,
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "light",
+      "width": 390,
+      "target": "Empty trash",
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "color(srgb 0.705882 0.137255 0.0941176 / 0.12)",
+            "border": "1px solid rgb(180, 35, 24)",
+            "color": "rgb(180, 35, 24)",
+            "hover": true
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "light",
+      "width": 390,
+      "target": "Delete permanently",
+      "value": {
+        "theme": "busnes-light",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 0.705882 0.137255 0.0941176 / 0.45)",
+            "color": "rgb(180, 35, 24)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(255, 255, 255)",
+            "border": "1px solid rgba(24, 35, 38, 0.38)",
+            "color": "rgb(24, 35, 38)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "color(srgb 0.705882 0.137255 0.0941176 / 0.12)",
+            "border": "1px solid rgb(180, 35, 24)",
+            "color": "rgb(180, 35, 24)",
+            "hover": true
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_idle",
+      "theme": "dark",
+      "width": 1280,
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "dark",
+      "width": 1280,
+      "target": "Empty trash",
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "color(srgb 1 0.505882 0.462745 / 0.12)",
+            "border": "1px solid rgb(255, 129, 118)",
+            "color": "rgb(255, 129, 118)",
+            "hover": true
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "dark",
+      "width": 1280,
+      "target": "Delete permanently",
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 941.125,
+            "y": 222.84375,
+            "width": 147.1875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 1096.3125,
+            "y": 222.84375,
+            "width": 122.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 948.625,
+            "y": 326.8203125,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 1047.3125,
+            "y": 326.8203125,
+            "width": 175.6875,
+            "height": 40,
+            "background": "color(srgb 1 0.505882 0.462745 / 0.12)",
+            "border": "1px solid rgb(255, 129, 118)",
+            "color": "rgb(255, 129, 118)",
+            "hover": true
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_idle",
+      "theme": "dark",
+      "width": 390,
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "dark",
+      "width": 390,
+      "target": "Empty trash",
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "color(srgb 1 0.505882 0.462745 / 0.12)",
+            "border": "1px solid rgb(255, 129, 118)",
+            "color": "rgb(255, 129, 118)",
+            "hover": true
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          }
+        ]
+      }
+    },
+    {
+      "check": "trash_hover",
+      "theme": "dark",
+      "width": 390,
+      "target": "Delete permanently",
+      "value": {
+        "theme": "busnes-dark",
+        "buttons": [
+          {
+            "text": "Back to files",
+            "class": "btn-secondary",
+            "x": 37,
+            "y": 396.6328125,
+            "width": 166.25,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Empty trash",
+            "class": "btn-danger-quiet",
+            "x": 211.25,
+            "y": 396.6328125,
+            "width": 141.75,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "border": "1px solid color(srgb 1 0.505882 0.462745 / 0.45)",
+            "color": "rgb(255, 129, 118)",
+            "hover": false
+          },
+          {
+            "text": "Restore",
+            "class": "btn-secondary",
+            "x": 86.625,
+            "y": 504.015625,
+            "width": 90.6875,
+            "height": 40,
+            "background": "rgb(31, 43, 46)",
+            "border": "1px solid rgba(242, 239, 232, 0.42)",
+            "color": "rgb(242, 239, 232)",
+            "hover": false
+          },
+          {
+            "text": "Delete permanently",
+            "class": "btn-danger-quiet",
+            "x": 185.3125,
+            "y": 504.015625,
+            "width": 175.6875,
+            "height": 40,
+            "background": "color(srgb 1 0.505882 0.462745 / 0.12)",
+            "border": "1px solid rgb(255, 129, 118)",
+            "color": "rgb(255, 129, 118)",
+            "hover": true
+          }
+        ]
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "light",
+      "value": {
+        "focus": "Shared with me",
+        "label": null,
+        "x": 117.296875,
+        "right": 265.59375,
+        "y": 60,
+        "width": 148.296875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "light",
+      "value": {
+        "focus": "Account",
+        "label": null,
+        "x": 274.59375,
+        "right": 377.390625,
+        "y": 60,
+        "width": 102.796875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "light",
+      "value": {
+        "focus": "Appearance",
+        "label": null,
+        "x": 381.390625,
+        "right": 507.6875,
+        "y": 60,
+        "width": 126.296875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "light",
+      "value": {
+        "focus": "Recovery",
+        "label": null,
+        "x": 140.6875,
+        "right": 248.984375,
+        "y": 60,
+        "width": 108.296875,
+        "navScroll": 371
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "light",
+      "value": {
+        "focus": "Settings & DB",
+        "label": null,
+        "x": 252.984375,
+        "right": 387.78125,
+        "y": 60,
+        "width": 134.796875,
+        "navScroll": 371
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "dark",
+      "value": {
+        "focus": "Shared with me",
+        "label": null,
+        "x": 117.296875,
+        "right": 265.59375,
+        "y": 60,
+        "width": 148.296875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "dark",
+      "value": {
+        "focus": "Account",
+        "label": null,
+        "x": 274.59375,
+        "right": 377.390625,
+        "y": 60,
+        "width": 102.796875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "dark",
+      "value": {
+        "focus": "Appearance",
+        "label": null,
+        "x": 381.390625,
+        "right": 507.6875,
+        "y": 60,
+        "width": 126.296875,
+        "navScroll": 0
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "dark",
+      "value": {
+        "focus": "Recovery",
+        "label": null,
+        "x": 140.6875,
+        "right": 248.984375,
+        "y": 60,
+        "width": 108.296875,
+        "navScroll": 371
+      }
+    },
+    {
+      "check": "phone_keyboard_destination",
+      "theme": "dark",
+      "value": {
+        "focus": "Settings & DB",
+        "label": null,
+        "x": 252.984375,
+        "right": 387.78125,
+        "y": 60,
+        "width": 134.796875,
+        "navScroll": 371
+      }
+    },
+    {
+      "check": "folder_empty_and_title",
+      "value": {
+        "heading": "Project materials",
+        "text": "Project materials\n\nMy files\n\n350 B of 10.0 GiB used\nUpload files\nMy files\nProject materials\nTrash\nNew\nThis folder is empty\n\nDrop files here, upload them, or create a document from New.\n\nUpload files\nAdministration"
+      }
+    },
+    {
+      "check": "desktop_alignment",
+      "value": {
+        "search": {
+          "x": 280,
+          "y": 148.171875,
+          "width": 960,
+          "height": 40.078125,
+          "right": 1240
+        },
+        "listPanel": null,
+        "table": null,
+        "heading": {
+          "x": 280,
+          "y": 36,
+          "width": 263.09375,
+          "height": 30,
+          "right": 543.09375
+        },
+        "upload": {
+          "x": 1096.8125,
+          "y": 36,
+          "width": 143.1875,
+          "height": 40,
+          "right": 1240
+        }
+      }
+    }
+  ],
+  "native_diagnostics": {
+    "console": [],
+    "network": [
+      {
+        "url": "http://127.0.0.1:5878/api/drive/files/b4fa9192-928a-43bb-832f-6774ec4f7442/preview",
+        "method": "HEAD",
+        "status": null,
+        "failed": true,
+        "errorText": "net::ERR_ABORTED",
+        "timestamp": "2026-10-27T21:24:36.489Z"
+      },
+      {
+        "url": "http://127.0.0.1:5878/api/drive/files/b4fa9192-928a-43bb-832f-6774ec4f7442/preview",
+        "method": "HEAD",
+        "status": null,
+        "failed": true,
+        "errorText": "net::ERR_ABORTED",
+        "timestamp": "2026-10-27T21:24:46.643Z"
+      }
+    ]
+  },
+  "preference": {
+    "original_on": true,
+    "off_persisted_ui_and_api_after_reload": true,
+    "on_restored_ui_and_api_after_reload": true,
+    "editors_opened": false
+  },
+  "share": {
+    "help_associated": "aria-describedby=share-person-help",
+    "phone_order": "person input, help, Access",
+    "reader_editor_manager_wording_observed": true,
+    "person_query_empty": true,
+    "close_square_css_px": 40,
+    "close_clicked": true,
+    "escape_dismissed": true
+  },
+  "preview": {
+    "header_controls_css_height": 40,
+    "close_css_square": 40,
+    "text_border": "0px none",
+    "all_four_viewport_scheme_probes": true,
+    "escape_and_close_dismissed": true,
+    "overflow_px": 0,
+    "phone_close_wraps_own_row": true
+  },
+  "desktop_alignment": {
+    "search_left": 280,
+    "search_right": 1240,
+    "list_outer_left": 280,
+    "list_outer_right": 1240,
+    "table_left": 281,
+    "table_right": 1239,
+    "heading_top": 36,
+    "upload_top": 36,
+    "table_inset_explained": "1px panel border; first native loaded list measured before Account check"
+  },
+  "trash_hover": {
+    "shared_class": "btn-danger-quiet",
+    "idle_background": "transparent",
+    "idle_border": "danger 45% / transparent",
+    "hover_background": "danger 12% / transparent",
+    "hover_border": "danger",
+    "native_four_size_scheme_probes": true,
+    "old_stage02_desktop_light_viewed": true,
+    "conclusion": "Pink old Empty trash fill is consistent with hover/hover-transition residue: native hover reproduces it on either control and idle style is identical. Stage02 delayed 500ms before moving pointer; stage03 moves pointer first then settles 500ms. Old manifest lacks hovered control state, so its exact instantaneous hover cannot be proven.",
+    "capture_state_correction_not_product_gain": true
+  },
+  "formal_capture": {
+    "driver": "docs/ui-drive-eight/capture-round4.mjs",
+    "runs": 1,
+    "confirmation_recapture": false,
+    "command": "node docs/ui-drive-eight/capture-round4.mjs /tmp/kydrive-r3-recreated-sgjfh9md/owned-process-r4.json",
+    "unmodified_committed_driver": true,
+    "atomic_manifest": true,
+    "browser": {
+      "engine": "Chromium",
+      "version": "156.0.8078.4",
+      "mode": "headless",
+      "playwright": "1.64.1"
+    },
+    "started_at": "2026-10-27T21:25:29.623Z",
+    "finished_at": "2026-10-27T21:26:00.597Z",
+    "browser_closed": true,
+    "count": 40,
+    "dpr": 1,
+    "locale": "en-US",
+    "timezone": "America/New_York",
+    "service_workers": "allow (normal registration and lifecycle)",
+    "conditions_match_stage02": true,
+    "pointer_change": "pointer (0,0) BEFORE 500ms settling; prior stage02 AFTER delay; separate capture-state correction",
+    "hovered_controls_all_empty": true,
+    "saved_theme_absent_all": true,
+    "service_worker_controller_present_all": true,
+    "max_document_horizontal_overflow_px": 0,
+    "pageerrors_and_http_failures": [],
+    "diagnostic_limit": "Driver records pageerror and HTTP>=400 responses, not all console warnings or canceled requests. Native captured two aborted preview HEAD requests during dismissal."
+  },
+  "inspections": [
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-light.png",
+      "sha256": "c2e55f4bfd21e534d91f4e5f738c3c71a0c90390a48b7376fce1409780fb94b7",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped placeholders, verified security check, Match system. No filled current credentials in formal image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-light.png",
+      "sha256": "3424528f707008bcee3769334f865e81539c93a2f448ee37d41212184160f97d",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files plus Project materials; name/role in shell; no header preference; Upload and full-width search; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-light.png",
+      "sha256": "2a3cffa35aac50cc1ecb68c4ca4893b5a0bd007103d070be581f716826a2c7fb",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials title and breadcrumb, empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-light.png",
+      "sha256": "fe8fb0c5d6f524f9b4053fbacd328bf7646df90dd2a579926b843728a8c2c37f",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts entered; unsubmitted form; fixed Close; blur/dimming is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-light.png",
+      "sha256": "03e8dfcc8c88a528088913306b46bdabd692a0a8fab53bb52202015ac0350681",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact Meeting notes.txt plain text; no inner border; header controls visible, phone Close wraps to its own row; no overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-light.png",
+      "sha256": "3a805534d5d5fea9eba654d549602da5e2f26435b8c9ccc3a8564c7926bf04dc",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Empty unsubmitted form, Reader; help below person input before Access on phone, square Close; no shares/links."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-light.png",
+      "sha256": "31063a90f52cfbe3b8ff36c845fb31e810d01e0ec5eb21e20c844bbce4d105fc",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version; original creation timestamp, relative age naturally advanced; no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-light.png",
+      "sha256": "0dba4a2e5bc961621b3387417af75563bd211df43dae9e27a2ce95bcb11e2d46",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; idle danger-quiet controls; no restore/delete activated."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-light.png",
+      "sha256": "6e39de0ec7f92b9752710bc3d20719444724559056b14ed3450686b2e9914ad2",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; theme-preview cards; phone list continues below viewport; no theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-light.png",
+      "sha256": "dda236a56e358ed3e877458b1232708123e49f0f0fe879c6ee8d3e10384e9fe9",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Account Files preference visibly ON; local administrator, MFA Off; no credential issuance; continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-light.png",
+      "sha256": "b66bf5cf38318e8bf1cc6383669e7e07a6564b98359ee8b0fa9e864379ff110f",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped placeholders, verified security check, Match system. No filled current credentials in formal image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-light.png",
+      "sha256": "3d813cc694ee728d17c410cff5b03e21bca6dba9ef20462a43ca8ddf7490eab6",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files plus Project materials; name/role in shell; no header preference; Upload and full-width search; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-light.png",
+      "sha256": "987886ee4463fef3096539a6b218f09a856128a2d4057dce84e94dd486cfa837",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials title and breadcrumb, empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-light.png",
+      "sha256": "d97ff1ff4c566fa0692bfb46891ca4c33e414115868bfc8716f964b313aaa2d7",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts entered; unsubmitted form; fixed Close; blur/dimming is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-light.png",
+      "sha256": "7d7ea7d2578ddb8bc415061059376f32457aaffa74be9f79cb48a340cb3d13f1",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact Meeting notes.txt plain text; no inner border; header controls visible, phone Close wraps to its own row; no overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-light.png",
+      "sha256": "8a555c98b990dc65c9445cb9eafd5a8187eda8275876605c2434ce996fa82397",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Empty unsubmitted form, Reader; help below person input before Access on phone, square Close; no shares/links."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-light.png",
+      "sha256": "931b1d93d6707a42d595d7238bf9056c03e8c62ca93e6208c9a50317f4eab449",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version; original creation timestamp, relative age naturally advanced; no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-light.png",
+      "sha256": "f802c2db62e130592c41e898580a6542ba1a63fddcb935c37d055782e08512bb",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; idle danger-quiet controls; no restore/delete activated."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-light.png",
+      "sha256": "adf04e4e11880dc49605f900f7ed0bef206defaa4b1ec05ddac8108c33eb4cf4",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; theme-preview cards; phone list continues below viewport; no theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-light.png",
+      "sha256": "93f6835e07dfae8844d8fe7f8bbab5c23ca87c2e0a4a3599097faeffa9de8ae3",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Account Files preference visibly ON; local administrator, MFA Off; no credential issuance; continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-dark.png",
+      "sha256": "9ecc174bd58b9c14adbb06a4616cecc2e434d14908e9b0cf594b32a1d06479fd",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped placeholders, verified security check, Match system. No filled current credentials in formal image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-dark.png",
+      "sha256": "8b05bb55ef4a4682dc6e723e5dcd813fe8072d267449da69337f378e731f36f5",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files plus Project materials; name/role in shell; no header preference; Upload and full-width search; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-dark.png",
+      "sha256": "2d216a80bbd3de20a3e8160e245309e0306bd50ae0994d54e07c6f0ac8ca3f58",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials title and breadcrumb, empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-dark.png",
+      "sha256": "6a3fc671a38cdb23f5e08ced8e992b5987900b5877b5fb6bae36d96b2699c8c5",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts entered; unsubmitted form; fixed Close; blur/dimming is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-dark.png",
+      "sha256": "5626c3f565018ad108481e4eebb8033c3a85fd48088b1a678a08e15bea9d5d3a",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact Meeting notes.txt plain text; no inner border; header controls visible, phone Close wraps to its own row; no overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-dark.png",
+      "sha256": "6851f82491b88e69c92d2bf3177b4a42b3af32d7a748c14147218b7b11591c0f",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Empty unsubmitted form, Reader; help below person input before Access on phone, square Close; no shares/links."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-dark.png",
+      "sha256": "e4b4d4a42e4fcd90f7edc5a2076eb4babccce07ae3e127f1c9c5d680af20fbe2",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version; original creation timestamp, relative age naturally advanced; no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-dark.png",
+      "sha256": "74cae80a8db0d8b7d4e44c12ac7eef8f0a1164c38844543af9f4bd6a2fca8ded",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; idle danger-quiet controls; no restore/delete activated."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-dark.png",
+      "sha256": "620234112c7c39ca7ab46959c36eee5b984d0d5c1d69b28c06d52301e3deb2ca",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; theme-preview cards; phone list continues below viewport; no theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-dark.png",
+      "sha256": "e596c7c4d454f26ceec3cc6bde1ff32e9b9bee4312966428f3b37507442c95e3",
+      "native_dimensions": [
+        1280,
+        900
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Account Files preference visibly ON; local administrator, MFA Off; no credential issuance; continues below viewport."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-dark.png",
+      "sha256": "f94d60c999307162dae01e887bb9b6337af4d7e9989babd19e6454e838cce696",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Signed out; shipped placeholders, verified security check, Match system. No filled current credentials in formal image."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-dark.png",
+      "sha256": "28d77ee1dbd9a31a42aeefb9cc70cff983149d247c210bb6189a0db9d5ba9526",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Three live revision-1 files plus Project materials; name/role in shell; no header preference; Upload and full-width search; Administration collapsed."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-dark.png",
+      "sha256": "3c7a845b6f106b461b6ad54ba2177e843aa717107540ef06ffa11b744b72d318",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Project materials title and breadcrumb, empty folder; no content added."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-dark.png",
+      "sha256": "6c1ddeeb3567aa9d9be02c2bdf21b571a85766898295a53a701de22cb3a7c9e5",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Working drafts entered; unsubmitted form; fixed Close; blur/dimming is product behavior."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-dark.png",
+      "sha256": "60072b5421e087cfe8d2a6d7642ebfa2d259b4f87690ac5863f9a587d1f429ee",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Exact Meeting notes.txt plain text; no inner border; header controls visible, phone Close wraps to its own row; no overflow."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-dark.png",
+      "sha256": "183a9dbe17741db8e1d45f46e30a7c1fcb3bbdd45cb7e1c429896cbeb2cf1763",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Empty unsubmitted form, Reader; help below person input before Access on phone, square Close; no shares/links."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-dark.png",
+      "sha256": "a186fe4367c70cf0f57051089a1d02b57d6513e0cd84257299b2d1c8283a6129",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "One current version; original creation timestamp, relative age naturally advanced; no version action."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-dark.png",
+      "sha256": "6f439a8cc34a3f86a5a4c4bfbdfbf8ec20f92a99daecd8361f6ae21738e74125",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Only Archive note.txt; Back to files before Empty trash; idle danger-quiet controls; no restore/delete activated."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-dark.png",
+      "sha256": "c9ee79d3357c5d7ba089558f43af19a232649513fdee2a48376c349e15515529",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Match system selected; theme-preview cards; phone list continues below viewport; no theme saved."
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-dark.png",
+      "sha256": "cf51451f94a3a7ed0c01ad9d361cf82840f82818e6004ad13d0cdb7b22a0f7e0",
+      "native_dimensions": [
+        390,
+        844
+      ],
+      "inspection": "Individually opened using view_image(detail=original), no contact sheet or rescaling",
+      "result": "No capture defect observed",
+      "notes": "Account Files preference visibly ON; local administrator, MFA Off; no credential issuance; continues below viewport."
+    }
+  ],
+  "duplicates": {
+    "comparisons": 380,
+    "exact_png_unique": 40,
+    "exact_rgba_unique": 40,
+    "near_duplicate_count": 0
+  },
+  "defects": [
+    {
+      "kind": "phone keyboard clipping observation; persistent defect unconfirmed",
+      "surface": "phone navigation",
+      "condition": "390x844, native DPR2, both OS schemes; Tab from My files",
+      "observed": "Appearance focused at x381.390625..507.6875 while nav scrollLeft=0, leaving most label clipped. Recovery then scrolled row to371. All destinations received keyboard focus; full focused-destination visibility is not established.",
+      "action": "Reported for parent judgment; no product edit or confirmation capture. Parent owns any bounded correction/confirmation decision.",
+      "probe_limit": "DOM read immediately followed Tab with no explicit focus-scroll settling delay or screenshot; in-flight native scrolling is not excluded. All destinations received keyboard focus; do not describe this as a confirmed settled accessibility failure."
+    }
+  ],
+  "missing_unscored": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)"
+  ],
+  "full_behavior_accessibility_role_sso_editor_shared_production_acceptance": false,
+  "product_test_agents_driver_edits": false,
+  "commits_or_subagents": false,
+  "myslop": "Known401; explicit no-retry/no-post honored; no board requests.",
+  "dox": "Rechecked workspace/repo/docs/ui-drive-eight and web/browser contracts. AGENTS unchanged per explicit instruction; evidence-only stage output follows existing stage03 contract; parent owns index and product correction decisions.",
+  "artifact_sha256": {
+    "manifest-03-after.json": "5fc12fe6e170222aaaa1ec2be94bee2d8603cb403f1dec5e445816822501666f",
+    "inventory-v4.json": "7741d52e6abf185d9176245a9b4bf10c25547819af9ba8d38573c2c93a27e1ad",
+    "near-duplicate-audit-v4.json": "22fc1604a7d3abec2b785428ee16d0b32b955812e37d1eff03c87b7cac9d90bc",
+    "source-provenance-r4.json": "df7b0a907406f1d6eed933ee3b47091c1a9fa412c971e0176ac0ea27cdb922be"
+  }
+}

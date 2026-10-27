@@ -1,0 +1,15 @@
+{
+  "targeted_tests": {
+    "command": "npm exec -- vitest run src/App.test.tsx src/pages/drive/ShareDialog.test.tsx src/pages/drive/QuickLook.test.tsx --maxWorkers=1",
+    "result": "11tests/3files passed;3.64s; workers sequential",
+    "first_invocation": "npm exec without -- refused maxWorkers; no tests ran. Correct invocation passed."
+  },
+  "syntax": "node --check passed for stage03 capture and3changed browser specifications",
+  "detector": {
+    "command": "impeccable detect --json web/src",
+    "result": "findings; owner-pinned Space Grotesk and required selected navigation rail retained",
+    "preliminary_single_file_scan": "Multi-target invocation returned empty output; replaced with full web/src scan, not treated as a clean whole-UI result."
+  },
+  "browser_full_tests": "Hosted CI pending. No heavy local full suite after owner hard lock. Native focused checks/captures pending bounded worker.",
+  "dox": "Updated nearest web/browser/evidence contracts. Root/API/security/operator ownership unchanged; no parent index changes."
+}

@@ -1,0 +1,184 @@
+{
+  "round": 4,
+  "raw_reports": {
+    "opus-round4.json": "6e0957e2d2b155f12063fffe18159d89b57593fc78eeb466d206bd27bb7866a8",
+    "opus-round4.md": "b11cbeb7e5d57a4bb93a16cc13254f101bd0bd1b88aa186cc8aff8ed2d08b22b",
+    "sol-round4.json": "80bb6128b626d98366309b754de1143d642a080bafc7f38d29acace4c989b540",
+    "sol-round4.md": "b3d99946117c3c6f38719a17c97cf8550a022fd34aca66f7b7678989c3220717"
+  },
+  "progression": {
+    "opus_exact": "791/100",
+    "opus_decimal": "7.91",
+    "opus_half_up": "7.9",
+    "accepted": false,
+    "sol_exact": "43/5",
+    "sol_decimal": "8.6",
+    "rule": "Current Opus overall only; half-up1decimal; no peer/history/brand pooling or cohort veto"
+  },
+  "independent_satisfaction": {
+    "opus": false,
+    "sol": true
+  },
+  "quality_validation": "Complete files-array freeze,40currentimage membership/hashes and weighted Decimal totals reproduced for both. Exact unrounded brand means also reproduced.",
+  "spreads": {
+    "quality": {
+      "count": 8,
+      "affected_originals": 8,
+      "rows": [
+        {
+          "file": "screenshots/kydrive-03-after-share-desktop-dark.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-share-desktop-light.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-share-mobile-dark.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-share-mobile-light.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-desktop-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-desktop-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-mobile-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-mobile-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        }
+      ]
+    },
+    "brand": {
+      "count": 14,
+      "affected_originals": 14,
+      "rows": [
+        {
+          "file": "screenshots/kydrive-03-after-account-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-account-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-files-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-files-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-folder-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-folder-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-login-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-login-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-new-folder-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-new-folder-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-share-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-share-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-desktop-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-03-after-trash-mobile-light.png",
+          "dimension": "palette_tokens",
+          "opus": 7,
+          "sol": 9
+        }
+      ]
+    }
+  },
+  "spread_audit": {
+    "status": "complete",
+    "report": "round4-spread-audit.md",
+    "quality_spreads": 8,
+    "brand_spreads": 14,
+    "affected_originals": 18,
+    "originals_inspected": 20,
+    "raw_scores_changed": false
+  },
+  "next_batch": "Only adopt shared field-border token for fields/secondary/icon outlines and40px icon dimensions. Do not broaden to optional layout/polish recommendations.",
+  "findings_qualification": "F1 pixel contrast is a useful lead, not a browser-computed complete contrast gate. Existing CSS uses line-strong instead of field-border. F2 source36px size is confirmed. Native before/after measurements requested with next capture.",
+  "behavior": "round4-focus-disposition.json retains all48destinations visible and strict0.1875px outerring residual; no further loop for that residual.",
+  "export_surface_correction": "Opus surface_key includes viewport/theme; exporter now uses canonical inventory surface for grouping. Raw reports and scores unchanged.",
+  "gemini": "Unavailable quota; no call, Opus not satisfied",
+  "limits": "Actual local administrator screenshots only, behavior/allthemes/integration/ordinary/shared/competitive gates unestablished."
+}

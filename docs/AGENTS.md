@@ -20,3 +20,5 @@ Own restore instructions, local acceptance evidence and captured product UI asse
 - Check referenced paths exist. Restore checks are in `internal/backup`; native browser captures are described in root `UI-VERIFICATION.md`.
 
 ## Child DOX Index
+
+- `ui-drive-eight/` — staged synthetic Council captures, independent raw reviews, score provenance and visual progression records; see `ui-drive-eight/AGENTS.md`.

@@ -1,0 +1,23 @@
+{
+  "product_source": "7dd862e4fab842c234e828754c101a56ebab322f",
+  "manifest": "manifest-01-after.json",
+  "inventory": "inventory-v2.json",
+  "near_duplicates": "near-duplicate-audit-v2.json",
+  "provenance": [
+    "source-provenance-r2.json",
+    "capture-provenance-r2.json"
+  ],
+  "authority": "authority.json",
+  "brand_references": "brand-references.json",
+  "all_image_artifacts": "artifacts-v2.json",
+  "quality_inputs": 40,
+  "unscored": {
+    "historical": 40,
+    "brand_only": 4
+  },
+  "capture_scope": "Actual local recovery administrator initial views only, except signed-out login. Ordinary/shared/connected/editor/SSO workflows remain absent/unscored.",
+  "build_limitation": "Supplied binary revision matches source7dd862e with vcs.modified=true. All390product hashes and served index matched; evidence-only untracked files existed. Not a hermetic-build claim.",
+  "restart": "Owner reported hard lock/reboot after capture completed. All40after originals rehashed successfully. Fixture/privatecredentials/temp test logs are gone. Static review only; no reconstruction or heavy local reruns required.",
+  "prohibited_before_freeze": "Prior quality images/reports, peer reports, parent score history/galleries/audits/delivery/acceptance/PR descriptions. After freezing, only own prior round1 for drift.",
+  "behavior_gates": "Complete gates remain untested; screenshots cannot pass them."
+}

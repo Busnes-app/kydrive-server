@@ -1,0 +1,265 @@
+{
+  "round": 3,
+  "raw_reports": {
+    "opus-round3.json": "c500c604a2da73cca7f9a4b3e98c9152faf93e46e3f03ed7ec6e1c9680705553",
+    "opus-round3.md": "b3e5b84c1a8a374c10dcfcadda5d09a779a0046ae9346c46122ed47d40aa3943",
+    "sol-round3.json": "24168a3a81757565a1ecf4488940a106ecf6836340301f5b6afd9c57f26e62dd",
+    "sol-round3.md": "02d7a224a4f58dadcbd07978203ab0b892217a57c7ecf43e9984daff27664b69"
+  },
+  "progression": {
+    "opus_exact": "3113/400",
+    "opus_decimal": "7.7825",
+    "opus_half_up": "7.8",
+    "accepted": false,
+    "sol_exact": "1731/200",
+    "sol_decimal": "8.655",
+    "rule": "Opus current-round overall only, half-up1decimal; no peer/historical/brand pooling or cohort veto"
+  },
+  "independent_satisfaction": {
+    "opus": false,
+    "sol": true
+  },
+  "quality_validation": "Both complete files-array freeze hashes,40image hashes/membership,integer vectors and weighted Decimal totals independently reproduced. build-report.py validates6raw pairs and CSV/XLSX round-trip.",
+  "spreads": {
+    "scores": {
+      "count": 27,
+      "affected_images": 18,
+      "rows": [
+        {
+          "file": "screenshots/kydrive-02-after-login-desktop-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-light.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-trash-desktop-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-login-mobile-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-folder-mobile-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-light.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-light.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-trash-mobile-light.png",
+          "dimension": "color",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-trash-mobile-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-appearance-mobile-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-account-mobile-light.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-login-desktop-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-dark.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-trash-desktop-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-login-mobile-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-folder-mobile-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-dark.png",
+          "dimension": "coherence",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-dark.png",
+          "dimension": "hierarchy",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-trash-mobile-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-appearance-mobile-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-account-mobile-dark.png",
+          "dimension": "visible_affordances",
+          "opus": 7,
+          "sol": 9
+        }
+      ]
+    },
+    "ky_fit": {
+      "count": 8,
+      "affected_images": 8,
+      "rows": [
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-light.png",
+          "dimension": "suite_cohesion",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-appearance-desktop-light.png",
+          "dimension": "shell",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-account-desktop-light.png",
+          "dimension": "shell",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-light.png",
+          "dimension": "suite_cohesion",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-appearance-mobile-light.png",
+          "dimension": "shell",
+          "opus": 6,
+          "sol": 8
+        },
+        {
+          "file": "screenshots/kydrive-02-after-account-mobile-light.png",
+          "dimension": "shell",
+          "opus": 6,
+          "sol": 8
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-desktop-dark.png",
+          "dimension": "suite_cohesion",
+          "opus": 7,
+          "sol": 9
+        },
+        {
+          "file": "screenshots/kydrive-02-after-share-mobile-dark.png",
+          "dimension": "suite_cohesion",
+          "opus": 7,
+          "sol": 9
+        }
+      ]
+    }
+  },
+  "spread_audit": {
+    "status": "complete",
+    "report": "round3-spread-audit.md",
+    "quality_spreads": 27,
+    "brand_spreads": 8,
+    "affected_originals": 20,
+    "originals_inspected": 30,
+    "raw_scores_changed": false
+  },
+  "source_audit": "round3-opus-audit.json",
+  "sol_exposure": "Sol discloses post-freeze incidental older own-history embedded in round2 Markdown; arrays unchanged and historical pooling excluded.",
+  "next_batch": [
+    "Phone identity and navigation hint; move existing file-opening preference to Account.",
+    "Consistent40px Preview header, flatter text frame; preserve bounded media viewer.",
+    "Help immediately under person search; full-width search/top-aligned header;40px Trash row actions with Back first."
+  ],
+  "gemini": "Unused, quota unavailable; Opus unsatisfied",
+  "limits": "Captured actual local administrator only; ordinary/shared/connected/complete behavior gates remain untested."
+}

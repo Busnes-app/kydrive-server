@@ -30,7 +30,9 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   expect((await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${name}&parent=&revision=0`, { headers, data: 'item,amount\n' })).status()).toBe(201);
   await page.reload();
   const choose = async (body, button) => {
-    await page.locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(body) });
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true }).click();
+    await (await chooser).setFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(body) });
     const ask = page.getByRole('dialog', { name: `${name} already exists` });
     await expect(ask).toBeVisible();
     await expect(page.getByText('revision conflict')).toHaveCount(0);
@@ -65,18 +67,95 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   await expect(history.locator('time').first()).toHaveAttribute('datetime', /Z$/);
   await history.getByRole('button', { name: 'Restore' }).click();
   await expect.poll(async () => (await files()).find(f => f.name === name)?.revision).toBe(3);
+  await page.getByLabel(`Actions for ${name}`).click();
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+  const sharing = page.getByRole('dialog', { name: `Share ${name}`, exact: true });
+  await expect(sharing.getByLabel('Find a person', { exact: true })).toHaveAccessibleDescription(/choose Add as reader beside a matching person/);
+  const help = await sharing.locator('#share-person-help').boundingBox();
+  const person = await sharing.getByLabel('Find a person', { exact: true }).boundingBox();
+  expect(help.y).toBeGreaterThanOrEqual(person.y + person.height);
+  if (testInfo.project.use.viewport.width < 720) {
+    const access = await sharing.getByLabel('Access', { exact: true }).boundingBox();
+    expect(help.y + help.height).toBeLessThan(access.y);
+  }
+  const close = sharing.getByRole('button', { name: 'Close', exact: true });
+  const closeBox = await close.boundingBox();
+  expect(closeBox.width).toBeGreaterThanOrEqual(40);
+  expect(closeBox.height).toBeGreaterThanOrEqual(40);
+  await close.click();
+  if (testInfo.project.use.viewport.width < 720) {
+    const root = await page.getByRole('navigation', { name: 'Folder path' }).boundingBox();
+    const trashIcon = await page.getByRole('button', { name: 'Trash', exact: true }).locator('svg').boundingBox();
+    expect(Math.abs(trashIcon.x - root.x)).toBeLessThanOrEqual(1);
+  }
   expect(await fits(page)).toBe(true);
 });
 
 test('the trash has a title and the Account page has the app layout', async ({ page }, testInfo) => {
   await signIn(page);
   await page.reload();
+  await expect(page.locator('.app-user-name')).toBeVisible();
+  await expect(page.locator('.app-user-role')).toBeVisible();
+  for (const control of await page.locator('.icon-btn').all()) {
+    const box = await control.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(40);
+    expect(box.height).toBeGreaterThanOrEqual(40);
+  }
+  const search = page.locator('.drive-search input');
+  await expect(search).toBeVisible();
+  const fieldContrast = await search.evaluate(input => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    const luminance = color => {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3)
+        .map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
+        .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
+    };
+    const border = luminance(getComputedStyle(input).borderTopColor);
+    return [getComputedStyle(input).backgroundColor, getComputedStyle(document.body).backgroundColor].map(color => {
+      const surface = luminance(color);
+      return (Math.max(border, surface) + .05) / (Math.min(border, surface) + .05);
+    });
+  });
+  for (const ratio of fieldContrast) expect(ratio).toBeGreaterThanOrEqual(3);
+  await expect(page.locator('.app-header').getByLabel('Open files in a new tab')).toHaveCount(0);
+  if (testInfo.project.use.viewport.width < 720) await expect(page.getByText('Scroll for more destinations', { exact: true })).toBeVisible();
+  if (testInfo.project.use.viewport.width < 720) {
+    const destinations = page.locator('.app-nav button');
+    await destinations.first().focus();
+    for (let index = 0; index < await destinations.count(); index++) {
+      await expect(destinations.nth(index)).toBeFocused();
+      await expect.poll(() => destinations.nth(index).evaluate(button => {
+        const row = button.closest('.app-navs').getBoundingClientRect();
+        const box = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        const ring = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+        return box.left - ring >= row.left - 1 && box.right + ring <= row.right + 1;
+      })).toBe(true);
+      if (index + 1 < await destinations.count()) await page.keyboard.press('Tab');
+    }
+  }
+  const admin = page.locator('details.drive-admin');
+  await expect(admin).not.toHaveAttribute('open');
+  await expect(page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();
+  const task = await page.locator('.drive-files-panel').boundingBox();
+  const management = await admin.boundingBox();
+  expect(task.y + task.height).toBeLessThanOrEqual(management.y);
+  await admin.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Create shared workspace', { exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(admin).not.toHaveAttribute('open');
   await page.getByRole('button', { name: 'Trash', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Trash', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trash', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Back to files' }).click();
 
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Account' }).click();
   await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+  await expect(page.getByLabel('Open files in a new tab')).toBeVisible();
   const card = page.getByRole('region', { name: 'Two-factor authentication' });
   const main = await page.locator('.app-main').boundingBox();
   const box = await card.boundingBox();
@@ -114,6 +193,7 @@ test('a second shared workspace with the same name is refused', async ({ page },
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name, quota: 1048576 } })).status()).toBe(201);
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name: name.toLowerCase(), quota: 1048576 } })).status()).toBe(409);
   await page.reload();
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByText('Create shared workspace').click();
   await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Create workspace' }).click();

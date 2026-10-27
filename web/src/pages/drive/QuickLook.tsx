@@ -48,10 +48,10 @@ export function QuickLook({ file, onClose }: { file: { id: string; name: string 
     <header>
       <h2 id="preview-title">{file.name}</h2>
       <div className="button-row">
-        {rendered && <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden="true" />Open in new tab</a>}
-        <a className="btn btn-secondary btn-sm" href={`/api/drive/files/${encodeURIComponent(file.id)}/download`}><Download size={14} aria-hidden="true" />Download</a>
-        <button type="button" className="icon-btn" aria-label="Close" autoFocus onClick={onClose}><X size={18} aria-hidden="true" /></button>
+        {rendered && <a className="btn btn-ghost" href={url} target="_blank" rel="noreferrer"><ExternalLink size={16} aria-hidden="true" />Open in new tab</a>}
+        <a className="btn btn-secondary" href={`/api/drive/files/${encodeURIComponent(file.id)}/download`}><Download size={16} aria-hidden="true" />Download</a>
       </div>
+      <button type="button" className="icon-btn" aria-label="Close" autoFocus onClick={onClose}><X size={18} aria-hidden="true" /></button>
     </header>
     <div className="drive-preview-body">
       {shown.kind === 'loading' && <p role="status">Loading preview…</p>}

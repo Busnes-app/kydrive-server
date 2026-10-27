@@ -1,0 +1,35 @@
+{
+  "round": 3,
+  "status": "Opus complete; Sol pending",
+  "raw_reports": {
+    "opus-round3.json": "c500c604a2da73cca7f9a4b3e98c9152faf93e46e3f03ed7ec6e1c9680705553",
+    "opus-round3.md": "b3e5b84c1a8a374c10dcfcadda5d09a779a0046ae9346c46122ed47d40aa3943"
+  },
+  "opus_progression": {
+    "exact": "3113/400",
+    "decimal": "7.7825",
+    "half_up": "7.8",
+    "accepted": false,
+    "genuinely_satisfied": false
+  },
+  "quality_validation": "40 current membership/hashes, weighted Decimal totals and complete files-array freeze independently reproduced.",
+  "reviewer_drift": "Opus reports -0.0825 overall, including -0.12 mean on15 byte-identical stage01 images. Preserve scores; calibration is not a product regression.",
+  "parent_findings_audit": {
+    "supported": [
+      "Preview header uses btn-sm links (32px) and icon-btn Close(36px); screenshot and CSS confirm mixed heights.",
+      "Share helper follows the entire person/Access form-row; at phone width it appears beneath Access.",
+      "Desktop search max-width38rem differs from list width; page-header uses align-items:flex-end.",
+      "Phone app-user-copy is hidden and navigation uses horizontal overflow without an explicit visible cue."
+    ],
+    "qualified": [
+      "Do not force a filled Done or Create link merely to satisfy a one-primary heuristic: Done dismisses, Create link grants access and is an optional secondary workflow. Role-search Add is absent before query by design; screenshot absence is not a missing operation.",
+      "Native select arrows do not mean unstyled controls: theme.css supplies font, height, colors, background, border and radius. Preserve native select behavior.",
+      "Empty trash and row deletion already share btn-danger-quiet; apparent tint differs in the screenshot. Hover uses danger-soft and has a transition; capture moves the pointer immediately before evaluation/screenshot. Rest/hover state cause needs browser confirmation before changing shared danger styles.",
+      "Short text in a full-height preview is visible, but sizing changes must preserve image/PDF/video/long-text use; do not optimize geometry solely for a three-line fixture."
+    ],
+    "deferred": "Wait for independent Sol result before selecting the next bounded product batch; raw reviewer scores remain immutable."
+  },
+  "gemini": "Unavailable quota; not invoked",
+  "CI": "Fresh hosted checks pending at b974b0c; older security clearance stale/truncated",
+  "dox": "Evidence/audit only. Existing root/docs/evidence ownership contracts unchanged."
+}

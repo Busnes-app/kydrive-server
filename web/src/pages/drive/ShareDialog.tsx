@@ -69,10 +69,17 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
 
   const cap = (r: string) => r[0].toUpperCase() + r.slice(1);
   return <Dialog wide title={`Share ${name}`} description={`${kind === 'folder' ? 'People you add can open everything in this folder.' : 'People you add can open this file.'} They need a KyDrive account.`} onClose={onClose}
-    footer={<button type="button" onClick={onClose}>Done</button>}>
-    <div className="form-row">
-      <label className="field grow">Find a person<input type="search" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} /></label>
-      <label className="field">Access<select value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select></label>
+    footer={<button type="button" className="btn-secondary" onClick={onClose}>Done</button>}>
+    <div className="form-row share-person-row">
+      <div className="field grow">
+        <label htmlFor="share-person-search">Find a person</label>
+        <input id="share-person-search" type="search" aria-describedby="share-person-help" value={q} placeholder="Name or username" onChange={e => setQ(e.target.value)} />
+        <p id="share-person-help" className="hint">Type at least two characters, then choose Add as {role} beside a matching person.</p>
+      </div>
+      <div className="field">
+        <label htmlFor="share-person-role">Access</label>
+        <select id="share-person-role" value={role} onChange={e => setRole(e.target.value)}>{roles.map(r => <option key={r} value={r}>{cap(r)}</option>)}</select>
+      </div>
     </div>
     {people.length > 0 && <ul aria-label="People" className="item-list">{people.map(p => <li key={p.id}><div className="item-main"><span className="item-title">{p.name}</span><span className="item-meta">{p.username}</span></div><div className="item-actions"><button type="button" className="btn-secondary btn-sm" disabled={busy} onClick={() => void add('user', p.id)}>Add as {role}</button></div></li>)}</ul>}
     {groups.length > 0 && <form className="form-row" onSubmit={e => { e.preventDefault(); if (group) void add('group', group); }}>
@@ -84,7 +91,7 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
       {shares.length === 0 ? <p>Not shared with anyone yet.</p> : <ul aria-label="Shared with" className="item-list">{shares.map(s => <li key={s.id}><div className="item-main"><span className="item-title">{s.name} <span className="badge">{cap(s.role)}</span></span><span className="item-meta">{s.principal_kind === 'group' ? 'Group' : 'Person'}</span></div><div className="item-actions"><button type="button" className="btn-danger-quiet btn-sm" disabled={busy} onClick={() => void removeShare(s)}>Remove</button></div></li>)}</ul>}
     </section>
     <section className="dialog-section" aria-labelledby="org-link-heading">
-      <h3 id="org-link-heading">Organisation link</h3>
+      <h3 id="org-link-heading">Organization link</h3>
       <p>Anyone signed in to KyDrive who opens the link gets this access until it expires or you revoke it.</p>
       <form className="form-row" onSubmit={e => { e.preventDefault(); void createLink(); }}>
         <label className="field">Link access<select value={linkRole} onChange={e => setLinkRole(e.target.value)}><option value="reader">Reader</option><option value="editor">Editor</option></select></label>

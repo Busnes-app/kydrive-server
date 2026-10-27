@@ -1,0 +1,16 @@
+Round,Current,Reviewer,Status,n,Sum fraction,Sum exact decimal,Mean fraction,Mean exact decimal (parentheses repeat),Half-up 0.1,Satisfied,Genuinely satisfied,Opus rule result for this round,Current owner progression gate
+1,False,opus,Published,40,2893/10,289.3,2893/400,7.2325,7.2,False,False,False,N/A
+1,False,sol,Published,40,1603/5,320.6,1603/200,8.015,8.0,False,False,N/A,N/A
+1,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+2,False,opus,Published,40,1573/5,314.6,1573/200,7.865,7.9,False,False,False,N/A
+2,False,sol,Published,40,1701/5,340.2,1701/200,8.505,8.5,True,True,N/A,N/A
+2,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+3,False,opus,Published,40,3113/10,311.3,3113/400,7.7825,7.8,False,False,False,N/A
+3,False,sol,Published,40,1731/5,346.2,1731/200,8.655,8.7,True,True,N/A,N/A
+3,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+4,False,opus,Published,40,1582/5,316.4,791/100,7.91,7.9,False,False,False,N/A
+4,False,sol,Published,40,344,344,43/5,8.6,8.6,True,True,N/A,N/A
+4,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+5,True,opus,Published,40,1638/5,327.6,819/100,8.19,8.2,True,True,True,True
+5,True,sol,Published,40,1734/5,346.8,867/100,8.67,8.7,True,True,N/A,N/A
+5,True,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A

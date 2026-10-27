@@ -1,0 +1,24 @@
+{
+  "pid": 2293191,
+  "binary": "/tmp/kydrive-drive-eight-ecm8peut/server",
+  "cwd": "/tmp/kydrive-drive-eight-ecm8peut",
+  "started_at": "2026-10-27T19:43:34Z",
+  "base_url": "http://127.0.0.1:5878",
+  "credentials_file": "/tmp/kydrive-drive-eight-ecm8peut/credentials.json",
+  "environment_keys": [
+    "PATH",
+    "KY_APP_URL",
+    "KY_HOST",
+    "KY_PORT",
+    "KY_DB_DRIVER",
+    "KY_DATA_DIR",
+    "KY_BACKUP_DIR",
+    "KY_ADMIN_PASSWORD",
+    "KY_CAPTCHA_PROVIDER",
+    "KY_EXCALIDRAW_FONTS_DIR"
+  ],
+  "source_commit": "fd472e8035222ae38d8bb4b5c5cbd79c066879a1",
+  "proc_start_ticks": "26498715",
+  "proc_exe": "/tmp/kydrive-drive-eight-ecm8peut/server",
+  "binary_sha256": "379e09322a3d982873543f427aa42a2ab2129a7ddaebadbf18cb924b9af04a6b"
+}

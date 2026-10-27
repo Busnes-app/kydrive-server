@@ -1,0 +1,2667 @@
+{
+  "method": "RGBA; changed_fraction<0.001 AND max_channel_delta<=8",
+  "originals": 40,
+  "comparisons": [
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "changed_fraction": 0.5218255208333333,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "changed_fraction": 0.5309652777777778,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "changed_fraction": 0.9468828125,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "changed_fraction": 0.8404244791666666,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "changed_fraction": 0.9164270833333333,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.9358394097222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.4055060763888889,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.5914296875,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.5774887152777778,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9974991319444444,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9998142361111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9998142361111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9999973958333334,
+      "max_channel_delta": 238,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9999270833333334,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9995460069444444,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9916866319444444,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9999774305555555,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "changed_fraction": 0.045734375,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "changed_fraction": 0.9240798611111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "changed_fraction": 0.7068784722222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "changed_fraction": 0.7706388888888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.8316701388888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.2082048611111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.38901996527777777,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.3716579861111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9988003472222222,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9993984375,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9991458333333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9999270833333334,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9999713541666667,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9998706597222222,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9998958333333333,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9987769097222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9986319444444445,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9991979166666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "changed_fraction": 0.9335512152777777,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "changed_fraction": 0.6781553819444445,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "changed_fraction": 0.7526354166666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.8424791666666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.23396701388888888,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.36589756944444446,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.36185850694444444,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9985529513888889,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9988463541666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9993984375,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9999713541666667,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.998421875,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9985182291666667,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9988289930555555,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "changed_fraction": 0.7553428819444444,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "changed_fraction": 0.38093055555555555,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.21545833333333334,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.9367196180555556,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.9601267361111111,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.9421467013888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9998255208333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9999600694444445,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9998776041666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9997178819444444,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9998324652777778,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9998298611111112,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9999574652777777,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "changed_fraction": 0.5995815972222223,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.6762595486111111,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.8743229166666666,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.7339670138888889,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.5859782986111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9991814236111111,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9997013888888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9997013888888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9997013888888889,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9976953125,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9997317708333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "changed_fraction": 0.2790859375,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.9050286458333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.8805442708333333,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.8244835069444445,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9990407986111111,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9997065972222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9998697916666667,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9998203125,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9998776041666667,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9996519097222222,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9990755208333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9999001736111112,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9999505208333334,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "changed_fraction": 0.9128159722222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.9236484375,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.8872508680555555,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9996649305555556,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9999644097222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9998489583333333,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9998784722222223,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9997829861111112,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9998776041666667,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9997699652777777,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9999166666666667,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "changed_fraction": 0.44815364583333334,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.4475234375,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9991996527777778,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9993081597222222,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9993107638888888,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9999592013888889,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9999513888888889,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9993984375,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9925130208333334,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9992204861111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "changed_fraction": 0.4227421875,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9945451388888888,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9951467013888889,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9952586805555556,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9999253472222223,
+      "max_channel_delta": 241,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9960911458333334,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9963446180555555,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.999890625,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9943975694444445,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.8506579861111111,
+      "max_channel_delta": 229,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9959079861111111,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "changed_fraction": 0.9984149305555555,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.9990286458333333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.9991032986111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9999635416666667,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.9999878472222222,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9995321180555555,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9999105902777777,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9985876736111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9970251736111111,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-desktop-light.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9993993055555556,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "changed_fraction": 0.4370944221655122,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "changed_fraction": 0.4775397982743954,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "changed_fraction": 0.8508081176327622,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "changed_fraction": 0.6296299671892089,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "changed_fraction": 0.702791955280107,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.8298578199052132,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.5152479037550127,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.6453821849556447,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.598231862923806,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9912474176692186,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9989002308907522,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9989002308907522,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9999908858913599,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9998146797909832,
+      "max_channel_delta": 235,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 238,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9979067930489731,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9882822943249484,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9991280836067566,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "changed_fraction": 0.11911532385466035,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "changed_fraction": 0.9008749544294568,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "changed_fraction": 0.633190545631304,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "changed_fraction": 0.6650473933649289,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.8141785150078988,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.36302102321059665,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.4119091019564953,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.43878660833637134,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9976667881881152,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9978946409041196,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.99739336492891,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.9996506258354599,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9997235387045813,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9995382184955645,
+      "max_channel_delta": 236,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.999510876169644,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9957224450115445,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9864473204520597,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9970956373799976,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "changed_fraction": 0.8984597156398104,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "changed_fraction": 0.5720652570178637,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "changed_fraction": 0.6479462875197473,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.8153329687689878,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.4298213634706526,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.4066745655608215,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.3794750273423259,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9971472839956252,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.99618422651598,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9978946409041196,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.9996718920889537,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9998025276461295,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9994622675902297,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9946591323368574,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9855450236966825,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9961751124073399,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "changed_fraction": 0.7487756714060032,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "changed_fraction": 0.8005255802649167,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.326008628022846,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.9148651111921254,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.952637015433224,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.8672773119455583,
+      "max_channel_delta": 234,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.999899744804958,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9992982136347065,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9992982136347065,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.999565560821485,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.999030866447928,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.9994075829383886,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9988576983837647,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9991797302223843,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "changed_fraction": 0.5196044476850165,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.6479857819905214,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.8023575161015919,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.7653755012759752,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.6610250334183984,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9972353870458136,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9987908615870701,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9987908615870701,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9999574674930125,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9987695953335763,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9975452667395796,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9987726333697897,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "changed_fraction": 0.6742192246931583,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.7325768623161988,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.7627354478065379,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.739777008141937,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9981407218374043,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.999100741280836,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9993012516709199,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.9992921375622797,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9995716368939118,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.9995382184955645,
+      "max_channel_delta": 238,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9984262972414631,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9988728885648317,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9991736541499575,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "changed_fraction": 0.8636347065257017,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.892863652934743,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.820640418033783,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9998268319358367,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9999392392757321,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9999392392757321,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.999270871308786,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9995534086766314,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.999565560821485,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9997660712115688,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9990733989549155,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9998693644428241,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "changed_fraction": 0.5389476242556811,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.5764704095272816,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.998456677603597,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9976303317535545,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9976212176449143,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.999914934986025,
+      "max_channel_delta": 238,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9998480981893304,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9996840442338073,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.9997964515737028,
+      "max_channel_delta": 239,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.997897678940333,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.97482986997205,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9975240004860858,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "changed_fraction": 0.46467067687446834,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9876534208287763,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9896949811641754,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.9876868392271236,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.9857850285575404,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9893638352169157,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.98906306963179,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.9852199538218496,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9909588042289464,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.8273301737756714,
+      "max_channel_delta": 229,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.9866447928059302,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "changed_fraction": 0.9981741402357516,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.9958895370032811,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.996199416697047,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.9997083485235144,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.9997630331753554,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.9980495807510026,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 1.0,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9945224207072548,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9959867541621096,
+      "max_channel_delta": 255,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-account-mobile-light.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.997897678940333,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "changed_fraction": 0.5216553819444445,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.5307821180555555,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9468862847222222,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.8404670138888889,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.9163845486111111,
+      "max_channel_delta": 229,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.9358055555555556,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.4053949652777778,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.5960425347222222,
+      "max_channel_delta": 237,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.5774001736111111,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "changed_fraction": 0.04569010416666667,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9240329861111111,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.6199071180555555,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.7705824652777777,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.8316354166666666,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.20808680555555556,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.3868359375,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.3717421875,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "changed_fraction": 0.9335833333333333,
+      "max_channel_delta": 226,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.5911822916666667,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.7525746527777778,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.8424348958333333,
+      "max_channel_delta": 228,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.23385329861111112,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.36418489583333336,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.36191493055555557,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "changed_fraction": 0.7553958333333334,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.3822578125,
+      "max_channel_delta": 228,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.21543489583333333,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9366640625,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9605026041666667,
+      "max_channel_delta": 241,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.9422430555555555,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "changed_fraction": 0.5995399305555555,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.6762760416666667,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.7873793402777778,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.6474340277777778,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.4996154513888889,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "changed_fraction": 0.2774331597222222,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9050225694444445,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.8778932291666667,
+      "max_channel_delta": 240,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.8246171875,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "changed_fraction": 0.9128072916666666,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.9240381944444445,
+      "max_channel_delta": 242,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.8872647569444444,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "changed_fraction": 0.4517265625,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.44728038194444447,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-desktop-dark.png",
+      "right": "screenshots/kydrive-01-after-account-desktop-dark.png",
+      "changed_fraction": 0.42301822916666665,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "changed_fraction": 0.4241675780775307,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.46455826953457285,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.850993437841779,
+      "max_channel_delta": 228,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.629778830963665,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.7025063798760481,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.8296816138048365,
+      "max_channel_delta": 229,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.5019564953214243,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.6343267711751124,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-login-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.585332361161745,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "changed_fraction": 0.1189907643699113,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.901023818203913,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.5492830234536396,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.6149775185320209,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.8144215579049702,
+      "max_channel_delta": 218,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.36324583789038767,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.4170312310122737,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-files-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.4387349617207437,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "changed_fraction": 0.8986146554866934,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.4881425446591323,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.5978369182160651,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.8155760116660591,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.4300492161866569,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.40937234171831327,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.3795692064649411,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "changed_fraction": 0.7489640296512334,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.7981862923806051,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.3222718434803743,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.9149957467493013,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.9390387653420829,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-new-folder-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.86787884311581,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "changed_fraction": 0.5194981164175477,
+      "max_channel_delta": 221,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.6479432494835339,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.7182039129906429,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.6747964515737027,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-preview-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.5774395430793535,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "changed_fraction": 0.6716065135496415,
+      "max_channel_delta": 225,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.6822973629845668,
+      "max_channel_delta": 224,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.7034299428849192,
+      "max_channel_delta": 235,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-share-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.6900322031838619,
+      "max_channel_delta": 235,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "changed_fraction": 0.8635678697290071,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.878630453275003,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-versions-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.8210657431036578,
+      "max_channel_delta": 233,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "changed_fraction": 0.5562036699477457,
+      "max_channel_delta": 229,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-trash-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.5761574917973022,
+      "max_channel_delta": 231,
+      "near_duplicate": false
+    },
+    {
+      "left": "screenshots/kydrive-01-after-appearance-mobile-dark.png",
+      "right": "screenshots/kydrive-01-after-account-mobile-dark.png",
+      "changed_fraction": 0.44631182403694253,
+      "max_channel_delta": 232,
+      "near_duplicate": false
+    }
+  ],
+  "near_duplicates": []
+}

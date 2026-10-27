@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Quarterly plan.md",
+    "content": "# Quarterly plan\n\nSynthetic KyDrive baseline fixture.\n\n- Review project milestones\n- Prepare shared materials\n- Archive completed work\n",
+    "sha256": "270d7c5956b5e361e9a56d72a16ad32aac2041299023232c1352fd987822e392",
+    "bytes": 135,
+    "state": "live"
+  },
+  {
+    "name": "Supplier list.csv",
+    "content": "Supplier,Category,Status\nCedar Studio,Design,Active\nHarbor Paper,Office,Review\n",
+    "sha256": "d0b78e64b8973f51977b305b05a9fc9be5c0fff0a0c2f61abb91de9f4c440755",
+    "bytes": 79,
+    "state": "live"
+  },
+  {
+    "name": "Meeting notes.txt",
+    "content": "Project meeting\n\nSynthetic baseline notes.\nNext step: review the quarterly plan.\n",
+    "sha256": "8a9ae5a2c3148cae6459e7e635c11a9323e78663ac81f717c7dbc47ca2478823",
+    "bytes": 81,
+    "state": "live"
+  },
+  {
+    "name": "Archive note.txt",
+    "content": "Disposable synthetic item prepared for the trash view.\n",
+    "sha256": "a91f3f7053ea992ed286bf27bdca8204a1b778a5165f4d051fbac3252a4a4121",
+    "bytes": 55,
+    "state": "trashed"
+  }
+]

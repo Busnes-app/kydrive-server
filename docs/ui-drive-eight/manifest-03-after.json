@@ -1,0 +1,1596 @@
+{
+  "stage": "03-after",
+  "product": "KyDrive",
+  "source_commit": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+  "branch": "ui/drive-eight",
+  "tracked_source_diff_bytes": 0,
+  "tracked_source_inventory_sha256": "c00cee7f1a11f9cfa01e76c749ad9a952ed86e82b67d2a3e2f312af17c484539",
+  "server_binary_sha256": "8f24ccca5e02c1548504658201487145b8b7e751eb9c02bece3572e424c6b6bb",
+  "embedded_index_sha256": "3f904b14f4a974089717760cd183ecb136dd86ba9cb728c166d62b195bc118ad",
+  "capture_driver_sha256": "042d0a10cbd2013e7188994cb4e84afaff92d8ab646f21e840cc8e737b857af9",
+  "package_lock_sha256": "d535ae94755b431e17ce0916fb3c1726ed28ffd49a7cd5dcb274e8f834d140be",
+  "browser": {
+    "engine": "Chromium",
+    "version": "156.0.8078.4",
+    "mode": "headless",
+    "playwright": "1.64.1"
+  },
+  "host": "linux 7.2.10-1-cachyos",
+  "started_at": "2026-10-27T21:39:19.311Z",
+  "base_url": "http://127.0.0.1:5878",
+  "owned_process_record": "/tmp/kydrive-r3-recreated-sgjfh9md/owned-process-r4-confirm.json",
+  "theme_source": "Fresh context per viewport/scheme; OS colorScheme emulation; ky_theme absent throughout",
+  "device_scale_factor": 1,
+  "locale": "en-US",
+  "timezone": "America/New_York",
+  "service_workers": "allow (normal registration and lifecycle)",
+  "full_page": false,
+  "fixture": "Disposable SQLite; actual local bootstrap administrator after mandatory password replacement. No ordinary account: staff requires external OIDC; SCIM supplies no passwords. Real UI created Project materials folder, uploaded Quarterly plan.md, Supplier list.csv, Meeting notes.txt, Archive note.txt, and trashed Archive note.txt. No editor, identity, email, recovery or external service configured. Upload receipts cleared by UI. No simulated roles, API mocks, storage auth injection or CSP/CSRF bypass.",
+  "missing_unscored": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)"
+  ],
+  "surfaces": [
+    "login",
+    "files",
+    "folder",
+    "new-folder",
+    "preview",
+    "share",
+    "versions",
+    "trash",
+    "appearance",
+    "account"
+  ],
+  "files": [
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-light.png",
+      "surface": "login",
+      "device": "desktop",
+      "theme": "light",
+      "account": "signed-out",
+      "sha256": "c2e55f4bfd21e534d91f4e5f738c3c71a0c90390a48b7376fce1409780fb94b7",
+      "bytes": 29311,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:20.756Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "KyDrive"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-light.png",
+      "surface": "files",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "dc1c7b2b957d300c376bc5b4396b36a2d58dbed6cb1e12439cf68cebf0d4e749",
+      "bytes": 64006,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:21.519Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-light.png",
+      "surface": "folder",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "2a3cffa35aac50cc1ecb68c4ca4893b5a0bd007103d070be581f716826a2c7fb",
+      "bytes": 57385,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:22.202Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Project materials"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-light.png",
+      "surface": "new-folder",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "06440d2307478e6226fe7db24b79a1f356489371916d47faf1391067e6ccccf2",
+      "bytes": 96095,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:22.911Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "New folder"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-light.png",
+      "surface": "preview",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "53ecf89b671ae79e9d557bdc735600ff641ec520dbc9eab7319b42dcbaa9d44c",
+      "bytes": 45240,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:23.672Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-light.png",
+      "surface": "share",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "77fb17d1ebdb76561c39c1dc6bcb78eb2e82e52b9266900d751423b5e3aa4473",
+      "bytes": 102552,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:24.474Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Share Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-light.png",
+      "surface": "versions",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "c1580ecae2dedb27cc8dc58729f40cdd479d19706bd06eebcb24c4a6a858e360",
+      "bytes": 86442,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:25.298Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Version history"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-light.png",
+      "surface": "trash",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "0dba4a2e5bc961621b3387417af75563bd211df43dae9e27a2ce95bcb11e2d46",
+      "bytes": 52961,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:25.988Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Trash"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-light.png",
+      "surface": "appearance",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "6e39de0ec7f92b9752710bc3d20719444724559056b14ed3450686b2e9914ad2",
+      "bytes": 75659,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:26.641Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Appearance"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-light.png",
+      "surface": "account",
+      "device": "desktop",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "dda236a56e358ed3e877458b1232708123e49f0f0fe879c6ee8d3e10384e9fe9",
+      "bytes": 87928,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:27.293Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Account",
+        "Files",
+        "Two-factor authentication",
+        "App passwords and AI agents",
+        "Computers"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-light.png",
+      "surface": "login",
+      "device": "mobile",
+      "theme": "light",
+      "account": "signed-out",
+      "sha256": "b66bf5cf38318e8bf1cc6383669e7e07a6564b98359ee8b0fa9e864379ff110f",
+      "bytes": 25270,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:27.993Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "KyDrive"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-light.png",
+      "surface": "files",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "3d813cc694ee728d17c410cff5b03e21bca6dba9ef20462a43ca8ddf7490eab6",
+      "bytes": 47518,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:28.829Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-light.png",
+      "surface": "folder",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "987886ee4463fef3096539a6b218f09a856128a2d4057dce84e94dd486cfa837",
+      "bytes": 41377,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:29.512Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Project materials"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-light.png",
+      "surface": "new-folder",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "d97ff1ff4c566fa0692bfb46891ca4c33e414115868bfc8716f964b313aaa2d7",
+      "bytes": 64652,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:30.265Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "New folder"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-light.png",
+      "surface": "preview",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "0e8640351cba66c531b05e9665119521f741d280e2debb452fc639f0780b4a3b",
+      "bytes": 18808,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:31.018Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-light.png",
+      "surface": "share",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "8a555c98b990dc65c9445cb9eafd5a8187eda8275876605c2434ce996fa82397",
+      "bytes": 51137,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:31.758Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Share Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-light.png",
+      "surface": "versions",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "185e1d9a22d963bd484fd9ef78bf7a8eacb9b4ba459e1d84b0fdd33bf486c86a",
+      "bytes": 62682,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:32.481Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Version history"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-light.png",
+      "surface": "trash",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "f802c2db62e130592c41e898580a6542ba1a63fddcb935c37d055782e08512bb",
+      "bytes": 37397,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:33.144Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Trash"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-light.png",
+      "surface": "appearance",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "adf04e4e11880dc49605f900f7ed0bef206defaa4b1ec05ddac8108c33eb4cf4",
+      "bytes": 41344,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:33.782Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Appearance"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-light.png",
+      "surface": "account",
+      "device": "mobile",
+      "theme": "light",
+      "account": "local administrator",
+      "sha256": "93f6835e07dfae8844d8fe7f8bbab5c23ca87c2e0a4a3599097faeffa9de8ae3",
+      "bytes": 53628,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:34.483Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-light",
+      "computed_color_scheme": "light",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Account",
+        "Files",
+        "Two-factor authentication",
+        "App passwords and AI agents",
+        "Computers"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-desktop-dark.png",
+      "surface": "login",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "signed-out",
+      "sha256": "9ecc174bd58b9c14adbb06a4616cecc2e434d14908e9b0cf594b32a1d06479fd",
+      "bytes": 29219,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:35.974Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "KyDrive"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-desktop-dark.png",
+      "surface": "files",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "8b05bb55ef4a4682dc6e723e5dcd813fe8072d267449da69337f378e731f36f5",
+      "bytes": 64169,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:36.898Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-desktop-dark.png",
+      "surface": "folder",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "2d216a80bbd3de20a3e8160e245309e0306bd50ae0994d54e07c6f0ac8ca3f58",
+      "bytes": 57440,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:37.612Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Project materials"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-desktop-dark.png",
+      "surface": "new-folder",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "aee33842c6944ae15866442669f2dfd39a8c6449e8d3036421032cdcaf278268",
+      "bytes": 93231,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:38.450Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "New folder"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-desktop-dark.png",
+      "surface": "preview",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "17b6bbdc74e1dfaebc7033a09f59b1a06577f0ebc2eadcb00c8c64ee55f88d90",
+      "bytes": 44780,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:39.279Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-desktop-dark.png",
+      "surface": "share",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "187441c4dd97382e8146d58bb7e3ca420159e50db1099c4cfde4a3d00edefd94",
+      "bytes": 100178,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:40.149Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Share Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-desktop-dark.png",
+      "surface": "versions",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "e912e26a4a659c2fb8df533e6190199a42a65449edb95a57bc9fed3b1580e1ba",
+      "bytes": 84643,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:41.011Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Version history"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-desktop-dark.png",
+      "surface": "trash",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "74cae80a8db0d8b7d4e44c12ac7eef8f0a1164c38844543af9f4bd6a2fca8ded",
+      "bytes": 53138,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:41.761Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Trash"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-desktop-dark.png",
+      "surface": "appearance",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "620234112c7c39ca7ab46959c36eee5b984d0d5c1d69b28c06d52301e3deb2ca",
+      "bytes": 76474,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:42.499Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Appearance"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-desktop-dark.png",
+      "surface": "account",
+      "device": "desktop",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "e596c7c4d454f26ceec3cc6bde1ff32e9b9bee4312966428f3b37507442c95e3",
+      "bytes": 88197,
+      "width": 1280,
+      "height": 900,
+      "captured_at": "2026-10-27T21:39:43.234Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Account",
+        "Files",
+        "Two-factor authentication",
+        "App passwords and AI agents",
+        "Computers"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-login-mobile-dark.png",
+      "surface": "login",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "signed-out",
+      "sha256": "f94d60c999307162dae01e887bb9b6337af4d7e9989babd19e6454e838cce696",
+      "bytes": 25227,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:45.212Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "KyDrive"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-files-mobile-dark.png",
+      "surface": "files",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "28d77ee1dbd9a31a42aeefb9cc70cff983149d247c210bb6189a0db9d5ba9526",
+      "bytes": 48115,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:46.132Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-folder-mobile-dark.png",
+      "surface": "folder",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "3c7a845b6f106b461b6ad54ba2177e843aa717107540ef06ffa11b744b72d318",
+      "bytes": 41785,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:46.831Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Project materials"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-new-folder-mobile-dark.png",
+      "surface": "new-folder",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "be5afa2a3a67735ef462ca174814b59bbbce2426a60296273adad695fa5430a5",
+      "bytes": 62004,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:47.607Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "New folder"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-preview-mobile-dark.png",
+      "surface": "preview",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "719b841399aed1695499ae373603bcf8e815770612d2d661463a43cbc2e9ee2f",
+      "bytes": 18935,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:48.372Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-share-mobile-dark.png",
+      "surface": "share",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "183a9dbe17741db8e1d45f46e30a7c1fcb3bbdd45cb7e1c429896cbeb2cf1763",
+      "bytes": 49679,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:49.131Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Share Meeting notes.txt"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-versions-mobile-dark.png",
+      "surface": "versions",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "121fde4e2f72aa2b150c62c542ede8cc3037ab199bd475811fbaa573207cf88d",
+      "bytes": 60168,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:49.924Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "My files",
+        "Version history"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-trash-mobile-dark.png",
+      "surface": "trash",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "6f439a8cc34a3f86a5a4c4bfbdfbf8ec20f92a99daecd8361f6ae21738e74125",
+      "bytes": 37734,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:50.663Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Trash"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-appearance-mobile-dark.png",
+      "surface": "appearance",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "c9ee79d3357c5d7ba089558f43af19a232649513fdee2a48376c349e15515529",
+      "bytes": 42002,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:51.381Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Appearance"
+      ]
+    },
+    {
+      "file": "screenshots/kydrive-03-after-account-mobile-dark.png",
+      "surface": "account",
+      "device": "mobile",
+      "theme": "dark",
+      "account": "local administrator",
+      "sha256": "cf51451f94a3a7ed0c01ad9d361cf82840f82818e6004ad13d0cdb7b22a0f7e0",
+      "bytes": 54285,
+      "width": 390,
+      "height": 844,
+      "captured_at": "2026-10-27T21:39:52.016Z",
+      "url": "http://127.0.0.1:5878/",
+      "title": "KyDrive",
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "dpr": 1,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "saved_theme": null,
+      "data_theme": "busnes-dark",
+      "computed_color_scheme": "dark",
+      "service_worker_controller": "http://127.0.0.1:5878/sw.js",
+      "service_worker_registrations": [
+        "http://127.0.0.1:5878/"
+      ],
+      "overflow_px": 0,
+      "hovered_buttons": [],
+      "scroll": {
+        "x": 0,
+        "y": 0
+      },
+      "headings": [
+        "Personal",
+        "Shared workspaces",
+        "Account",
+        "Files",
+        "Two-factor authentication",
+        "App passwords and AI agents",
+        "Computers"
+      ]
+    }
+  ],
+  "diagnostics": [],
+  "finished_at": "2026-10-27T21:39:52.020Z",
+  "complete": true
+}

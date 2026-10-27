@@ -1,0 +1,8 @@
+{
+  "captured_source": "8a23d753ba7aa0f67025efa1eca19bce3df63363",
+  "trigger": "Settled native Tab confirmed Appearance117.69px beyond phone navigation row and Settings outer ring1.78px beyond.",
+  "change": "Reuse row-only geometry scrolling for selected and focused navigation buttons, allowing4px for shared focus outline/offset. No CSS,initial markup,route,taborder or initial-layout change.",
+  "checks": "2App unit tests passed; changed browser specification syntax passed. Native focused verification and full hosted CI pending.",
+  "evidence_policy": "Frozen40stage03 originals/source remain8a23d75; focus-state follow-up is separately pinned and never described as pictured by those originals. No extra40-image redesign recapture.",
+  "dox": "Nearest web/browser contracts updated; parent/root ownership and indexes unchanged."
+}
