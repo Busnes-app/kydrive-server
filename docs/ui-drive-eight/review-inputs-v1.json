@@ -1,0 +1,22 @@
+{
+  "product_source": "fd472e8035222ae38d8bb4b5c5cbd79c066879a1",
+  "capture_scope": "40 unique initial-view screenshots; actual local administrator for authenticated surfaces",
+  "missing_unscored": [
+    "Ordinary account shell and task workflows (no real local staff provisioning boundary)",
+    "Group-granted shared workspace and populated Shared with me (no directory/groups/second account)",
+    "Euro-Office editing and save (not configured)",
+    "Live SSO, external guest collaboration, linked computers and recovery integrations (not configured)"
+  ],
+  "product_source_changes": false,
+  "parent_evidence_only_changes": [
+    "docs/AGENTS.md"
+  ],
+  "authority": "authority.json",
+  "inventory": "inventory-v1.json",
+  "duplicates": "near-duplicate-audit-v1.json",
+  "brands": "brand-references.json",
+  "quality_set": 40,
+  "quality_unscored_brand_references": 4,
+  "native_browser": "Capture agent performed native T3 login/password change, upload, navigation and Appearance reconnaissance. Parent snapshot step twice timed out after15000ms; documented Playwright workflow used for DPR1 frozen capture.",
+  "behavior_gates": "Full gates untested; baseline builds/capture verification only. Do not equate screenshots with functional/accessibility/security/role coverage."
+}

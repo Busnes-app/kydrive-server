@@ -1,0 +1,10 @@
+{
+  "files": 40,
+  "unique_byte_hashes": 40,
+  "byte_duplicate_groups": [],
+  "unique_decoded_pixel_signatures": 40,
+  "pixel_duplicate_groups": [],
+  "method": "SHA-256 of original PNG and ImageMagick decoded-pixel signature, grouped with dimensions; no perceptual-similarity claim",
+  "confirmation_recaptures": 0,
+  "superseded_artifacts": []
+}
