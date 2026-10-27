@@ -1,0 +1,9 @@
+{
+  "scope": "Shared existing field-border token adoption for inputs/selects/secondary/icon outlines;40px icon targets. No new themes, color copies, routes or operations.",
+  "code_findings": "Old input/select border used line-strong; icon target2.25rem and line border. Source findings support Opus F1/F2; pixel sampling alone not a complete gate.",
+  "syntax": "node --check passed for changed launch-fixes browser specification and stage04 driver.",
+  "browser_regression": "Existing launch test now checks visible icon40px dimensions and rendered search-border contrast>=3 against field/page surfaces in Busnes projects. Hosted run pending.",
+  "runtime": "Native actual computed-style before/after measurements and bounded capture requested; no fresh runtime pass claimed before them.",
+  "detector": "Full web/src scan returns two known owner-required font/selected-navigation findings, retained with reasons.",
+  "dox": "Nearest web/browser contracts updated. Root/shared-token ownership and indexes unchanged; no vendor file edited."
+}

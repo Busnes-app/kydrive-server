@@ -215,7 +215,7 @@ button, .btn {
 button:hover:not(:disabled), .btn:hover { filter: brightness(1.08); }
 button:active:not(:disabled) { filter: brightness(.95); }
 button:disabled { opacity: .5; cursor: not-allowed; }
-.btn-secondary { background: var(--panel); color: var(--ink-strong); border-color: var(--line-strong); }
+.btn-secondary { background: var(--panel); color: var(--ink-strong); border-color: var(--ky-field-border); }
 .btn-secondary:hover:not(:disabled) { filter: none; border-color: var(--ink); background: var(--panel-hover); }
 .btn-ghost { background: transparent; color: var(--ink-strong); border-color: transparent; }
 .btn-ghost:hover:not(:disabled) { filter: none; background: var(--panel-hover); }
@@ -225,8 +225,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .btn-sm { min-height: 2rem; padding: .3rem .75rem; font-size: .82rem; }
 .btn-link { background: none; border: 0; min-height: 0; padding: 0; color: inherit; font: inherit; font-weight: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: normal; text-align: left; }
 .btn-link:hover:not(:disabled) { filter: none; color: var(--accent); }
-.icon-btn { min-height: 2.25rem; width: 2.25rem; padding: 0; background: transparent; color: var(--ink); border-color: var(--line); }
-.icon-btn:hover:not(:disabled) { filter: none; color: var(--ink-strong); background: var(--panel-hover); border-color: var(--line-strong); }
+.icon-btn { min-height: var(--control-h); width: var(--control-h); padding: 0; background: transparent; color: var(--ink); border-color: var(--ky-field-border); }
+.icon-btn:hover:not(:disabled) { filter: none; color: var(--ink-strong); background: var(--panel-hover); border-color: var(--ky-field-border); }
 .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1rem; }
 .button-row.end { justify-content: flex-end; }
 
@@ -235,7 +235,7 @@ input, select, textarea {
   font: inherit; font-size: .92rem;
   width: 100%; min-height: var(--control-h); padding: .5rem .75rem;
   background: var(--bg); color: var(--ink-strong);
-  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  border: 1px solid var(--ky-field-border); border-radius: var(--radius-sm);
 }
 textarea { min-height: 5rem; }
 input::placeholder, textarea::placeholder { color: var(--ink); opacity: .85; }

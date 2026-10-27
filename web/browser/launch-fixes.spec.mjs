@@ -96,6 +96,31 @@ test('the trash has a title and the Account page has the app layout', async ({ p
   await page.reload();
   await expect(page.locator('.app-user-name')).toBeVisible();
   await expect(page.locator('.app-user-role')).toBeVisible();
+  for (const control of await page.locator('.icon-btn').all()) {
+    const box = await control.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(40);
+    expect(box.height).toBeGreaterThanOrEqual(40);
+  }
+  const search = page.locator('.drive-search input');
+  await expect(search).toBeVisible();
+  const fieldContrast = await search.evaluate(input => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    const luminance = color => {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3)
+        .map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
+        .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
+    };
+    const border = luminance(getComputedStyle(input).borderTopColor);
+    return [getComputedStyle(input).backgroundColor, getComputedStyle(document.body).backgroundColor].map(color => {
+      const surface = luminance(color);
+      return (Math.max(border, surface) + .05) / (Math.min(border, surface) + .05);
+    });
+  });
+  for (const ratio of fieldContrast) expect(ratio).toBeGreaterThanOrEqual(3);
   await expect(page.locator('.app-header').getByLabel('Open files in a new tab')).toHaveCount(0);
   if (testInfo.project.use.viewport.width < 720) await expect(page.getByText('Scroll for more destinations', { exact: true })).toBeVisible();
   if (testInfo.project.use.viewport.width < 720) {
