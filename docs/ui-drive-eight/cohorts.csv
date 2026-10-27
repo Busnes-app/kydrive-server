@@ -23,3 +23,15 @@ Round,Reviewer,Cohort,Measure,n,Sum fraction,Sum exact decimal,Mean fraction,Mea
 2,sol,auth,Brand,4,35,35,35/4,8.75,8.8,True,True
 2,sol,drive,Brand,28,1232/5,246.4,44/5,8.8,8.8,True,True
 2,sol,settings,Brand,8,348/5,69.6,87/10,8.7,8.7,True,True
+3,opus,auth,Quality,4,158/5,31.6,79/10,7.9,7.9,False,False
+3,opus,drive,Quality,28,2167/10,216.7,2167/280,7.739(285714),7.7,False,False
+3,opus,settings,Quality,8,63,63,63/8,7.875,7.9,False,False
+3,opus,auth,Brand,4,34,34,17/2,8.5,8.5,False,False
+3,opus,drive,Brand,28,1159/5,231.8,1159/140,8.27(857142),8.3,False,False
+3,opus,settings,Brand,8,324/5,64.8,81/10,8.1,8.1,False,False
+3,sol,auth,Quality,4,174/5,34.8,87/10,8.7,8.7,True,True
+3,sol,drive,Quality,28,1211/5,242.2,173/20,8.65,8.7,True,True
+3,sol,settings,Quality,8,346/5,69.2,173/20,8.65,8.7,True,True
+3,sol,auth,Brand,4,34,34,17/2,8.5,8.5,True,True
+3,sol,drive,Brand,28,1214/5,242.8,607/70,8.6(714285),8.7,True,True
+3,sol,settings,Brand,8,68,68,17/2,8.5,8.5,True,True

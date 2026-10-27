@@ -1,6 +1,6 @@
 # KyDrive Council score history
 
-Current round: **R2**. Covered-set descriptions only; not rankings, whole-product or behavior acceptance.
+Current round: **R3**. Covered-set descriptions only; not rankings, whole-product or behavior acceptance.
 
 Owner progression uses ONLY current Opus overall quality, rounded half-up to one decimal, >=8.0. Sol, brand, historical rounds and individual cohort shortfalls do not enter the gate. Owner rejection reopens it.
 
@@ -9,9 +9,12 @@ Owner progression uses ONLY current Opus overall quality, rounded half-up to one
 | 1 | False | opus | Published | 40 | 2893/10 | 289.3 | 2893/400 | 7.2325 | 7.2 | False | False | False | N/A |
 | 1 | False | sol | Published | 40 | 1603/5 | 320.6 | 1603/200 | 8.015 | 8.0 | False | False | N/A | N/A |
 | 1 | False | gemini | Unused; quota unavailable; gated on both primary approvals | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 2 | True | opus | Published | 40 | 1573/5 | 314.6 | 1573/200 | 7.865 | 7.9 | False | False | False | False |
-| 2 | True | sol | Published | 40 | 1701/5 | 340.2 | 1701/200 | 8.505 | 8.5 | True | True | N/A | N/A |
-| 2 | True | gemini | Unused; quota unavailable; gated on both primary approvals | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 2 | False | opus | Published | 40 | 1573/5 | 314.6 | 1573/200 | 7.865 | 7.9 | False | False | False | N/A |
+| 2 | False | sol | Published | 40 | 1701/5 | 340.2 | 1701/200 | 8.505 | 8.5 | True | True | N/A | N/A |
+| 2 | False | gemini | Unused; quota unavailable; gated on both primary approvals | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 3 | True | opus | Published | 40 | 3113/10 | 311.3 | 3113/400 | 7.7825 | 7.8 | False | False | False | False |
+| 3 | True | sol | Published | 40 | 1731/5 | 346.2 | 1731/200 | 8.655 | 8.7 | True | True | N/A | N/A |
+| 3 | True | gemini | Unused; quota unavailable; gated on both primary approvals | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
 ## Independent cohort summaries
 
@@ -41,6 +44,18 @@ Owner progression uses ONLY current Opus overall quality, rounded half-up to one
 | 2 | sol | auth | Brand | 4 | 35 | 35 | 35/4 | 8.75 | 8.8 | True | True |
 | 2 | sol | drive | Brand | 28 | 1232/5 | 246.4 | 44/5 | 8.8 | 8.8 | True | True |
 | 2 | sol | settings | Brand | 8 | 348/5 | 69.6 | 87/10 | 8.7 | 8.7 | True | True |
+| 3 | opus | auth | Quality | 4 | 158/5 | 31.6 | 79/10 | 7.9 | 7.9 | False | False |
+| 3 | opus | drive | Quality | 28 | 2167/10 | 216.7 | 2167/280 | 7.739(285714) | 7.7 | False | False |
+| 3 | opus | settings | Quality | 8 | 63 | 63 | 63/8 | 7.875 | 7.9 | False | False |
+| 3 | opus | auth | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | False | False |
+| 3 | opus | drive | Brand | 28 | 1159/5 | 231.8 | 1159/140 | 8.27(857142) | 8.3 | False | False |
+| 3 | opus | settings | Brand | 8 | 324/5 | 64.8 | 81/10 | 8.1 | 8.1 | False | False |
+| 3 | sol | auth | Quality | 4 | 174/5 | 34.8 | 87/10 | 8.7 | 8.7 | True | True |
+| 3 | sol | drive | Quality | 28 | 1211/5 | 242.2 | 173/20 | 8.65 | 8.7 | True | True |
+| 3 | sol | settings | Quality | 8 | 346/5 | 69.2 | 173/20 | 8.65 | 8.7 | True | True |
+| 3 | sol | auth | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | True | True |
+| 3 | sol | drive | Brand | 28 | 1214/5 | 242.8 | 607/70 | 8.6(714285) | 8.7 | True | True |
+| 3 | sol | settings | Brand | 8 | 68 | 68 | 17/2 | 8.5 | 8.5 | True | True |
 
 ## Independent surface summaries
 
@@ -126,6 +141,46 @@ Owner progression uses ONLY current Opus overall quality, rounded half-up to one
 | 2 | sol | share | Brand | 4 | 35 | 35 | 35/4 | 8.75 | 8.8 | True | True |
 | 2 | sol | trash | Brand | 4 | 174/5 | 34.8 | 87/10 | 8.7 | 8.7 | True | True |
 | 2 | sol | versions | Brand | 4 | 36 | 36 | 9 | 9 | 9.0 | True | True |
+| 3 | opus | account | Quality | 4 | 156/5 | 31.2 | 39/5 | 7.8 | 7.8 | False | False |
+| 3 | opus | appearance | Quality | 4 | 159/5 | 31.8 | 159/20 | 7.95 | 8.0 | False | False |
+| 3 | opus | files | Quality | 4 | 154/5 | 30.8 | 77/10 | 7.7 | 7.7 | False | False |
+| 3 | opus | folder | Quality | 4 | 31 | 31 | 31/4 | 7.75 | 7.8 | False | False |
+| 3 | opus | login | Quality | 4 | 158/5 | 31.6 | 79/10 | 7.9 | 7.9 | False | False |
+| 3 | opus | new-folder | Quality | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | False | False |
+| 3 | opus | preview | Quality | 4 | 30 | 30 | 15/2 | 7.5 | 7.5 | False | False |
+| 3 | opus | share | Quality | 4 | 148/5 | 29.6 | 37/5 | 7.4 | 7.4 | False | False |
+| 3 | opus | trash | Quality | 4 | 297/10 | 29.7 | 297/40 | 7.425 | 7.4 | False | False |
+| 3 | opus | versions | Quality | 4 | 32 | 32 | 8 | 8 | 8.0 | False | False |
+| 3 | opus | account | Brand | 4 | 32 | 32 | 8 | 8 | 8.0 | False | False |
+| 3 | opus | appearance | Brand | 4 | 164/5 | 32.8 | 41/5 | 8.2 | 8.2 | False | False |
+| 3 | opus | files | Brand | 4 | 164/5 | 32.8 | 41/5 | 8.2 | 8.2 | False | False |
+| 3 | opus | folder | Brand | 4 | 164/5 | 32.8 | 41/5 | 8.2 | 8.2 | False | False |
+| 3 | opus | login | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | False | False |
+| 3 | opus | new-folder | Brand | 4 | 35 | 35 | 35/4 | 8.75 | 8.8 | False | False |
+| 3 | opus | preview | Brand | 4 | 33 | 33 | 33/4 | 8.25 | 8.3 | False | False |
+| 3 | opus | share | Brand | 4 | 33 | 33 | 33/4 | 8.25 | 8.3 | False | False |
+| 3 | opus | trash | Brand | 4 | 156/5 | 31.2 | 39/5 | 7.8 | 7.8 | False | False |
+| 3 | opus | versions | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | False | False |
+| 3 | sol | account | Quality | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | True | True |
+| 3 | sol | appearance | Quality | 4 | 178/5 | 35.6 | 89/10 | 8.9 | 8.9 | True | True |
+| 3 | sol | files | Quality | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | True | True |
+| 3 | sol | folder | Quality | 4 | 35 | 35 | 35/4 | 8.75 | 8.8 | True | True |
+| 3 | sol | login | Quality | 4 | 174/5 | 34.8 | 87/10 | 8.7 | 8.7 | True | True |
+| 3 | sol | new-folder | Quality | 4 | 36 | 36 | 9 | 9 | 9.0 | True | True |
+| 3 | sol | preview | Quality | 4 | 164/5 | 32.8 | 41/5 | 8.2 | 8.2 | True | True |
+| 3 | sol | share | Quality | 4 | 176/5 | 35.2 | 44/5 | 8.8 | 8.8 | True | True |
+| 3 | sol | trash | Quality | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | True | True |
+| 3 | sol | versions | Quality | 4 | 178/5 | 35.6 | 89/10 | 8.9 | 8.9 | True | True |
+| 3 | sol | account | Brand | 4 | 166/5 | 33.2 | 83/10 | 8.3 | 8.3 | True | True |
+| 3 | sol | appearance | Brand | 4 | 174/5 | 34.8 | 87/10 | 8.7 | 8.7 | True | True |
+| 3 | sol | files | Brand | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | True | True |
+| 3 | sol | folder | Brand | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | True | True |
+| 3 | sol | login | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | True | True |
+| 3 | sol | new-folder | Brand | 4 | 36 | 36 | 9 | 9 | 9.0 | True | True |
+| 3 | sol | preview | Brand | 4 | 34 | 34 | 17/2 | 8.5 | 8.5 | True | True |
+| 3 | sol | share | Brand | 4 | 36 | 36 | 9 | 9 | 9.0 | True | True |
+| 3 | sol | trash | Brand | 4 | 168/5 | 33.6 | 42/5 | 8.4 | 8.4 | True | True |
+| 3 | sol | versions | Brand | 4 | 36 | 36 | 9 | 9 | 9.0 | True | True |
 
 ## Evidence and limits
 

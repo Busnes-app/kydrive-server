@@ -2,6 +2,9 @@ Round,Current,Reviewer,Status,n,Sum fraction,Sum exact decimal,Mean fraction,Mea
 1,False,opus,Published,40,2893/10,289.3,2893/400,7.2325,7.2,False,False,False,N/A
 1,False,sol,Published,40,1603/5,320.6,1603/200,8.015,8.0,False,False,N/A,N/A
 1,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
-2,True,opus,Published,40,1573/5,314.6,1573/200,7.865,7.9,False,False,False,False
-2,True,sol,Published,40,1701/5,340.2,1701/200,8.505,8.5,True,True,N/A,N/A
-2,True,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+2,False,opus,Published,40,1573/5,314.6,1573/200,7.865,7.9,False,False,False,N/A
+2,False,sol,Published,40,1701/5,340.2,1701/200,8.505,8.5,True,True,N/A,N/A
+2,False,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+3,True,opus,Published,40,3113/10,311.3,3113/400,7.7825,7.8,False,False,False,False
+3,True,sol,Published,40,1731/5,346.2,1731/200,8.655,8.7,True,True,N/A,N/A
+3,True,gemini,Unused; quota unavailable; gated on both primary approvals,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
