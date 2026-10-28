@@ -51,6 +51,12 @@ the access it gets.
 File names and contents can come from other people, and an agent may treat them as
 instructions. Give an agent write access only if you trust everyone who can message it.
 
+## License
+
+KyDrive is released under the [MIT License](LICENSE.txt).
+
+[![OctoCounts](https://api.octocounts.com/badge/Busnes-app/kydrive-server/branch/master)](https://octocounts.com/github/Busnes-app/kydrive-server/tree/master)
+
 ## Documentation
 
 Euro-Office can also run on Docker with the optional [production editor Compose overlay](docs/EURO-DOCKER.md); Kubernetes remains supported.
