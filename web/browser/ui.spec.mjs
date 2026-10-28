@@ -21,6 +21,8 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   });
   // Online navigation must refresh the shell rather than pinning a previous deploy.
   await page.reload();
+  await expect(page.getByRole('link', { name: 'Continue with Single Sign On', exact: true })).toHaveAttribute('href', '/api/sso/kysignon/login');
+  await expect(page.getByText(/Single Sign[- ]?On/i)).toHaveCount(1);
   await page.getByPlaceholder('admin', { exact: true }).fill('admin');
   await page.locator('input[type=password]').fill('IncorrectPassword123!');
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();

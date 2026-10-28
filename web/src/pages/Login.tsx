@@ -139,10 +139,9 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
                   <span>{loading ? 'Signing in...' : 'Sign In'}</span>
                 </button>
                 <div className="auth-divider">
-                  <span>Or continue with Single Sign-On</span>
                   <a href="/api/sso/kysignon/login" className="btn btn-secondary">
                     <Key size={16} aria-hidden="true" />
-                    <span>Sign On with KyIdentity</span>
+                    <span>Continue with Single Sign On</span>
                   </a>
                 </div>
               </form>
