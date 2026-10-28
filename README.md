@@ -2,7 +2,6 @@
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15939/badge)](https://www.bestpractices.dev/projects/15939)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Busnes-app/kydrive-server/badge)](https://scorecard.dev/viewer/?uri=github.com/Busnes-app/kydrive-server)
-[![OctoCounts](https://api.octocounts.com/badge/Busnes-app/kydrive-server/branch/master)](https://octocounts.com/github/Busnes-app/kydrive-server/tree/master)
 
 **Start here:** [Standalone installation](INSTALL.md). Browse, upload, download and organize files in permissioned workspaces, share files, retain versions and trash, and link desktop sync clients. Staff sign-in and provisioning require KyIdentity; the local bootstrap account is for administration. Euro-Office is an optional separate editor service. Recovery needs both sealed metadata and the independent bulk repository.
 
@@ -51,6 +50,12 @@ the access it gets.
 
 File names and contents can come from other people, and an agent may treat them as
 instructions. Give an agent write access only if you trust everyone who can message it.
+
+## License
+
+KyDrive is released under the [MIT License](LICENSE.txt).
+
+[![OctoCounts](https://api.octocounts.com/badge/Busnes-app/kydrive-server/branch/master)](https://octocounts.com/github/Busnes-app/kydrive-server/tree/master)
 
 ## Documentation
 
