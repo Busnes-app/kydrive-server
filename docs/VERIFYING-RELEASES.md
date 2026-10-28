@@ -58,7 +58,7 @@ docker buildx imagetools inspect ghcr.io/busnes-app/kydrive-server@$d --format '
 The binary embeds the web interface (`web/dist`), which is built from source in the image, not
 committed. Releases after 0.4.3 are built with `-trimpath`, so the same commit, Go version, Node
 version and version string give the same binary on any machine and in any directory. CI checks
-this on every push. Images up to 0.4.3 recorded their build directory (`/app`) and Go's install
+this on every push to `master` and pull request. Images up to 0.4.3 recorded their build directory (`/app`) and Go's install
 path in the binary, so a build elsewhere does not compare with them.
 
 You need the Go and Node versions the Dockerfile names: Go from its `FROM golang:` line (the
