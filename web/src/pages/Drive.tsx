@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, Share2, Trash2, Upload } from 'lucide-react';
 import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, HttpError, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { Leavers } from './drive/Leavers';
+import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
 import { QuickLook } from './drive/QuickLook';
@@ -251,6 +252,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
         <button className="btn-secondary" disabled={busy}>Save retention</button>
       </form>
     </section>}
+    {/* Deleting clears the selection; the next load picks My files. */}
+    {admin && <WorkspaceAdmin workspace={current} onRenamed={() => void run(reload)} onDeleted={() => onSelectWorkspace('')} />}
   </div>;
 
   return <section className="page drive-page">

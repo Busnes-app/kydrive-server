@@ -502,3 +502,23 @@ func TestMtimeHeader(t *testing.T) {
 		}
 	}
 }
+
+// A deleted workspace leaves the WebDAV tree: its paths answer 404, not an error.
+func TestDeletedWorkspaceIsGone(t *testing.T) {
+	e := setup(t)
+	// Delete the one shown as "Organization (2)", so the other keeps its plain name.
+	gone, victim := "/dav/Organization%20(2)", max(e.team.ID, e.shared.ID)
+	if err := e.st.Drive().DeleteWorkspace(context.Background(), "admin", victim); err != nil {
+		t.Fatal(err)
+	}
+	e.want(e.do("worker", "PROPFIND", gone+"/", nil, "Depth", "1"), 404, "propfind deleted workspace")
+	// A write answers as for a workspace that never existed.
+	never := e.do("worker", "PUT", "/dav/Never/late.txt", strings.NewReader("late")).Code
+	e.want(e.do("worker", "PUT", gone+"/late.txt", strings.NewReader("late")), never, "put into deleted workspace")
+	root := e.do("worker", "PROPFIND", "/dav/", nil, "Depth", "1")
+	e.want(root, 207, "propfind root")
+	if strings.Contains(root.Body.String(), "(2)") || !strings.Contains(root.Body.String(), "<D:href>/dav/Organization/</D:href>") {
+		t.Fatalf("root after delete:\n%s", root.Body.String())
+	}
+	e.want(e.do("worker", "PROPFIND", "/dav/Organization/", nil, "Depth", "0"), 207, "remaining workspace")
+}

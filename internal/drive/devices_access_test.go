@@ -25,8 +25,8 @@ var (
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
 	deviceRefused = []string{
 		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
-		"CreateServiceToken", "CreateWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
-		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
+		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
+		"RenameWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
 		"Share", "Unshare",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
@@ -96,6 +96,7 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 	dev := mustDevices(t, d, "worker")[0].ID
 	week := time.Now().Add(7 * 24 * time.Hour).Unix()
 
+	spare := ""
 	calls := map[string]func(context.Context) error{
 		"EditorSession": func(c context.Context) error { _, err := d.EditorSession(c, "worker", f.ID); return err },
 		"Share": func(c context.Context) error {
@@ -138,7 +139,18 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 		},
 		"CreateWorkspace": func(c context.Context) error { _, err := d.CreateWorkspace(c, "admin", "Second", 10); return err },
 		"Quota":           func(c context.Context) error { return d.Quota(c, "admin", w.ID, 200) },
-		"SetRetention":    func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
+		"RenameWorkspace": func(c context.Context) error { return d.RenameWorkspace(c, "admin", w.ID, "Renamed") },
+		"DeleteWorkspace": func(c context.Context) error {
+			if spare == "" {
+				x, err := d.CreateWorkspace(ctx, "admin", "Spare", 10)
+				if err != nil {
+					return err
+				}
+				spare = x.ID
+			}
+			return d.DeleteWorkspace(c, "admin", spare)
+		},
+		"SetRetention": func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
 		// Handover needs a leaver; the device refusal comes first, so no success case.
 		"Handover": nil,
 	}

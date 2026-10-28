@@ -37,6 +37,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/grants", s.requireAuthenticated(s.driveGrants))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/grants/{group}", s.requireAuthenticated(s.driveGrant))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/quota", s.requireAdmin(s.driveQuota))
+	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/name", s.requireAdmin(s.driveRenameWorkspace))
+	s.mux.HandleFunc("DELETE /api/drive/workspaces/{id}", s.requireAdmin(s.driveDeleteWorkspace))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveFolders))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
@@ -219,6 +221,27 @@ func (s *Server) driveQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, 200, map[string]bool{"applied": true})
+}
+func (s *Server) driveRenameWorkspace(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	if err := s.store.Drive().RenameWorkspace(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Name); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]bool{"applied": true})
+}
+func (s *Server) driveDeleteWorkspace(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Drive().DeleteWorkspace(r.Context(), s.driveUser(r).ID, r.PathValue("id")); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]bool{"deleted": true})
 }
 func (s *Server) driveFolders(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.Drive().Folders(r.Context(), s.driveUser(r).ID, r.PathValue("id"), r.URL.Query().Get("trash") == "true")
