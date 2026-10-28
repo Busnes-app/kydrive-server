@@ -1,6 +1,6 @@
 // The episode-8 launch bugs, checked against the real server: upload over an existing file,
 // version dates, menus that close, document icons, the trash title and the Account layout; and
-// from the re-shoot, name-match highlights and duplicate workspace names.
+// from the re-shoot, name-match highlights, duplicate workspace names and workspace rename/delete.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 
@@ -200,4 +200,36 @@ test('a second shared workspace with the same name is refused', async ({ page },
   await expect(page.getByText(`A shared workspace named “${name}” already exists.`)).toBeVisible();
   const all = await (await page.request.get('/api/drive/workspaces?admin=true')).json();
   expect(all.filter(w => w.name.toLowerCase() === name.toLowerCase())).toHaveLength(1);
+});
+
+test('an administrator renames a shared workspace and deletes it once empty', async ({ page }, testInfo) => {
+  const headers = await signIn(page);
+  const tag = testInfo.project.name.replace(/\W/g, '');
+  const [name, taken, fixed] = [`Mistake ${tag}`, `Taken ${tag}`, `Fixed ${tag}`];
+  const created = await page.request.post('/api/drive/workspaces', { headers, data: { name, quota: 1048576 } });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
+  expect((await page.request.post('/api/drive/workspaces', { headers, data: { name: taken, quota: 1048576 } })).status()).toBe(201);
+  await page.reload();
+  await page.getByRole('button', { name, exact: true }).click();
+  await page.getByRole('tab', { name: 'Workspace settings' }).click();
+  const panel = page.getByRole('region', { name: 'Workspace', exact: true });
+  await panel.getByLabel('Name').fill(taken.toLowerCase());
+  await panel.getByRole('button', { name: 'Rename' }).click();
+  await expect(panel.getByText(`A shared workspace named “${taken.toLowerCase()}” already exists.`)).toBeVisible();
+  await panel.getByLabel('Name').fill(fixed);
+  await panel.getByRole('button', { name: 'Rename' }).click();
+  await expect(page.getByRole('button', { name: fixed, exact: true })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Delete workspace' }).click();
+  const ask = page.getByRole('dialog', { name: `Delete ${fixed}?` });
+  await expect(ask).toBeVisible();
+  if (testInfo.project.name === 'light-1280') await page.screenshot({ path: testInfo.outputPath('delete-workspace.png') });
+  await ask.getByRole('button', { name: 'Delete workspace' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole('button', { name: fixed, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1, name: 'My files' })).toBeVisible();
+  const all = await (await page.request.get('/api/drive/workspaces?admin=true')).json();
+  expect(all.some(w => w.id === id)).toBe(false);
+  expect(all.some(w => w.name === taken)).toBe(true);
 });
