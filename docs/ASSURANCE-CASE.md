@@ -131,9 +131,9 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 ## Evidence
 
 - **Tests:** the security tests named above, the whole Go suite under the race detector, Vitest and
-  Playwright browser tests, and the deploy rendering tests, on every push and pull request (`test`
-  job). Restic-backed tests run in CI, which installs restic.
-- **Static analysis:** `go vet` and `tsc -b` (strict TypeScript) on every push and pull request,
+  Playwright browser tests, and the deploy rendering tests, on every push to `master` and pull request (`race`, `fips` and
+  `checks` jobs, gated by `test`). Restic-backed tests run in CI, which installs restic.
+- **Static analysis:** `go vet` and `tsc -b` (strict TypeScript) on every push to `master` and pull request,
   and GitHub CodeQL (default setup, configured in the repository settings rather than a workflow
   file) for Go, JavaScript/TypeScript, Python and Actions.
 - **Dynamic analysis:** the race detector on the full suite, the binary smoke test

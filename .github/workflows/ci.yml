@@ -1,12 +1,19 @@
 name: KyDrive CI
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+# A new push supersedes a pull request's run. Every other run gets its own group: a shared
+# one would cancel a pending master run, leaving its commit without an image.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  test:
+  # The race and strong-key passes run beside everything else.
+  race:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -19,13 +26,47 @@ jobs:
         with:
           node-version: 26
       - run: sudo apt-get update && sudo apt-get install -y restic
-      # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
-      - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
+      # web/dist is built, not committed; the Go packages embed it.
+      - run: cd web && npm ci && npm run build
       - run: go test -race ./... && go vet ./...
+
+  fips:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26
+      - run: sudo apt-get update && sudo apt-get install -y restic
+      - run: cd web && npm ci && npm run build
       - name: test supported strong-key profile
         env:
           GODEBUG: fips140=on
         run: go test -race -count=1 ./...
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          # Own cache key: the race legs keep their -race build cache.
+          cache-dependency-path: |
+            go.sum
+            web/package-lock.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26
+      # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
+      - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - name: profile preserves Compose configuration
         run: python3 docs/check-strong-crypto-compose.py
       # The release binary must not depend on where it is built: build it the way the
@@ -60,8 +101,17 @@ jobs:
           name: tested-image
           path: tested-image.tar.gz
           retention-days: 7
+
+  # The required check and release-image.yml's REQUIRED name: green only if every leg passed.
+  test:
+    needs: [race, fips, checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}" = true
+
   publish:
-    needs: test
+    needs: [race, fips, checks, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
