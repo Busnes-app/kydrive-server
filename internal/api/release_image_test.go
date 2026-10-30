@@ -60,3 +60,10 @@ func TestReleaseTagsAreNeverOverwritten(t *testing.T) {
 		t.Error("ci.yml no longer pushes; update this test")
 	}
 }
+
+// The About dialog bundles a copy of the licence, since the web build sees only web/.
+func TestWebLicenceMatchesRepo(t *testing.T) {
+	if readRepoFile(t, "web/src/mit.txt") != readRepoFile(t, "LICENSE.txt") {
+		t.Error("web/src/mit.txt differs from LICENSE.txt; copy it again")
+	}
+}

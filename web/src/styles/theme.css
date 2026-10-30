@@ -172,6 +172,9 @@ summary:focus-visible { outline-offset: 4px; }
 .app-user-copy { min-width: 0; flex: 1; font-size: .85rem; }
 .app-user-name { font-weight: 600; color: var(--ink-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-user-role { color: var(--ink); font-size: .75rem; text-transform: capitalize; }
+.sidebar-footer { font-size: .75rem; color: var(--ink); padding-left: .5rem; white-space: nowrap; }
+.sidebar-footer p { margin: 0; }
+.license-link { margin: 0; padding: 0; min-height: 0; border: none; background: none; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; }
 .app-main { min-width: 0; }
 .app-notice { margin: 1.5rem 2.5rem 0; }
 
@@ -324,6 +327,12 @@ dialog.dialog::backdrop, dialog.drive-preview-dialog::backdrop { background: rgb
 .dialog-section { display: grid; gap: .65rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .dialog-section > h3 { font-size: .95rem; }
 .dialog-section > p { color: var(--ink); font-size: .85rem; }
+/* About dialog: the suite's licence window (same classes as KyPost). */
+.license-title-main { display: flex; align-items: baseline; gap: .6rem; }
+.license-app-name { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+.license-version-badge { font-size: .72rem; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.license-title-sub { display: block; }
+.license-text { width: 100%; min-height: 320px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem; line-height: 1.4; white-space: pre; background: var(--panel); color: var(--ink-strong); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 
 /* ---------- Menus ---------- */
 .menu-wrap { position: relative; display: inline-flex; }
@@ -522,6 +531,7 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
   .app-user { grid-column: 2; grid-row: 1; border-top: 0; padding-top: 0; }
   .app-user-copy { max-width: 8rem; font-size: .75rem; }
   .app-user-role { font-size: .7rem; }
+  .sidebar-footer { grid-column: 1 / -1; padding-left: 0; }
   .drive-preview-dialog header { grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
   .drive-preview-dialog header .button-row { grid-column: 1 / -1; grid-row: 2; }
   .drive-preview-dialog header .icon-btn { grid-column: 2; }

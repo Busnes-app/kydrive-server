@@ -233,3 +233,19 @@ test('an administrator renames a shared workspace and deletes it once empty', as
   expect(all.some(w => w.id === id)).toBe(false);
   expect(all.some(w => w.name === taken)).toBe(true);
 });
+
+test('the sidebar footer opens the MIT licence with the running version', async ({ page }, testInfo) => {
+  await signIn(page);
+  await page.reload();
+  const link = page.getByRole('button', { name: /^© \d{4} · MIT License$/ });
+  await expect(link).toBeVisible();
+  expect(await fits(page)).toBe(true);
+  await link.click();
+  const dialog = page.getByRole('dialog');
+  const { version } = await (await page.request.get('/api/auth/me')).json();
+  await expect(dialog.locator('.license-version-badge')).toHaveText(`v${version}`);
+  await expect(dialog.getByRole('textbox', { name: 'MIT License' })).toHaveValue(/^MIT License\n\nCopyright \(c\) \d{4} Busnes\.app/);
+  await page.screenshot({ path: testInfo.outputPath('license.png') });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+});

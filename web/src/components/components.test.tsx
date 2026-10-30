@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Menu } from './Menu';
+import { AppHeader } from './AppHeader';
 import { useConfirm } from './Dialog';
 import { relative, toDate } from './time';
 import { When } from './When';
@@ -108,5 +109,30 @@ describe('FileIcon for documents', () => {
       expect(container.querySelector('svg.drive-file-icon')).not.toBeNull();
       cleanup();
     }
+  });
+});
+
+describe('AppHeader licence footer', () => {
+  const header = (version?: string) => render(<AppHeader appName="KyDrive" activeTab="drive" onTabChange={() => {}}
+    user={{ display_name: 'Ada', username: 'ada', role: 'user' }} onLogout={() => {}} workspaces={[]}
+    selectedWorkspace="" onWorkspaceSelect={() => {}} version={version} />);
+
+  it('opens the MIT licence with the server version', () => {
+    header('1.2.3');
+    fireEvent.click(screen.getByRole('button', { name: `© ${new Date().getFullYear()} · MIT License` }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('KyDrive')).toBeTruthy();
+    expect(within(dialog).getByText('v1.2.3')).toBeTruthy();
+    expect(within(dialog).getByText('Developed by Busnes.app')).toBeTruthy();
+    const text = (within(dialog).getByRole('textbox', { name: 'MIT License' }) as HTMLTextAreaElement).value;
+    expect(text).toMatch(/^MIT License\n\nCopyright \(c\) \d{4} Busnes\.app/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows no badge without a version', () => {
+    header();
+    fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
+    expect(within(screen.getByRole('dialog')).queryByText(/^v\d/)).toBeNull();
   });
 });
