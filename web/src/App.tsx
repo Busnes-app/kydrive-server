@@ -32,6 +32,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('drive');
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
   const [openInNewTab, setOpenInNewTab] = useState(true);
+  const [version, setVersion] = useState('');
   // Idempotent, so StrictMode's second call is harmless.
   const [linking, setLinking] = useState(() => { takeLinkRequestFromURL(); return hasLinkRequest(); });
 
@@ -52,6 +53,7 @@ export const App: React.FC = () => {
           if (isRecord(a) && a.authenticated && isDriveUser(a.user)) {
             setUser(a.user);
             if (typeof a.open_in_new_tab === 'boolean') setOpenInNewTab(a.open_in_new_tab);
+            if (typeof a.version === 'string') setVersion(a.version);
           }
         }
       } catch (err) {
@@ -87,7 +89,9 @@ export const App: React.FC = () => {
     const resp = await fetch('/api/auth/me');
     if (!resp.ok) return;
     const a: unknown = await resp.json();
-    if (isRecord(a) && typeof a.open_in_new_tab === 'boolean') setOpenInNewTab(a.open_in_new_tab);
+    if (!isRecord(a)) return;
+    if (typeof a.open_in_new_tab === 'boolean') setOpenInNewTab(a.open_in_new_tab);
+    if (typeof a.version === 'string') setVersion(a.version);
   };
 
   const changeOpenInNewTab = async (value: boolean) => {
@@ -110,6 +114,7 @@ export const App: React.FC = () => {
     setActiveTab('drive');
     setSettings(null);
     setOpenInNewTab(true);
+    setVersion('');
     void loadSettings().catch(() => {});
   };
 
@@ -158,6 +163,7 @@ export const App: React.FC = () => {
         selectedWorkspace={selectedWorkspace}
         onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
         onLogout={handleLogout}
+        version={version}
       />
 
       <main className="app-main">

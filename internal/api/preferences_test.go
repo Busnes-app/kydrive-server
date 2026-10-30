@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/appversion"
 )
 
 func TestOpenInNewTabPreferenceAPI(t *testing.T) {
@@ -59,5 +60,23 @@ func TestOpenInNewTabPreferenceAPI(t *testing.T) {
 	}
 	if me() {
 		t.Fatal("a refused request changed the preference")
+	}
+}
+
+// The About dialog's version badge reads /api/auth/me; signed-out callers never see the version.
+func TestMeReportsVersionOnlyWhenSignedIn(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	read := func(c *http.Cookie) map[string]any {
+		var out map[string]any
+		if err := json.Unmarshal(do(t, srv, "GET", "/api/auth/me", c).Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if v := read(loginAs(t, srv, st, "veruser", "user"))["version"]; v != appversion.String() {
+		t.Fatalf("signed in: version %v, want %q", v, appversion.String())
+	}
+	if out := read(nil); out["version"] != nil || out["authenticated"] != false {
+		t.Fatalf("signed out: %v", out)
 	}
 }

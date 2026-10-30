@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
+	"github.com/Busnes-app/kydrive-server/internal/appversion"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -315,6 +316,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"authenticated":   true,
 		"user":            user,
 		"open_in_new_tab": newTab,
+		"version":         appversion.String(),
 	})
 }
 

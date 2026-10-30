@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
 import { SHARED_WITH_ME } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
+import { Dialog } from './Dialog';
+import mitLicenseText from '../mit.txt?raw';
 
 function revealNavItem(row: HTMLElement, item: Element) {
   if (row.scrollWidth <= row.clientWidth) return;
@@ -20,10 +22,13 @@ interface AppHeaderProps {
   workspaces: Workspace[];
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
+  version?: string;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version }) => {
   const navsRef = useRef<HTMLDivElement>(null);
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const year = new Date().getFullYear();
   // Phones scroll both navigations as one row: keep the current destination in view. Only the
   // row scrolls; scrollIntoView would also move the page.
   useEffect(() => {
@@ -95,9 +100,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
               </button>
             </div>
           )}
+          <div className="sidebar-footer">
+            <p>
+              <button type="button" className="license-link" onClick={() => setLicenseOpen(true)}>
+                &copy; {year} &middot; MIT License
+              </button>
+            </p>
+          </div>
         </div>
       </header>
-
+      {licenseOpen && <Dialog wide className="license-window" onClose={() => setLicenseOpen(false)}
+        title={<span className="license-title-main"><span className="license-app-name">{appName || 'KyDrive'}</span>{version && <span className="license-version-badge">v{version}</span>}</span>}
+        description={<><span className="license-title-sub">Developed by Busnes.app</span><span className="license-title-sub">&copy; {year} &middot; Licensed under the MIT License</span></>}>
+        <textarea className="license-text" readOnly aria-label="MIT License" value={mitLicenseText} />
+      </Dialog>}
     </>
   );
 };
