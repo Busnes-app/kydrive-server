@@ -6,6 +6,7 @@ import { When } from '../components/When';
 import { HttpError, bytes, change, list, record, response, workspace } from './drive/client';
 import type { Workspace } from './drive/client';
 import { Leavers } from './drive/Leavers';
+import { auditLabel } from './auditLabels';
 
 // Administration destinations in the sidebar: shared workspaces, operational status and leavers.
 
@@ -44,7 +45,7 @@ export function AdminWorkspaces({ workspaces, onWorkspacesChange, onOpen }: { wo
         <td className="num">{bytes(w.used)}</td><td className="num">{bytes(w.quota)}</td>
       </tr>)}</tbody>
     </table></div></div>}
-    {creating && <Dialog title="New shared workspace" description="Give a KyIdentity group access from its Workspace settings once it exists." onClose={() => setCreating(false)} onSubmit={() => void create()}
+    {creating && <Dialog closeButton={false} title="New shared workspace" description="Give a KyIdentity group access from its Workspace settings once it exists." onClose={() => setCreating(false)} onSubmit={() => void create()}
       footer={<><button type="button" className="btn-secondary" onClick={() => setCreating(false)}>Cancel</button><button disabled={busy || !name.trim()}>Create workspace</button></>}>
       <label className="field">Name<input autoFocus required value={name} onChange={e => setName(e.target.value)} /></label>
       <label className="field">Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label>
@@ -97,7 +98,7 @@ export function AdminActivity() {
       </section>
       <section className="panel" aria-labelledby="audit-heading">
         <h2 id="audit-heading">Recent audit events</h2>
-        {audit.length === 0 ? <p className="empty-note">No audit events yet.</p> : <ul className="drive-audit" aria-label="Recent audit events">{audit.map((e, i) => <li key={i}><When value={e.created} /><code>{e.action}</code></li>)}</ul>}
+        {audit.length === 0 ? <p className="empty-note">No audit events yet.</p> : <ul className="drive-audit" aria-label="Recent audit events">{audit.map((e, i) => <li key={i}><When value={e.created} /><span title={e.action}>{auditLabel(e.action)}</span></li>)}</ul>}
       </section>
     </div>
   </section>;

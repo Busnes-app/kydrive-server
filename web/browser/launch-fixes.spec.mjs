@@ -280,6 +280,7 @@ test('checked rows move to the trash together, and the list shows when files cha
     await expect(more).toHaveCSS('opacity', '1');
     await expect(more).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
   }
+  else await expect(page.getByRole('button', { name: `Actions for ${names[0]}` })).toHaveCSS('opacity', '1'); // phones cannot hover
   for (const n of names) await page.getByLabel(`Select ${n}`, { exact: true }).check();
   const bar = page.getByRole('region', { name: 'Selected items' });
   await expect(bar).toContainText('2 selected');

@@ -37,6 +37,14 @@ const adminItems: NavItem[] = [
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
+// A light track with an accent fill sized to the share used, so near-empty storage reads as empty.
+export function StorageBar({ used, quota }: { used: number; quota: number }) {
+  const percent = quota > 0 ? Math.min(100, Math.max(0, used / quota * 100)) : 0;
+  return <div className="storage-bar" role="meter" aria-label="Storage used" aria-valuemin={0} aria-valuemax={quota} aria-valuenow={Math.min(used, quota)} aria-valuetext={`${bytes(used)} of ${bytes(quota)} used`}>
+    <span className="storage-bar-fill" style={{ width: `${percent}%` }} />
+  </div>;
+}
+
 export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version }) => {
   const navsRef = useRef<HTMLDivElement>(null);
   const aboutRef = useRef<HTMLDialogElement>(null);
@@ -83,11 +91,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             <h2 className="app-nav-label">Personal</h2>
             {workspaces.filter(w => w.kind === 'personal').map(w => item(w.id, 'My files', Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
             {item(SHARED_WITH_ME, 'Shared with me', Users, drive(SHARED_WITH_ME), () => onWorkspaceSelect(SHARED_WITH_ME))}
-            <h2 className="app-nav-label">Shared workspaces</h2>
+            {workspaces.some(w => w.kind === 'shared') && <h2 className="app-nav-label">Shared workspaces</h2>}
             {workspaces.filter(w => w.kind === 'shared').map(w => item(w.id, w.name, Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
-            {!workspaces.some(w => w.kind === 'shared') && <p className="app-nav-empty">No shared workspaces assigned</p>}
           </nav>
-          <nav className="app-nav" aria-label="Primary">{tabs(accountItems)}</nav>
+          <nav className="app-nav" aria-label="Primary"><h2 className="app-nav-label">Preferences</h2>{tabs(accountItems)}</nav>
           {user.role === 'admin' && <nav className="app-nav" aria-label="Administration">
             <h2 className="app-nav-label">Administration</h2>
             {tabs(adminItems)}
@@ -96,7 +103,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
         <p className="app-nav-hint">Scroll for more destinations</p>
         <div className="app-header-actions">
           {personal && personal.quota > 0 && <div className="sidebar-storage">
-            <meter min={0} max={personal.quota} value={Math.min(personal.used, personal.quota)} aria-label="Storage used" />
+            <StorageBar used={personal.used} quota={personal.quota} />
             <p>{bytes(personal.used)} of {bytes(personal.quota)} used</p>
           </div>}
           <div className="ky-user">

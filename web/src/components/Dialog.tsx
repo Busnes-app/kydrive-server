@@ -4,8 +4,8 @@ import { X } from 'lucide-react';
 
 // Dialog is the suite's modal: a native <dialog> with a titled header, a scrolling body and a
 // footer of actions (secondary first, primary last). Escape and the close button call onClose.
-export function Dialog({ title, description, children, footer, onClose, onSubmit, wide, className }: {
-  title: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode;
+export function Dialog({ title, description, children, footer, onClose, onSubmit, wide, className, closeButton = true }: {
+  title: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode; closeButton?: boolean;
   onClose: () => void; onSubmit?: (e: FormEvent<HTMLFormElement>) => void; wide?: boolean; className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -20,7 +20,8 @@ export function Dialog({ title, description, children, footer, onClose, onSubmit
   const inner = <>
     <header className="dialog-header">
       <div><h2 id={`${id}-title`}>{title}</h2>{description && <p>{description}</p>}</div>
-      <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={18} aria-hidden="true" /></button>
+      {/* Without the icon, the footer's Cancel and Escape close the dialog. */}
+      {closeButton && <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={18} aria-hidden="true" /></button>}
     </header>
     <div className="dialog-body">{children}</div>
     {footer && <footer className="dialog-footer">{footer}</footer>}

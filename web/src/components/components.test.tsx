@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Menu } from './Menu';
-import { AppHeader } from './AppHeader';
+import { AppHeader, StorageBar } from './AppHeader';
+import { auditLabel } from '../pages/auditLabels';
 import { useConfirm } from './Dialog';
 import { relative, toDate } from './time';
 import { When } from './When';
@@ -168,6 +169,30 @@ describe('Login', () => {
     expect(screen.getByRole('link', { name: 'Continue with Single Sign On' }).getAttribute('href')).toBe('/api/sso/kysignon/login');
     expect(container.querySelector('.ky-auth-divider')).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('StorageBar', () => {
+  it('fills to the share used, so near-empty storage reads as empty', () => {
+    const fill = (used: number, quota: number) => {
+      const { container } = render(<StorageBar used={used} quota={quota} />);
+      const width = (container.querySelector('.storage-bar-fill') as HTMLElement).style.width;
+      cleanup();
+      return width;
+    };
+    expect(fill(506, 10 * 1024 ** 3)).toMatch(/^0\.0+\d*%$|^4\.\d+e-\d+%$/);
+    expect(parseFloat(fill(506, 10 * 1024 ** 3))).toBeLessThan(0.001);
+    expect(fill(512, 1024)).toBe('50%');
+    expect(fill(2048, 1024)).toBe('100%');
+    expect(fill(5, 0)).toBe('0%');
+  });
+});
+
+describe('auditLabel', () => {
+  it('names known actions in sentence case and falls back to the ID', () => {
+    expect(auditLabel('file.version_created')).toBe('New version uploaded');
+    expect(auditLabel('upload.started')).toBe('Upload started');
+    expect(auditLabel('scim.group.replaced')).toBe('Scim group replaced');
   });
 });
 
