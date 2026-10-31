@@ -42,7 +42,7 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
   return <section className="panel" aria-label="Leavers">
     {message && <p role="status" className="alert alert-info">{message}</p>}
     {leavers.length === 0 ? <p className="empty-note">No removed accounts hold files.</p> : <ul className="item-list" aria-label="Leavers">{leavers.map(l => <li key={l.workspace}>
-      <div className="item-main"><span className="item-title">{l.name} <span className="badge">{l.status}</span></span><span className="item-meta">{bytes(l.size)} · {l.items} items</span></div>
+      <div className="item-main"><span className="item-title">{l.name} <span className="ky-status">{l.status}</span></span><span className="item-meta">{bytes(l.size)} · {l.items} items</span></div>
       <form className="form-row" onSubmit={e => { e.preventDefault(); void handOver(l); }}>
         <label className="field">Destination<select required value={targets[l.workspace] ?? ''} onChange={e => setTargets({ ...targets, [l.workspace]: e.target.value })}>
           <option value="">Choose destination</option>
