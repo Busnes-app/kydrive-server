@@ -165,14 +165,14 @@ describe('AppHeader licence footer', () => {
 });
 
 describe('Login', () => {
-  it('shows Single Sign On under a divider only when it is configured', () => {
+  it('shows single sign-on under a divider only when it is configured', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
     const { container, rerender } = render(<Login appName="KyDrive" onSuccess={() => {}} />);
     expect(screen.getByRole('button', { name: 'Sign in' }).querySelector('svg')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'Continue with Single Sign On' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Continue with single sign-on' })).toBeNull();
     expect(container.querySelector('.ky-auth-divider')).toBeNull();
     rerender(<Login appName="KyDrive" sso onSuccess={() => {}} />);
-    expect(screen.getByRole('link', { name: 'Continue with Single Sign On' }).getAttribute('href')).toBe('/api/sso/kysignon/login');
+    expect(screen.getByRole('link', { name: 'Continue with single sign-on' }).getAttribute('href')).toBe('/api/sso/kysignon/login');
     expect(container.querySelector('.ky-auth-divider')).toBeTruthy();
     vi.unstubAllGlobals();
   });

@@ -143,7 +143,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName, sso }) => {
                 <hr className="ky-auth-divider" />
                 <a href="/api/sso/kysignon/login" className="ky-auth-sso">
                   <Key aria-hidden="true" />
-                  <span>Continue with Single Sign On</span>
+                  <span>Continue with single sign-on</span>
                 </a>
               </>}
             </form>
