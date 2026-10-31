@@ -51,3 +51,41 @@ it('keeps the session when sign-out cannot reach the server', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('Sign out failed');
   expect(screen.queryByRole('button', { name: 'Fake sign in' })).toBeNull();
 });
+
+it('loads the app rail once after sign-in, drops entries that are not https and clears it on sign-out', async () => {
+  const { App } = await import('./App');
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === '/api/auth/me') return Response.json({ authenticated: true, user: admin });
+    if (url === '/api/suite/apps') return Response.json({ apps: [
+      { id: 'kypost', name: 'KyPost', url: 'https://mail.example.com/api/auth/oidc/login' },
+      { id: 'evil', name: 'Evil', url: 'javascript:alert(1)' },
+    ] });
+    return Response.json(url.startsWith('/api/drive/workspaces') ? [] : {});
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(<App />);
+  const rails = await screen.findAllByRole('navigation', { name: 'Apps' });
+  expect(rails).toHaveLength(2);
+  expect(screen.getAllByRole('link', { name: 'KyPost' })).toHaveLength(2);
+  expect(screen.queryByRole('link', { name: 'Evil' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  expect(fetcher.mock.calls.filter(([u]) => String(u) === '/api/suite/apps').length).toBe(1);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
+  await screen.findByRole('button', { name: 'Fake sign in' });
+  expect(screen.queryByRole('navigation', { name: 'Apps' })).toBeNull();
+});
+
+it('shows no app rail when the server has no list', async () => {
+  const { App } = await import('./App');
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === '/api/auth/me') return Response.json({ authenticated: true, user: admin });
+    if (url === '/api/suite/apps') return new Response('{}', { status: 500 });
+    return Response.json(url.startsWith('/api/drive/workspaces') ? [] : {});
+  }));
+  render(<App />);
+  await screen.findAllByRole('button', { name: 'Sign out' });
+  await new Promise(r => setTimeout(r, 0));
+  expect(screen.queryByRole('navigation', { name: 'Apps' })).toBeNull();
+});

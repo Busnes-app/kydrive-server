@@ -3,6 +3,7 @@ import { Activity, Archive, Folder, FolderCog, LogOut, Palette, Settings as Sett
 import { SHARED_WITH_ME, bytes } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
 import mitLicenseText from '../mit.txt?raw';
+import { appMark } from '../ky-ui/appmarks.js';
 
 function revealNavItem(row: HTMLElement, item: Element) {
   if (row.scrollWidth <= row.clientWidth) return;
@@ -22,7 +23,23 @@ interface AppHeaderProps {
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
   version?: string;
+  apps?: SuiteApp[];
   children?: React.ReactNode;
+}
+
+export type SuiteApp = { id: string; name: string; url: string };
+
+/** Links to the other suite apps from `/api/suite/apps`; nothing when the list is empty. */
+export function AppRail({ apps }: { apps: SuiteApp[] }) {
+  if (!apps.length) return null;
+  return <nav className="ky-app-rail" aria-label="Apps">
+    <p className="ky-app-rail-label" aria-hidden="true">Apps</p>
+    <ul>{apps.map(a => <li key={a.id}>
+      <a href={a.url} title={a.name} aria-label={a.name} aria-current={a.id === 'kydrive' ? 'page' : undefined}>
+        <img src={appMark(a.id)} width={24} height={24} alt="" />
+      </a>
+    </li>)}</ul>
+  </nav>;
 }
 
 type NavItem = { id: string; label: string; icon: typeof Folder };
@@ -47,7 +64,7 @@ export function StorageBar({ used, quota }: { used: number; quota: number }) {
 }
 
 /** The ky-ui app frame: sidebar (a sticky header on phones) around the page in `children`. */
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version, children }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version, apps = [], children }) => {
   const navRef = useRef<HTMLElement>(null);
   const aboutRef = useRef<HTMLDialogElement>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -108,6 +125,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
           {user.role === 'admin' && <><p className="ky-nav-section">Administration</p>{tabs(adminItems)}</>}
         </nav>
         <div className="ky-sidebar-foot">
+          <AppRail apps={apps} />
           {storage}
           <div className="ky-user">
             <div className="ky-user-copy">
@@ -124,7 +142,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
       </header>
       <main className="ky-content">
         {children}
-        <footer className="ky-content-foot">{storage}{licence}</footer>
+        <footer className="ky-content-foot"><AppRail apps={apps} />{storage}{licence}</footer>
       </main>
       {aboutOpen && <dialog ref={aboutRef} className="ky-about" aria-label={`About ${name}`} {...{ closedby: 'any' }} onClose={() => setAboutOpen(false)}>
         <div className="ky-about-head">

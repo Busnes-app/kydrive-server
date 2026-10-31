@@ -63,6 +63,7 @@ type Server struct {
 	collecting     context.Context
 	stopCollecting context.CancelFunc
 	search         *search.Index // content search; nil when off
+	suiteApps      suiteAppsCache
 }
 
 // detachedCounter is a WaitGroup that tolerates a registration arriving while the wait is
@@ -263,6 +264,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
 	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
+	s.mux.HandleFunc("GET /api/suite/apps", s.requireAuthenticated(s.handleSuiteApps))
 	// Session routes: CSRF-checked, unlike the pre-session MFA login routes above.
 	s.mux.HandleFunc("POST /api/auth/mfa/enroll", s.requireAuthenticated(s.handleMFAEnroll))
 	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))

@@ -37,6 +37,9 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await expect(nav).toBeVisible();
   await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
   await fits(page);
+  // A local account without SSO gets an empty suite list and no app rail.
+  expect(await (await page.request.get('/api/suite/apps')).json()).toEqual({ apps: [] });
+  await expect(page.locator('.ky-app-rail')).toHaveCount(0);
   // Appearance is the only theme control in the shell: native radio cards, one saved choice.
   const appearance = async (p) => {
     await p.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Appearance' }).click();
