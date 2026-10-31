@@ -77,9 +77,8 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await page.keyboard.press('Tab');
   await expect(nav.getByRole('button').nth(1)).toBeFocused();
   await expect(nav.getByRole('button').nth(1)).toHaveCSS('outline-style', 'solid');
-  const adminNav = page.getByRole('navigation', { name: 'Administration' });
-  await adminNav.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(adminNav.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+  await nav.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(nav.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await fits(page);

@@ -22,6 +22,7 @@ interface AppHeaderProps {
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
   version?: string;
+  children?: React.ReactNode;
 }
 
 type NavItem = { id: string; label: string; icon: typeof Folder };
@@ -45,8 +46,9 @@ export function StorageBar({ used, quota }: { used: number; quota: number }) {
   </div>;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version }) => {
-  const navsRef = useRef<HTMLDivElement>(null);
+/** The ky-ui app frame: sidebar (a sticky header on phones) around the page in `children`. */
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version, children }) => {
+  const navRef = useRef<HTMLElement>(null);
   const aboutRef = useRef<HTMLDialogElement>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const year = new Date().getFullYear();
@@ -58,7 +60,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
   // Phones scroll the navigation as one row: keep the current destination in view. Only the
   // row scrolls; scrollIntoView would also move the page.
   useEffect(() => {
-    const row = navsRef.current, cur = row?.querySelector('[aria-current="page"]');
+    const row = navRef.current, cur = row?.querySelector('[aria-current="page"]');
     if (row && cur) revealNavItem(row, cur);
   }, [activeTab, selectedWorkspace]);
   useEffect(() => {
@@ -70,42 +72,43 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
   // Closing the native dialog first returns focus to the licence button.
   const closeAbout = () => { const d = aboutRef.current; if (d?.open && typeof d.close === 'function') d.close(); setAboutOpen(false); };
   const item = (id: string, label: string, Icon: typeof Folder, current: boolean, onClick: () => void) =>
-    <button key={id} className={current ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={current ? 'page' : undefined} onClick={onClick}>
-      <Icon size={16} aria-hidden="true" /><span>{label}</span>
+    <button key={id} type="button" className="ky-nav-item" aria-current={current ? 'page' : undefined} onClick={onClick}>
+      <Icon aria-hidden="true" /><span>{label}</span>
     </button>;
   const drive = (id: string) => activeTab === 'drive' && selectedWorkspace === id;
   const tabs = (items: NavItem[]) => items.map(({ id, label, icon }) => item(id, label, icon, activeTab === id, () => onTabChange(id)));
+  const storage = personal && personal.quota > 0 && <div className="sidebar-storage">
+    <StorageBar used={personal.used} quota={personal.quota} />
+    <p>{bytes(personal.used)} of {bytes(personal.quota)} used</p>
+  </div>;
+  const licence = <button type="button" className="ky-license-link" onClick={() => setAboutOpen(true)}>
+    &copy; {year} &middot; MIT License
+  </button>;
 
   return (
-    <>
-      <header className="app-header">
-        <div className="app-brand">
-          <img className="brand-mark" src="/app-icon.png" width={28} height={28} alt="" />
-          <span>{name}</span>
+    <div className="ky-app">
+      <header className="ky-sidebar">
+        <div className="ky-mobile-head">
+          <div className="ky-brand">
+            <img className="brand-mark" src="/app-icon.png" width={28} height={28} alt="" />
+            <span>{name}</span>
+          </div>
+          <button type="button" className="ky-mobile-signout" aria-label="Sign out" onClick={onLogout}><LogOut aria-hidden="true" /></button>
         </div>
-
-        <div ref={navsRef} className="app-navs" onFocusCapture={e => {
+        <nav ref={navRef} className="ky-nav" aria-label="Primary" onFocusCapture={e => {
           if (e.target instanceof HTMLButtonElement) revealNavItem(e.currentTarget, e.target);
         }}>
-          <nav className="app-nav" aria-label="Workspaces">
-            <h2 className="app-nav-label">Personal</h2>
-            {workspaces.filter(w => w.kind === 'personal').map(w => item(w.id, 'My files', Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
-            {item(SHARED_WITH_ME, 'Shared with me', Users, drive(SHARED_WITH_ME), () => onWorkspaceSelect(SHARED_WITH_ME))}
-            {workspaces.some(w => w.kind === 'shared') && <h2 className="app-nav-label">Shared workspaces</h2>}
-            {workspaces.filter(w => w.kind === 'shared').map(w => item(w.id, w.name, Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
-          </nav>
-          <nav className="app-nav" aria-label="Primary"><h2 className="app-nav-label">Preferences</h2>{tabs(accountItems)}</nav>
-          {user.role === 'admin' && <nav className="app-nav" aria-label="Administration">
-            <h2 className="app-nav-label">Administration</h2>
-            {tabs(adminItems)}
-          </nav>}
-        </div>
-        <p className="app-nav-hint">Scroll for more destinations</p>
-        <div className="app-header-actions">
-          {personal && personal.quota > 0 && <div className="sidebar-storage">
-            <StorageBar used={personal.used} quota={personal.quota} />
-            <p>{bytes(personal.used)} of {bytes(personal.quota)} used</p>
-          </div>}
+          <p className="ky-nav-section">Personal</p>
+          {workspaces.filter(w => w.kind === 'personal').map(w => item(w.id, 'My files', Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
+          {item(SHARED_WITH_ME, 'Shared with me', Users, drive(SHARED_WITH_ME), () => onWorkspaceSelect(SHARED_WITH_ME))}
+          {workspaces.some(w => w.kind === 'shared') && <p className="ky-nav-section">Shared workspaces</p>}
+          {workspaces.filter(w => w.kind === 'shared').map(w => item(w.id, w.name, Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
+          <p className="ky-nav-section">Preferences</p>
+          {tabs(accountItems)}
+          {user.role === 'admin' && <><p className="ky-nav-section">Administration</p>{tabs(adminItems)}</>}
+        </nav>
+        <div className="ky-sidebar-foot">
+          {storage}
           <div className="ky-user">
             <div className="ky-user-copy">
               <p className="ky-user-name">{shownName}</p>
@@ -116,13 +119,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
               <span>Sign out</span>
             </button>
           </div>
-          <footer>
-            <button type="button" className="ky-license-link" onClick={() => setAboutOpen(true)}>
-              &copy; {year} &middot; MIT License
-            </button>
-          </footer>
+          <footer>{licence}</footer>
         </div>
       </header>
+      <main className="ky-content">
+        {children}
+        <footer className="ky-content-foot">{storage}{licence}</footer>
+      </main>
       {aboutOpen && <dialog ref={aboutRef} className="ky-about" aria-label={`About ${name}`} {...{ closedby: 'any' }} onClose={() => setAboutOpen(false)}>
         <div className="ky-about-head">
           <div>
@@ -134,6 +137,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
         </div>
         <textarea className="ky-about-license" readOnly aria-label="MIT License" value={mitLicenseText} />
       </dialog>}
-    </>
+    </div>
   );
 };

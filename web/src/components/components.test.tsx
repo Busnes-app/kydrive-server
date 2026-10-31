@@ -121,7 +121,10 @@ describe('AppHeader licence footer', () => {
 
   it('opens the MIT licence with the server version', () => {
     header('1.2.3');
-    fireEvent.click(screen.getByRole('button', { name: `© ${new Date().getFullYear()} · MIT License` }));
+    // The sidebar foot and, on phones, the end of the page carry the same licence line.
+    const licences = screen.getAllByRole('button', { name: `© ${new Date().getFullYear()} · MIT License` });
+    expect(licences.map(b => b.closest('footer')?.className ?? '')).toEqual(['', 'ky-content-foot']);
+    fireEvent.click(licences[0]);
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('KyDrive')).toBeTruthy();
     expect(within(dialog).getByText('v1.2.3')).toBeTruthy();
@@ -134,13 +137,13 @@ describe('AppHeader licence footer', () => {
 
   it('shows no badge without a version', () => {
     header();
-    fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /MIT License/ })[0]);
     expect(within(screen.getByRole('dialog')).queryByText(/^v\d/)).toBeNull();
   });
 
   it('closes with the outlined Close button, not an icon', () => {
     header('1.2.3');
-    fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /MIT License/ })[0]);
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }).className).toBe('ky-about-close');
   });
 
@@ -151,10 +154,13 @@ describe('AppHeader licence footer', () => {
       selectedWorkspace="p" onWorkspaceSelect={() => {}} />);
     expect(document.querySelector('.ky-user-name')?.textContent).toBe('admin');
     expect(document.querySelector('.ky-user-role')?.textContent).toBe('Administrator');
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
-    expect(screen.getByRole('navigation', { name: 'Administration' })).toBeTruthy();
-    expect(screen.getByRole('meter', { name: 'Storage used' })).toBeTruthy();
-    expect(screen.getByText('512 B of 1.0 KiB used')).toBeTruthy();
+    // The sidebar's labelled Sign out, and the phone header's icon-only one.
+    expect(screen.getAllByRole('button', { name: 'Sign out' }).map(b => b.className)).toEqual(['ky-mobile-signout', 'ky-user-signout']);
+    expect(screen.getByText('Administration', { selector: '.ky-nav-section' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Administration' })).toBeNull();
+    // Storage sits in the sidebar foot, and closes the page on phones.
+    expect(screen.getAllByRole('meter', { name: 'Storage used' })).toHaveLength(2);
+    expect(screen.getAllByText('512 B of 1.0 KiB used')).toHaveLength(2);
   });
 });
 

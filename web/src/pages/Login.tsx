@@ -104,7 +104,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName, sso }) => {
         <div className="ky-auth-brand">
           <img className="brand-mark" src="/app-icon.png" width={56} height={56} alt="" />
           <h1>{appName || 'KyDrive'}</h1>
-          <p>Organization files and shared workspaces</p>
+          <p>Organization files and shared workspaces.</p>
         </div>
         <div className="ky-auth-card">
           {mfaChallenge ? (

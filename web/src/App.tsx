@@ -156,43 +156,39 @@ export const App: React.FC = () => {
   if (linking) return <LinkDevice onClose={() => setLinking(false)} />;
 
   return (
-    <div className="app-shell">
-      <AppHeader
-        appName={typeof settings?.app_name === 'string' ? settings.app_name : 'KyDrive'}
-        activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab)}
-        user={user}
-        workspaces={workspaces}
-        selectedWorkspace={selectedWorkspace}
-        onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
-        onLogout={handleLogout}
-        version={version}
-      />
+    <AppHeader
+      appName={typeof settings?.app_name === 'string' ? settings.app_name : 'KyDrive'}
+      activeTab={activeTab}
+      onTabChange={(tab) => setActiveTab(tab)}
+      user={user}
+      workspaces={workspaces}
+      selectedWorkspace={selectedWorkspace}
+      onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
+      onLogout={handleLogout}
+      version={version}
+    >
+      {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
+      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
 
-      <main className="app-main">
-        {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
-        {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
-        
-        {activeTab === 'workspaces' && user.role === 'admin' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={id => { setSelectedWorkspace(id); setActiveTab('drive'); }} />}
-        {activeTab === 'activity' && user.role === 'admin' && <AdminActivity />}
-        {activeTab === 'leavers' && user.role === 'admin' && <AdminLeavers workspaces={workspaces} />}
-        {activeTab === 'backup' && <Backup />}
-        {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
-        {activeTab === 'appearance' && <Appearance />}
-        {activeTab === 'account' && <section className="page page-narrow account-page">
-          <header className="ky-page-head"><div><h1 className="ky-page-title">Account</h1><p className="ky-page-lede">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
-          <div className="stack">
-            <section className="account-preferences" aria-labelledby="file-preferences-title">
-              <h2 id="file-preferences-title">Files</h2>
-              <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => void changeOpenInNewTab(e.target.checked)} />Open files in a new tab</label>
-            </section>
-            <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />
-            <AppPasswords />
-            <Devices />
-          </div>
-        </section>}
-      </main>
-    </div>
+      {activeTab === 'workspaces' && user.role === 'admin' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={id => { setSelectedWorkspace(id); setActiveTab('drive'); }} />}
+      {activeTab === 'activity' && user.role === 'admin' && <AdminActivity />}
+      {activeTab === 'leavers' && user.role === 'admin' && <AdminLeavers workspaces={workspaces} />}
+      {activeTab === 'backup' && <Backup />}
+      {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
+      {activeTab === 'appearance' && <Appearance />}
+      {activeTab === 'account' && <section className="page page-narrow account-page">
+        <header className="ky-page-head"><div><h1 className="ky-page-title">Account</h1><p className="ky-page-lede">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
+        <div className="stack">
+          <section className="account-preferences" aria-labelledby="file-preferences-title">
+            <h2 id="file-preferences-title">Files</h2>
+            <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => void changeOpenInNewTab(e.target.checked)} />Open files in a new tab</label>
+          </section>
+          <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />
+          <AppPasswords />
+          <Devices />
+        </div>
+      </section>}
+    </AppHeader>
   );
 };
 

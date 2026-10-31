@@ -100,34 +100,19 @@ summary:focus-visible { outline-offset: 4px; }
 }
 
 /* ---------- App shell ---------- */
-.app-shell { min-height: 100vh; display: grid; grid-template-columns: var(--ky-sidebar-size) minmax(0, 1fr); }
-.app-header { display: flex; flex-direction: column; gap: 1.25rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1.25rem 1rem; background: linear-gradient(180deg, var(--sidebar-start, var(--panel)), var(--sidebar-end, var(--panel))); border-right: 1px solid var(--line); z-index: 10; }
-.app-brand { display: flex; align-items: center; gap: .7rem; padding: .25rem .5rem .5rem; color: var(--ink-strong); font-size: 1.15rem; font-weight: 700; }
-.app-brand img { border-radius: .45rem; flex: none; }
+/* The frame, brand, navigation and phone header are ky-ui shell.css. */
 /* Dark schemes invert the mark: a light tile with a dark letter, on sign-in and in the sidebar. */
 :root[data-scheme="dark"] .brand-mark { filter: invert(1) hue-rotate(180deg); }
-.app-navs { display: contents; }
-.app-nav-hint { display: none; }
-.app-nav { display: flex; flex-direction: column; gap: .15rem; }
-.app-nav + .app-nav { padding-top: .75rem; border-top: 1px solid var(--line); }
-.app-nav button { justify-content: flex-start; width: 100%; min-height: var(--ky-control-size); border: 0; border-left: 3px solid transparent; border-radius: var(--ky-control-radius); padding: .5rem .65rem; background: transparent; color: var(--ink); font-size: var(--ky-type-nav); font-weight: 500; text-align: left; }
-.app-nav button:hover { background: var(--panel-hover); color: var(--ink-strong); }
-.app-nav button span { min-width: 0; overflow-wrap: anywhere; }
-/* Selected, hover and focus states are supplied by ky-ui/navigation.css. */
-.app-nav-label { font-size: .78rem; font-weight: 600; color: var(--ink); padding: .6rem .65rem .25rem; }
-.app-nav-label:first-child { padding-top: 0; }
-.app-nav-empty { font-size: .8rem; color: var(--ink); padding: .4rem .65rem; }
-.app-header-actions { display: flex; flex-direction: column; gap: .75rem; margin-top: auto; }
+/* Many shared workspaces scroll the sidebar rather than push the user block off screen. */
+@media (min-width: 721px) { .ky-sidebar { overflow-y: auto; } }
 .sidebar-storage { display: grid; gap: .4rem; padding: 0 var(--ky-space-2) 0 var(--ky-space-3); font-size: var(--ky-type-meta); color: var(--ink); }
 .storage-bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .storage-bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .app-preference { display: flex; align-items: center; gap: .55rem; font-size: .82rem; color: var(--ink); cursor: pointer; }
-.app-main { min-width: 0; }
-.app-notice { margin: 1.5rem 2.5rem 0; }
+.app-notice { margin-bottom: 1rem; }
 
 /* ---------- Pages ---------- */
-.page { width: 100%; max-width: 80rem; margin: 0 auto; padding: 2.25rem 2.5rem 4rem; }
-.page-narrow { max-width: 52rem; margin-left: 0; margin-right: auto; }
+.page-narrow { max-width: 52rem; }
 .page-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .page-header h1, .page-title { font-size: var(--ky-type-title); font-weight: 600; }
 .page-desc { color: var(--ink); margin-top: 8px; max-width: 62ch; }
@@ -153,8 +138,9 @@ summary:focus-visible { outline-offset: 4px; }
 .panel-section > h3 + p { color: var(--ink); font-size: .88rem; margin-bottom: .85rem; max-width: 65ch; }
 
 /* ---------- Buttons ---------- */
-/* Zero-specificity base: any class, the shell's ky-* buttons included, overrides it. */
-:where(button, .btn) {
+/* Zero-specificity base: any class, the shell's ky-* buttons included, overrides it. Navigation
+   rows are ky-ui's alone: they inherit nothing from it. */
+:where(button:not(.ky-nav-item), .btn) {
   font-family: var(--font-sans);
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
   min-height: var(--control-h); padding: .5rem 1.1rem;
@@ -422,7 +408,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 /* ---------- Backup & recovery ---------- */
 @keyframes dr-spin { to { transform: rotate(360deg); } }
 .animate-spin { animation: dr-spin 1s linear infinite; }
-.dr-page { max-width: 80rem; margin: 0 auto; padding: 2.25rem 2.5rem 4rem; }
 .dr-section { margin-bottom: 1.25rem; }
 .dr-section h3 { font-size: 1.05rem; display: inline-flex; align-items: center; gap: 8px; }
 .dr-mono { font-family: var(--font-mono); }
@@ -460,37 +445,16 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 .dr-narrow { flex: 0 0 7rem; }
 
 /* ---------- Small screens ---------- */
-/* Phones retain identity beside the brand and keep every destination in one scrolling row. */
+/* Phones: the page ends with storage, then the licence line. */
 @media (max-width: 720px) {
-  .app-shell { display: block; }
-  .app-header { position: static; height: auto; overflow: visible; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 6px 16px 6px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .app-brand { padding: 0; grid-row: 1; }
-  .app-navs { display: flex; grid-column: 1 / -1; grid-row: 2; gap: 4px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 4px; }
-  .app-nav { flex: none; flex-direction: row; gap: 4px; }
-  .app-nav + .app-nav { padding: 0 0 0 4px; border-top: 0; border-left: 1px solid var(--line); }
-  .app-nav button { width: auto; flex: 0 0 auto; min-height: 2.5rem; border-left: 0; border-bottom: 3px solid transparent; white-space: nowrap; }
-  .app-nav button span { overflow-wrap: normal; }
-  .app-nav button.active { border-bottom-color: var(--accent); }
-  .app-nav-label { display: none; }
-  .app-nav-empty { display: none; }
-  .app-header-actions { display: contents; }
-  /* Read by assistive tech, not shown (KyDNS's pattern). */
-  .app-nav-hint { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ky-content-foot .sidebar-storage { padding: 0 0 var(--ky-space-3); max-width: 16rem; }
+  /* The tab row clips overflow: draw the focus ring inside the tab so none of it is cut off. */
+  .ky-nav > .ky-nav-item:focus-visible { outline-offset: -2px; }
   .drive-preview-dialog header { grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
   .drive-preview-dialog header .button-row { grid-column: 1 / -1; grid-row: 2; }
   .drive-preview-dialog header .icon-btn { grid-column: 2; }
   .drive-preview-dialog header .btn-ghost { padding-left: 0; }
-  .app-notice { margin: 1rem 1rem 0; }
-  .page, .dr-page { padding: 1.25rem 1rem 3rem; }
   .page-header h1, .page-title { font-size: 1.4rem; }
-  .app-header .ky-user { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: .25rem; padding-top: 0; border-top: 0; }
-  .app-header .ky-user-copy { max-width: 8rem; padding: 0; }
-  .app-header :is(.ky-user-name, .ky-user-role) { font-size: .75rem; }
-  .app-header .ky-user-signout { width: auto; padding: 0 .6rem; }
-  /* Storage and licence share a row under the navigation. */
-  .app-header-actions > footer { grid-column: 1; grid-row: 3; justify-self: start; }
-  .sidebar-storage { grid-column: 2; grid-row: 3; grid-template-columns: 3rem auto; align-items: center; justify-content: end; gap: .5rem; padding: 0; white-space: nowrap; }
-  .app-header .ky-license-link { margin-left: 0; }
   .drive-crumb .btn-link { font-size: 1.4rem; }
   .ky-page-head > .page-actions { width: 100%; }
   .drive-table td.col-modified { display: none; }
