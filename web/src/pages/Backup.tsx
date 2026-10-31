@@ -105,6 +105,16 @@ function when(iso?: string): string {
   return isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
+type Tone = 'success' | 'warning' | 'danger';
+
+// Local copies against the number kept: none is danger, some warning, all success.
+// No local directory is a setting, so neutral. The status has no backup age to soften none.
+function localTone(dirSet: boolean, count: number, keep: number): Tone | undefined {
+  if (!dirSet) return undefined;
+  if (count === 0) return 'danger';
+  return count >= keep ? 'success' : 'warning';
+}
+
 function every(sec?: number): string {
   if (!sec) return 'Off';
   const hit = SCHEDULE_CHOICES.find((c) => c.sec === sec);
@@ -144,7 +154,7 @@ const Alert: React.FC<{ kind: 'error' | 'warn' | 'success'; children: React.Reac
 );
 
 // ky-ui state pill: a word plus its dot; no tone is neutral.
-const Badge: React.FC<{ tone?: 'success' | 'danger'; children: React.ReactNode }> = ({ tone, children }) => (
+const Badge: React.FC<{ tone?: Tone; children: React.ReactNode }> = ({ tone, children }) => (
   <span className="ky-status" data-ky-status={tone}>{children}</span>
 );
 
@@ -427,7 +437,7 @@ export const Backup: React.FC = () => {
         <div className="dr-fact">
           <div className="dr-fact-label">
             <span>Local copies</span>
-            <Badge tone={hasLocal ? 'success' : undefined}>{hasLocal ? `${copies.length} of ${status?.local_keep}` : 'Off'}</Badge>
+            <Badge tone={localTone(hasLocal, copies.length, status?.local_keep ?? 0)}>{hasLocal ? `${copies.length} of ${status?.local_keep}` : 'Off'}</Badge>
           </div>
           <div className="dr-fact-value dr-mono">{status?.local_dir ?? 'KY_BACKUP_DIR not set'}</div>
           <div className="dr-fact-note">{status?.local_error ?? (newestLocal ? `Newest ${when(newestLocal.created_at)}` : hasLocal ? 'Nothing written yet' : '')}</div>
@@ -435,7 +445,7 @@ export const Backup: React.FC = () => {
         <div className="dr-fact">
           <div className="dr-fact-label">
             <span>Schedule</span>
-            <Badge tone={scheduleOn && canBackUp ? 'success' : scheduleOn ? undefined : 'danger'}>{every(status?.interval_sec)}</Badge>
+            <Badge tone={scheduleOn && canBackUp ? 'success' : undefined}>{every(status?.interval_sec)}</Badge>
           </div>
           {/* A schedule cannot run without a pinned key and a destination: say what it waits for. */}
           <div className="dr-fact-value">{!scheduleOn ? 'Manual only' : !keyPinned ? 'Waiting for recovery key' : !canBackUp ? 'Waiting for a destination' : status?.next_run_at ? `Next ${when(status.next_run_at)}` : 'Manual only'}</div>
