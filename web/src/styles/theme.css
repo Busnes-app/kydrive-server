@@ -474,7 +474,8 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
   .app-nav-label { display: none; }
   .app-nav-empty { display: none; }
   .app-header-actions { display: contents; }
-  .app-nav-hint { display: block; grid-column: 1; grid-row: 3; font-size: .75rem; color: var(--ink); }
+  /* Read by assistive tech, not shown (KyDNS's pattern). */
+  .app-nav-hint { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .drive-preview-dialog header { grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
   .drive-preview-dialog header .button-row { grid-column: 1 / -1; grid-row: 2; }
   .drive-preview-dialog header .icon-btn { grid-column: 2; }
@@ -486,9 +487,9 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
   .app-header .ky-user-copy { max-width: 8rem; padding: 0; }
   .app-header :is(.ky-user-name, .ky-user-role) { font-size: .75rem; }
   .app-header .ky-user-signout { width: auto; padding: 0 .6rem; }
-  /* Hint and licence share a row; storage sits under them. */
-  .app-header-actions > footer { grid-column: 2; grid-row: 3; justify-self: end; }
-  .sidebar-storage { grid-column: 1 / -1; grid-row: 4; grid-template-columns: 5rem auto; align-items: center; justify-content: start; gap: .6rem; padding: 0; }
+  /* Storage and licence share a row under the navigation. */
+  .app-header-actions > footer { grid-column: 1; grid-row: 3; justify-self: start; }
+  .sidebar-storage { grid-column: 2; grid-row: 3; grid-template-columns: 3rem auto; align-items: center; justify-content: end; gap: .5rem; padding: 0; white-space: nowrap; }
   .app-header .ky-license-link { margin-left: 0; }
   .drive-crumb .btn-link { font-size: 1.4rem; }
   .ky-page-head > .page-actions { width: 100%; }
