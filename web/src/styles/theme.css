@@ -448,8 +448,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 /* Phones: the page ends with storage, then the licence line. */
 @media (max-width: 720px) {
   .ky-content-foot .sidebar-storage { padding: 0 0 var(--ky-space-3); max-width: 16rem; }
-  /* The tab row clips overflow: draw the focus ring inside the tab so none of it is cut off. */
-  .ky-nav > .ky-nav-item:focus-visible { outline-offset: -2px; }
   .drive-preview-dialog header { grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
   .drive-preview-dialog header .button-row { grid-column: 1 / -1; grid-row: 2; }
   .drive-preview-dialog header .icon-btn { grid-column: 2; }
