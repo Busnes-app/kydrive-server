@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AppHeader } from './components/AppHeader';
+import type { SuiteApp } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
 import { SharedView } from './pages/drive/SharedView';
@@ -35,6 +36,7 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
   const [openInNewTab, setOpenInNewTab] = useState(true);
   const [version, setVersion] = useState('');
+  const [apps, setApps] = useState<SuiteApp[]>([]);
   // Idempotent, so StrictMode's second call is harmless.
   const [linking, setLinking] = useState(() => { takeLinkRequestFromURL(); return hasLinkRequest(); });
 
@@ -77,6 +79,16 @@ export const App: React.FC = () => {
       setSelectedWorkspace(SHARED_WITH_ME); setActiveTab('drive');
     }, () => setNotice('This link is no longer valid. Ask whoever sent it for a new one.'));
   }, [user]);
+
+  // The app rail: once per signed-in account. Any failure leaves it hidden.
+  useEffect(() => {
+    if (!user || user.must_change_password) return;
+    let live = true;
+    void fetch('/api/suite/apps').then(r => r.ok ? r.json() : null).then((body: unknown) => {
+      if (live && isRecord(body) && Array.isArray(body.apps)) setApps(body.apps.filter(isSuiteApp));
+    }).catch(() => {});
+    return () => { live = false; setApps([]); };
+  }, [user?.id, user?.must_change_password]);
 
   // /api/settings returns more fields once authenticated, so re-read it after login.
   const loadSettings = async () => {
@@ -166,6 +178,7 @@ export const App: React.FC = () => {
       onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
       onLogout={handleLogout}
       version={version}
+      apps={apps}
     >
       {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
       {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
@@ -194,4 +207,5 @@ export const App: React.FC = () => {
 
 interface DriveUser { id: string; username: string; display_name: string; role: string; must_change_password?: boolean; totp_enabled?: boolean; sso_provider?: string }
 function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
+function isSuiteApp(v: unknown): v is SuiteApp { return isRecord(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.url === 'string' && v.url.startsWith('https://'); }
 function isDriveUser(v: unknown): v is DriveUser { return isRecord(v) && typeof v.id === 'string' && typeof v.username === 'string' && typeof v.display_name === 'string' && typeof v.role === 'string' && (v.must_change_password === undefined || typeof v.must_change_password === 'boolean'); }

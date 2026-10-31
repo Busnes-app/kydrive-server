@@ -58,6 +58,9 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    bearer token; a directory webhook that must carry a valid HMAC-SHA256 signature and a timestamp
    within five minutes before anything is parsed further; back-channel logout tokens verified
    like ID tokens plus the logout-token claims (`internal/sso`, `internal/scim`).
+   Outbound, the app rail asks KyIdentity `/api/suite/apps` with the KyDrive client credentials
+   (`ky-primitives/suitedir`: HTTPS or loopback issuer, redirects refused, body capped); entries need an HTTPS
+   URL, and the browser renders them as plain links, never markup (`internal/api/suite_apps.go`).
 4. **KyDrive ↔ Euro-Office.** Editor configuration and callbacks are HS256 JWTs under a secret of
    at least 32 bytes; output is fetched only from the configured editor origin, without following
    redirects (`internal/editor/client.go`).

@@ -164,6 +164,41 @@ describe('AppHeader licence footer', () => {
   });
 });
 
+describe('AppHeader app rail', () => {
+  const header = (apps?: { id: string; name: string; url: string }[]) => render(<AppHeader appName="KyDrive" activeTab="drive" onTabChange={() => {}}
+    user={{ display_name: 'Ada', username: 'ada', role: 'user' }} onLogout={() => {}} workspaces={[]}
+    selectedWorkspace="" onWorkspaceSelect={() => {}} apps={apps} />);
+
+  it('links each suite app as given, marks KyDrive current, at the top of both foots', () => {
+    header([
+      { id: 'kypost', name: 'KyPost', url: 'https://mail.example.com/api/auth/oidc/login' },
+      { id: 'kydrive', name: 'KyDrive', url: 'https://drive.example.com/api/sso/kysignon/login' },
+      { id: 'unknown-app', name: 'Other', url: 'https://other.example.com/' },
+    ]);
+    const rails = screen.getAllByRole('navigation', { name: 'Apps' });
+    expect(rails.map(r => r.parentElement?.className)).toEqual(['ky-sidebar-foot', 'ky-content-foot']);
+    rails.forEach(r => expect(r.parentElement?.firstElementChild).toBe(r));
+    const links = within(rails[0]).getAllByRole('link');
+    expect(links.map(a => [a.getAttribute('aria-label'), a.getAttribute('title'), a.getAttribute('href'), a.getAttribute('aria-current')])).toEqual([
+      ['KyPost', 'KyPost', 'https://mail.example.com/api/auth/oidc/login', null],
+      ['KyDrive', 'KyDrive', 'https://drive.example.com/api/sso/kysignon/login', 'page'],
+      ['Other', 'Other', 'https://other.example.com/', null],
+    ]);
+    links.forEach(a => {
+      expect(a.getAttribute('target')).toBeNull();
+      expect(a.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\//);
+    });
+  });
+
+  it('renders no rail when the list is empty', () => {
+    header([]);
+    expect(screen.queryByRole('navigation', { name: 'Apps' })).toBeNull();
+    cleanup();
+    header();
+    expect(screen.queryByRole('navigation', { name: 'Apps' })).toBeNull();
+  });
+});
+
 describe('Login', () => {
   it('shows single sign-on under a divider only when it is configured', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
