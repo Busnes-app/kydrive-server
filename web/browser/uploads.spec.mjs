@@ -65,7 +65,8 @@ test('upload a folder tree, resume a dropped chunk, search and download the fold
     await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'My files' }).click();
     await page.getByLabel('Search files').fill(`dme-${tag}`);
     await page.getByRole('search').getByRole('button', { name: new RegExp(`findme-${tag}\\.txt`) }).click();
-    await expect(page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'sub' })).toBeVisible();
+    // The current folder is the title, plain text at the end of the path.
+    await expect(page.getByRole('navigation', { name: 'Folder path' }).getByRole('heading', { name: 'sub', level: 1 })).toBeVisible();
 
     await page.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'My files' }).click();
     await page.getByLabel(`Actions for folder ${top}`).click();

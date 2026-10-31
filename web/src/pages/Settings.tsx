@@ -78,28 +78,34 @@ interface SettingsProps {
   onOpenAppearance: () => void;
 }
 
+const sections = [['trash', 'Trash'], ['guest', 'Guest links'], ['computers', 'Computers'], ['system', 'System']] as const;
+
 export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }) => {
   const driver = typeof settings?.db_driver === 'string' ? settings.db_driver : 'sqlite';
+  const [tab, setTab] = useState<typeof sections[number][0]>('trash');
   return (
     <section className="page">
-      <header className="page-header">
+      <header className="ky-page-head">
         <div>
-          <h1>Settings</h1>
-          <p className="page-desc">Drive-wide rules for trash, guest links and linked computers.</p>
+          <h1 className="ky-page-title">Settings</h1>
+          <p className="ky-page-lede">Drive-wide rules for trash, guest links and linked computers.</p>
         </div>
       </header>
-      <div className="card-grid">
-        <TrashRetention />
-        <GuestLinkSettings />
-        <DevicePolicySettings />
-        <section className="panel" aria-labelledby="system-heading">
+      <div className="tabs" role="tablist" aria-label="Settings sections">
+        {sections.map(([id, label]) => <button key={id} id={`settings-tab-${id}`} role="tab" className="tab" aria-selected={tab === id} aria-controls="settings-panel" onClick={() => setTab(id)}>{label}</button>)}
+      </div>
+      <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`} className="settings-panel">
+        {tab === 'trash' && <TrashRetention />}
+        {tab === 'guest' && <GuestLinkSettings />}
+        {tab === 'computers' && <DevicePolicySettings />}
+        {tab === 'system' && <section className="panel" aria-labelledby="system-heading">
           <div className="panel-header"><div><Database size={20} aria-hidden="true" /><h2 id="system-heading" className="panel-title" style={{ margin: 0 }}>System</h2></div></div>
           <dl className="settings-facts">
             <dt>Database</dt><dd><span className="badge font-mono">{driver}</span> One SQLite database, one writer</dd>
             <dt>Theme on this browser</dt><dd><button type="button" className="btn-secondary" onClick={onOpenAppearance}>Open Appearance</button></dd>
           </dl>
           <p className="hint" style={{ marginTop: '.75rem' }}>The theme follows this device until someone picks one; each browser keeps its own choice.</p>
-        </section>
+        </section>}
       </div>
     </section>
   );

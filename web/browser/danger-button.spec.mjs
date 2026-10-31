@@ -6,8 +6,7 @@ import { THEME_CATALOG } from '../src/ky-ui/themes.js';
 // screen shows it: pixels from a screenshot, so hover brightness and focus are included. The
 // control is the real "Delete permanently" confirmation for a synthetic trashed folder; the
 // dialog is always cancelled.
-const LEGACY = ['patina', 'cyber', 'nord', 'paper', 'oled'];
-const SUITE = THEME_CATALOG.filter(t => !t.id.startsWith('busnes-') && !LEGACY.includes(t.id)).map(t => t.id);
+const SUITE = THEME_CATALOG.filter(t => !t.id.startsWith('busnes-')).map(t => t.id);
 const sessionFile = 'test-results/file-management-session.json'; // shared: sign-ins are rate limited
 
 async function signIn(page) {
@@ -89,9 +88,8 @@ test('the filled danger button label reads on its fill in every suite palette', 
     }
     console.log(testInfo.project.name, JSON.stringify(results));
     expect(results.filter(r => Math.min(r.rest, r.hover, r.focus) < 4.5)).toEqual([]);
-    // Busnes and the five original base palettes keep their own label colour (polled: the
-    // button's colour transition settles after the switch).
-    for (const id of ['busnes-light', 'busnes-dark', ...LEGACY]) {
+    // Busnes keeps its own label colour (polled: the button's colour transition settles after the switch).
+    for (const id of ['busnes-light', 'busnes-dark']) {
       await choose(id);
       await expect.poll(() => button.evaluate(el => {
         const probe = document.body.appendChild(document.createElement('i'));

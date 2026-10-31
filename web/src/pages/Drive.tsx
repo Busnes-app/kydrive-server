@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, Share2, Trash2, Upload } from 'lucide-react';
-import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, HttpError, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
-import { Leavers } from './drive/Leavers';
+import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
+import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -27,7 +26,6 @@ export type { Workspace } from './drive/client';
 type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
 const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
 const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
-type AuditEvent = { action: string; created: string };
 
 export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
   const fileTarget = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
@@ -44,7 +42,6 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [grants, setGrants] = useState<Grant[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [identityURL, setIdentityURL] = useState('');
-  const [newName, setNewName] = useState('');
   const [quota, setQuota] = useState(1024);
   const [trashDays, setTrashDays] = useState(0);
   const [keepVersions, setKeepVersions] = useState(0);
@@ -58,8 +55,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [clash, setClash] = useState<{ names: string[]; answer: (c: Choice) => void } | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [operations, setOperations] = useState('');
-  const [audit, setAudit] = useState<AuditEvent[]>([]);
+  // Checked rows, keyed `file:<id>` or `folder:<id>`; cleared whenever the listing changes place.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirm, confirmNode] = useConfirm();
   const current = workspaces.find(w => w.id === selected);
   const path = breadcrumb(folders, parent);
@@ -99,6 +96,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   // A search result in another workspace opens its folder once that workspace is selected.
   const openAfterSwitch = useRef('');
   useEffect(() => { setParent(openAfterSwitch.current); openAfterSwitch.current = ''; setHistory(null); setView('files'); }, [selected]);
+  useEffect(() => setPicked(new Set()), [selected, parent, trash]);
   const canDrop = (dt: DataTransfer) => canEdit && !trash && view === 'files' && dt.types.includes('Files');
   function openHit(h: Hit) {
     const target = h.kind === 'folder' ? h.id : h.parent;
@@ -109,7 +107,6 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   }
   useEffect(() => { void reload().catch(e => setMessage(e instanceof Error ? e.message : 'Drive unavailable')); }, [reload]);
   useEffect(() => { if (!canManage) return; let active = true; void (async () => { const v = await response(await fetch(admin ? '/api/drive/directory' : `/api/drive/workspaces/${selected}/directory`)); if (!active) return; if (!record(v) || !Array.isArray(v.groups) || !v.groups.every(group)) throw new Error('Invalid directory'); setGroups(v.groups); if (typeof v.identity_url === 'string' && v.identity_url.startsWith('https://')) setIdentityURL(v.identity_url); })().catch(e => { if (active) setMessage(e instanceof Error ? e.message : 'Directory unavailable'); }); return () => { active = false; }; }, [admin, selected, canManage]);
-  useEffect(() => { if (!admin) return; let active = true; const refresh = async () => { try { const v = await response(await fetch('/api/drive/status')); if (record(v) && record(v.editor_revocations) && typeof v.editor_revocations.pending === 'number' && active) setOperations(`Directory: ${v.scim_enabled ? 'SCIM enabled' : 'SCIM disabled'} · Editor: ${v.editor_configured ? 'configured' : 'not configured'} · Pending editor revocations: ${v.editor_revocations.pending} · Bulk backup: ${v.bulk_repository_configured ? 'configured' : 'not configured'}`); const events = await response(await fetch('/api/drive/audit')); if (Array.isArray(events) && active) setAudit(events.filter(record).filter((e): e is AuditEvent => typeof e.action === 'string' && typeof e.created === 'string').slice(0, 10)); } catch { if (active) setOperations('Operational status unavailable; refresh before assuming access changes have reconciled.'); } }; void refresh(); const timer = setInterval(() => void refresh(), 5000); return () => { active = false; clearInterval(timer); }; }, [admin]);
   function startDocument(kind: DocumentKind) {
     const extension = extensions[kind];
     const base = `Untitled ${kind}`;
@@ -158,6 +155,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     { label: 'Version history', icon: <History size={16} />, onSelect: () => showHistory(f) },
     ...(canEdit ? ['separator' as const, { label: 'Move to trash', icon: <Trash2 size={16} />, danger: true, onSelect: () => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: true })) }] : []),
   ];
+  const enterTrash = () => { setFiles([]); setFolders([]); setTrash(true); };
+  const leaveTrash = () => { if (!trash) return; setFiles([]); setFolders([]); setTrash(false); };
   const restoreButton = (onClick: () => void) => canEdit && <button className="btn-secondary" disabled={busy} onClick={onClick}>Restore</button>;
   const purgeButton = (onClick: () => void) => canPurge && <button className="btn-danger-quiet" disabled={busy} onClick={onClick}>Delete permanently</button>;
 
@@ -169,47 +168,72 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     { label: 'Upload folder', icon: <FolderUp size={16} />, onSelect: () => folderInput.current?.click() },
   ];
 
+  const keyOf = (kind: 'file' | 'folder', id: string) => `${kind}:${id}`;
+  const visibleKeys = [...visibleFolders.map(d => keyOf('folder', d.id)), ...visibleFiles.map(f => keyOf('file', f.id))];
+  const chosen = visibleKeys.filter(k => picked.has(k));
+  const chosenFolders = visibleFolders.filter(d => picked.has(keyOf('folder', d.id)));
+  const chosenFiles = visibleFiles.filter(f => picked.has(keyOf('file', f.id)));
+  // Rows are selectable only where a bulk action exists.
+  const selectable = trash ? canEdit || canPurge : canEdit;
+  const toggle = (key: string, on: boolean) => setPicked(p => { const next = new Set(p); if (on) next.add(key); else next.delete(key); return next; });
+  const allBox = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (allBox.current) allBox.current.indeterminate = chosen.length > 0 && chosen.length < visibleKeys.length; });
+  const bulk = (action: () => Promise<unknown>) => void run(async () => { await action(); setPicked(new Set()); });
+  const setTrashed = (trashed: boolean) => bulk(async () => {
+    for (const d of chosenFolders) await change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed });
+    for (const f of chosenFiles) await change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed });
+  });
+  async function purgeChosen() {
+    const n = chosen.length;
+    if (!await confirm({ title: `Delete ${n} ${n === 1 ? 'item' : 'items'} permanently?`, body: 'They are removed from the drive at once and cannot be restored here; only a backup can bring them back.', confirm: 'Delete permanently', danger: true })) return;
+    runPurge(async () => {
+      for (const d of chosenFolders) await remove(`/api/drive/folders/${d.id}`);
+      for (const f of chosenFiles) await remove(`/api/drive/files/${f.id}`);
+      setPicked(new Set());
+    });
+  }
+
   const filesPanel = current && current.role && <div className={dragging ? 'panel drive-files-panel drive-drop-active' : 'panel drive-files-panel'}
     onDragOver={e => { if (canDrop(e.dataTransfer)) { e.preventDefault(); setDragging(true); } }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
     onDrop={e => { setDragging(false); if (!canDrop(e.dataTransfer)) return; e.preventDefault(); upload(fromDataTransfer(e.dataTransfer)); }}>
-    {trash ? <div className="drive-trash-banner">
+    {chosen.length > 0 ? <div className="drive-bulk" role="region" aria-label="Selected items">
+      <span className="drive-bulk-count">{chosen.length} selected</span>
+      <div className="drive-toolbar-actions">
+        {trash ? <>
+          {canEdit && <button className="btn-secondary" disabled={busy} onClick={() => setTrashed(false)}><RotateCcw size={16} aria-hidden="true" />Restore</button>}
+          {canPurge && <button className="btn-danger-quiet" disabled={busy} onClick={() => void purgeChosen()}><Trash2 size={16} aria-hidden="true" />Delete permanently</button>}
+        </> : <button className="btn-secondary" disabled={busy} onClick={() => setTrashed(true)}><Trash2 size={16} aria-hidden="true" />Move to trash</button>}
+        <button className="btn-ghost" onClick={() => setPicked(new Set())}><X size={16} aria-hidden="true" />Clear selection</button>
+      </div>
+    </div> : trash && <div className="drive-trash-banner">
       <p>{current.trash_days > 0 ? `Items here are deleted permanently after ${current.trash_days} days.` : 'Deleted items stay here until they are restored or deleted permanently.'}</p>
       <div className="drive-toolbar-actions">
-        <button className="btn-secondary" onClick={() => { setFiles([]); setFolders([]); setTrash(false); }}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
+        <button className="btn-secondary" onClick={leaveTrash}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
         {canPurge && <button className="btn-danger-quiet" disabled={busy || visibleFiles.length + visibleFolders.length === 0} onClick={() => void emptyTrash()}>Empty trash</button>}
-      </div>
-    </div> : <div className="drive-toolbar">
-      <nav className="drive-breadcrumb" aria-label="Folder path">
-        <button className="btn-link" onClick={() => setParent('')} aria-current={parent === '' ? 'page' : undefined}>{current.name}</button>
-        {path.map(f => <span key={f.id} style={{ display: 'contents' }}><ChevronRight className="drive-breadcrumb-sep" size={16} aria-hidden="true" /><button className="btn-link" onClick={() => setParent(f.id)} aria-current={f.id === parent ? 'page' : undefined}>{f.name}</button></span>)}
-      </nav>
-      <div className="drive-toolbar-actions">
-        <button className="btn-ghost" aria-pressed={trash} onClick={() => { setFiles([]); setFolders([]); setTrash(true); }}><Trash2 size={16} aria-hidden="true" />Trash</button>
-        <button className="icon-btn" aria-label="Refresh" title="Refresh" disabled={busy} onClick={() => void run(reload)}><RefreshCw size={16} aria-hidden="true" /></button>
-        {canEdit && <>
-          <Menu label="New" trigger="text" items={newMenu} />
-          <input ref={uploadInput} type="file" multiple hidden aria-label="Choose files to upload" onChange={e => { const chosen = Array.from(e.target.files ?? []); e.target.value = ''; upload({ dirs: [], files: chosen.map(file => ({ dirs: [], file })) }); }} />
-          <input ref={folderInput} type="file" hidden aria-label="Choose folder to upload" {...{ webkitdirectory: '' }} onChange={e => { const chosen = e.target.files; if (chosen) { const tree = fromFolderInput(chosen); e.target.value = ''; upload(tree); } }} />
-        </>}
       </div>
     </div>}
     <UploadList {...uploads} />
     {visibleFiles.length + visibleFolders.length > 0 && <div className="drive-table"><table>
-      <thead><tr><th>Name</th><th className="num">Size</th><th className="num">Version</th><th className="col-actions"><span className="sr-only">Actions</span></th></tr></thead>
+      <thead><tr>
+        {selectable && <th className="col-select"><input ref={allBox} type="checkbox" aria-label="Select all" checked={chosen.length > 0 && chosen.length === visibleKeys.length} onChange={e => setPicked(e.target.checked ? new Set(visibleKeys) : new Set())} /></th>}
+        <th>Name</th><th className="col-modified">Modified</th><th className="num">Size</th><th className="col-actions"><span className="sr-only">Actions</span></th>
+      </tr></thead>
       <tbody>
-        {visibleFolders.map(d => <tr key={`folder-${d.id}`}>
+        {visibleFolders.map(d => { const key = keyOf('folder', d.id); return <tr key={key} className={picked.has(key) ? 'is-selected' : undefined}>
+          {selectable && <td className="col-select"><input type="checkbox" aria-label={`Select folder ${d.name}`} checked={picked.has(key)} onChange={e => toggle(key, e.target.checked)} /></td>}
           <td><span className="drive-name-cell"><FolderIcon /><span className="drive-name-text">{trash ? <span className="drive-file-name">{d.name}</span> : <button className="drive-file-name btn-link" onClick={() => setParent(d.id)}>{d.name}</button>}<span className="drive-row-meta">Folder</span></span></span></td>
-          <td className="num">Folder</td><td className="num">—</td>
+          <td className="col-modified">—</td><td className="num">—</td>
           <td className="col-actions">{trash ? <div className="button-row">{restoreButton(() => void run(() => change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed: false })))}{purgeButton(() => void purge(`/api/drive/folders/${d.id}`, d.name))}</div>
-            : <Menu label={`Actions for folder ${d.name}`} items={folderActions(d)} />}</td>
-        </tr>)}
-        {visibleFiles.map(f => <tr key={f.id}>
-          <td><span className="drive-name-cell"><FileIcon file={f} /><span className="drive-name-text">{f.trashed ? <span className="drive-file-name">{f.name}</span> : opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...fileTarget}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}<span className="drive-row-meta">{bytes(f.size)} · version {f.revision}</span></span></span></td>
-          <td className="num">{bytes(f.size)}</td><td className="num">{f.revision}</td>
+            : <Menu className="row-menu" label={`Actions for folder ${d.name}`} items={folderActions(d)} />}</td>
+        </tr>; })}
+        {visibleFiles.map(f => { const key = keyOf('file', f.id); return <tr key={key} className={picked.has(key) ? 'is-selected' : undefined}>
+          {selectable && <td className="col-select"><input type="checkbox" aria-label={`Select ${f.name}`} checked={picked.has(key)} onChange={e => toggle(key, e.target.checked)} /></td>}
+          <td><span className="drive-name-cell"><FileIcon file={f} /><span className="drive-name-text">{f.trashed ? <span className="drive-file-name">{f.name}</span> : opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...fileTarget}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}<span className="drive-row-meta">{f.modified && <><When value={f.modified} relativeOnly /> · </>}{bytes(f.size)}</span></span></span></td>
+          <td className="col-modified">{f.modified ? <When value={f.modified} relativeOnly /> : '—'}</td><td className="num">{bytes(f.size)}</td>
           <td className="col-actions">{f.trashed ? <div className="button-row">{restoreButton(() => void run(() => change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed: false })))}{purgeButton(() => void purge(`/api/drive/files/${f.id}`, f.name))}</div>
-            : <Menu label={`Actions for ${f.name}`} items={fileActions(f)} />}</td>
-        </tr>)}
+            : <Menu className="row-menu" label={`Actions for ${f.name}`} items={fileActions(f)} />}</td>
+        </tr>; })}
       </tbody>
     </table></div>}
     {visibleFiles.length + visibleFolders.length === 0 && <div className="drive-empty">
@@ -256,44 +280,48 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     {admin && <WorkspaceAdmin workspace={current} onRenamed={() => void run(reload)} onDeleted={() => onSelectWorkspace('')} />}
   </div>;
 
+  // The breadcrumb is the title: ancestors are buttons, the current place is the h1.
+  const crumbs: { key: string; name: string; go: () => void }[] = !current ? [] : view === 'settings' || trash
+    ? [{ key: 'root', name: current.name, go: () => { setView('files'); leaveTrash(); setParent(''); } }]
+    : parent ? [{ key: 'root', name: current.name, go: () => setParent('') }, ...path.slice(0, -1).map(f => ({ key: f.id, name: f.name, go: () => setParent(f.id) }))] : [];
+  const lede = trash ? 'Restore deleted items or delete them permanently.' : view === 'settings' ? 'Group permissions, storage and retention for this workspace.' : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces';
+  const commands = current?.role && view === 'files' && !trash;
+
   return <section className="page drive-page">
-    <header className="page-header">
-      <div><h1>{pageTitle}</h1><p className="page-desc">{trash || parent || view === 'settings' ? current?.name : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces'}</p>
-        {current && <span className="drive-storage"><meter min={0} max={current.quota || 1} value={current.used} aria-label="Storage used" />{bytes(current.used)} of {bytes(current.quota)} used</span>}
+    <header className="ky-page-head drive-head">
+      <div>
+        <nav className="drive-crumbs" aria-label="Folder path">
+          {crumbs.map(c => <span key={c.key} className="drive-crumb"><button className="btn-link" onClick={c.go}>{c.name}</button><ChevronRight size={18} aria-hidden="true" /></span>)}
+          <h1 className="ky-page-title">{pageTitle}</h1>
+        </nav>
+        <p className="ky-page-lede">{lede}</p>
       </div>
-      <div className="page-actions">
-        {canEdit && view === 'files' && !trash && <button className="drive-upload-button" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>}
-        {identityURL && <a className="btn btn-secondary btn-sm" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity<ExternalLink size={14} aria-hidden="true" /></a>}
-      </div>
+      {(canEdit && commands || identityURL) && <div className="page-actions">
+        {identityURL && <a className="btn btn-secondary" href={identityURL} target="_blank" rel="noreferrer">Manage people &amp; groups in KyIdentity<ExternalLink size={14} aria-hidden="true" /></a>}
+        {canEdit && commands && <>
+          <button className="btn-secondary drive-upload-button" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>
+          <Menu label="New" trigger="primary" items={newMenu} />
+        </>}
+      </div>}
+      {canEdit && <>
+        <input ref={uploadInput} type="file" multiple hidden aria-label="Choose files to upload" onChange={e => { const chosen = Array.from(e.target.files ?? []); e.target.value = ''; upload({ dirs: [], files: chosen.map(file => ({ dirs: [], file })) }); }} />
+        <input ref={folderInput} type="file" hidden aria-label="Choose folder to upload" {...{ webkitdirectory: '' }} onChange={e => { const chosen = e.target.files; if (chosen) { const tree = fromFolderInput(chosen); e.target.value = ''; upload(tree); } }} />
+      </>}
     </header>
     {message && !newDocument && !newFolderOpen && <div style={{ marginBottom: '1rem' }}><Alert>{message}</Alert></div>}
-    {current && <Search workspaces={workspaces} onOpen={openHit} />}
     {current ? <>
       {canManage && <div className="tabs" role="tablist" aria-label="Workspace views">
         <button role="tab" className="tab" aria-selected={view === 'files'} onClick={() => setView('files')}>Files</button>
         <button role="tab" className="tab" aria-selected={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button>
       </div>}
+      {view === 'files' && <div className="drive-commands">
+        <Search workspaces={workspaces} onOpen={openHit} />
+        {current.role && !trash && <button className="btn-ghost" onClick={enterTrash}><Trash2 size={16} aria-hidden="true" />Trash</button>}
+        {current.role && <button className="icon-btn" aria-label="Refresh" title="Refresh" disabled={busy} onClick={() => void run(reload)}><RefreshCw size={16} aria-hidden="true" /></button>}
+      </div>}
       {view === 'files' && (current.role ? filesPanel : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>No access to files yet</h3><p>Assign a group permission in Workspace settings to open this workspace's files.</p></div>)}
       {view === 'settings' && settingsPanel}
     </> : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>Your shared drive</h3><p>Create a workspace and assign a KyIdentity group to start.</p></div>}
-
-    {admin && <details className="drive-admin">
-      <summary>Administration</summary>
-      <div className="drive-admin-panels">
-      <details className="panel"><summary>Operations &amp; audit <small>Directory, editor and backup status</small></summary><div className="details-body">
-        <p role="status" className="hint">{operations || 'Loading…'}</p>
-        {audit.length > 0 && <ul className="drive-audit" aria-label="Recent audit events">{audit.map((e, i) => <li key={i}><When value={e.created} /><code>{e.action}</code></li>)}</ul>}
-      </div></details>
-      <details className="panel drive-create-workspace"><summary>Create shared workspace</summary><div className="details-body">
-        <form className="form-row" onSubmit={e => { e.preventDefault(); void run(async () => { try { await change('/api/drive/workspaces', 'POST', { name: newName, quota: quota * 1048576 }); } catch (err) { throw err instanceof HttpError && err.status === 409 ? new Error(`A shared workspace named “${newName.trim()}” already exists.`) : err; } setNewName(''); }); }}>
-          <label className="field grow">Name<input required value={newName} onChange={e => setNewName(e.target.value)} /></label>
-          <label className="field">Quota (MiB)<input type="number" min="1" required value={quota} onChange={e => setQuota(e.target.valueAsNumber)} /></label>
-          <button disabled={busy}>Create workspace</button>
-        </form>
-      </div></details>
-      <Leavers workspaces={workspaces} onDone={() => void reload().catch(() => {})} />
-      </div>
-    </details>}
 
     {newDocument && <Dialog title={`New ${documentKinds.find(([k]) => k === newDocument.kind)?.[1].slice(4) ?? newDocument.kind}`} description={`Create in ${current?.name ?? 'this workspace'}`} onClose={() => setNewDocument(null)}
       onSubmit={() => {

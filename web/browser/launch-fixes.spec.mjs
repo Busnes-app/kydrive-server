@@ -31,7 +31,7 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   await page.reload();
   const choose = async (body, button) => {
     const chooser = page.waitForEvent('filechooser');
-    await page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true }).click();
+    await page.locator('.ky-page-head').getByRole('button', { name: 'Upload files', exact: true }).click();
     await (await chooser).setFiles({ name, mimeType: 'text/csv', buffer: Buffer.from(body) });
     const ask = page.getByRole('dialog', { name: `${name} already exists` });
     await expect(ask).toBeVisible();
@@ -94,8 +94,9 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
 test('the trash has a title and the Account page has the app layout', async ({ page }, testInfo) => {
   await signIn(page);
   await page.reload();
-  await expect(page.locator('.app-user-name')).toBeVisible();
-  await expect(page.locator('.app-user-role')).toBeVisible();
+  await expect(page.locator('.ky-user-name')).toBeVisible();
+  await expect(page.locator('.ky-user-role')).toBeVisible();
+  await expect(page.locator('.ky-user-name')).not.toHaveText(await page.locator('.ky-user-role').textContent());
   for (const control of await page.locator('.icon-btn').all()) {
     const box = await control.boundingBox();
     expect(box.width).toBeGreaterThanOrEqual(40);
@@ -138,17 +139,21 @@ test('the trash has a title and the Account page has the app layout', async ({ p
       if (index + 1 < await destinations.count()) await page.keyboard.press('Tab');
     }
   }
-  const admin = page.locator('details.drive-admin');
-  await expect(admin).not.toHaveAttribute('open');
-  await expect(page.locator('.page-header').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();
-  const task = await page.locator('.drive-files-panel').boundingBox();
-  const management = await admin.boundingBox();
-  expect(task.y + task.height).toBeLessThanOrEqual(management.y);
-  await admin.locator(':scope > summary').focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByText('Create shared workspace', { exact: true })).toBeVisible();
-  await page.keyboard.press('Enter');
-  await expect(admin).not.toHaveAttribute('open');
+  // Administration lives in the sidebar, not under the file list.
+  await expect(page.locator('.ky-page-head').getByRole('button', { name: 'Upload files', exact: true })).toBeVisible();
+  await expect(page.locator('.ky-page-head').getByRole('button', { name: 'New', exact: true })).not.toHaveClass(/btn-secondary/);
+  await expect(page.locator('details.drive-admin')).toHaveCount(0);
+  const admin = page.getByRole('navigation', { name: 'Administration' });
+  for (const name of ['Workspaces', 'Activity', 'Leavers', 'Backup & recovery', 'Settings']) await expect(admin.getByRole('button', { name, exact: true })).toHaveCount(1);
+  // One accent-filled primary at a time: "+ New" in the page head.
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  expect(await page.locator('main button:visible').evaluateAll((buttons, a) => {
+    const probe = document.body.appendChild(document.createElement('i'));
+    probe.style.color = a;
+    const fill = getComputedStyle(probe).color;
+    probe.remove();
+    return buttons.filter(b => getComputedStyle(b).backgroundColor === fill).length;
+  }, accent)).toBe(1);
   await page.getByRole('button', { name: 'Trash', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Trash', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Back to files' }).click();
@@ -193,11 +198,12 @@ test('a second shared workspace with the same name is refused', async ({ page },
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name, quota: 1048576 } })).status()).toBe(201);
   expect((await page.request.post('/api/drive/workspaces', { headers, data: { name: name.toLowerCase(), quota: 1048576 } })).status()).toBe(409);
   await page.reload();
-  await page.getByText('Administration', { exact: true }).click();
-  await page.getByText('Create shared workspace').click();
-  await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page.getByText(`A shared workspace named “${name}” already exists.`)).toBeVisible();
+  await page.getByRole('navigation', { name: 'Administration' }).getByRole('button', { name: 'Workspaces', exact: true }).click();
+  await page.getByRole('button', { name: 'New workspace', exact: true }).click();
+  const create = page.getByRole('dialog', { name: 'New shared workspace' });
+  await create.getByLabel('Name', { exact: true }).fill(name);
+  await create.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(create.getByText(`A shared workspace named “${name}” already exists.`)).toBeVisible();
   const all = await (await page.request.get('/api/drive/workspaces?admin=true')).json();
   expect(all.filter(w => w.name.toLowerCase() === name.toLowerCase())).toHaveLength(1);
 });
@@ -219,7 +225,7 @@ test('an administrator renames a shared workspace and deletes it once empty', as
   await expect(panel.getByText(`A shared workspace named “${taken.toLowerCase()}” already exists.`)).toBeVisible();
   await panel.getByLabel('Name').fill(fixed);
   await panel.getByRole('button', { name: 'Rename' }).click();
-  await expect(page.getByRole('button', { name: fixed, exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: fixed, exact: true })).toBeVisible();
 
   await panel.getByRole('button', { name: 'Delete workspace' }).click();
   const ask = page.getByRole('dialog', { name: `Delete ${fixed}?` });
@@ -227,7 +233,7 @@ test('an administrator renames a shared workspace and deletes it once empty', as
   if (testInfo.project.name === 'light-1280') await page.screenshot({ path: testInfo.outputPath('delete-workspace.png') });
   await ask.getByRole('button', { name: 'Delete workspace' }).click();
   await expect(ask).toHaveCount(0);
-  await expect(page.getByRole('button', { name: fixed, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: fixed, exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 1, name: 'My files' })).toBeVisible();
   const all = await (await page.request.get('/api/drive/workspaces?admin=true')).json();
   expect(all.some(w => w.id === id)).toBe(false);
@@ -243,9 +249,44 @@ test('the sidebar footer opens the MIT licence with the running version', async 
   await link.click();
   const dialog = page.getByRole('dialog');
   const { version } = await (await page.request.get('/api/auth/me')).json();
-  await expect(dialog.locator('.license-version-badge')).toHaveText(`v${version}`);
+  await expect(dialog.locator('.ky-about-version')).toHaveText(`v${version}`);
   await expect(dialog.getByRole('textbox', { name: 'MIT License' })).toHaveValue(/^MIT License\n\nCopyright \(c\) \d{4} Busnes\.app/);
   await page.screenshot({ path: testInfo.outputPath('license.png') });
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toHaveCSS('border-top-style', 'solid');
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toBeHidden();
+  await expect(link).toBeFocused();
+});
+
+test('checked rows move to the trash together, and the list shows when files changed', async ({ page }, testInfo) => {
+  const headers = await signIn(page);
+  await page.request.post('/api/drive/personal-workspace', { headers, data: {} });
+  const mine = (await (await page.request.get('/api/drive/workspaces')).json()).find(w => w.kind === 'personal');
+  const tag = testInfo.project.name.replace(/\W/g, '');
+  const names = [`bulk-a-${tag}.txt`, `bulk-b-${tag}.txt`];
+  for (const n of names) expect((await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${n}&parent=&revision=0`, { headers, data: 'x' })).status()).toBe(201);
+  await page.reload();
+  if (testInfo.project.use.viewport.width >= 720) {
+    await expect(page.getByRole('columnheader', { name: 'Modified' })).toBeVisible();
+    const size = page.getByRole('columnheader', { name: 'Size' });
+    await expect(size).toHaveCSS('text-align', 'right');
+    // The row menu has no border and appears on hover.
+    const row = page.getByRole('row', { name: new RegExp(names[0]) });
+    await expect(row.locator('.col-modified time')).toHaveAttribute('title', /\d/);
+    const more = row.getByRole('button', { name: `Actions for ${names[0]}` });
+    await page.mouse.move(0, 0);
+    await expect(more).toHaveCSS('opacity', '0');
+    await row.hover();
+    await expect(more).toHaveCSS('opacity', '1');
+    await expect(more).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  }
+  for (const n of names) await page.getByLabel(`Select ${n}`, { exact: true }).check();
+  const bar = page.getByRole('region', { name: 'Selected items' });
+  await expect(bar).toContainText('2 selected');
+  await bar.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(bar).toHaveCount(0);
+  for (const n of names) await expect(page.getByRole('link', { name: n })).toHaveCount(0);
+  const trashed = (await (await page.request.get(`/api/drive/workspaces/${mine.id}/files?trash=true`)).json()).map(f => f.name);
+  for (const n of names) expect(trashed).toContain(n);
+  expect(await fits(page)).toBe(true);
 });

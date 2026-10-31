@@ -39,8 +39,7 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
       onDone();
     } catch (e) { setMessage(e instanceof Error ? e.message : 'Handover failed'); } finally { setBusy(false); }
   }
-  return <details className="panel"><summary>Leavers <small>{leavers.length ? `${leavers.length} removed ${leavers.length === 1 ? 'account holds' : 'accounts hold'} files` : 'Hand over a removed account’s files'}</small></summary><div className="details-body">
-    <p className="hint">Move a removed account's My files to a shared workspace or a colleague. File names stay hidden here.</p>
+  return <section className="panel" aria-label="Leavers">
     {message && <p role="status" className="alert alert-info">{message}</p>}
     {leavers.length === 0 ? <p className="empty-note">No removed accounts hold files.</p> : <ul className="item-list" aria-label="Leavers">{leavers.map(l => <li key={l.workspace}>
       <div className="item-main"><span className="item-title">{l.name} <span className="badge">{l.status}</span></span><span className="item-meta">{bytes(l.size)} · {l.items} items</span></div>
@@ -53,5 +52,6 @@ export function Leavers({ workspaces, onDone }: { workspaces: Workspace[]; onDon
         <button className="btn-secondary" disabled={busy || !targets[l.workspace]}>Hand over</button>
       </form>
     </li>)}</ul>}
-  </div>{confirmNode}</details>;
+    {confirmNode}
+  </section>;
 }

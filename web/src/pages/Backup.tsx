@@ -371,13 +371,16 @@ export const Backup: React.FC = () => {
   return (
     <div className="dr-page">
       {confirmNode}
-      <div className="dr-header">
-        <h1>Backup &amp; recovery</h1>
+      <header className="ky-page-head">
+        <div>
+          <h1 className="ky-page-title">Backup &amp; recovery</h1>
+          <p className="ky-page-lede">Sealed backups of this drive, their local copies and the KyRecovery pairing.</p>
+        </div>
         <button type="button" className="btn-secondary" onClick={fetchStatus} disabled={loadingStatus}>
-          <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} aria-hidden="true" />
           <span>Refresh</span>
         </button>
-      </div>
+      </header>
 
       {statusError && <Alert kind="error">{statusError}</Alert>}
       {status?.recovery_key_error && <Alert kind="error">{status.recovery_key_error}</Alert>}

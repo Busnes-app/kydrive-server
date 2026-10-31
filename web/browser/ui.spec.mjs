@@ -21,15 +21,18 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   });
   // Online navigation must refresh the shell rather than pinning a previous deploy.
   await page.reload();
-  await expect(page.getByRole('link', { name: 'Continue with Single Sign On', exact: true })).toHaveAttribute('href', '/api/sso/kysignon/login');
-  await expect(page.getByText(/Single Sign[- ]?On/i)).toHaveCount(1);
-  await page.getByPlaceholder('admin', { exact: true }).fill('admin');
+  // SSO is not configured here: no divider and no SSO button.
+  await expect(page.getByText(/Single Sign[- ]?On/i)).toHaveCount(0);
+  await expect(page.locator('.ky-auth-divider')).toHaveCount(0);
+  await expect(page.locator('.ky-auth-check')).not.toHaveCSS('border-top-style', 'solid');
+  await page.getByLabel('Username', { exact: true }).fill('admin');
   await page.locator('input[type=password]').fill('IncorrectPassword123!');
-  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true }).locator('svg')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.locator('form').locator('..')).toContainText(/invalid|incorrect|failed/i);
   await fits(page);
   await page.locator('input[type=password]').fill('BrowserUpdated456!');
-  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   const nav = page.getByRole('navigation', { name: 'Primary' });
   await expect(nav).toBeVisible();
   await expect(page.getByRole('heading', { name: 'My files', exact: true })).toBeVisible();
@@ -39,57 +42,53 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
     await p.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Appearance' }).click();
     await expect(p.getByRole('heading', { name: 'Appearance', level: 1 })).toBeVisible();
   };
-  const pick = (p, name) => p.getByRole('radio', { name: new RegExp(`^${name}\\b`) });
+  const pick = (p, pair, mode) => p.getByRole('group', { name: pair, exact: true }).getByRole('radio', { name: new RegExp(`^${mode}`) });
   await expect(page.getByLabel('Color theme')).toHaveCount(0);
   await appearance(page);
   await fits(page);
-  await pick(page, 'Paper Clean').check();
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 250, 252)');
-  await pick(page, 'Busnes Dark').check();
+  await pick(page, 'Nord', 'Light').check();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(236, 239, 244)');
+  // Only the selected segment carries the check mark.
+  await expect(page.locator('.appearance-mode svg')).toHaveCount(1);
+  await expect(page.locator('.appearance-mode').filter({ has: page.locator('input:checked') }).locator('svg')).toHaveCount(1);
+  await pick(page, 'Busnes', 'Dark').check();
   await page.reload();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
   const other = await context.newPage();
   await other.goto('/');
   await appearance(other);
-  await pick(other, 'Busnes Light').check();
+  await pick(other, 'Busnes', 'Light').check();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
   await other.close();
   await appearance(page);
-  await pick(page, 'Match system').check();
+  await pick(page, 'Busnes', 'Match system').check();
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 35, 38)');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 246, 240)');
   await page.emulateMedia({ colorScheme: testInfo.project.use.colorScheme });
-  await pick(page, 'Ocean').check();
+  await pick(page, 'Ocean', 'Dark').check();
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 27, 36)');
+  // One radio group across the pairs: the arrow key moves on to the next pair.
   await page.keyboard.press('ArrowRight');
-  await expect(pick(page, 'Coffee')).toBeChecked();
-  // The shipped themes' previews show the colours the app applies (not the catalog's).
-  for (const id of ['patina', 'cyber', 'nord', 'paper', 'oled']) {
-    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
-    const [preview, applied] = await page.evaluate((v) => {
-      const read = (el, names) => names.map((n) => getComputedStyle(el).getPropertyValue(n).trim().toLowerCase());
-      return [read(document.querySelector(`[data-ky-preview="${v}"]`), ['--ky-preview-bg', '--ky-preview-sidebar', '--ky-preview-ink', '--ky-preview-accent']),
-        read(document.documentElement, ['--bg', '--panel', '--ink-strong', '--accent'])];
-    }, id);
-    expect(preview, id).toEqual(applied);
-  }
-  await pick(page, 'Match system').check();
+  await expect(pick(page, 'Forest', 'Match system')).toBeChecked();
+  await pick(page, 'Busnes', 'Match system').check();
   await nav.getByRole('button').first().focus();
   await page.keyboard.press('Tab');
   await expect(nav.getByRole('button').nth(1)).toBeFocused();
   await expect(nav.getByRole('button').nth(1)).toHaveCSS('outline-style', 'solid');
-  await nav.getByRole('button', { name: 'Settings & DB' }).click();
-  await expect(nav.getByRole('button', { name: 'Settings & DB' })).toHaveAttribute('aria-current', 'page');
+  const adminNav = page.getByRole('navigation', { name: 'Administration' });
+  await adminNav.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(adminNav.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await fits(page);
   await expect(page.getByRole('button', { name: 'Pair Device' })).toHaveCount(0);
   // New suite palettes must keep status text readable against both app surfaces.
   await nav.getByRole('button', { name: 'Appearance' }).click();
   const statusContrast = [];
-  for (const id of ['light-matter', 'tropics', 'white-cliffs', 'sun', 'polished-ky', 'sky']) {
-    await page.locator(`.ky-appearance-radio[value="${id}"]`).check();
+  for (const id of ['light-matter', 'white-cliffs', 'forest-light', 'polished-ky', 'paper']) {
+    await page.locator(`input[name="kydrive-theme"][value="${id}"]`).check();
     statusContrast.push(...await page.evaluate((theme) => {
       const root = document.documentElement;
       const probe = document.createElement('span');
@@ -112,7 +111,7 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   }
   await page.mouse.move(0, 0);
   await testInfo.attach('status-contrast', { body: JSON.stringify(statusContrast, null, 2), contentType: 'application/json' });
-  await page.screenshot({ path: testInfo.outputPath('sky-status-contrast.png'), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('light-status-contrast.png'), fullPage: true });
   for (const row of statusContrast) expect(row.ratio, JSON.stringify(row)).toBeGreaterThanOrEqual(4.5);
   await page.evaluate(() => fetch('/browser-regression-uncached'));
   const cachedDynamic = await page.evaluate(async () => {

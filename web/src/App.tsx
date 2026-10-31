@@ -10,6 +10,7 @@ import { ChangePassword } from './pages/ChangePassword';
 import { Backup } from './pages/Backup';
 
 import { Settings } from './pages/Settings';
+import { AdminActivity, AdminLeavers, AdminWorkspaces } from './pages/Admin';
 import { Appearance } from './pages/Appearance';
 import { TwoFactor } from './pages/TwoFactor';
 import { AppPasswords } from './pages/AppPasswords';
@@ -20,6 +21,7 @@ import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
 import './ky-ui/appearance.css';
 import './ky-ui/appearance-themes.css';
+import './ky-ui/shell.css';
 import { secureFetch } from './api';
 import { Alert } from './components/Alert';
 
@@ -132,6 +134,7 @@ export const App: React.FC = () => {
       {notice && <div className="app-notice" style={{ maxWidth: '24rem', margin: '1.5rem auto 0' }}><Alert tone="info">{notice}</Alert></div>}
       <Login
         appName={typeof settings?.app_name === 'string' ? settings.app_name : 'KyDrive'}
+        sso={settings?.sso_enabled === true}
         onSuccess={(u) => {
           setNotice('');
           if (isDriveUser(u)) setUser(u);
@@ -170,11 +173,14 @@ export const App: React.FC = () => {
         {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
         {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
         
+        {activeTab === 'workspaces' && user.role === 'admin' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={id => { setSelectedWorkspace(id); setActiveTab('drive'); }} />}
+        {activeTab === 'activity' && user.role === 'admin' && <AdminActivity />}
+        {activeTab === 'leavers' && user.role === 'admin' && <AdminLeavers workspaces={workspaces} />}
         {activeTab === 'backup' && <Backup />}
         {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
         {activeTab === 'appearance' && <Appearance />}
         {activeTab === 'account' && <section className="page page-narrow account-page">
-          <header className="page-header"><div><h1>Account</h1><p className="page-desc">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
+          <header className="ky-page-head"><div><h1 className="ky-page-title">Account</h1><p className="ky-page-lede">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
           <div className="stack">
             <section className="account-preferences" aria-labelledby="file-preferences-title">
               <h2 id="file-preferences-title">Files</h2>

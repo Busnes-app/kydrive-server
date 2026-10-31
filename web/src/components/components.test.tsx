@@ -7,6 +7,7 @@ import { relative, toDate } from './time';
 import { When } from './When';
 import { Versions } from '../pages/drive/Versions';
 import { FileIcon } from '../pages/drive/FileIcon';
+import { Login } from '../pages/Login';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -135,4 +136,38 @@ describe('AppHeader licence footer', () => {
     fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
     expect(within(screen.getByRole('dialog')).queryByText(/^v\d/)).toBeNull();
   });
+
+  it('closes with the outlined Close button, not an icon', () => {
+    header('1.2.3');
+    fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }).className).toBe('ky-about-close');
+  });
+
+  it('shows the name over the role, never the same word twice, with a labelled Sign out', () => {
+    render(<AppHeader appName="KyDrive" activeTab="drive" onTabChange={() => {}}
+      user={{ display_name: 'Administrator', username: 'admin', role: 'admin' }} onLogout={() => {}}
+      workspaces={[{ id: 'p', name: 'My files', role: 'manager', kind: 'personal', quota: 1024, used: 512, trash_days: 0, keep_versions: 0, editors_share: false }]}
+      selectedWorkspace="p" onWorkspaceSelect={() => {}} />);
+    expect(document.querySelector('.ky-user-name')?.textContent).toBe('admin');
+    expect(document.querySelector('.ky-user-role')?.textContent).toBe('Administrator');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Administration' })).toBeTruthy();
+    expect(screen.getByRole('meter', { name: 'Storage used' })).toBeTruthy();
+    expect(screen.getByText('512 B of 1.0 KiB used')).toBeTruthy();
+  });
 });
+
+describe('Login', () => {
+  it('shows Single Sign On under a divider only when it is configured', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    const { container, rerender } = render(<Login appName="KyDrive" onSuccess={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Sign in' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Continue with Single Sign On' })).toBeNull();
+    expect(container.querySelector('.ky-auth-divider')).toBeNull();
+    rerender(<Login appName="KyDrive" sso onSuccess={() => {}} />);
+    expect(screen.getByRole('link', { name: 'Continue with Single Sign On' }).getAttribute('href')).toBe('/api/sso/kysignon/login');
+    expect(container.querySelector('.ky-auth-divider')).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+});
+

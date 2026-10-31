@@ -1,32 +1,43 @@
 import { readChoice, saveChoice, watchChoice } from './ky-ui/theme';
-import { SYSTEM_THEME, THEME_CATALOG, applyThemeVariables, findTheme } from './ky-ui/themes';
-import type { CatalogTheme, SystemTheme } from './ky-ui/themes';
+import { SYSTEM_THEME, THEME_PAIRS, applyThemeVariables, findPair, findTheme } from './ky-ui/themes';
 
-// Busnes.app defaults; explicit choices are local to this browser and saved by catalog ID.
-export type Theme = CatalogTheme | SystemTheme;
-export const THEME_OPTIONS: readonly Theme[] = [SYSTEM_THEME, ...THEME_CATALOG];
-// Themes KyDrive shipped before the suite catalog keep the exact values in styles/theme.css.
-export const LEGACY = new Set(['patina', 'cyber', 'nord', 'paper', 'oled']);
+// Busnes.app defaults; explicit choices are local to this browser. The saved value is `system`
+// (Busnes following the OS), a pair ID (that pair following the OS) or a half ID (a fixed mode).
+// Aliases resolve to their half; removed IDs fall back to `system`.
 const KEY = 'ky_theme';
+export const THEME_CHOICES = THEME_PAIRS.map(pair => ({
+  pair,
+  choices: [
+    { mode: 'system', label: 'Match system', value: pair.id === 'busnes-pair' ? SYSTEM_THEME.id : pair.id },
+    { mode: 'light', label: 'Light', value: pair.light },
+    { mode: 'dark', label: 'Dark', value: pair.dark },
+  ],
+}));
 
-export function storedTheme(): Theme {
-  try { return findTheme(readChoice(KEY)) ?? SYSTEM_THEME; }
-  catch { return SYSTEM_THEME; }
+export function storedTheme(): string {
+  let saved: unknown;
+  try { saved = readChoice(KEY); } catch { saved = null; }
+  return findPair(saved)?.id ?? findTheme(saved)?.id ?? SYSTEM_THEME.id;
 }
-let current = storedTheme();
+
 const media = window.matchMedia?.('(prefers-color-scheme: dark)');
-export function applyTheme(theme: Theme, persist = false) {
-  current = theme;
+export function applyTheme(theme: string, persist = false) {
+  const option = findTheme(theme);
+  if (!option) return;
   const root = document.documentElement;
-  const named = applyThemeVariables(LEGACY.has(theme.id) ? SYSTEM_THEME.id : theme.id, root);
-  const resolved = theme.id === 'system' ? (media?.matches ? 'busnes-dark' : 'busnes-light') : theme.id;
+  const dark = media?.matches ?? false;
+  const resolved = option.id === 'system' ? (dark ? 'busnes-dark' : 'busnes-light') : option.id;
+  const named = applyThemeVariables(resolved, root);
+  const scheme = named ?? (resolved === 'busnes-light' ? 'light' : 'dark');
   root.dataset.theme = resolved;
-  root.style.colorScheme = named ?? (theme.scheme === 'system' ? (media?.matches ? 'dark' : 'light') : theme.scheme);
-  // The base :root warning is a dark-theme amber; light named themes take Paper's.
+  root.dataset.scheme = scheme;
+  root.style.colorScheme = scheme;
+  // The base warning is a dark-theme amber; light named themes take a darker one.
   if (named === 'light') root.style.setProperty('--warning', '#a16207');
   else root.style.removeProperty('--warning');
-  if (persist) try { saveChoice(KEY, theme.id); } catch { /* Storage is optional. */ }
+  if (persist) try { saveChoice(KEY, findPair(theme)?.id ?? option.id); } catch { /* Storage is optional. */ }
   window.dispatchEvent(new Event('ky:theme'));
 }
-applyTheme(current);
-watchChoice(KEY, () => applyTheme(storedTheme()), () => current.id !== 'system');
+
+applyTheme(storedTheme());
+watchChoice(KEY, () => applyTheme(storedTheme()));
