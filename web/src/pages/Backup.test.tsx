@@ -33,6 +33,37 @@ afterEach(() => {
 });
 
 describe('Backup', () => {
+  const copy = (n: number) => ({ name: `c${n}.capsule`, size_bytes: 10, created_at: '2026-10-30T12:00:00Z' });
+  const tone = (text: string) => screen.getByText(text, { selector: '.ky-status' }).getAttribute('data-ky-status');
+
+  it('rates local copies against the number kept', async () => {
+    for (const [copies, text, want] of [[0, '0 of 3', 'danger'], [2, '2 of 3', 'warning'], [3, '3 of 3', 'success']] as const) {
+      mockStatus({ ...PAIRED, local_dir: '/backups', local_keep: 3, local_copies: Array.from({ length: copies }, (_, i) => copy(i)) });
+      render(<Backup />);
+      await screen.findByText(text, { selector: '.ky-status' });
+      expect(tone(text)).toBe(want);
+      cleanup();
+    }
+    mockStatus({ ...PAIRED, interval_sec: 86400 });
+    render(<Backup />);
+    await screen.findByText('KY_BACKUP_DIR not set');
+    expect(tone('Off')).toBeNull();
+  });
+
+  it('shows a running schedule as success and waiting or off as neutral', async () => {
+    for (const [body, text, want] of [
+      [PAIRED, 'Daily', 'success'],
+      [{ ...PAIRED, key_pinned: false, paired: false }, 'Daily', null],
+      [{ ...PAIRED, interval_sec: 0, local_dir: '/backups', local_keep: 3, local_copies: [] }, 'Off', null],
+    ] as const) {
+      mockStatus(body);
+      render(<Backup />);
+      await screen.findByText(text, { selector: '.ky-status' });
+      expect(tone(text)).toBe(want);
+      cleanup();
+    }
+  });
+
   it('warns when a key is pinned but there is no destination', async () => {
     mockStatus({ key_pinned: true, paired: false, interval_sec: 0, recovery_key_id: 'k1', threshold: 2, total_shares: 3, database_driver: 'sqlite', members: [] });
     render(<Backup />);
