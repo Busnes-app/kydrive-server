@@ -29,7 +29,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"app_url":          s.config.Server.AppURL,
 		"theme":            theme,
 		"captcha_provider": s.config.Captcha.Provider,
-		"sso_enabled":      s.config.SSO.Enabled,
+		// KY_SSO_ENABLED defaults on: report SSO only when a provider is set up, so an
+		// unconfigured install shows no SSO button that would answer 502.
+		"sso_enabled": s.config.SSO.Enabled && s.config.SSO.KySignOnIssuer != "" && s.config.SSO.KySignOnClientID != "",
 	}
 
 	user, _, err := s.sessions.AuthenticateRequest(r)
