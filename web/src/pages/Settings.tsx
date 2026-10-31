@@ -87,7 +87,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }
     <section className="page">
       <header className="ky-page-head">
         <div>
-          <h1 className="ky-page-title">Settings</h1>
+          <h1 className="ky-page-title">Server settings</h1>
           <p className="ky-page-lede">Drive-wide rules for trash, guest links and linked computers.</p>
         </div>
       </header>

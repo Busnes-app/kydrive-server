@@ -91,19 +91,23 @@ test('uploading an existing name offers Replace, Keep both and Cancel', async ({
   expect(await fits(page)).toBe(true);
 });
 
-test('the trash has a title and the Account page has the app layout', async ({ page }, testInfo) => {
+test('the trash has a title and the Settings sections have the app layout', async ({ page }, testInfo) => {
   await signIn(page);
   await page.reload();
   await expect(page.locator('.ky-user-name')).not.toHaveText(await page.locator('.ky-user-role').textContent());
   if (testInfo.project.use.viewport.width < 720) {
-    // Phones: brand and an icon-only Sign out in the header; no name or role; licence at the page end.
+    // Phones: brand, then icon-only Settings and Sign out in the header; no name or role; licence at the page end.
+    await expect(page.locator('.ky-mobile-head').getByRole('link', { name: 'Settings' })).toBeVisible();
     await expect(page.locator('.ky-mobile-head').getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(page.locator('.ky-user-name')).toBeHidden();
     await expect(page.locator('.ky-content-foot .ky-license-link')).toBeVisible();
   } else {
     await expect(page.locator('.ky-user-name')).toBeVisible();
     await expect(page.locator('.ky-user-role')).toBeVisible();
-    await expect(page.locator('.ky-mobile-signout')).toBeHidden();
+    await expect(page.locator('.ky-mobile-actions')).toBeHidden();
+    // The footer's account buttons are icons, named by aria-label: the words "Sign out" never show.
+    await expect(page.locator('.ky-user-actions > .ky-icon-button')).toHaveCount(2);
+    await expect(page.locator('.ky-sidebar-foot')).not.toContainText('Sign out');
     // Content starts the shared inset from the sidebar (x=272).
     expect((await page.locator('.ky-page-head').boundingBox()).x).toBe(272);
   }
@@ -154,7 +158,8 @@ test('the trash has a title and the Account page has the app layout', async ({ p
   await expect(page.locator('details.drive-admin')).toHaveCount(0);
   const admin = page.getByRole('navigation', { name: 'Primary' });
   await expect(admin.locator('.ky-nav-section', { hasText: 'Administration' })).toHaveCount(1);
-  for (const name of ['Workspaces', 'Activity', 'Leavers', 'Backup & recovery', 'Settings']) await expect(admin.getByRole('button', { name, exact: true })).toHaveCount(1);
+  for (const name of ['Workspaces', 'Activity', 'Leavers', 'Backup & recovery', 'Server settings']) await expect(admin.getByRole('button', { name, exact: true })).toHaveCount(1);
+  for (const name of ['Account', 'Appearance', 'Settings']) await expect(admin.getByRole('button', { name, exact: true })).toHaveCount(0);
   // One accent-filled primary at a time: "+ New" in the page head.
   const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   expect(await page.locator('main button:visible').evaluateAll((buttons, a) => {
@@ -168,15 +173,20 @@ test('the trash has a title and the Account page has the app layout', async ({ p
   await expect(page.getByRole('heading', { name: 'Trash', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Back to files' }).click();
 
-  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Account' }).click();
-  await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
-  await expect(page.getByLabel('Open files in a new tab')).toBeVisible();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+  const sections = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(sections.getByRole('link')).toHaveText(['Account', 'Phones & apps', 'Appearance', 'Files']);
+  await expect(sections.getByRole('link', { name: 'Account' })).toHaveAttribute('aria-current', 'page');
   const card = page.getByRole('region', { name: 'Two-factor authentication' });
   const main = await page.locator('.ky-content').boundingBox();
   const box = await card.boundingBox();
   // Cards sit inside the page's padding, not flush against the sidebar.
   expect(box.x - main.x).toBeGreaterThanOrEqual(testInfo.project.use.viewport.width < 720 ? 12 : 32);
+  await sections.getByRole('link', { name: 'Files' }).click();
+  await expect(page.getByLabel('Open files in a new tab')).toBeVisible();
   // Each Kind choice is one card with the radio beside its label, not stacked above it.
+  await sections.getByRole('link', { name: 'Phones & apps' }).click();
   for (const label of [/^File manager or office app/, /^AI agent/]) {
     const choice = page.locator('label.choice').filter({ hasText: label });
     const radio = await choice.locator('input[type=radio]').boundingBox();

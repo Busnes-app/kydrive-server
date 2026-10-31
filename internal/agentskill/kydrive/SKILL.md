@@ -11,7 +11,7 @@ replace, rename, move and trash them. Tools: `list_folder`, `search_files`, `get
 `read_file`, `write_file`, `create_folder`, `move_item`, `move_to_trash`.
 
 If these tools are missing, the kydrive MCP server is not configured. Tell the user to create an
-AI agent token under App passwords on their KyDrive Account page and follow the setup shown
+AI agent token under App passwords in KyDrive's Settings → Phones & apps and follow the setup shown
 there. If the server answers 401, the token was revoked: by the user, or automatically after 90
 days unused. The user creates a new one the same way.
 

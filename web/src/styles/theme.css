@@ -119,6 +119,9 @@ summary:focus-visible { outline-offset: 4px; }
 .page-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .ky-page-head > .page-actions { flex: 0 1 auto; }
 .settings-panel { max-width: 52rem; }
+/* A Settings section's description, between the tabs and its first panel. */
+.settings-intro { max-width: 65ch; margin: 0 0 1rem; color: var(--ink); }
+.stack > .settings-intro { margin: 0; }
 .stack { display: grid; gap: 1.25rem; }
 .stack > * { min-width: 0; }
 

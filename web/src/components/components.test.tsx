@@ -147,15 +147,21 @@ describe('AppHeader licence footer', () => {
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }).className).toBe('ky-about-close');
   });
 
-  it('shows the name over the role, never the same word twice, with a labelled Sign out', () => {
+  it('shows the name over the role, never the same word twice, with icon-only Settings and Sign out', () => {
     render(<AppHeader appName="KyDrive" activeTab="drive" onTabChange={() => {}}
       user={{ display_name: 'Administrator', username: 'admin', role: 'admin' }} onLogout={() => {}}
       workspaces={[{ id: 'p', name: 'My files', role: 'manager', kind: 'personal', quota: 1024, used: 512, trash_days: 0, keep_versions: 0, editors_share: false }]}
       selectedWorkspace="p" onWorkspaceSelect={() => {}} />);
     expect(document.querySelector('.ky-user-name')?.textContent).toBe('admin');
     expect(document.querySelector('.ky-user-role')?.textContent).toBe('Administrator');
-    // The sidebar's labelled Sign out, and the phone header's icon-only one.
-    expect(screen.getAllByRole('button', { name: 'Sign out' }).map(b => b.className)).toEqual(['ky-mobile-signout', 'ky-user-signout']);
+    // The phone header's and the sidebar's: icon buttons named by aria-label and title, no visible words.
+    for (const name of ['Settings', 'Sign out']) {
+      const buttons = screen.getAllByRole(name === 'Settings' ? 'link' : 'button', { name });
+      expect(buttons.map(b => [b.className, b.getAttribute('title'), b.textContent])).toEqual([['ky-icon-button', name, ''], ['ky-icon-button', name, '']]);
+    }
+    expect(document.querySelectorAll('.ky-mobile-actions > .ky-icon-button, .ky-user-actions > .ky-icon-button')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Server settings' })).toBeTruthy();
+    expect(screen.queryByText('Preferences')).toBeNull();
     expect(screen.getByText('Administration', { selector: '.ky-nav-section' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Administration' })).toBeNull();
     // Storage sits in the sidebar foot, and closes the page on phones.

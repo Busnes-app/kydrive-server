@@ -4,7 +4,7 @@ import type { SuiteApp } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
 import { SharedView } from './pages/drive/SharedView';
-import { SHARED_WITH_ME, editorURL } from './pages/drive/client';
+import { SHARED_WITH_ME, change, editorURL, list, workspace } from './pages/drive/client';
 import { openPendingLink, takeLinkFromURL } from './pages/drive/links';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
@@ -12,10 +12,7 @@ import { Backup } from './pages/Backup';
 
 import { Settings } from './pages/Settings';
 import { AdminActivity, AdminLeavers, AdminWorkspaces } from './pages/Admin';
-import { Appearance } from './pages/Appearance';
-import { TwoFactor } from './pages/TwoFactor';
-import { AppPasswords } from './pages/AppPasswords';
-import { Devices } from './pages/Devices';
+import { PersonalSettings, SETTINGS_SECTIONS } from './pages/PersonalSettings';
 import { LinkDevice, hasLinkRequest, takeLinkRequestFromURL } from './pages/LinkDevice';
 import './styles/theme.css';
 import './ky-ui/tokens.css';
@@ -26,19 +23,40 @@ import './ky-ui/shell.css';
 import { secureFetch } from './api';
 import { Alert } from './components/Alert';
 
+const ADMIN_TABS = ['workspaces', 'activity', 'leavers', 'backup', 'server-settings'];
+const SETTINGS_TABS = SETTINGS_SECTIONS.map(s => `settings/${s.id}`);
+// Pages that became Settings sections keep their old addresses.
+const MOVED: Record<string, string> = { settings: 'settings/account', account: 'settings/account', appearance: 'settings/appearance' };
+
+// Each page is a hash URL (#/drive, #/settings/devices), so links and Back work. Only on `/`:
+// shared links (/l#…) and device linking (/link) own theirs.
+function hashTab(): string | null {
+  if (location.pathname !== '/') return null;
+  const id = location.hash.replace(/^#\/?/, '');
+  if (MOVED[id]) history.replaceState(null, '', `#/${MOVED[id]}`);
+  return MOVED[id] ?? (id || null);
+}
+const go = (tab: string) => { location.hash = `/${tab}`; };
+
 export const App: React.FC = () => {
   const [user, setUser] = useState<DriveUser | null>(null);
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState<boolean>(true);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState('');
-  const [activeTab, setActiveTab] = useState<string>('drive');
+  const [chosenTab, setChosenTab] = useState<string | null>(hashTab);
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
   const [openInNewTab, setOpenInNewTab] = useState(true);
   const [version, setVersion] = useState('');
   const [apps, setApps] = useState<SuiteApp[]>([]);
   // Idempotent, so StrictMode's second call is harmless.
   const [linking, setLinking] = useState(() => { takeLinkRequestFromURL(); return hasLinkRequest(); });
+
+  useEffect(() => {
+    const sync = () => setChosenTab(hashTab());
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
 
   useEffect(() => {
     takeLinkFromURL();
@@ -76,7 +94,7 @@ export const App: React.FC = () => {
     void openPendingLink().then(item => {
       if (!item) return;
       if (item.kind === 'file') { location.assign(editorURL(item)); return; }
-      setSelectedWorkspace(SHARED_WITH_ME); setActiveTab('drive');
+      setSelectedWorkspace(SHARED_WITH_ME); go('drive');
     }, () => setNotice('This link is no longer valid. Ask whoever sent it for a new one.'));
   }, [user]);
 
@@ -89,6 +107,20 @@ export const App: React.FC = () => {
     }).catch(() => {});
     return () => { live = false; setApps([]); };
   }, [user?.id, user?.must_change_password]);
+
+  // The sidebar's workspaces come from the drive's own load. A page opened by its address
+  // (Settings, an admin page) loads them here, so My files and the storage meter still show.
+  const listFor = user && !user.must_change_password && !linking && (chosenTab ?? 'drive') !== 'drive' ? user.role : null;
+  useEffect(() => {
+    if (!listFor || workspaces.length) return;
+    let live = true;
+    void (async () => {
+      await change('/api/drive/personal-workspace', 'POST', {});
+      const listed = await list(`/api/drive/workspaces${listFor === 'admin' ? '?admin=true' : ''}`, workspace);
+      if (live) setWorkspaces(listed);
+    })().catch(() => {});
+    return () => { live = false; };
+  }, [listFor, workspaces.length]);
 
   // /api/settings returns more fields once authenticated, so re-read it after login.
   const loadSettings = async () => {
@@ -125,7 +157,8 @@ export const App: React.FC = () => {
     setUser(null);
     setWorkspaces([]);
     setSelectedWorkspace('');
-    setActiveTab('drive');
+    history.replaceState(null, '', '/');
+    setChosenTab(null);
     setSettings(null);
     setOpenInNewTab(true);
     setVersion('');
@@ -167,40 +200,37 @@ export const App: React.FC = () => {
 
   if (linking) return <LinkDevice onClose={() => setLinking(false)} />;
 
+  const admin = user.role === 'admin';
+  const tabs = ['drive', ...(admin ? ADMIN_TABS : []), ...SETTINGS_TABS];
+  // An unknown address lands on the drive, or Settings' first section.
+  const fallback = chosenTab?.startsWith('settings/') ? SETTINGS_TABS[0] : 'drive';
+  const activeTab = chosenTab && tabs.includes(chosenTab) ? chosenTab : fallback;
+  const openWorkspace = (id: string) => { setSelectedWorkspace(id); go('drive'); };
+
   return (
     <AppHeader
       appName={typeof settings?.app_name === 'string' ? settings.app_name : 'KyDrive'}
       activeTab={activeTab}
-      onTabChange={(tab) => setActiveTab(tab)}
+      onTabChange={go}
       user={user}
       workspaces={workspaces}
       selectedWorkspace={selectedWorkspace}
-      onWorkspaceSelect={id => { setSelectedWorkspace(id); setActiveTab('drive'); }}
+      onWorkspaceSelect={openWorkspace}
       onLogout={handleLogout}
       version={version}
       apps={apps}
     >
       {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
-      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={user.role === 'admin'} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
+      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={admin} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
 
-      {activeTab === 'workspaces' && user.role === 'admin' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={id => { setSelectedWorkspace(id); setActiveTab('drive'); }} />}
-      {activeTab === 'activity' && user.role === 'admin' && <AdminActivity />}
-      {activeTab === 'leavers' && user.role === 'admin' && <AdminLeavers workspaces={workspaces} />}
+      {activeTab === 'workspaces' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={openWorkspace} />}
+      {activeTab === 'activity' && <AdminActivity />}
+      {activeTab === 'leavers' && <AdminLeavers workspaces={workspaces} />}
       {activeTab === 'backup' && <Backup />}
-      {activeTab === 'settings' && <Settings settings={settings} onOpenAppearance={() => setActiveTab('appearance')} />}
-      {activeTab === 'appearance' && <Appearance />}
-      {activeTab === 'account' && <section className="page page-narrow account-page">
-        <header className="ky-page-head"><div><h1 className="ky-page-title">Account</h1><p className="ky-page-lede">Signed in as {user.display_name || user.username} ({user.username}). Sign-in security, app passwords, AI agents and linked computers.</p></div></header>
-        <div className="stack">
-          <section className="account-preferences" aria-labelledby="file-preferences-title">
-            <h2 id="file-preferences-title">Files</h2>
-            <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => void changeOpenInNewTab(e.target.checked)} />Open files in a new tab</label>
-          </section>
-          <TwoFactor enabled={user.totp_enabled === true} local={user.sso_provider === 'local'} onChange={(enabled) => setUser({ ...user, totp_enabled: enabled })} />
-          <AppPasswords />
-          <Devices />
-        </div>
-      </section>}
+      {activeTab === 'server-settings' && <Settings settings={settings} onOpenAppearance={() => go('settings/appearance')} />}
+      {activeTab.startsWith('settings/') && <PersonalSettings section={activeTab.slice('settings/'.length)} user={user}
+        onTwoFactorChange={(enabled) => setUser({ ...user, totp_enabled: enabled })}
+        openInNewTab={openInNewTab} onOpenInNewTabChange={value => void changeOpenInNewTab(value)} />}
     </AppHeader>
   );
 };

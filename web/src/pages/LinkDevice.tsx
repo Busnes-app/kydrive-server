@@ -63,7 +63,7 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
           <dt>Request from</dt><dd className="font-mono">{ip || 'unknown'}</dd>
           <dt>Time</dt><dd>{at.toLocaleString()}</dd>
         </dl>
-        <p className="alert alert-warn">The computer can open and change every file you can, until you revoke it on your Account page. Approve only if you just chose Link in the KyDrive app on this computer.</p>
+        <p className="alert alert-warn">The computer can open and change every file you can, until you revoke it in Settings → Phones & apps. Approve only if you just chose Link in the KyDrive app on this computer.</p>
         <div className="button-row">
           <button type="button" className="btn-secondary" onClick={cancel} disabled={sent && !error}>Cancel</button>
           <button type="button" onClick={() => void approve()} disabled={sent}>Approve</button>

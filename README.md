@@ -28,7 +28,7 @@ When a directory user is also named `admin`, reserve a distinct name for the loc
 ## Connect an AI agent
 
 AI agents such as OpenClaw and Hermes Agent reach your files over MCP at
-`https://<your host>/mcp`. On the **Account** page, under **App passwords**, choose **AI agent**
+`https://<your host>/mcp`. In **Settings** → **Phones & apps**, under **App passwords**, choose **AI agent**
 and an access level:
 
 - **Read only** (the default): the agent lists, searches (by name and by content) and reads your files, including the

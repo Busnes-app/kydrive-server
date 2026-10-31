@@ -12,7 +12,7 @@ The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GI
 
 ## WebDAV
 
-Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** on their Account page; it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account stops all of its app passwords on the next request.
+Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** in Settings → Phones & apps (the gear beside Sign out); it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account stops all of its app passwords on the next request.
 
 - **Windows:** File Explorer → *Map network drive* → `https://drive.example.com/dav/`. Windows refuses downloads over 50 MB by default; raise `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes` (up to `4294967295`) and restart the WebClient service.
 - **macOS:** Finder → *Go* → *Connect to Server* → `https://drive.example.com/dav/`.
@@ -28,8 +28,8 @@ WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating pro
 
 The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive-desktop), in development) keeps chosen workspaces in a local folder. Choosing **Link** in the app opens KyDrive in the browser; after the usual sign-in, the user approves the computer by name. The app receives its own credential, kept in the computer's keychain, and never sees a password. Shared with me is not synced yet.
 
-- **Account → Computers** lists linked computers with their last use, at most 20 per user. **Revoke** stops one at once. Its dialog offers *Also remove KyDrive files from this computer*: the files go the next time the computer reaches KyDrive, edits that never uploaded move to an `Unsynced` folder, and a computer offline for 30 days is never told. It is not a guaranteed remote wipe.
-- **Settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
+- **Settings → Phones & apps → Computers** lists linked computers with their last use, at most 20 per user. **Revoke** stops one at once. Its dialog offers *Also remove KyDrive files from this computer*: the files go the next time the computer reaches KyDrive, edits that never uploaded move to an `Unsynced` folder, and a computer offline for 30 days is never told. It is not a guaranteed remote wipe.
+- **Server settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
 - A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
 
 ## AI agents
