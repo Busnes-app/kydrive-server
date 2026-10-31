@@ -1,14 +1,14 @@
 import { secureFetch } from '../../api';
 
 export type Workspace = { id: string; name: string; role: string; kind: 'personal' | 'shared'; quota: number; used: number; trash_days: number; keep_versions: number; editors_share: boolean };
-export type DriveFile = { id: string; name: string; parent: string; revision: number; size: number; trashed: boolean };
+export type DriveFile = { id: string; name: string; parent: string; revision: number; size: number; trashed: boolean; modified?: string };
 export type Folder = { id: string; name: string; parent: string; trashed: boolean };
 export type Grant = { group_id: string; name: string; role: string };
 export type Group = { id: string; display_name: string };
 export type Version = { revision: number; size: number; created: string };
 export function record(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
 export function workspace(v: unknown): v is Workspace { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.role === 'string' && (v.kind === 'personal' || v.kind === 'shared') && typeof v.quota === 'number' && typeof v.used === 'number' && typeof v.trash_days === 'number' && typeof v.keep_versions === 'number' && typeof v.editors_share === 'boolean'; }
-export function file(v: unknown): v is DriveFile { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.trashed === 'boolean'; }
+export function file(v: unknown): v is DriveFile { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.trashed === 'boolean' && (v.modified === undefined || typeof v.modified === 'string'); }
 export function folder(v: unknown): v is Folder { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.parent === 'string' && typeof v.trashed === 'boolean'; }
 export function grant(v: unknown): v is Grant { return record(v) && typeof v.group_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
 export function group(v: unknown): v is Group { return record(v) && typeof v.id === 'string' && typeof v.display_name === 'string'; }

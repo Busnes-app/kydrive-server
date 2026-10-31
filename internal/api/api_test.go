@@ -957,3 +957,30 @@ func TestMFAChallengeRejectedAfterPasswordRotation(t *testing.T) {
 		t.Fatalf("stale challenge: got %d, want 403", got)
 	}
 }
+
+// The login page shows the SSO button only for a configured provider, never for the bare default.
+func TestPublicSettingsReportSSOOnlyWhenConfigured(t *testing.T) {
+	srv, _, cfg := setupTestServer(t)
+	configured := func() any {
+		t.Helper()
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/settings", nil))
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body["sso_enabled"]
+	}
+	cfg.SSO.Enabled, cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID = true, "", ""
+	if got := configured(); got != false {
+		t.Fatalf("enabled without a provider: sso_enabled = %v, want false", got)
+	}
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID = "https://sso.example.com", "kydrive"
+	if got := configured(); got != true {
+		t.Fatalf("configured provider: sso_enabled = %v, want true", got)
+	}
+	cfg.SSO.Enabled = false
+	if got := configured(); got != false {
+		t.Fatalf("disabled provider: sso_enabled = %v, want false", got)
+	}
+}

@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Menu } from './Menu';
-import { AppHeader } from './AppHeader';
+import { AppHeader, StorageBar } from './AppHeader';
+import { auditLabel } from '../pages/auditLabels';
 import { useConfirm } from './Dialog';
 import { relative, toDate } from './time';
 import { When } from './When';
 import { Versions } from '../pages/drive/Versions';
 import { FileIcon } from '../pages/drive/FileIcon';
+import { Login } from '../pages/Login';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -119,7 +121,10 @@ describe('AppHeader licence footer', () => {
 
   it('opens the MIT licence with the server version', () => {
     header('1.2.3');
-    fireEvent.click(screen.getByRole('button', { name: `© ${new Date().getFullYear()} · MIT License` }));
+    // The sidebar foot and, on phones, the end of the page carry the same licence line.
+    const licences = screen.getAllByRole('button', { name: `© ${new Date().getFullYear()} · MIT License` });
+    expect(licences.map(b => b.closest('footer')?.className ?? '')).toEqual(['', 'ky-content-foot']);
+    fireEvent.click(licences[0]);
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('KyDrive')).toBeTruthy();
     expect(within(dialog).getByText('v1.2.3')).toBeTruthy();
@@ -132,7 +137,68 @@ describe('AppHeader licence footer', () => {
 
   it('shows no badge without a version', () => {
     header();
-    fireEvent.click(screen.getByRole('button', { name: /MIT License/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /MIT License/ })[0]);
     expect(within(screen.getByRole('dialog')).queryByText(/^v\d/)).toBeNull();
   });
+
+  it('closes with the outlined Close button, not an icon', () => {
+    header('1.2.3');
+    fireEvent.click(screen.getAllByRole('button', { name: /MIT License/ })[0]);
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }).className).toBe('ky-about-close');
+  });
+
+  it('shows the name over the role, never the same word twice, with a labelled Sign out', () => {
+    render(<AppHeader appName="KyDrive" activeTab="drive" onTabChange={() => {}}
+      user={{ display_name: 'Administrator', username: 'admin', role: 'admin' }} onLogout={() => {}}
+      workspaces={[{ id: 'p', name: 'My files', role: 'manager', kind: 'personal', quota: 1024, used: 512, trash_days: 0, keep_versions: 0, editors_share: false }]}
+      selectedWorkspace="p" onWorkspaceSelect={() => {}} />);
+    expect(document.querySelector('.ky-user-name')?.textContent).toBe('admin');
+    expect(document.querySelector('.ky-user-role')?.textContent).toBe('Administrator');
+    // The sidebar's labelled Sign out, and the phone header's icon-only one.
+    expect(screen.getAllByRole('button', { name: 'Sign out' }).map(b => b.className)).toEqual(['ky-mobile-signout', 'ky-user-signout']);
+    expect(screen.getByText('Administration', { selector: '.ky-nav-section' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Administration' })).toBeNull();
+    // Storage sits in the sidebar foot, and closes the page on phones.
+    expect(screen.getAllByRole('meter', { name: 'Storage used' })).toHaveLength(2);
+    expect(screen.getAllByText('512 B of 1.0 KiB used')).toHaveLength(2);
+  });
 });
+
+describe('Login', () => {
+  it('shows single sign-on under a divider only when it is configured', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    const { container, rerender } = render(<Login appName="KyDrive" onSuccess={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Sign in' }).querySelector('svg')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Continue with single sign-on' })).toBeNull();
+    expect(container.querySelector('.ky-auth-divider')).toBeNull();
+    rerender(<Login appName="KyDrive" sso onSuccess={() => {}} />);
+    expect(screen.getByRole('link', { name: 'Continue with single sign-on' }).getAttribute('href')).toBe('/api/sso/kysignon/login');
+    expect(container.querySelector('.ky-auth-divider')).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('StorageBar', () => {
+  it('fills to the share used, so near-empty storage reads as empty', () => {
+    const fill = (used: number, quota: number) => {
+      const { container } = render(<StorageBar used={used} quota={quota} />);
+      const width = (container.querySelector('.storage-bar-fill') as HTMLElement).style.width;
+      cleanup();
+      return width;
+    };
+    expect(fill(506, 10 * 1024 ** 3)).toMatch(/^0\.0+\d*%$|^4\.\d+e-\d+%$/);
+    expect(parseFloat(fill(506, 10 * 1024 ** 3))).toBeLessThan(0.001);
+    expect(fill(512, 1024)).toBe('50%');
+    expect(fill(2048, 1024)).toBe('100%');
+    expect(fill(5, 0)).toBe('0%');
+  });
+});
+
+describe('auditLabel', () => {
+  it('names known actions in sentence case and falls back to the ID', () => {
+    expect(auditLabel('file.version_created')).toBe('New version uploaded');
+    expect(auditLabel('upload.started')).toBe('Upload started');
+    expect(auditLabel('scim.group.replaced')).toBe('Scim group replaced');
+  });
+});
+

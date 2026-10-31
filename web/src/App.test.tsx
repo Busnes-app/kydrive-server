@@ -23,17 +23,17 @@ it('keeps the session on a failed sign-out and resets the shell on success', asy
   vi.stubGlobal('fetch', fetcher);
   render(<App />);
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Settings & DB' }));
-  expect(screen.getByRole('button', { name: 'Settings & DB' }).getAttribute('aria-current')).toBe('page');
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  expect(screen.getByRole('button', { name: 'Settings' }).getAttribute('aria-current')).toBe('page');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
   expect((await screen.findByText(/Sign out failed/)).closest('[role="alert"]')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Sign out' })[0]).toBeTruthy();
 
   const settingsReads = fetcher.mock.calls.filter(([u]) => String(u) === '/api/settings').length;
-  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
   fireEvent.click(await screen.findByRole('button', { name: 'Fake sign in' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Settings & DB' }).getAttribute('aria-current')).toBeNull());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Settings' }).getAttribute('aria-current')).toBeNull());
   expect(screen.queryByText(/Sign out failed/)).toBeNull();
   expect(fetcher.mock.calls.filter(([u]) => String(u) === '/api/settings').length).toBeGreaterThan(settingsReads);
 });
@@ -47,7 +47,7 @@ it('keeps the session when sign-out cannot reach the server', async () => {
     return Response.json(url.startsWith('/api/drive/workspaces') ? [] : {});
   }));
   render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Sign out' }))[0]);
   expect((await screen.findByRole('alert')).textContent).toContain('Sign out failed');
   expect(screen.queryByRole('button', { name: 'Fake sign in' })).toBeNull();
 });

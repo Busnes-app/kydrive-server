@@ -371,13 +371,16 @@ export const Backup: React.FC = () => {
   return (
     <div className="dr-page">
       {confirmNode}
-      <div className="dr-header">
-        <h1>Backup &amp; recovery</h1>
+      <header className="ky-page-head">
+        <div>
+          <h1 className="ky-page-title">Backup &amp; recovery</h1>
+          <p className="ky-page-lede">Sealed backups of this drive, their local copies and the KyRecovery pairing.</p>
+        </div>
         <button type="button" className="btn-secondary" onClick={fetchStatus} disabled={loadingStatus}>
-          <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} aria-hidden="true" />
           <span>Refresh</span>
         </button>
-      </div>
+      </header>
 
       {statusError && <Alert kind="error">{statusError}</Alert>}
       {status?.recovery_key_error && <Alert kind="error">{status.recovery_key_error}</Alert>}
@@ -431,10 +434,11 @@ export const Backup: React.FC = () => {
         <div className="dr-fact">
           <div className="dr-fact-label">
             <span>Schedule</span>
-            <Badge tone={scheduleOn ? 'success' : 'danger'}>{every(status?.interval_sec)}</Badge>
+            <Badge tone={scheduleOn && canBackUp ? 'success' : scheduleOn ? 'muted' : 'danger'}>{every(status?.interval_sec)}</Badge>
           </div>
-          <div className="dr-fact-value">{scheduleOn && status?.next_run_at ? `Next ${when(status.next_run_at)}` : 'Manual only'}</div>
-          <div className="dr-fact-note">Counts from the last attempt, successful or not</div>
+          {/* A schedule cannot run without a pinned key and a destination: say what it waits for. */}
+          <div className="dr-fact-value">{!scheduleOn ? 'Manual only' : !keyPinned ? 'Waiting for recovery key' : !canBackUp ? 'Waiting for a destination' : status?.next_run_at ? `Next ${when(status.next_run_at)}` : 'Manual only'}</div>
+          <div className="dr-fact-note">{scheduleOn && !canBackUp ? 'No scheduled run until backups can be made' : 'Counts from the last attempt, successful or not'}</div>
         </div>
       </div>
 

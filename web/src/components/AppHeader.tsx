@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogOut, Settings as SettingsIcon, Folder, Archive, UserRound, Users, Palette } from 'lucide-react';
-import { SHARED_WITH_ME } from '../pages/drive/client';
+import { Activity, Archive, Folder, FolderCog, LogOut, Palette, Settings as SettingsIcon, UserMinus, UserRound, Users } from 'lucide-react';
+import { SHARED_WITH_ME, bytes } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
-import { Dialog } from './Dialog';
 import mitLicenseText from '../mit.txt?raw';
 
 function revealNavItem(row: HTMLElement, item: Element) {
@@ -23,97 +22,121 @@ interface AppHeaderProps {
   selectedWorkspace: string;
   onWorkspaceSelect: (id: string) => void;
   version?: string;
+  children?: React.ReactNode;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version }) => {
-  const navsRef = useRef<HTMLDivElement>(null);
-  const [licenseOpen, setLicenseOpen] = useState(false);
+type NavItem = { id: string; label: string; icon: typeof Folder };
+const accountItems: NavItem[] = [
+  { id: 'account', label: 'Account', icon: UserRound },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+];
+const adminItems: NavItem[] = [
+  { id: 'workspaces', label: 'Workspaces', icon: FolderCog },
+  { id: 'activity', label: 'Activity', icon: Activity },
+  { id: 'leavers', label: 'Leavers', icon: UserMinus },
+  { id: 'backup', label: 'Backup & recovery', icon: Archive },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon },
+];
+
+// A light track with an accent fill sized to the share used, so near-empty storage reads as empty.
+export function StorageBar({ used, quota }: { used: number; quota: number }) {
+  const percent = quota > 0 ? Math.min(100, Math.max(0, used / quota * 100)) : 0;
+  return <div className="storage-bar" role="meter" aria-label="Storage used" aria-valuemin={0} aria-valuemax={quota} aria-valuenow={Math.min(used, quota)} aria-valuetext={`${bytes(used)} of ${bytes(quota)} used`}>
+    <span className="storage-bar-fill" style={{ width: `${percent}%` }} />
+  </div>;
+}
+
+/** The ky-ui app frame: sidebar (a sticky header on phones) around the page in `children`. */
+export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabChange, user, onLogout, workspaces, selectedWorkspace, onWorkspaceSelect, version, children }) => {
+  const navRef = useRef<HTMLElement>(null);
+  const aboutRef = useRef<HTMLDialogElement>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const year = new Date().getFullYear();
-  // Phones scroll both navigations as one row: keep the current destination in view. Only the
+  const name = appName || 'KyDrive';
+  const role = user.role === 'admin' ? 'Administrator' : 'Everyday account';
+  // Never the same word twice: a display name that repeats the role shows the username instead.
+  const shownName = user.display_name && user.display_name.toLowerCase() !== role.toLowerCase() ? user.display_name : user.username;
+  const personal = workspaces.find(w => w.kind === 'personal');
+  // Phones scroll the navigation as one row: keep the current destination in view. Only the
   // row scrolls; scrollIntoView would also move the page.
   useEffect(() => {
-    const row = navsRef.current, cur = row?.querySelector('[aria-current="page"]');
+    const row = navRef.current, cur = row?.querySelector('[aria-current="page"]');
     if (row && cur) revealNavItem(row, cur);
   }, [activeTab, selectedWorkspace]);
+  useEffect(() => {
+    const d = aboutRef.current;
+    // jsdom lacks showModal; opening by attribute keeps the dialog reachable in unit tests.
+    if (aboutOpen && d && !d.open) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
+  }, [aboutOpen]);
 
-  const navItems = [
-    { id: 'account', label: 'Account', icon: UserRound },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    ...(user.role === 'admin' ? [
-      { id: 'backup', label: 'Recovery', icon: Archive },
-      { id: 'settings', label: 'Settings & DB', icon: SettingsIcon },
-    ] : []),
-  ];
+  // Closing the native dialog first returns focus to the licence button.
+  const closeAbout = () => { const d = aboutRef.current; if (d?.open && typeof d.close === 'function') d.close(); setAboutOpen(false); };
+  const item = (id: string, label: string, Icon: typeof Folder, current: boolean, onClick: () => void) =>
+    <button key={id} type="button" className="ky-nav-item" aria-current={current ? 'page' : undefined} onClick={onClick}>
+      <Icon aria-hidden="true" /><span>{label}</span>
+    </button>;
+  const drive = (id: string) => activeTab === 'drive' && selectedWorkspace === id;
+  const tabs = (items: NavItem[]) => items.map(({ id, label, icon }) => item(id, label, icon, activeTab === id, () => onTabChange(id)));
+  const storage = personal && personal.quota > 0 && <div className="sidebar-storage">
+    <StorageBar used={personal.used} quota={personal.quota} />
+    <p>{bytes(personal.used)} of {bytes(personal.quota)} used</p>
+  </div>;
+  const licence = <button type="button" className="ky-license-link" onClick={() => setAboutOpen(true)}>
+    &copy; {year} &middot; MIT License
+  </button>;
 
   return (
-    <>
-      <header className="app-header">
-        <div className="app-brand">
-            <img src="/app-icon.png" width={28} height={28} alt="" />
-            <span>{appName || 'Busnes.app'}</span>
+    <div className="ky-app">
+      <header className="ky-sidebar">
+        <div className="ky-mobile-head">
+          <div className="ky-brand">
+            <img className="brand-mark" src="/app-icon.png" width={28} height={28} alt="" />
+            <span>{name}</span>
           </div>
-
-          <div ref={navsRef} className="app-navs" onFocusCapture={e => {
-            if (e.target instanceof HTMLButtonElement) revealNavItem(e.currentTarget, e.target);
-          }}>
-          <nav className="app-nav" aria-label="Workspaces">
-            <h2 className="app-nav-label">Personal</h2>
-            {workspaces.filter(w => w.kind === 'personal').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>My files</span></button>)}
-            <button className={activeTab === 'drive' && selectedWorkspace === SHARED_WITH_ME ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === SHARED_WITH_ME ? 'page' : undefined} onClick={() => onWorkspaceSelect(SHARED_WITH_ME)}><Users size={16} /><span>Shared with me</span></button>
-            <h2 className="app-nav-label">Shared workspaces</h2>
-            {workspaces.filter(w => w.kind === 'shared').map(workspace => <button key={workspace.id} className={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'ky-nav-item active' : 'ky-nav-item'} aria-current={activeTab === 'drive' && selectedWorkspace === workspace.id ? 'page' : undefined} onClick={() => onWorkspaceSelect(workspace.id)}><Folder size={16} /><span>{workspace.name}</span></button>)}
-            {!workspaces.some(w => w.kind === 'shared') && <p className="app-nav-empty">No shared workspaces assigned</p>}
-          </nav>
-          <nav className="app-nav" aria-label="Primary">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  className={active ? 'ky-nav-item active' : 'ky-nav-item'}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-          </div>
-        <p className="app-nav-hint">Scroll for more destinations</p>
-        <div className="app-header-actions">
-          {user && (
-            <div className="app-user">
-              <div className="app-user-copy">
-                <div className="app-user-name">{user.display_name || user.username}</div>
-                <div className="app-user-role">{user.role === 'admin' ? 'Administrator' : user.username}</div>
-              </div>
-              <button
-                className="icon-btn app-logout"
-                onClick={onLogout}
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut size={16} aria-hidden="true" />
-              </button>
+          <button type="button" className="ky-mobile-signout" aria-label="Sign out" onClick={onLogout}><LogOut aria-hidden="true" /></button>
+        </div>
+        <nav ref={navRef} className="ky-nav" aria-label="Primary" onFocusCapture={e => {
+          if (e.target instanceof HTMLButtonElement) revealNavItem(e.currentTarget, e.target);
+        }}>
+          <p className="ky-nav-section">Personal</p>
+          {workspaces.filter(w => w.kind === 'personal').map(w => item(w.id, 'My files', Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
+          {item(SHARED_WITH_ME, 'Shared with me', Users, drive(SHARED_WITH_ME), () => onWorkspaceSelect(SHARED_WITH_ME))}
+          {workspaces.some(w => w.kind === 'shared') && <p className="ky-nav-section">Shared workspaces</p>}
+          {workspaces.filter(w => w.kind === 'shared').map(w => item(w.id, w.name, Folder, drive(w.id), () => onWorkspaceSelect(w.id)))}
+          <p className="ky-nav-section">Preferences</p>
+          {tabs(accountItems)}
+          {user.role === 'admin' && <><p className="ky-nav-section">Administration</p>{tabs(adminItems)}</>}
+        </nav>
+        <div className="ky-sidebar-foot">
+          {storage}
+          <div className="ky-user">
+            <div className="ky-user-copy">
+              <p className="ky-user-name">{shownName}</p>
+              <p className="ky-user-role">{role}</p>
             </div>
-          )}
-          <div className="sidebar-footer">
-            <p>
-              <button type="button" className="license-link" onClick={() => setLicenseOpen(true)}>
-                &copy; {year} &middot; MIT License
-              </button>
-            </p>
+            <button type="button" className="ky-user-signout" onClick={onLogout}>
+              <LogOut aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
           </div>
+          <footer>{licence}</footer>
         </div>
       </header>
-      {licenseOpen && <Dialog wide className="license-window" onClose={() => setLicenseOpen(false)}
-        title={<span className="license-title-main"><span className="license-app-name">{appName || 'KyDrive'}</span>{version && <span className="license-version-badge">v{version}</span>}</span>}
-        description={<><span className="license-title-sub">Developed by Busnes.app</span><span className="license-title-sub">&copy; {year} &middot; Licensed under the MIT License</span></>}>
-        <textarea className="license-text" readOnly aria-label="MIT License" value={mitLicenseText} />
-      </Dialog>}
-    </>
+      <main className="ky-content">
+        {children}
+        <footer className="ky-content-foot">{storage}{licence}</footer>
+      </main>
+      {aboutOpen && <dialog ref={aboutRef} className="ky-about" aria-label={`About ${name}`} {...{ closedby: 'any' }} onClose={() => setAboutOpen(false)}>
+        <div className="ky-about-head">
+          <div>
+            <h2 className="ky-about-name">{name}{version && <span className="ky-about-version">v{version}</span>}</h2>
+            <p className="ky-about-meta">Developed by Busnes.app</p>
+            <p className="ky-about-meta">&copy; {year} &middot; Licensed under the MIT License</p>
+          </div>
+          <button type="button" className="ky-about-close" onClick={closeAbout}>Close</button>
+        </div>
+        <textarea className="ky-about-license" readOnly aria-label="MIT License" value={mitLicenseText} />
+      </dialog>}
+    </div>
   );
 };

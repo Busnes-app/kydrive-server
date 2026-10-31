@@ -7,13 +7,15 @@ import { ThemeSwitcher } from '../components/ThemeSwitcher';
 interface LoginProps {
   onSuccess: (user: any) => void;
   appName: string;
+  /** Only a configured provider gets the divider and SSO button. */
+  sso?: boolean;
 }
 
 interface MFAChallenge {
   mfa_token: string;
 }
 
-export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
+export const Login: React.FC<LoginProps> = ({ onSuccess, appName, sso }) => {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [captchaToken, setCaptchaToken] = useState<string>('');
@@ -96,59 +98,58 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, appName }) => {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-theme"><ThemeSwitcher /></div>
-      <main className="auth-center">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <img src="/app-icon.png" width={56} height={56} alt="" style={{ borderRadius: 14 }} />
-            <h1>{appName || 'Busnes.app'}</h1>
-            <p>Organization files and shared workspaces</p>
-          </div>
-          <div className="panel">
-            {mfaChallenge ? (
-              <form onSubmit={handleMFASubmit}>
-                <div>
-                  <h2 style={{ fontSize: '1.1rem', marginBottom: '.25rem' }}>Two-Factor Verification</h2>
-                  <p className="hint">{isRecoveryCode ? 'Enter one of your single-use recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}</p>
-                </div>
-                {error && <Alert>{error}</Alert>}
-                <label className="field">
-                  {isRecoveryCode ? 'Recovery Code' : 'Authenticator Code'}
-                  <input type="text" className="otp-input" autoFocus autoComplete="one-time-code" inputMode={isRecoveryCode ? 'text' : 'numeric'} value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} placeholder={isRecoveryCode ? 'XXXX-XXXX' : '123456'} required />
-                </label>
-                <button type="submit" disabled={loading}>{loading ? 'Verifying...' : 'Verify & Sign In'}</button>
-                <button type="button" className="btn-ghost btn-sm" onClick={() => setIsRecoveryCode(!isRecoveryCode)}>
-                  {isRecoveryCode ? 'Use Authenticator App' : 'Use a Recovery Code'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleLogin}>
-                {error && <Alert>{error}</Alert>}
-                <label className="field">
-                  Username
-                  <input type="text" autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" required />
-                </label>
-                <label className="field">
-                  Password
-                  <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required />
-                </label>
-                <CaptchaWidget key={captchaRound} onToken={setCaptchaToken} />
-                <button type="submit" disabled={loading}>
-                  <LogIn size={16} aria-hidden="true" />
-                  <span>{loading ? 'Signing in...' : 'Sign In'}</span>
-                </button>
-                <div className="auth-divider">
-                  <a href="/api/sso/kysignon/login" className="btn btn-secondary">
-                    <Key size={16} aria-hidden="true" />
-                    <span>Continue with Single Sign On</span>
-                  </a>
-                </div>
-              </form>
-            )}
-          </div>
+    <main className="ky-auth">
+      <div className="ky-auth-theme"><ThemeSwitcher /></div>
+      <div className="ky-auth-body">
+        <div className="ky-auth-brand">
+          <img className="brand-mark" src="/app-icon.png" width={56} height={56} alt="" />
+          <h1>{appName || 'KyDrive'}</h1>
+          <p>Organization files and shared workspaces.</p>
         </div>
-      </main>
-    </div>
+        <div className="ky-auth-card">
+          {mfaChallenge ? (
+            <form onSubmit={handleMFASubmit}>
+              <div>
+                <h2>Two-step verification</h2>
+                <p className="hint">{isRecoveryCode ? 'Enter one of your single-use recovery codes.' : 'Enter the 6-digit code from your authenticator app.'}</p>
+              </div>
+              {error && <Alert>{error}</Alert>}
+              <div className="ky-auth-field">
+                <label htmlFor="mfa-code">{isRecoveryCode ? 'Recovery code' : 'Authenticator code'}</label>
+                <input id="mfa-code" type="text" className="otp-input" autoFocus autoComplete="one-time-code" inputMode={isRecoveryCode ? 'text' : 'numeric'} value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} placeholder={isRecoveryCode ? 'XXXX-XXXX' : '123456'} required />
+              </div>
+              <button type="submit" className="ky-auth-submit" disabled={loading}>{loading ? 'Verifying…' : 'Verify and sign in'}</button>
+              <button type="button" className="ky-auth-link" onClick={() => setIsRecoveryCode(!isRecoveryCode)}>
+                {isRecoveryCode ? 'Use your authenticator app' : 'Use a recovery code'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin}>
+              {error && <Alert>{error}</Alert>}
+              <div className="ky-auth-field">
+                <label htmlFor="login-username">Username</label>
+                <input id="login-username" type="text" autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} required />
+              </div>
+              <div className="ky-auth-field">
+                <label htmlFor="login-password">Password</label>
+                <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </div>
+              <CaptchaWidget key={captchaRound} onToken={setCaptchaToken} />
+              <button type="submit" className="ky-auth-submit" disabled={loading}>
+                <LogIn aria-hidden="true" />
+                <span>{loading ? 'Signing in…' : 'Sign in'}</span>
+              </button>
+              {sso && <>
+                <hr className="ky-auth-divider" />
+                <a href="/api/sso/kysignon/login" className="ky-auth-sso">
+                  <Key aria-hidden="true" />
+                  <span>Continue with single sign-on</span>
+                </a>
+              </>}
+            </form>
+          )}
+        </div>
+      </div>
+    </main>
   );
 };
