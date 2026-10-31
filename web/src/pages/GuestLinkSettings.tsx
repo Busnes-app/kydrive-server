@@ -38,7 +38,7 @@ export function GuestLinkSettings() {
   };
 
   return <section className="panel" aria-labelledby="guest-settings-heading">
-    <div className="panel-header"><div><Link2 size={20} aria-hidden="true" /><h2 id="guest-settings-heading" className="panel-title" style={{ margin: 0 }}>Guest links</h2></div><span className={policy?.enabled ? 'badge badge-success' : 'badge'}>{policy?.enabled ? 'On' : 'Off'}</span></div>
+    <div className="panel-header"><div><Link2 size={20} aria-hidden="true" /><h2 id="guest-settings-heading" className="panel-title" style={{ margin: 0 }}>Guest links</h2></div><span className="ky-status" data-ky-status={policy?.enabled ? 'success' : undefined}>{policy?.enabled ? 'On' : 'Off'}</span></div>
     <p className="panel-desc">
       Let workspace managers share a file or folder with people who have no account: view and download, or upload-only into a folder. Every guest link expires and can have a password. Turning this off stops every existing guest link at once.
     </p>

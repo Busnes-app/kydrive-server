@@ -221,9 +221,6 @@ legend { font-size: .82rem; font-weight: 600; color: var(--ink-strong); margin-b
 .page > .alert { margin-bottom: 1rem; }
 
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; font-weight: 600; padding: .1rem .5rem; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-strong); background: var(--panel); white-space: nowrap; }
-.badge-accent { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-.badge-success { background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 40%, transparent); }
-.badge-danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 
 /* ---------- Secret reveal ---------- */
 .reveal { display: grid; gap: .75rem; padding: 1rem 1.1rem; margin-bottom: 1.25rem; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: var(--radius); background: var(--accent-soft); }
@@ -421,10 +418,9 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 .dr-alert-warn { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
 .dr-alert-success { background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 40%, transparent); }
 .dr-alert-success svg { color: var(--success); }
-.dr-badge-muted { background: var(--panel-hover); color: var(--ink); border: 1px solid var(--line); }
 .dr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
 .dr-fact { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1.1rem; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.dr-fact-label { font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dr-fact-label { font-size: .72rem; font-weight: 600; color: var(--ink); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dr-fact-value { font-size: .95rem; color: var(--ink-strong); overflow-wrap: anywhere; }
 .dr-fact-note { font-size: .8rem; color: var(--ink); }
 .dr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -448,8 +444,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 /* Phones: the page ends with storage, then the licence line. */
 @media (max-width: 720px) {
   .ky-content-foot .sidebar-storage { padding: 0 0 var(--ky-space-3); max-width: 16rem; }
-  /* The tab row clips overflow: draw the focus ring inside the tab so none of it is cut off. */
-  .ky-nav > .ky-nav-item:focus-visible { outline-offset: -2px; }
   .drive-preview-dialog header { grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
   .drive-preview-dialog header .button-row { grid-column: 1 / -1; grid-row: 2; }
   .drive-preview-dialog header .icon-btn { grid-column: 2; }

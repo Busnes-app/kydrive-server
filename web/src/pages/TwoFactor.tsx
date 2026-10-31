@@ -67,7 +67,7 @@ export function TwoFactor({ enabled, local, onChange }: TwoFactorProps) {
     </>;
   } else if (enabled) {
     body = <form className="form" onSubmit={disable}>
-      <p><span className="badge badge-success">On</span> Signing in needs your password and a code from your authenticator app.</p>
+      <p><span className="ky-status" data-ky-status="success">On</span> Signing in needs your password and a code from your authenticator app.</p>
       <div className="field"><label htmlFor="mfa-password">Password</label>
       <input id="mfa-password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
       <div className="field"><label htmlFor="mfa-code">Authenticator or recovery code</label>
@@ -88,7 +88,7 @@ export function TwoFactor({ enabled, local, onChange }: TwoFactorProps) {
     </form>;
   } else {
     body = <>
-      <p className="panel-desc"><span className="badge">Off</span> Turn it on to require a code from an authenticator app when you sign in.</p>
+      <p className="panel-desc"><span className="ky-status">Off</span> Turn it on to require a code from an authenticator app when you sign in.</p>
       <button type="button" disabled={busy} onClick={() => void start()}>Turn on two-factor authentication</button>
     </>;
   }
