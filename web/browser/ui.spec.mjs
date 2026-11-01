@@ -43,16 +43,16 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   // Appearance is the only theme control in the shell: native radio cards, one saved choice.
   // It is a Settings section, behind the account footer's gear.
   const appearance = async (p) => {
-    await p.getByRole('link', { name: 'Settings', exact: true }).click();
+    await p.getByRole('button', { name: 'Settings', exact: true }).click();
+    await p.getByRole('menu', { name: 'Settings' }).getByRole('menuitem', { name: 'Appearance', exact: true }).click();
     const tab = p.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Appearance', exact: true });
-    await tab.click();
     await expect(tab).toHaveAttribute('aria-current', 'page');
     await expect(p.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   };
   const pick = (p, pair, mode) => p.getByRole('group', { name: pair, exact: true }).getByRole('radio', { name: new RegExp(`^${mode}`) });
   await expect(page.getByLabel('Color theme')).toHaveCount(0);
   await appearance(page);
-  await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(nav.locator('[aria-current]')).toHaveCount(0);
   await fits(page);
   await pick(page, 'Nord', 'Light').check();

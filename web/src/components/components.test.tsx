@@ -156,10 +156,12 @@ describe('AppHeader licence footer', () => {
     expect(document.querySelector('.ky-user-role')?.textContent).toBe('Administrator');
     // The phone header's and the sidebar's: icon buttons named by aria-label and title, no visible words.
     for (const name of ['Settings', 'Sign out']) {
-      const buttons = screen.getAllByRole(name === 'Settings' ? 'link' : 'button', { name });
+      const buttons = screen.getAllByRole('button', { name });
       expect(buttons.map(b => [b.className, b.getAttribute('title'), b.textContent])).toEqual([['ky-icon-button', name, ''], ['ky-icon-button', name, '']]);
     }
-    expect(document.querySelectorAll('.ky-mobile-actions > .ky-icon-button, .ky-user-actions > .ky-icon-button')).toHaveLength(4);
+    expect(document.querySelectorAll('.ky-mobile-actions .ky-icon-button, .ky-user-actions .ky-icon-button')).toHaveLength(4);
+    // Each gear opens its own menu.
+    expect(screen.getAllByRole('button', { name: 'Settings' }).map(b => b.getAttribute('aria-controls'))).toEqual(['ky-settings-menu-phone', 'ky-settings-menu']);
     expect(screen.getByRole('button', { name: 'Server settings' })).toBeTruthy();
     expect(screen.queryByText('Preferences')).toBeNull();
     expect(screen.getByText('Administration', { selector: '.ky-nav-section' })).toBeTruthy();

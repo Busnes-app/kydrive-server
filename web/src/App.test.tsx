@@ -102,8 +102,11 @@ it('keeps Settings behind the footer gear, with a tab and an address per section
   for (const label of ['Account', 'Appearance', 'Settings']) expect(within(nav).queryByRole('button', { name: label })).toBeNull();
   expect(screen.queryByText('Preferences')).toBeNull();
   expect(screen.queryByText('Sign out')).toBeNull();
-  const gear = screen.getAllByRole('link', { name: 'Settings' })[0];
-  expect(gear.getAttribute('href')).toBe('#/settings/account');
+  const gear = screen.getAllByRole('button', { name: 'Settings' })[0];
+  expect(gear.getAttribute('aria-haspopup')).toBe('menu');
+  fireEvent.click(gear);
+  const account = within(document.getElementById(gear.getAttribute('aria-controls')!)!).getByRole('menuitem', { name: 'Account' });
+  expect(account.getAttribute('href')).toBe('#/settings/account');
   location.hash = '/settings/account';
   const tabs = await screen.findByRole('navigation', { name: 'Settings sections' });
   expect(within(tabs).getAllByRole('link').map(a => a.textContent)).toEqual(['Account', 'Phones & apps', 'Appearance', 'Files']);

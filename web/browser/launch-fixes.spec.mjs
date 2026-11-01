@@ -97,7 +97,7 @@ test('the trash has a title and the Settings sections have the app layout', asyn
   await expect(page.locator('.ky-user-name')).not.toHaveText(await page.locator('.ky-user-role').textContent());
   if (testInfo.project.use.viewport.width < 720) {
     // Phones: brand, then icon-only Settings and Sign out in the header; no name or role; licence at the page end.
-    await expect(page.locator('.ky-mobile-head').getByRole('link', { name: 'Settings' })).toBeVisible();
+    await expect(page.locator('.ky-mobile-head').getByRole('button', { name: 'Settings' })).toBeVisible();
     await expect(page.locator('.ky-mobile-head').getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(page.locator('.ky-user-name')).toBeHidden();
     await expect(page.locator('.ky-content-foot .ky-license-link')).toBeVisible();
@@ -106,7 +106,7 @@ test('the trash has a title and the Settings sections have the app layout', asyn
     await expect(page.locator('.ky-user-role')).toBeVisible();
     await expect(page.locator('.ky-mobile-actions')).toBeHidden();
     // The footer's account buttons are icons, named by aria-label: the words "Sign out" never show.
-    await expect(page.locator('.ky-user-actions > .ky-icon-button')).toHaveCount(2);
+    await expect(page.locator('.ky-user-actions .ky-icon-button')).toHaveCount(2);
     await expect(page.locator('.ky-sidebar-foot')).not.toContainText('Sign out');
     // Content starts the shared inset from the sidebar (x=272).
     expect((await page.locator('.ky-page-head').boundingBox()).x).toBe(272);
@@ -173,7 +173,11 @@ test('the trash has a title and the Settings sections have the app layout', asyn
   await expect(page.getByRole('heading', { name: 'Trash', level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Back to files' }).click();
 
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  // The gear opens a menu of the sections, in tab order; Account opens its tab.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const menu = page.getByRole('menu', { name: 'Settings' });
+  await expect(menu.getByRole('menuitem')).toHaveText(['Account', 'Phones & apps', 'Appearance', 'Files']);
+  await menu.getByRole('menuitem', { name: 'Account' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   const sections = page.getByRole('navigation', { name: 'Settings sections' });
   await expect(sections.getByRole('link')).toHaveText(['Account', 'Phones & apps', 'Appearance', 'Files']);
