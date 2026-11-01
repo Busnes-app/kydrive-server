@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, Archive, Folder, FolderCog, LogOut, Server, Settings as SettingsIcon, UserMinus, Users } from 'lucide-react';
+import { Activity, Archive, Folder, FolderCog, LogOut, Server, UserMinus, Users } from 'lucide-react';
 import { SHARED_WITH_ME, bytes } from '../pages/drive/client';
 import type { Workspace } from '../pages/Drive';
 import mitLicenseText from '../mit.txt?raw';
 import { appMark } from '../ky-ui/appmarks.js';
+import { SettingsMenu } from './SettingsMenu';
 
 function revealNavItem(row: HTMLElement, item: Element) {
   if (row.scrollWidth <= row.clientWidth) return;
@@ -94,11 +95,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
     <StorageBar used={personal.used} quota={personal.quota} />
     <p>{bytes(personal.used)} of {bytes(personal.quota)} used</p>
   </div>;
-  // Personal settings sit behind the gear, in the footer and the phone header, not in the navigation.
-  const actions = <>
-    <a className="ky-icon-button" href="#/settings/account" aria-label="Settings" title="Settings" aria-current={activeTab.startsWith('settings/') ? 'page' : undefined}>
-      <SettingsIcon aria-hidden="true" />
-    </a>
+  // Personal settings sit behind the gear, in the footer and the phone header, not in the navigation:
+  // it opens a menu of the Settings sections. Each placement names its own menu.
+  const section = activeTab.startsWith('settings/') ? activeTab.slice('settings/'.length) : undefined;
+  const actions = (menuId: string) => <>
+    <SettingsMenu id={menuId} section={section} />
     <button type="button" className="ky-icon-button" aria-label="Sign out" title="Sign out" onClick={onLogout}><LogOut aria-hidden="true" /></button>
   </>;
   const licence = <button type="button" className="ky-license-link" onClick={() => setAboutOpen(true)}>
@@ -113,7 +114,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
             <img className="brand-mark" src="/app-icon.png" width={28} height={28} alt="" />
             <span>{name}</span>
           </div>
-          <div className="ky-mobile-actions">{actions}</div>
+          <div className="ky-mobile-actions">{actions('ky-settings-menu-phone')}</div>
         </div>
         <nav ref={navRef} className="ky-nav" aria-label="Primary" onFocusCapture={e => {
           if (e.target instanceof HTMLButtonElement) revealNavItem(e.currentTarget, e.target);
@@ -133,7 +134,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ appName, activeTab, onTabC
               <p className="ky-user-name">{shownName}</p>
               <p className="ky-user-role">{role}</p>
             </div>
-            <div className="ky-user-actions">{actions}</div>
+            <div className="ky-user-actions">{actions('ky-settings-menu')}</div>
           </div>
           <footer>{licence}</footer>
         </div>

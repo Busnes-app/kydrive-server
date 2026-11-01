@@ -12,8 +12,8 @@ test('files open in a new tab or in place, per saved user preference', async ({ 
   // The server is shared by every project; start from the default.
   expect((await page.request.put('/api/auth/preferences', { headers, data: { open_in_new_tab: true } })).ok()).toBe(true);
   await page.goto('/');
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Files', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('menu', { name: 'Settings' }).getByRole('menuitem', { name: 'Files', exact: true }).click();
   const preference = page.getByLabel('Open files in a new tab');
   await expect(preference).toBeChecked();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -42,8 +42,8 @@ test('files open in a new tab or in place, per saved user preference', async ({ 
 
   // Turning it off is saved for the account, not the browser: a context with the session
   // cookie but no local storage still sees it (a second sign-in would trip the login limit).
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Files', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('menu', { name: 'Settings' }).getByRole('menuitem', { name: 'Files', exact: true }).click();
   await preference.uncheck();
   await expect.poll(async () => (await (await page.request.get('/api/auth/me')).json()).open_in_new_tab).toBe(false);
   const other = await browser.newContext({ storageState: { cookies: await page.context().cookies(), origins: [] } });
