@@ -1,7 +1,7 @@
 ---
 name: kydrive
 description: Read and manage the user's KyDrive files through the kydrive MCP tools. Use when the user asks about their files, documents or folders, asks to find or read a file, or asks to save, rename, move or trash one.
-version: "0.5.0"
+version: "0.6.0"
 ---
 
 # KyDrive
