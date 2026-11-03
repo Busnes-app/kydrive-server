@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -83,17 +82,10 @@ func (s *Server) driveAppendUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) driveCompleteUpload(w http.ResponseWriter, r *http.Request) {
-	// Completion re-seals the whole file, which can outlast KY_READ_TIMEOUT and
-	// KY_WRITE_TIMEOUT; the read deadline would cancel the request context mid-seal. Read the
-	// (empty) body under the deadlines first, then lift both: the size cap bounds the work and
-	// a disconnect still cancels it.
-	if _, err := io.Copy(io.Discard, http.MaxBytesReader(w, r.Body, 1<<10)); err != nil {
-		s.writeError(w, http.StatusBadRequest, "Completion takes no body")
-		return
-	}
-	rc := http.NewResponseController(w)
-	_ = rc.SetReadDeadline(time.Time{})
-	_ = rc.SetWriteDeadline(time.Time{})
+	// Completion re-seals the whole file, which can outlast KY_WRITE_TIMEOUT: the file would be
+	// published and its 201 lost. Lift the write deadline; the size cap bounds the work. (Go
+	// clears the read deadline once the body is read, so a long handler is not cancelled.)
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	f, err := s.store.Drive().CompleteUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, s.driveUser(r).ID, r.PathValue("sid"))
 	if err != nil {
 		s.driveError(w, err)

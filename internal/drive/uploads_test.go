@@ -426,15 +426,50 @@ func TestCompletionClaimHoldsAgainstExpiry(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
 		t.Fatalf("expiry deleted a claimed session's staging: %v", err)
 	}
-	claim := now - 3600 // about to lapse
-	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, claim, u.ID); err != nil {
+	// CompleteUpload's claim renews itself while held, so it never lapses, and is given up on release.
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=0,expires=? WHERE id=?`, time.Now().Add(time.Hour).Unix(), u.ID); err != nil {
 		t.Fatal(err)
 	}
-	stop := drive.RenewClaim(ctx, d, u.ID, &claim, 10*time.Millisecond)
-	time.Sleep(100 * time.Millisecond)
-	stop()
-	held, err := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID)
-	if err != nil || int64(held) != claim || claim < now {
-		t.Fatalf("claim not renewed: stored %d, held %d, err %v", held, claim, err)
+	if _, err := appendChunk(d, staging, "worker", u.ID, 5, "fghij"); err != nil {
+		t.Fatal(err)
+	}
+	release, err := drive.ClaimCompletion(ctx, d, "worker", u.ID, 10*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID)
+	time.Sleep(1100 * time.Millisecond) // claims are Unix seconds
+	if held, _ := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID); held <= first {
+		t.Fatalf("claim not renewed: %d, then %d", first, held)
+	}
+	if _, err := drive.ClaimCompletion(ctx, d, "worker", u.ID, time.Hour); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("second claim while held: %v", err)
+	}
+	release(false)
+	if held, _ := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID); held != 0 {
+		t.Fatalf("released claim still held: %d", held)
+	}
+}
+
+// A completion whose file was published reports success even when removing its staging fails;
+// otherwise the client would retry and publish it again.
+func TestCompletionSucceedsWhenCleanupFails(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "kept.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(staging, u.ID)
+	if err := os.Chmod(dir, 0o500); err != nil { // segments readable, not removable
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	f, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID)
+	if err != nil || f.Size != 5 {
+		t.Fatalf("published completion reported %v (size %d)", err, f.Size)
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("test did not make cleanup fail: %v", err)
 	}
 }

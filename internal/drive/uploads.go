@@ -205,28 +205,16 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 	if err != nil {
 		return File{}, err
 	}
-	// Claim the session before the file-sized re-seal so concurrent completions cannot each
-	// write a full copy. A crashed request's claim expires; a failure releases it.
-	claim := time.Now().Unix()
-	res, err := s.db.ExecContext(ctx, `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND owner=? AND received=size AND completing<?`, claim, id, user, claim-int64(completionClaim/time.Second))
+	release, err := s.claimCompletion(ctx, user, id, completionClaim/3)
 	if err != nil {
 		return File{}, err
 	}
-	if n, err := res.RowsAffected(); err != nil || n != 1 {
-		return File{}, cmp.Or(err, fmt.Errorf("%w: upload incomplete or already completing", ErrConflict))
-	}
-	done := false
-	defer func() {
-		if !done {
-			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
-		}
-	}()
-	stopRenewal := s.renewClaim(ctx, id, &claim, completionClaim/3)
+	published := false
+	defer func() { release(published) }()
 	pr, pw := io.Pipe()
 	go func() { pw.CloseWithError(s.readSegments(ctx, pw, staging, key, id)) }()
 	v, err := WriteBlob(blobs, key, pr, max(u.Size, 1))
 	pr.Close()
-	stopRenewal()
 	if err == nil && v.Size != u.Size {
 		RemoveBlobs(blobs, []string{v.Blob})
 		err = fmt.Errorf("%w: staged %d bytes, expected %d", ErrInvalid, v.Size, u.Size)
@@ -240,7 +228,7 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 		RemoveBlobs(blobs, []string{v.Blob})
 		return f, err
 	}
-	done = true
+	published = true
 	// The file is published: a failed cleanup must not tell the client otherwise, or its
 	// retry publishes again. ExpireUploads removes what is left.
 	if err := s.dropUpload(context.WithoutCancel(ctx), staging, id, nil); err != nil {
@@ -249,10 +237,17 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 	return f, nil
 }
 
-// renewClaim keeps a completion's claim fresh (every interval) while its re-seal runs, so a long one is never
-// taken for crashed by a second completion, ExpireUploads or a workspace delete. The returned
-// stop waits for the renewer, after which *claim is the current claim.
-func (s *Store) renewClaim(ctx context.Context, id string, claim *int64, every time.Duration) (stop func()) {
+// claimCompletion claims a fully received session before its file-sized re-seal, so concurrent
+// completions cannot each write a full copy, and renews the claim every interval until release,
+// since completion has no time limit: a long one is never taken for crashed by a second
+// completion, ExpireUploads or a workspace delete. Only a crashed request's claim lapses.
+// release(published) stops the renewal and, unless the file was published, gives the claim up.
+func (s *Store) claimCompletion(ctx context.Context, user, id string, every time.Duration) (release func(published bool), err error) {
+	claim := time.Now().Unix()
+	n, err := rowsAffected(s.db.ExecContext(ctx, `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND owner=? AND received=size AND completing<?`, claim, id, user, claim-int64(completionClaim/time.Second)))
+	if err != nil || n != 1 {
+		return nil, cmp.Or(err, fmt.Errorf("%w: upload incomplete or already completing", ErrConflict))
+	}
 	done, stopped := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(stopped)
@@ -264,14 +259,19 @@ func (s *Store) renewClaim(ctx context.Context, id string, claim *int64, every t
 				return
 			case <-tick.C:
 				now := time.Now().Unix()
-				res, err := s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND completing=?`, now, id, *claim)
-				if n, _ := rowsAffected(res, err); n == 1 {
-					*claim = now
+				if n, _ := rowsAffected(s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND completing=?`, now, id, claim)); n == 1 {
+					claim = now
 				}
 			}
 		}
 	}()
-	return func() { close(done); <-stopped }
+	return func(published bool) {
+		close(done)
+		<-stopped
+		if !published {
+			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
+		}
+	}, nil
 }
 
 func rowsAffected(res sql.Result, err error) (int64, error) {

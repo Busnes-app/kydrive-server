@@ -246,7 +246,7 @@ func ExpireUpload(ctx context.Context, s *Store, staging, id string, now int64) 
 	return s.expireUpload(ctx, staging, id, now)
 }
 
-// RenewClaim runs the completion claim renewer every interval.
-func RenewClaim(ctx context.Context, s *Store, id string, claim *int64, interval time.Duration) (stop func()) {
-	return s.renewClaim(ctx, id, claim, interval)
+// ClaimCompletion is CompleteUpload's claim, renewed every interval until release.
+func ClaimCompletion(ctx context.Context, s *Store, user, id string, interval time.Duration) (func(bool), error) {
+	return s.claimCompletion(ctx, user, id, interval)
 }
