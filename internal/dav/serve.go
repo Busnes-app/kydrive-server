@@ -63,7 +63,7 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 			http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
 			return
 		}
-		f.IfMatch, f.CreateOnly = true, strings.Contains(m, "*")
+		f.IfMatch, f.CreateOnly = true, strings.TrimSpace(m) == "*" // a quoted tag may hold '*'
 	}
 	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks.view(r.Context(), f, r.Method)}
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)

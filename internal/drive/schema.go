@@ -167,10 +167,12 @@ func (s *Store) renameClashes(ctx context.Context, tx *sql.Tx) error {
 			return err
 		}
 		for n := 2; ; n++ {
+			// Files in any state: a trashed one may come back in the same restore. Clashes are
+			// rare, so this per-candidate count (workspace index) stays cheap.
 			candidate := clashName(name, n)
 			mac := s.names.hmac(candidate)
 			var taken int
-			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, c.workspace, c.parent, mac).Scan(&taken); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, c.workspace, c.parent, mac).Scan(&taken); err != nil {
 				return err
 			}
 			if taken > 0 || folders[place{c.workspace, c.parent, mac, true}] {

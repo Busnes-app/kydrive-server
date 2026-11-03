@@ -177,9 +177,11 @@ func TestPutGetAndVersions(t *testing.T) {
 		t.Fatalf("revision %d", v)
 	}
 	e.want(e.do("worker", "PUT", e.org()+"/new.txt", strings.NewReader("x"), "If-Match", `*`), 412, "if-match on a missing file")
+	// An If-None-Match tag that differs from the file's is an ordinary update, even holding '*'.
+	e.want(e.do("worker", "PUT", path, strings.NewReader("tagged"), "If-None-Match", `"old*etag"`), 201, "if-none-match with a non-matching tag")
 	// If-None-Match: a create-only PUT never replaces an existing file, and still creates a new one.
 	e.want(e.do("worker", "PUT", path, strings.NewReader("clobber"), "If-None-Match", `*`), 412, "if-none-match on an existing file")
-	if v := e.versions("Résumé 2026.txt"); v != 3 {
+	if v := e.versions("Résumé 2026.txt"); v != 4 {
 		t.Fatalf("if-none-match published: revision %d", v)
 	}
 	e.want(e.do("worker", "PUT", e.org()+"/created.txt", strings.NewReader("x"), "If-None-Match", `*`), 201, "if-none-match on a missing file")

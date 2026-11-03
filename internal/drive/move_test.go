@@ -382,8 +382,27 @@ func TestClashSchemaRenamesExistingClashes(t *testing.T) {
 		t.Fatal(err)
 	}
 	kept := publish("Kept")
+	// A pair trashed together, beside a trashed "Plan (2)", restores together after the upgrade.
+	box, err := d.AddFolder(ctx, "worker", w.ID, "", "Box")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.AddFolder(ctx, "worker", w.ID, box.ID, "Plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Plan (2)", "Plan"} {
+		if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Parent: box.ID, Name: name}, blob(t, root, "x"), 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = d.SetFolderTrash(ctx, "worker", box.ID, true); err != nil {
+		t.Fatal(err)
+	}
 	if err := drive.Migrate(ctx, d); err != nil {
 		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", box.ID, false); err != nil {
+		t.Fatalf("restoring a folder trashed with a clash: %v", err)
 	}
 	for f, want := range map[string]string{budget.ID: "Budget (3).xlsx", longFile.ID: strings.Repeat("é", 123) + " (2).xlsx", kept.ID: "Kept"} {
 		got, err := d.File(ctx, "worker", f, 1)
