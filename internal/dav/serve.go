@@ -3,6 +3,8 @@ package dav
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 
 	"golang.org/x/net/webdav"
@@ -25,6 +27,17 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>`))
 		return
+	}
+	if r.Method == "COPY" || r.Method == "MOVE" {
+		// x/net copies a folder into its own subtree level after level up to depth 1000 (RFC 4918
+		// 9.8.3), and a MOVE with Overwrite onto an ancestor trashes the source with it.
+		if u, err := url.Parse(r.Header.Get("Destination")); err == nil {
+			src, dst := path.Clean(strings.TrimPrefix(r.URL.Path, prefix)), path.Clean(strings.TrimPrefix(u.Path, prefix))
+			if strings.HasPrefix(dst, src+"/") || strings.HasPrefix(src, dst+"/") {
+				http.Error(w, "Destination is inside the source or contains it", http.StatusForbidden)
+				return
+			}
+		}
 	}
 	if r.Method == "LOCK" {
 		// x/net reports the timeout it parsed, so cap the request itself (view.Create caps too).

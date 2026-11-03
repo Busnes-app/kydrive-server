@@ -233,6 +233,13 @@ func TestMoveCopyDelete(t *testing.T) {
 		t.Fatalf("after moves: %d %q", got.Code, got.Body.String())
 	}
 	e.want(e.do("worker", "COPY", e.org()+"/A/B/renamed.txt", nil, "Destination", host+e.org()+"/copy.txt"), 201, "copy")
+	// A folder never copies into its own subtree, and a MOVE never overwrites its own ancestor.
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/C"), 403, "copy into own subtree")
+	e.want(e.do("worker", "PROPFIND", e.org()+"/A/C", nil, "Depth", "0"), 404, "copy into own subtree created nothing")
+	e.want(e.do("worker", "MOVE", e.org()+"/A/B", nil, "Destination", host+e.org()+"/A", "Overwrite", "T"), 403, "move onto own ancestor")
+	if got := e.do("worker", "GET", e.org()+"/A/B/renamed.txt", nil); got.Body.String() != "hello" {
+		t.Fatalf("after refused move onto ancestor: %d %q", got.Code, got.Body.String())
+	}
 	if got := e.do("worker", "GET", e.org()+"/copy.txt", nil); got.Body.String() != "hello" {
 		t.Fatalf("copy: %q", got.Body.String())
 	}
