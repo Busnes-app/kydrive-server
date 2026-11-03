@@ -236,3 +236,13 @@ func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
 func CheckStaged(tmp string, key []byte, id string, size int64, digest string) error {
 	return checkStaged(tmp, key, id, size, digest)
 }
+
+// ExpireUpload is one session's expiry, as ExpireUploads runs it after its selection.
+func ExpireUpload(ctx context.Context, s *Store, staging, id string, now int64) error {
+	return s.expireUpload(ctx, staging, id, now)
+}
+
+// RenewClaim runs the completion claim renewer every interval.
+func RenewClaim(ctx context.Context, s *Store, id string, claim *int64, interval time.Duration) (stop func()) {
+	return s.renewClaim(ctx, id, claim, interval)
+}

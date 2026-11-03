@@ -21,7 +21,8 @@ import (
 const (
 	uploadTTL      = 24 * time.Hour
 	uploadsPerUser = 8
-	// completionClaim outlives the longest request (KY_WRITE_TIMEOUT is at most 15m).
+	// completionClaim is how long a completion's claim holds; a running completion renews it
+	// every third of that (completion has no time limit), so only a crashed one's lapses.
 	completionClaim = 30 * time.Minute
 )
 
@@ -220,10 +221,12 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
 		}
 	}()
+	stopRenewal := s.renewClaim(ctx, id, &claim, completionClaim/3)
 	pr, pw := io.Pipe()
 	go func() { pw.CloseWithError(s.readSegments(ctx, pw, staging, key, id)) }()
 	v, err := WriteBlob(blobs, key, pr, max(u.Size, 1))
 	pr.Close()
+	stopRenewal()
 	if err == nil && v.Size != u.Size {
 		RemoveBlobs(blobs, []string{v.Blob})
 		err = fmt.Errorf("%w: staged %d bytes, expected %d", ErrInvalid, v.Size, u.Size)
@@ -244,6 +247,38 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 		log.Printf("upload %s: published, cleanup failed: %v", id, err)
 	}
 	return f, nil
+}
+
+// renewClaim keeps a completion's claim fresh (every interval) while its re-seal runs, so a long one is never
+// taken for crashed by a second completion, ExpireUploads or a workspace delete. The returned
+// stop waits for the renewer, after which *claim is the current claim.
+func (s *Store) renewClaim(ctx context.Context, id string, claim *int64, every time.Duration) (stop func()) {
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				now := time.Now().Unix()
+				res, err := s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND completing=?`, now, id, *claim)
+				if n, _ := rowsAffected(res, err); n == 1 {
+					*claim = now
+				}
+			}
+		}
+	}()
+	return func() { close(done); <-stopped }
+}
+
+func rowsAffected(res sql.Result, err error) (int64, error) {
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, key []byte, id string) error {
@@ -309,6 +344,25 @@ func (s *Store) dropUpload(ctx context.Context, staging, id string, audit func(*
 	return os.RemoveAll(filepath.Join(staging, id))
 }
 
+// expireUpload drops one session only if the deleting transaction still finds it expired and
+// unclaimed, so a completion that claimed it after the selection keeps its bytes.
+func (s *Store) expireUpload(ctx context.Context, staging, id string, now int64) error {
+	gone := false
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		// Segments reference the session, so they go first; the session delete decides.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_segments WHERE session=? AND session IN (SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?)`, id, now, now-int64(completionClaim/time.Second)); err != nil {
+			return err
+		}
+		n, err := rowsAffected(tx.ExecContext(ctx, `DELETE FROM drive_upload_sessions WHERE id=? AND expires<=? AND completing<?`, id, now, now-int64(completionClaim/time.Second)))
+		gone = n == 1
+		return err
+	})
+	if err != nil || !gone {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(staging, id))
+}
+
 // ExpireUploads removes expired sessions, then staging directories with no session that are an
 // hour old (crash residue; the hour keeps a session that is starting up safe). Staging is not
 // user data.
@@ -321,7 +375,7 @@ func (s *Store) ExpireUploads(ctx context.Context, staging string) (int, error) 
 	}
 	var errs []error
 	for _, id := range expired {
-		errs = append(errs, s.dropUpload(ctx, staging, id, nil))
+		errs = append(errs, s.expireUpload(ctx, staging, id, now))
 	}
 	entries, err := os.ReadDir(staging)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -403,3 +403,38 @@ func TestFailedCompletionReleasesClaim(t *testing.T) {
 		t.Fatalf("claim kept after failure: %d %v", n, err)
 	}
 }
+
+// A completion that claims an expired session after ExpireUploads selected it keeps its bytes:
+// the delete rechecks the claim. A running completion renews its claim, so it never lapses.
+func TestCompletionClaimHoldsAgainstExpiry(t *testing.T) {
+	st, w, _ := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "late.bin", Size: 10})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET expires=0,completing=? WHERE id=?`, now, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExpireUpload(ctx, d, staging, u.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_upload_sessions WHERE id=?`, u.ID); err != nil || n != 1 {
+		t.Fatalf("expiry deleted a claimed session: %d %v", n, err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
+		t.Fatalf("expiry deleted a claimed session's staging: %v", err)
+	}
+	claim := now - 3600 // about to lapse
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, claim, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	stop := drive.RenewClaim(ctx, d, u.ID, &claim, 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+	stop()
+	held, err := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID)
+	if err != nil || int64(held) != claim || claim < now {
+		t.Fatalf("claim not renewed: stored %d, held %d, err %v", held, claim, err)
+	}
+}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -83,8 +84,13 @@ func (s *Server) driveAppendUpload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) driveCompleteUpload(w http.ResponseWriter, r *http.Request) {
 	// Completion re-seals the whole file, which can outlast KY_READ_TIMEOUT and
-	// KY_WRITE_TIMEOUT; the read deadline would cancel the request context mid-seal. The
-	// request has no body, so lift both: the size cap bounds the work, a disconnect still cancels.
+	// KY_WRITE_TIMEOUT; the read deadline would cancel the request context mid-seal. Read the
+	// (empty) body under the deadlines first, then lift both: the size cap bounds the work and
+	// a disconnect still cancels it.
+	if _, err := io.Copy(io.Discard, http.MaxBytesReader(w, r.Body, 1<<10)); err != nil {
+		s.writeError(w, http.StatusBadRequest, "Completion takes no body")
+		return
+	}
 	rc := http.NewResponseController(w)
 	_ = rc.SetReadDeadline(time.Time{})
 	_ = rc.SetWriteDeadline(time.Time{})

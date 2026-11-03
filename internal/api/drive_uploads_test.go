@@ -87,6 +87,10 @@ func TestResumableUploadRoutes(t *testing.T) {
 	if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &session) != nil || session.Received != 15 {
 		t.Fatalf("status %d %s", out.Code, out.Body.String())
 	}
+	// Completion lifts the server's deadlines, so it reads its (empty) body first and refuses one.
+	if got := send(t, srv, "POST", "/api/drive/upload-sessions/"+session.ID+"/complete", strings.Repeat("x", 2<<10), user, ""); got.Code != 400 {
+		t.Fatalf("completion with a body: %d", got.Code)
+	}
 	out = send(t, srv, "POST", "/api/drive/upload-sessions/"+session.ID+"/complete", "", user, "")
 	var file struct{ ID string }
 	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &file) != nil {

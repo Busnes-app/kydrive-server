@@ -115,5 +115,5 @@ func (s *Server) drivePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	previewHeaders(w, kind, f.Name)
 	w.Header().Set("ETag", `"`+f.Digest+`"`)
-	http.ServeContent(w, r, "", time.Time{}, file)
+	http.ServeContent(s.steady(w), r, "", time.Time{}, file) // a long video plays past KY_WRITE_TIMEOUT
 }
