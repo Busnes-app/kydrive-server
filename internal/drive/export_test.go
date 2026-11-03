@@ -33,6 +33,9 @@ var SchemaVersion = len(schema)
 // KYB1SchemaVersion queues KYB1 blobs; LoginSchemaVersion binds editor sessions to sign-ins.
 const KYB1SchemaVersion, LoginSchemaVersion = 16, 17
 
+// ServiceTokenSchemaVersion binds editor sessions to the service token that opened them.
+const ServiceTokenSchemaVersion = 19
+
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
 // MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:

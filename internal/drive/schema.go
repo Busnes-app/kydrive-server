@@ -86,7 +86,11 @@ UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND user_id IN
 ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
 CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
 	// An editor session opened with a service token names it, so revoking the token ends it.
-	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';`,
+	// Open sessions with no sign-in binding (login_at 0) came from service tokens, which no
+	// revocation could reach: revoke them once, here, as schema 17 did for its sessions.
+	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';
+UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND login_at=0);
+UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND login_at=0;`,
 	// A live file and a live folder never share a name in one parent: WebDAV and the desktop
 	// client could reach only one. The message makes uniqueViolation report ErrConflict.
 	`CREATE TRIGGER drive_file_name_free_insert BEFORE INSERT ON drive_files WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)

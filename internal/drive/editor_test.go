@@ -485,8 +485,36 @@ func TestLoginSchemaRevokesUnboundDirectoryEditors(t *testing.T) {
 	}
 }
 
+// Service-token editor sessions opened before schema 19 carry no token, so the upgrade revokes
+// them once; sessions bound to a browser sign-in stay.
+func TestServiceTokenSchemaRevokesUnboundSessions(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.docx"}, blob(t, root, "a"), 0)
+	service, err := d.EditorSession(drive.WithServiceAccess(ctx, drive.ServiceAccess{Workspace: w.ID, Rank: 2, Token: "legacy"}), "worker", f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser, err := d.EditorSession(drive.WithLogin(ctx, drive.Login{At: time.Now()}), "worker", f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As before schema 19.
+	if err = drive.ExecSQL(ctx, d, `ALTER TABLE drive_editor_sessions DROP COLUMN service_token; DELETE FROM drive_schema WHERE version=?`, drive.ServiceTokenSchemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.Migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if !revoked(t, d, service.ID) || revoked(t, d, browser.ID) {
+		t.Fatalf("revoked: service %v, browser %v", revoked(t, d, service.ID), revoked(t, d, browser.ID))
+	}
+}
+
 // An editor session opened with a service token ends when the token is revoked or expires,
-// as the token's own requests do; the same user's browser sessions stay open.
+// as the token's own requests do. The browser sessions of the token's owner stay valid
+// (Euro-Office's drop names the user, so their open editor on that document reconnects).
 func TestServiceTokenEditorSessionsEndWithTheToken(t *testing.T) {
 	st, w, root := fixture(t)
 	ctx := context.Background()
