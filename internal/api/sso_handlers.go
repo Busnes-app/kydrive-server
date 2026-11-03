@@ -15,6 +15,10 @@ import (
 )
 
 func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.config.SSO.Enabled {
+		s.writeError(w, http.StatusNotFound, "Sign-on is disabled")
+		return
+	}
 	state := crypto.RandomHex(16)
 	nonce := crypto.RandomHex(16)
 	verifier := oauth2.GenerateVerifier()
@@ -51,6 +55,11 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) {
+	// KY_SSO_ENABLED=false closes sign-in, not just the button; back-channel logout stays open.
+	if !s.config.SSO.Enabled {
+		s.writeError(w, http.StatusNotFound, "Sign-on is disabled")
+		return
+	}
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 

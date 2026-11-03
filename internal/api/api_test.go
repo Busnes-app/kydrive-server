@@ -984,3 +984,19 @@ func TestPublicSettingsReportSSOOnlyWhenConfigured(t *testing.T) {
 		t.Fatalf("disabled provider: sso_enabled = %v, want false", got)
 	}
 }
+
+// KY_SSO_ENABLED=false refuses sign-in itself, not only the button, even with a provider set up.
+func TestDisabledSSORefusesSignIn(t *testing.T) {
+	srv, _, cfg := setupTestServer(t)
+	cfg.SSO.Enabled, cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.KySignOnSecret = false, "https://sso.example.com", "kydrive", "secret"
+	for _, path := range []string{"/api/sso/kysignon/login", "/api/sso/kysignon/callback?code=c&state=s"} {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.AddCookie(&http.Cookie{Name: "ky_pkce_s", Value: "v"})
+		r.AddCookie(&http.Cookie{Name: "ky_nonce_s", Value: "n"})
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("%s with SSO disabled: got %d, want 404", path, w.Code)
+		}
+	}
+}
