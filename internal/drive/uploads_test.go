@@ -266,12 +266,17 @@ func TestExpiredUploadSessionsRemoved(t *testing.T) {
 	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
 	old := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "old.bin", Size: 10})
 	live := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "live.bin", Size: 10})
-	for _, id := range []string{old.ID, live.ID} {
+	// An expired session whose completion is still sealing keeps its bytes.
+	claimed := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "claimed.bin", Size: 10})
+	for _, id := range []string{old.ID, live.ID, claimed.ID} {
 		if _, err := appendChunk(d, staging, "worker", id, 0, "abcde"); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET expires=0 WHERE id=?`, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET expires=0,completing=? WHERE id=?`, time.Now().Unix(), claimed.ID); err != nil {
 		t.Fatal(err)
 	}
 	// A crash can leave a directory with no session; it goes once it is an hour old.
@@ -288,7 +293,7 @@ func TestExpiredUploadSessionsRemoved(t *testing.T) {
 	if n, err := d.ExpireUploads(ctx, staging); err != nil || n != 1 {
 		t.Fatalf("expired %d: %v", n, err)
 	}
-	for dir, want := range map[string]bool{old.ID: false, "stray": false, live.ID: true, "fresh": true} {
+	for dir, want := range map[string]bool{old.ID: false, "stray": false, live.ID: true, "fresh": true, claimed.ID: true} {
 		if _, err := os.Stat(filepath.Join(staging, dir)); (err == nil) != want {
 			t.Errorf("%s present=%v", dir, err == nil)
 		}

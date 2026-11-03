@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -98,5 +100,56 @@ func TestSealedUploadDownloadRanges(t *testing.T) {
 	os.WriteFile(path, raw, 0600)
 	if out = get(""); bytes.Contains(out.Body.Bytes(), []byte("plaintext-marker")) {
 		t.Fatalf("tampered first chunk served: %d", out.Code)
+	}
+}
+
+// A download that keeps moving outlasts KY_WRITE_TIMEOUT; only a stalled one is cut off.
+func TestSlowDownloadOutlastsWriteTimeout(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	loginAs(t, srv, st, "slowadmin", "admin")
+	user := loginAs(t, srv, st, "slowuser", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "slow", DisplayName: "Slow", Members: []string{"usr_slowuser"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_slowadmin", "Slow", 64<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_slowadmin", w.ID, "slow", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	plain := bytes.Repeat([]byte("0123456789abcdef"), (24<<20)/16)
+	out := send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=big.bin&revision=0", string(plain), user, "")
+	var file struct{ ID string }
+	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &file) != nil {
+		t.Fatalf("upload %d %s", out.Code, out.Body.String())
+	}
+	cfg.Server.WriteTimeout = time.Second
+	ts := httptest.NewUnstartedServer(srv)
+	ts.Config.WriteTimeout = cfg.Server.WriteTimeout
+	ts.Start()
+	defer ts.Close()
+	req, _ := http.NewRequest("GET", ts.URL+"/api/drive/files/"+file.ID+"/download", nil)
+	req.AddCookie(user)
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	start, got, buf := time.Now(), 0, make([]byte, 512<<10)
+	for {
+		n, err := io.ReadFull(res.Body, buf)
+		got += n
+		if err != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond) // about 10 MB/s: the whole file takes over 2 s
+	}
+	if got != len(plain) {
+		t.Fatalf("download cut off after %v: %d of %d bytes", time.Since(start), got, len(plain))
 	}
 }

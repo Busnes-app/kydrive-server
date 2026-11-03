@@ -429,8 +429,29 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("ETag", `"`+f.Digest+`"`)
-	http.ServeContent(w, r, f.Name, time.Time{}, file)
+	http.ServeContent(s.steady(w), r, f.Name, time.Time{}, file)
 }
+
+// steadyWriter moves the write deadline on before every write, so a download that keeps
+// moving is never cut off at KY_WRITE_TIMEOUT, while a client that stops reading still times out.
+type steadyWriter struct {
+	http.ResponseWriter
+	rc      *http.ResponseController
+	timeout time.Duration
+}
+
+func (s *Server) steady(w http.ResponseWriter) steadyWriter {
+	return steadyWriter{w, http.NewResponseController(w), s.config.Server.WriteTimeout}
+}
+
+func (w steadyWriter) Write(b []byte) (int, error) {
+	if w.timeout > 0 {
+		_ = w.rc.SetWriteDeadline(time.Now().Add(w.timeout))
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w steadyWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r).ID
 	f, err := s.store.Drive().File(r.Context(), user, r.PathValue("id"), 1)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -81,6 +82,12 @@ func (s *Server) driveAppendUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) driveCompleteUpload(w http.ResponseWriter, r *http.Request) {
+	// Completion re-seals the whole file, which can outlast KY_READ_TIMEOUT and
+	// KY_WRITE_TIMEOUT; the read deadline would cancel the request context mid-seal. The
+	// request has no body, so lift both: the size cap bounds the work, a disconnect still cancels.
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Time{})
+	_ = rc.SetWriteDeadline(time.Time{})
 	f, err := s.store.Drive().CompleteUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, s.driveUser(r).ID, r.PathValue("sid"))
 	if err != nil {
 		s.driveError(w, err)

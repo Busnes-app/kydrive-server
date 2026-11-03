@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -237,7 +238,12 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 		return f, err
 	}
 	done = true
-	return f, s.dropUpload(ctx, staging, id, nil)
+	// The file is published: a failed cleanup must not tell the client otherwise, or its
+	// retry publishes again. ExpireUploads removes what is left.
+	if err := s.dropUpload(context.WithoutCancel(ctx), staging, id, nil); err != nil {
+		log.Printf("upload %s: published, cleanup failed: %v", id, err)
+	}
+	return f, nil
 }
 
 func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, key []byte, id string) error {
@@ -307,7 +313,9 @@ func (s *Store) dropUpload(ctx context.Context, staging, id string, audit func(*
 // hour old (crash residue; the hour keeps a session that is starting up safe). Staging is not
 // user data.
 func (s *Store) ExpireUploads(ctx context.Context, staging string) (int, error) {
-	expired, err := column(ctx, s.db, `SELECT id FROM drive_upload_sessions WHERE expires<=?`, time.Now().Unix())
+	// A completion in progress holds its claim; expiring it would delete the bytes it is sealing.
+	now := time.Now().Unix()
+	expired, err := column(ctx, s.db, `SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?`, now, now-int64(completionClaim/time.Second))
 	if err != nil {
 		return 0, err
 	}
