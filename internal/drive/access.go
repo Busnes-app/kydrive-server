@@ -10,10 +10,11 @@ import (
 
 // rankSQL is the rank a user holds on a whole workspace. The active owner of a personal
 // workspace is its manager and has no co-owners; a shared workspace grants the highest role
-// of the user's active group memberships. Administration grants nothing. Service tokens are
-// narrowed in authorize, outside SQL.
+// of the user's active group memberships. A deleted workspace grants nobody anything.
+// Administration grants nothing. Service tokens are narrowed in authorize, outside SQL.
 func rankSQL(user, workspace string) string {
 	return strings.NewReplacer("$U", user, "$W", workspace).Replace(`(CASE
+ WHEN EXISTS(SELECT 1 FROM drive_workspaces dw WHERE dw.id=$W AND dw.deleted_at!='') THEN 0
  WHEN EXISTS(SELECT 1 FROM drive_personal_workspaces pw JOIN users po ON po.id=pw.owner WHERE pw.workspace=$W AND pw.owner=$U AND po.status='active') THEN 3
  WHEN EXISTS(SELECT 1 FROM drive_personal_workspaces pw WHERE pw.workspace=$W) THEN 0
  ELSE COALESCE((SELECT MAX(CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END) FROM drive_grants g JOIN group_members gm ON gm.group_id=g.group_id JOIN users gu ON gu.id=gm.user_id WHERE g.workspace=$W AND gu.id=$U AND gu.status='active'),0)
@@ -23,7 +24,8 @@ END)`)
 // itemRankSQL is the rank a user holds on one item: the workspace rank, raised by any grant on
 // the file or on folder and its ancestors. A grant is a share to the active user or one of
 // their groups, or an organisation link the user opened that is neither revoked nor expired.
-// Grants only add. A personal workspace's grants lapse while its owner is not active.
+// Grants only add. A personal workspace's grants lapse while its owner is not active, and every
+// grant lapses while the workspace is deleted.
 // folder is the item's own folder (for a folder) or its parent (for a file, "" at the root);
 // file is the file's ID, or empty for a folder.
 func itemRankSQL(user, workspace, folder, file string) string {
@@ -37,6 +39,7 @@ func itemRankSQL(user, workspace, folder, file string) string {
  WHERE ((x.kind='file' AND x.rid=$F)
   OR (x.kind='folder' AND x.rid IN (WITH RECURSIVE up(id) AS (SELECT $D WHERE $D!='' UNION SELECT f.parent FROM drive_folders f JOIN up ON f.id=up.id WHERE f.parent!='') SELECT id FROM up)))
  AND EXISTS(SELECT 1 FROM users su WHERE su.id=$U AND su.status='active')
+ AND NOT EXISTS(SELECT 1 FROM drive_workspaces sw WHERE sw.id=$W AND sw.deleted_at!='')
  AND NOT EXISTS(SELECT 1 FROM drive_personal_workspaces sp WHERE sp.workspace=$W AND NOT EXISTS(SELECT 1 FROM users so WHERE so.id=sp.owner AND so.status='active'))),0)`)
 	return "MAX(" + rankSQL(user, workspace) + "," + grants + ")"
 }

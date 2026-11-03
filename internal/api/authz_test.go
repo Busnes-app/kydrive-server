@@ -143,6 +143,8 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 		{"PUT", "/api/drive/trash-retention"},
 		{"PUT", "/api/drive/workspaces/x/name"},
 		{"DELETE", "/api/drive/workspaces/x"},
+		{"GET", "/api/drive/deleted-workspaces"},
+		{"POST", "/api/drive/workspaces/x/restore"},
 	}
 
 	for _, tc := range cases {

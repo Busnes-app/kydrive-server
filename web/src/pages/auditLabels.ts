@@ -55,8 +55,10 @@ const labels: Record<string, string> = {
   'workspace.handed_over': 'Leaver files handed over',
   'workspace.permission_changed': 'Group permission changed',
   'workspace.personal_created': 'My files created',
+  'workspace.purged': 'Deleted workspace purged',
   'workspace.quota_changed': 'Quota changed',
   'workspace.renamed': 'Workspace renamed',
+  'workspace.restored': 'Workspace restored',
   'workspace.retention_changed': 'Workspace retention changed',
   'workspace.sharing_changed': 'Editor sharing changed',
 };

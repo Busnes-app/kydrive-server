@@ -36,7 +36,8 @@ type Workspace struct {
 	TrashDays    int    `json:"trash_days"`
 	KeepVersions int    `json:"keep_versions"`
 	EditorsShare bool   `json:"editors_share"`
-	Head         int64  `json:"head"` // newest change seq; unchanged means nothing to fetch
+	Items        int64  `json:"items"` // files and folders, trashed ones included; 0 deletes at once
+	Head         int64  `json:"head"`  // newest change seq; unchanged means nothing to fetch
 }
 type Grant struct {
 	GroupID string `json:"group_id"`
@@ -211,7 +212,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +221,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	for rows.Next() {
 		var w Workspace
 		var rank int
-		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.EditorsShare, &w.Kind, &w.Used, &w.Head, &rank); err != nil {
+		if err = rows.Scan(&w.ID, &w.Name, &w.Quota, &w.TrashDays, &w.KeepVersions, &w.EditorsShare, &w.Kind, &w.Used, &w.Head, &w.Items, &rank); err != nil {
 			return nil, err
 		}
 		w.Role = []string{"", "reader", "editor", "manager"}[rank]
@@ -294,7 +295,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 }
 func sharedWorkspace(ctx context.Context, q queryer, workspace string) error {
 	var shared int
-	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE w.id=? AND p.workspace IS NULL`, workspace).Scan(&shared); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE w.id=? AND p.workspace IS NULL AND w.deleted_at=''`, workspace).Scan(&shared); err != nil {
 		return err
 	}
 	if shared != 1 {

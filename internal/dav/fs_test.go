@@ -508,7 +508,7 @@ func TestDeletedWorkspaceIsGone(t *testing.T) {
 	e := setup(t)
 	// Delete the one shown as "Organization (2)", so the other keeps its plain name.
 	gone, victim := "/dav/Organization%20(2)", max(e.team.ID, e.shared.ID)
-	if err := e.st.Drive().DeleteWorkspace(context.Background(), "admin", victim); err != nil {
+	if _, err := e.st.Drive().DeleteWorkspace(context.Background(), "admin", victim, ""); err != nil {
 		t.Fatal(err)
 	}
 	e.want(e.do("worker", "PROPFIND", gone+"/", nil, "Depth", "1"), 404, "propfind deleted workspace")

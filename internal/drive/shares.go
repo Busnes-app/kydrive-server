@@ -219,7 +219,7 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
   UNION ALL
   SELECT l.resource_kind,l.resource_id,l.workspace,l.role,'link','',l.id FROM drive_links l WHERE l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>CAST(strftime('%s','now') AS INTEGER))) g
   ON (g.pk='user' AND g.pid=q.u) OR (g.pk='group' AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.pid AND m.user_id=q.u)) OR (g.pk='link' AND EXISTS(SELECT 1 FROM drive_link_users lu WHERE lu.link=g.link AND lu.user_id=q.u))
- JOIN drive_workspaces w ON w.id=g.workspace
+ JOIN drive_workspaces w ON w.id=g.workspace AND w.deleted_at=''
  LEFT JOIN drive_personal_workspaces p ON p.workspace=g.workspace
  LEFT JOIN drive_files f ON g.kind='file' AND f.id=g.rid AND f.trashed=false
  LEFT JOIN drive_folders d ON g.kind='folder' AND d.id=g.rid AND d.trashed=false
