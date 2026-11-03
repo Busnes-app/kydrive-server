@@ -34,7 +34,8 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		// compared as FS.split resolves them, so "/davX" cannot pass for "/dav/X".
 		if u, err := url.Parse(r.Header.Get("Destination")); err == nil {
 			src, dst := path.Clean("/"+strings.TrimPrefix(r.URL.Path, prefix)), path.Clean("/"+strings.TrimPrefix(u.Path, prefix))
-			if strings.HasPrefix(dst, src+"/") || strings.HasPrefix(src, dst+"/") {
+			// The root holds every workspace, so it contains any destination.
+			if src == "/" || dst == "/" || strings.HasPrefix(dst, src+"/") || strings.HasPrefix(src, dst+"/") {
 				http.Error(w, "Destination is inside the source or contains it", http.StatusForbidden)
 				return
 			}
@@ -55,13 +56,14 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		f.IfMatch = true
 	}
 	// x/net ignores If-None-Match: a create-only PUT ("*") must not replace an existing file,
-	// nor one created while the body arrives (IfMatch makes a publish conflict final: 412).
+	// whether it exists now, when the target is opened (CreateOnly) or by publication (IfMatch
+	// makes the publish conflict final). Each answers 412.
 	if m := r.Header.Get("If-None-Match"); m != "" && r.Method == http.MethodPut {
 		if matches(r, prefix, f, m) {
 			http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
 			return
 		}
-		f.IfMatch = true
+		f.IfMatch, f.CreateOnly = true, strings.Contains(m, "*")
 	}
 	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks.view(r.Context(), f, r.Method)}
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)

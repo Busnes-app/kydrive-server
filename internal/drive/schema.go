@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // schema upgrades drive tables in place; entry i is version i+1. Append only: never edit
@@ -110,58 +113,104 @@ const nameVersion = 5
 // transaction renames the files of existing clashes (renameClashes).
 const clashVersion = 20
 
-// renameClashes renames each file that shares its parent and name with a folder, trashed or
-// not, to "<name> (n)", so a handover or restore that moves both never trips the triggers.
+// renameClashes renames each file that shares its parent and name with a folder in the same
+// state (both live, or both trashed and so restored together) to the first free "<name> (n)",
+// extension kept, so a handover or restore that moves both never trips the triggers. Folder
+// places are loaded once: no index serves an all-states file-to-folder lookup.
 func (s *Store) renameClashes(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, `SELECT f.id,f.workspace,f.parent,f.name FROM drive_files f WHERE EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=f.workspace AND d.parent=f.parent AND d.name_hmac=f.name_hmac)`)
+	type place struct {
+		workspace, parent, mac string
+		trashed                bool
+	}
+	folders := map[place]bool{}
+	rows, err := tx.QueryContext(ctx, `SELECT workspace,parent,name_hmac,trashed FROM drive_folders`)
 	if err != nil {
 		return err
 	}
-	var clashes [][4]string
 	for rows.Next() {
-		var c [4]string
-		if err := rows.Scan(&c[0], &c[1], &c[2], &c[3]); err != nil {
+		var p place
+		if err := rows.Scan(&p.workspace, &p.parent, &p.mac, &p.trashed); err != nil {
 			rows.Close()
 			return err
 		}
-		clashes = append(clashes, c)
+		folders[p] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	type clash struct{ id, workspace, parent, stored string }
+	var clashes []clash
+	rows, err = tx.QueryContext(ctx, `SELECT id,workspace,parent,name_hmac,trashed,name FROM drive_files`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var c clash
+		var p place
+		if err := rows.Scan(&c.id, &p.workspace, &p.parent, &p.mac, &p.trashed, &c.stored); err != nil {
+			rows.Close()
+			return err
+		}
+		if folders[p] {
+			c.workspace, c.parent = p.workspace, p.parent
+			clashes = append(clashes, c)
+		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 	for _, c := range clashes {
-		id, workspace, parent := c[0], c[1], c[2]
-		name, err := s.names.open("drive_files", id, c[3])
+		name, err := s.names.open("drive_files", c.id, c.stored)
 		if err != nil {
 			return err
 		}
 		for n := 2; ; n++ {
-			candidate := fmt.Sprintf("%s (%d)", name, n)
+			candidate := clashName(name, n)
+			mac := s.names.hmac(candidate)
 			var taken int
-			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)`, workspace, parent, s.names.hmac(candidate)).Scan(&taken); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, c.workspace, c.parent, mac).Scan(&taken); err != nil {
 				return err
 			}
-			if taken > 0 {
+			if taken > 0 || folders[place{c.workspace, c.parent, mac, true}] {
 				continue
 			}
-			stored, mac, err := s.names.seal("drive_files", id, candidate)
+			stored, mac, err := s.names.seal("drive_files", c.id, candidate)
 			if err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET name=?,name_hmac=? WHERE id=?`, stored, mac, id); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET name=?,name_hmac=? WHERE id=?`, stored, mac, c.id); err != nil {
 				return err
 			}
-			if err := change(ctx, tx, workspace, "file", id); err != nil {
+			if err := change(ctx, tx, c.workspace, "file", c.id); err != nil {
 				return err
 			}
-			if err := event(ctx, tx, "system", "file.renamed", id+" name clashed with a folder"); err != nil {
+			if err := event(ctx, tx, "system", "file.renamed", c.id+" name clashed with a folder"); err != nil {
 				return err
 			}
 			break
 		}
 	}
 	return nil
+}
+
+// clashName is numbered(name, n) within ValidName's 255 bytes: whole runes are cut from the
+// end of the base, so the extension, which picks the editor, survives.
+func clashName(name string, n int) string {
+	for {
+		candidate := numbered(name, n)
+		if len(candidate) <= 255 {
+			return candidate
+		}
+		ext := path.Ext(name)
+		if ext == name {
+			ext = ""
+		}
+		base := strings.TrimSuffix(name, ext)
+		_, size := utf8.DecodeLastRuneInString(base) // base is never empty: then ext would be ""
+		name = base[:len(base)-size] + ext
+	}
 }
 
 func (s *Store) migrate(ctx context.Context) error {

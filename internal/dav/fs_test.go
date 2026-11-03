@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -237,6 +238,7 @@ func TestMoveCopyDelete(t *testing.T) {
 	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/C"), 403, "copy into own subtree")
 	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+"/dav"+strings.TrimPrefix(e.org(), "/dav/")+"/A/C"), 403, "copy into own subtree, prefix without slash")
 	e.want(e.do("worker", "PROPFIND", e.org()+"/A/C", nil, "Depth", "0"), 404, "copy into own subtree created nothing")
+	e.want(e.do("worker", "COPY", "/dav/", nil, "Destination", host+e.org()+"/A/Root"), 403, "copy of the root")
 	// A shallow COPY makes one empty folder and never recurses.
 	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/Empty", "Depth", "0"), 201, "shallow copy into own subtree")
 	e.want(e.do("worker", "MOVE", e.org()+"/A/B", nil, "Destination", host+e.org()+"/A", "Overwrite", "T"), 403, "move onto own ancestor")
@@ -569,5 +571,25 @@ func TestIfNoneMatchHoldsWhileTheBodyArrives(t *testing.T) {
 	e.want(e.do("worker", "PUT", path, body, "If-None-Match", "*"), 412, "create-only over a file created meanwhile")
 	if got := e.do("worker", "GET", path, nil); got.Body.String() != "theirs" {
 		t.Fatalf("create-only PUT replaced the concurrent file: %q", got.Body.String())
+	}
+}
+
+// A create-only write refuses a file that appeared after the precondition was checked but before
+// the target was opened.
+func TestCreateOnlyRefusesAFileFoundAtOpen(t *testing.T) {
+	e := setup(t)
+	v, err := drive.WriteBlob(e.blobs, testdb.Key, strings.NewReader("theirs"), 1<<20)
+	if err == nil {
+		_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "open.txt"}, v, 0)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := dav.New(e.st.Drive(), "worker", e.blobs, testdb.Key, 1<<20, "")
+	fs.IfMatch, fs.CreateOnly = true, true
+	name := strings.TrimPrefix(e.org(), "/dav") + "/open.txt"
+	name = strings.ReplaceAll(name, "%20", " ")
+	if _, err := fs.OpenFile(context.Background(), name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644); err == nil || !errors.Is(fs.Err, drive.ErrConflict) {
+		t.Fatalf("create-only open of an existing file: %v (drive error %v)", err, fs.Err)
 	}
 }
