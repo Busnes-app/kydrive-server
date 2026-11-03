@@ -87,6 +87,16 @@ ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
 CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
 	// An editor session opened with a service token names it, so revoking the token ends it.
 	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';`,
+	// A live file and a live folder never share a name in one parent: WebDAV and the desktop
+	// client could reach only one. The message makes uniqueViolation report ErrConflict.
+	`CREATE TRIGGER drive_file_name_free_insert BEFORE INSERT ON drive_files WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
+CREATE TRIGGER drive_file_name_free_update BEFORE UPDATE ON drive_files WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
+CREATE TRIGGER drive_folder_name_free_insert BEFORE INSERT ON drive_folders WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
+CREATE TRIGGER drive_folder_name_free_update BEFORE UPDATE ON drive_folders WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

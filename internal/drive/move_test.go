@@ -308,3 +308,44 @@ func TestDocumentKeyRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// A live file and a live folder never share a name in one parent, whichever way the name arrives.
+func TestFileAndFolderNeverShareAName(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	report, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Report"}, blob(t, root, "r"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Report"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("folder over a file's name: %v", err)
+	}
+	plans, err := d.AddFolder(ctx, "worker", w.ID, "", "Plans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Plans"}, blob(t, root, "p"), 0); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("file over a folder's name: %v", err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", report.ID, 1, drive.Location{Workspace: w.ID, Name: "Plans"}); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("file renamed onto a folder's name: %v", err)
+	}
+	other, err := d.AddFolder(ctx, "worker", w.ID, "", "Other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFolder(ctx, "worker", other.ID, "", "Report"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("folder renamed onto a file's name: %v", err)
+	}
+	// Trashed items free their name, and restoring one into a clash is refused.
+	if err = d.SetFolderTrash(ctx, "worker", plans.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Plans"}, blob(t, root, "p"), 0); err != nil {
+		t.Fatalf("name of a trashed folder: %v", err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", plans.ID, false); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("restored a folder over a file's name: %v", err)
+	}
+}
