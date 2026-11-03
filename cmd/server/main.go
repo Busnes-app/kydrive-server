@@ -519,15 +519,8 @@ func recordRun(ctx context.Context, st store.Store, actor string, res recoverycl
 
 // runDeposit seals and delivers one capsule now, for cron or an operator at a shell.
 func runDeposit() {
-	cfg, err := config.LoadExisting()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
-	if err != nil {
-		log.Fatalf("DB error: %v", err)
-	}
+	cfg, st := mustOpenExisting(ctx)
 	defer st.Close()
 
 	res, err := runBackup(ctx, cfg, st)
@@ -592,6 +585,33 @@ func runInitAdmin(args []string) {
 	log.Printf("✓ Admin user %q created successfully", *username)
 }
 
+// openExisting opens a deployment for a CLI backup with the configuration the server runs
+// with: the environment plus the installer configuration stored in its database, so a capsule
+// carries installer-supplied secrets and the deposit uses the installer's backup directory.
+func openExisting(ctx context.Context) (*config.Config, store.Store, error) {
+	cfg, err := config.LoadExisting()
+	if err != nil {
+		return nil, nil, fmt.Errorf("load configuration: %w", err)
+	}
+	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open database: %w", err)
+	}
+	if err := loadInstallerConfiguration(ctx, cfg, st); err != nil {
+		st.Close()
+		return nil, nil, fmt.Errorf("installer configuration refused: %w", err)
+	}
+	return cfg, st, nil
+}
+
+func mustOpenExisting(ctx context.Context) (*config.Config, store.Store) {
+	cfg, st, err := openExisting(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return cfg, st
+}
+
 // collectFiles is what every CLI seal uses; the sealed-only members are safe here and nowhere else.
 func collectFiles(ctx context.Context, cfg *config.Config, purpose backup.Purpose) recoveryclient.Payload {
 	payload, err := backup.Collect(ctx, cfg, appversion.String(), purpose)
@@ -602,15 +622,8 @@ func collectFiles(ctx context.Context, cfg *config.Config, purpose backup.Purpos
 }
 
 func runBackupDrill(args []string) {
-	cfg, err := config.LoadExisting()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
-	if err != nil {
-		log.Fatalf("DB error: %v", err)
-	}
+	cfg, st := mustOpenExisting(ctx)
 	defer st.Close()
 
 	payload := collectFiles(ctx, cfg, backup.PurposeDrill)
@@ -637,15 +650,8 @@ func runExportCapsule(args []string) {
 	out := fs.String("out", "", "output path (default <capsule-id>.kycap in the current directory)")
 	_ = fs.Parse(args)
 
-	cfg, err := config.LoadExisting()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
 	ctx := context.Background()
-	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
-	if err != nil {
-		log.Fatalf("DB error: %v", err)
-	}
+	cfg, st := mustOpenExisting(ctx)
 	defer st.Close()
 
 	key, err := recoveryclient.LoadRecoveryKey(cfg.Database.DataDir, backup.Settings(ctx, st.Settings()))
