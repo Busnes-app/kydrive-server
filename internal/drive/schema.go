@@ -90,7 +90,7 @@ ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
 CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
 	// An editor session opened with a service token names it, so revoking the token ends it.
 	// Open sessions with no sign-in binding (login_at 0) came from service tokens, which no
-	// revocation could reach: revoke them once, here, as schema 17 did for its sessions.
+	// revocation could reach, or are local sign-ins older than schema 17: revoke them once, here.
 	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';
 UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND login_at=0);
 UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND login_at=0;`,
