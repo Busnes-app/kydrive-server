@@ -62,7 +62,7 @@ export function WorkspaceAdmin({ workspace, onRenamed, onDeleted }: { workspace:
       <p>{workspace.name} leaves everyone’s sidebar now. Its members, people it is shared with and linked computers lose access at once.</p>
       <p><strong>What happens to the files:</strong> its {workspace.items === undefined ? '' : `${workspace.items} `}files and folders, their versions and its trash are kept {keptFor(asking.days)}. Until then an administrator can restore it from Workspaces → Deleted workspaces; after that they are permanently deleted.</p>
       <p>Its links, service tokens and AI agent tokens limited to it stop working for good, even after a restore. Backups taken earlier keep it until their own retention ends.</p>
-      <label className="field">Type <strong>{workspace.name}</strong> to confirm<input autoFocus autoComplete="off" spellCheck={false} value={typed} onChange={e => setTyped(e.target.value)} /></label>
+      <label className="field"><span>Type <strong>{workspace.name}</strong> to confirm</span><input autoFocus autoComplete="off" spellCheck={false} value={typed} onChange={e => setTyped(e.target.value)} /></label>
     </Dialog>}
   </section>;
 }

@@ -67,7 +67,6 @@ try {
     page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto(base + '/');
     const nav = page.getByRole('navigation', { name: 'Primary' });
-    if (!await nav.getByRole('button', { name: 'Studio', exact: true }).isVisible()) await page.getByRole('button', { name: /menu/i }).first().click();
     await nav.getByRole('button', { name: 'Studio', exact: true }).click();
     await page.getByRole('tab', { name: 'Workspace settings' }).click();
     const panel = page.getByRole('region', { name: 'Workspace', exact: true });
@@ -86,7 +85,6 @@ try {
       await panel.scrollIntoViewIfNeeded();
       await page.screenshot({ path: `${out}-result-${tag}.png`, fullPage: w < 720 });
     } else {
-      if (!await nav.getByRole('button', { name: 'Workspaces', exact: true }).isVisible()) await page.getByRole('button', { name: /menu/i }).first().click();
       await nav.getByRole('button', { name: 'Workspaces', exact: true }).click();
       await page.getByRole('heading', { name: 'Deleted workspaces' }).waitFor();
       await page.waitForTimeout(300);

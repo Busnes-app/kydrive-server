@@ -40,7 +40,7 @@ export function DeletedWorkspaces({ onRestored }: { onRestored: () => void }) {
     } catch (e) { setMessage(e instanceof Error ? e.message : 'Restore failed'); } finally { setBusy(false); }
   }
   if (items.length === 0 && !message) return null;
-  return <section className="panel" aria-labelledby="deleted-workspaces-heading">
+  return <section className="panel" style={{ marginTop: '1rem' }} aria-labelledby="deleted-workspaces-heading">
     <h2 id="deleted-workspaces-heading">Deleted workspaces</h2>
     <p className="panel-desc">{days > 0 ? `Each is permanently deleted ${days} ${days === 1 ? 'day' : 'days'} after it was deleted (Server settings → Trash). Until then nobody can open it.` : 'Trash retention is off, so deleted workspaces are kept until restored. Nobody can open them meanwhile.'}</p>
     {message && <Alert>{message}</Alert>}
@@ -49,7 +49,7 @@ export function DeletedWorkspaces({ onRestored }: { onRestored: () => void }) {
       return <li key={d.id}>
         <div className="item-main">
           <span className="item-title">{d.name}</span>
-          <span className="item-meta">{bytes(d.used)} · {d.items} items · deleted <When value={d.deleted_at} relativeOnly /> by {d.deleted_by}{purge && <> · purged on <When value={purge} dateOnly /></>}</span>
+          <span className="item-meta">{bytes(d.used)} · {d.items} {d.items === 1 ? 'item' : 'items'} · deleted <When value={d.deleted_at} relativeOnly /> by {d.deleted_by}{purge && <> · purged on <When value={purge} dateOnly /></>}</span>
         </div>
         <button className="btn-secondary" disabled={busy} onClick={() => void restore(d)}>Restore</button>
       </li>;
