@@ -210,3 +210,32 @@ func TestRetentionRefusesPersonalWorkspace(t *testing.T) {
 		t.Fatalf("personal file purged: %v", err)
 	}
 }
+
+// A deleted workspace keeps its trash and versions until it is restored or purged, as its
+// delete dialog promises; retention resumes once it is restored.
+func TestRetentionSparesDeletedWorkspaces(t *testing.T) {
+	d, w, root := managerFixture(t)
+	ctx := context.Background()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "v1"), 0)
+	f, _ = d.Publish(ctx, "worker", f, blob(t, root, "v2"), 1)
+	old, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "old.txt"}, blob(t, root, "o"), 0)
+	if err := d.SetTrash(ctx, "worker", old.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetRetention(ctx, "admin", w.ID, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.DeleteWorkspace(ctx, "admin", w.ID, w.Name); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(2 * 24 * time.Hour)
+	if blobs, err := d.ApplyRetention(ctx, later, 90); err != nil || len(blobs) != 0 {
+		t.Fatalf("retention purged a deleted workspace: %v %v", blobs, err)
+	}
+	if err := d.RestoreWorkspace(ctx, "admin", w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if blobs, err := d.ApplyRetention(ctx, later, 90); err != nil || len(blobs) != 2 {
+		t.Fatalf("retention after restore: %v %v", blobs, err)
+	}
+}

@@ -38,12 +38,13 @@ func (s *Store) SetRetention(ctx context.Context, user, workspace string, trashD
 // NULL when both are 0, which expires nothing.
 const trashLimit = `COALESCE(NULLIF(w.trash_days,0),NULLIF(?,0))`
 
-// Expiry queries take (at, global trash days).
-const expiredFolders = `SELECT d.id FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE d.trashed=true AND julianday(?)-julianday(d.trashed_at)>` + trashLimit + ` AND NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.parent=d.id) AND NOT EXISTS(SELECT 1 FROM drive_folders c WHERE c.parent=d.id)`
+// Expiry queries take (at, global trash days). A deleted workspace keeps everything until
+// RestoreWorkspace or PurgeDeletedWorkspaces, as its delete dialog promises.
+const expiredFolders = `SELECT d.id FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE w.deleted_at='' AND d.trashed=true AND julianday(?)-julianday(d.trashed_at)>` + trashLimit + ` AND NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.parent=d.id) AND NOT EXISTS(SELECT 1 FROM drive_folders c WHERE c.parent=d.id)`
 
 const (
-	expiredFile    = `FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.trashed=true AND julianday(?)-julianday(f.trashed_at)>` + trashLimit
-	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.keep_versions>0 AND v.revision<=f.revision-w.keep_versions`
+	expiredFile    = `FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND f.trashed=true AND julianday(?)-julianday(f.trashed_at)>` + trashLimit
+	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND w.keep_versions>0 AND v.revision<=f.revision-w.keep_versions`
 	page           = 500
 )
 
