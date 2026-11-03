@@ -349,3 +349,34 @@ func TestFileAndFolderNeverShareAName(t *testing.T) {
 		t.Fatalf("restored a folder over a file's name: %v", err)
 	}
 }
+
+// Clashes made before schema 20 are resolved by the upgrade: the file gets a free numbered name,
+// so a handover or restore that moves both never trips the triggers.
+func TestClashSchemaRenamesExistingClashes(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := drive.ExecSQL(ctx, d, `DROP TRIGGER drive_file_name_free_insert; DROP TRIGGER drive_file_name_free_update; DROP TRIGGER drive_folder_name_free_insert; DROP TRIGGER drive_folder_name_free_update; DELETE FROM drive_schema WHERE version=?`, drive.ClashSchemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.AddFolder(ctx, "worker", w.ID, "", "Report"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Report (2)"}, blob(t, root, "taken"), 0); err != nil {
+		t.Fatal(err)
+	}
+	f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Report"}, blob(t, root, "r"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = drive.Migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.File(ctx, "worker", f.ID, 1)
+	if err != nil || got.Name != "Report (3)" {
+		t.Fatalf("clashing file after upgrade: %q %v", got.Name, err)
+	}
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Report (3)"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("triggers not installed by the upgrade: %v", err)
+	}
+}

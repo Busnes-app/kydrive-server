@@ -106,6 +106,64 @@ BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
 // nameVersion is the schema version whose transaction encrypts existing names.
 const nameVersion = 5
 
+// clashVersion is the schema version that forbids a file and a folder sharing a name; its
+// transaction renames the files of existing clashes (renameClashes).
+const clashVersion = 20
+
+// renameClashes renames each file that shares its parent and name with a folder, trashed or
+// not, to "<name> (n)", so a handover or restore that moves both never trips the triggers.
+func (s *Store) renameClashes(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT f.id,f.workspace,f.parent,f.name FROM drive_files f WHERE EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=f.workspace AND d.parent=f.parent AND d.name_hmac=f.name_hmac)`)
+	if err != nil {
+		return err
+	}
+	var clashes [][4]string
+	for rows.Next() {
+		var c [4]string
+		if err := rows.Scan(&c[0], &c[1], &c[2], &c[3]); err != nil {
+			rows.Close()
+			return err
+		}
+		clashes = append(clashes, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, c := range clashes {
+		id, workspace, parent := c[0], c[1], c[2]
+		name, err := s.names.open("drive_files", id, c[3])
+		if err != nil {
+			return err
+		}
+		for n := 2; ; n++ {
+			candidate := fmt.Sprintf("%s (%d)", name, n)
+			var taken int
+			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)`, workspace, parent, s.names.hmac(candidate)).Scan(&taken); err != nil {
+				return err
+			}
+			if taken > 0 {
+				continue
+			}
+			stored, mac, err := s.names.seal("drive_files", id, candidate)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET name=?,name_hmac=? WHERE id=?`, stored, mac, id); err != nil {
+				return err
+			}
+			if err := change(ctx, tx, workspace, "file", id); err != nil {
+				return err
+			}
+			if err := event(ctx, tx, "system", "file.renamed", id+" name clashed with a folder"); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
+}
+
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
 		return err
@@ -121,6 +179,11 @@ func (s *Store) migrate(ctx context.Context) error {
 			}
 			if i+1 == nameVersion {
 				if err := s.names.encryptNames(ctx, tx); err != nil {
+					return fmt.Errorf("drive schema %d: %w", i+1, err)
+				}
+			}
+			if i+1 == clashVersion {
+				if err := s.renameClashes(ctx, tx); err != nil {
 					return fmt.Errorf("drive schema %d: %w", i+1, err)
 				}
 			}
