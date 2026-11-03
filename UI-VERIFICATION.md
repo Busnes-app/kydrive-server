@@ -52,3 +52,8 @@ The F1 tint darkened the filled danger fill on light suite palettes, whose dark 
 ## Fleet visual refinement (2026-10-26)
 
 Admin Settings opens Appearance instead of showing a second theme select; on phones both navigations scroll as one row under the brand and sign-out, with the new-tab preference below (202px → 141px). Before/after captures (light/dark × 1280×900/390×844, synthetic fixture, clean commits), manifests with hashes, behaviour checks and CSVs are in [docs/ui-visual-refinement-2026-10-26](docs/ui-visual-refinement-2026-10-26/README.md). No score is self-assigned.
+
+## Stale tab after an upgrade — 2026-11-02
+
+The ky-ui update notice ("<app> was updated. Reload to use the new version.", Reload and Dismiss) is started from `web/src/main.tsx`; the entry document is never reused from a cache. Not captured in this repository: the notice is the shared ky-ui component, captured end to end (a real server upgrade under an open tab, 1440×900, Busnes Light and Dark) in KyIdentity and KyPost (`docs/ui-stale-tab-2026-11-02/`), and checked by ky-ui's `browser/update.spec.js` under a strict CSP at 390 and 1280 px. `check-vendor.mjs` passes and the web tests and build pass with Node 26.12.1.
+
