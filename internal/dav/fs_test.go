@@ -235,7 +235,10 @@ func TestMoveCopyDelete(t *testing.T) {
 	e.want(e.do("worker", "COPY", e.org()+"/A/B/renamed.txt", nil, "Destination", host+e.org()+"/copy.txt"), 201, "copy")
 	// A folder never copies into its own subtree, and a MOVE never overwrites its own ancestor.
 	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/C"), 403, "copy into own subtree")
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+"/dav"+strings.TrimPrefix(e.org(), "/dav/")+"/A/C"), 403, "copy into own subtree, prefix without slash")
 	e.want(e.do("worker", "PROPFIND", e.org()+"/A/C", nil, "Depth", "0"), 404, "copy into own subtree created nothing")
+	// A shallow COPY makes one empty folder and never recurses.
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/Empty", "Depth", "0"), 201, "shallow copy into own subtree")
 	e.want(e.do("worker", "MOVE", e.org()+"/A/B", nil, "Destination", host+e.org()+"/A", "Overwrite", "T"), 403, "move onto own ancestor")
 	if got := e.do("worker", "GET", e.org()+"/A/B/renamed.txt", nil); got.Body.String() != "hello" {
 		t.Fatalf("after refused move onto ancestor: %d %q", got.Code, got.Body.String())
@@ -254,7 +257,7 @@ func TestMoveCopyDelete(t *testing.T) {
 	}
 	e.want(e.do("worker", "DELETE", e.org()+"/A", nil), 204, "delete folder")
 	trashedFolders, _ := e.st.Drive().Folders(ctx, "worker", e.team.ID, true)
-	if len(trashedFolders) != 2 {
+	if len(trashedFolders) != 3 { // A, A/B and the shallow copy A/Empty
 		t.Fatalf("folder delete trashed %d folders", len(trashedFolders))
 	}
 }
@@ -534,4 +537,37 @@ func TestDeletedWorkspaceIsGone(t *testing.T) {
 		t.Fatalf("root after delete:\n%s", root.Body.String())
 	}
 	e.want(e.do("worker", "PROPFIND", "/dav/Organization/", nil, "Depth", "0"), 207, "remaining workspace")
+}
+
+// raceBody runs before on its first read: something that happens while a body is arriving.
+type raceBody struct {
+	before func()
+	r      io.Reader
+}
+
+func (b *raceBody) Read(p []byte) (int, error) {
+	if b.before != nil {
+		b.before()
+		b.before = nil
+	}
+	return b.r.Read(p)
+}
+
+// A create-only PUT whose target appears while its body arrives never replaces that file.
+func TestIfNoneMatchHoldsWhileTheBodyArrives(t *testing.T) {
+	e := setup(t)
+	path := e.org() + "/race.txt"
+	body := &raceBody{before: func() { // a web upload: WebDAV's own lock would refuse a second PUT
+		v, err := drive.WriteBlob(e.blobs, testdb.Key, strings.NewReader("theirs"), 1<<20)
+		if err == nil {
+			_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "race.txt"}, v, 0)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}, r: strings.NewReader("mine")}
+	e.want(e.do("worker", "PUT", path, body, "If-None-Match", "*"), 412, "create-only over a file created meanwhile")
+	if got := e.do("worker", "GET", path, nil); got.Body.String() != "theirs" {
+		t.Fatalf("create-only PUT replaced the concurrent file: %q", got.Body.String())
+	}
 }

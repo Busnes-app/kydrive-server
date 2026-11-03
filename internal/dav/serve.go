@@ -28,11 +28,12 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>`))
 		return
 	}
-	if r.Method == "COPY" || r.Method == "MOVE" {
+	if d := r.Header.Get("Depth"); r.Method == "MOVE" || r.Method == "COPY" && d != "0" {
 		// x/net copies a folder into its own subtree level after level up to depth 1000 (RFC 4918
-		// 9.8.3), and a MOVE with Overwrite onto an ancestor trashes the source with it.
+		// 9.8.3), and a MOVE with Overwrite onto an ancestor trashes the source with it. Paths are
+		// compared as FS.split resolves them, so "/davX" cannot pass for "/dav/X".
 		if u, err := url.Parse(r.Header.Get("Destination")); err == nil {
-			src, dst := path.Clean(strings.TrimPrefix(r.URL.Path, prefix)), path.Clean(strings.TrimPrefix(u.Path, prefix))
+			src, dst := path.Clean("/"+strings.TrimPrefix(r.URL.Path, prefix)), path.Clean("/"+strings.TrimPrefix(u.Path, prefix))
 			if strings.HasPrefix(dst, src+"/") || strings.HasPrefix(src, dst+"/") {
 				http.Error(w, "Destination is inside the source or contains it", http.StatusForbidden)
 				return
@@ -53,10 +54,14 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		}
 		f.IfMatch = true
 	}
-	// x/net ignores If-None-Match: a create-only PUT ("*") must not replace an existing file.
-	if m := r.Header.Get("If-None-Match"); m != "" && r.Method == http.MethodPut && matches(r, prefix, f, m) {
-		http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
-		return
+	// x/net ignores If-None-Match: a create-only PUT ("*") must not replace an existing file,
+	// nor one created while the body arrives (IfMatch makes a publish conflict final: 412).
+	if m := r.Header.Get("If-None-Match"); m != "" && r.Method == http.MethodPut {
+		if matches(r, prefix, f, m) {
+			http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
+			return
+		}
+		f.IfMatch = true
 	}
 	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks.view(r.Context(), f, r.Method)}
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)
