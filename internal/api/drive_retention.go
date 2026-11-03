@@ -75,6 +75,14 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if err = drive.RemoveBlobs(s.blobRoot(), blobs); err != nil {
 			log.Printf("retention blob cleanup: %v", err)
 		}
+		// Deleted workspaces wait the drive-wide trash age too; 0 keeps them until restored.
+		blobs, err = s.store.Drive().PurgeDeletedWorkspaces(ctx, time.Now(), days)
+		if err != nil && ctx.Err() == nil {
+			log.Printf("workspace purge: %v", err)
+		}
+		if err = drive.RemoveBlobs(s.blobRoot(), blobs); err != nil {
+			log.Printf("workspace purge blob cleanup: %v", err)
+		}
 		if n, err := s.store.Drive().SweepOrphans(ctx, s.blobRoot(), time.Hour); err != nil && ctx.Err() == nil {
 			log.Printf("orphan sweep: %v", err)
 		} else if n > 0 {

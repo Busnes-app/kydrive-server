@@ -39,6 +39,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/quota", s.requireAdmin(s.driveQuota))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/name", s.requireAdmin(s.driveRenameWorkspace))
 	s.mux.HandleFunc("DELETE /api/drive/workspaces/{id}", s.requireAdmin(s.driveDeleteWorkspace))
+	s.mux.HandleFunc("GET /api/drive/deleted-workspaces", s.requireAdmin(s.driveDeletedWorkspaces))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/restore", s.requireAdmin(s.driveRestoreWorkspace))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveFolders))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
@@ -236,12 +238,43 @@ func (s *Server) driveRenameWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	s.writeJSON(w, 200, map[string]bool{"applied": true})
 }
+
+// driveDeleteWorkspace takes an optional {confirm}: a workspace holding items is deleted
+// (recoverably) only when it equals the workspace's name.
 func (s *Server) driveDeleteWorkspace(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.Drive().DeleteWorkspace(r.Context(), s.driveUser(r).ID, r.PathValue("id")); err != nil {
+	var in struct {
+		Confirm string `json:"confirm"`
+	}
+	if r.ContentLength != 0 && decodeDrive(r, &in) != nil {
+		s.driveError(w, drive.ErrInvalid)
+		return
+	}
+	recoverable, err := s.store.Drive().DeleteWorkspace(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Confirm)
+	if err != nil {
 		s.driveError(w, err)
 		return
 	}
-	s.writeJSON(w, 200, map[string]bool{"deleted": true})
+	s.writeJSON(w, 200, map[string]bool{"deleted": true, "recoverable": recoverable})
+}
+func (s *Server) driveDeletedWorkspaces(w http.ResponseWriter, r *http.Request) {
+	out, err := s.store.Drive().DeletedWorkspaces(r.Context(), s.driveUser(r).ID)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	days, err := s.trashDays(r.Context())
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]any{"purge_days": days, "workspaces": out})
+}
+func (s *Server) driveRestoreWorkspace(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Drive().RestoreWorkspace(r.Context(), s.driveUser(r).ID, r.PathValue("id")); err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]bool{"restored": true})
 }
 func (s *Server) driveFolders(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.Drive().Folders(r.Context(), s.driveUser(r).ID, r.PathValue("id"), r.URL.Query().Get("trash") == "true")

@@ -6,6 +6,7 @@ import { When } from '../components/When';
 import { HttpError, bytes, change, list, record, response, workspace } from './drive/client';
 import type { Workspace } from './drive/client';
 import { Leavers } from './drive/Leavers';
+import { DeletedWorkspaces } from './drive/DeletedWorkspaces';
 import { auditLabel } from './auditLabels';
 
 // Administration destinations in the sidebar: shared workspaces, operational status and leavers.
@@ -26,7 +27,7 @@ export function AdminWorkspaces({ workspaces, onWorkspacesChange, onOpen }: { wo
       setCreating(false); setName('');
       await reload();
     } catch (err) {
-      setMessage(err instanceof HttpError && err.status === 409 ? `A shared workspace named “${name.trim()}” already exists.` : err instanceof Error ? err.message : 'Could not create the workspace');
+      setMessage(err instanceof HttpError && err.status === 409 ? (err.message.includes('Deleted workspaces') ? `A deleted workspace named “${name.trim()}” is waiting in Deleted workspaces. Restore it, or pick another name.` : `A shared workspace named “${name.trim()}” already exists.`) : err instanceof Error ? err.message : 'Could not create the workspace');
     } finally { setBusy(false); }
   }
   return <section className="page">
@@ -45,6 +46,7 @@ export function AdminWorkspaces({ workspaces, onWorkspacesChange, onOpen }: { wo
         <td className="num">{bytes(w.used)}</td><td className="num">{bytes(w.quota)}</td>
       </tr>)}</tbody>
     </table></div></div>}
+    <DeletedWorkspaces onRestored={() => { reload().catch(e => setMessage(e instanceof Error ? e.message : 'Workspaces unavailable')); }} />
     {creating && <Dialog closeButton={false} title="New shared workspace" description="Give a KyIdentity group access from its Workspace settings once it exists." onClose={() => setCreating(false)} onSubmit={() => void create()}
       footer={<><button type="button" className="btn-secondary" onClick={() => setCreating(false)}>Cancel</button><button disabled={busy || !name.trim()}>Create workspace</button></>}>
       <label className="field">Name<input autoFocus required value={name} onChange={e => setName(e.target.value)} /></label>

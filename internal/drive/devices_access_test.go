@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -26,16 +27,16 @@ var (
 	deviceRefused = []string{
 		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
-		"RenameWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
+		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
 		"Share", "Unshare",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
 	deviceUnreachable = []string{
 		"AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
-		"DeferRevocation", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
+		"DeferRevocation", "DeletedWorkspaces", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
-		"PruneChanges", "PruneDevices", "PublishEditor", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
+		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
 	}
 )
@@ -148,7 +149,23 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 				}
 				spare = x.ID
 			}
-			return d.DeleteWorkspace(c, "admin", spare)
+			return deleteEmpty(d, c, "admin", spare)
+		},
+		"RestoreWorkspace": func(c context.Context) error {
+			x, err := d.CreateWorkspace(ctx, "admin", "Deleted "+strconv.FormatBool(c == device), 10)
+			if err == nil {
+				err = d.Grant(ctx, "admin", x.ID, "team", "manager")
+			}
+			if err == nil {
+				_, err = d.AddFolder(ctx, "worker", x.ID, "", "kept")
+			}
+			if err == nil {
+				_, err = d.DeleteWorkspace(ctx, "admin", x.ID, x.Name)
+			}
+			if err != nil {
+				return err
+			}
+			return d.RestoreWorkspace(c, "admin", x.ID)
 		},
 		"SetRetention": func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
 		// Handover needs a leaver; the device refusal comes first, so no success case.

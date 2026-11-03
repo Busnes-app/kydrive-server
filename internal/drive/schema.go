@@ -80,6 +80,11 @@ ALTER TABLE drive_editor_sessions ADD COLUMN login_at INTEGER NOT NULL DEFAULT 0
 CREATE INDEX drive_editor_sids ON drive_editor_sessions(sso_sid) WHERE revoked=false AND sso_sid!='';
 UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND user_id IN (SELECT id FROM users WHERE sso_provider!='local'));
 UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND user_id IN (SELECT id FROM users WHERE sso_provider!='local');`,
+	// A deleted shared workspace keeps its rows until purge; deleted_at (RFC 3339, '' = live)
+	// takes away every access to it (access.go) and starts its recovery period.
+	`ALTER TABLE drive_workspaces ADD COLUMN deleted_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
+CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

@@ -26,6 +26,12 @@ func events(t *testing.T, d *drive.Store, action string) []string {
 	return out
 }
 
+// deleteEmpty deletes without naming the workspace, as for an empty one.
+func deleteEmpty(d *drive.Store, ctx context.Context, user, workspace string) error {
+	_, err := d.DeleteWorkspace(ctx, user, workspace, "")
+	return err
+}
+
 func TestRenameWorkspace(t *testing.T) {
 	st, w, _ := fixture(t)
 	d, ctx := st.Drive(), context.Background()
@@ -91,7 +97,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	}
 	refuse := func(want error, what string) {
 		t.Helper()
-		if err := d.DeleteWorkspace(ctx, "admin", w.ID); !errors.Is(err, want) {
+		if err := deleteEmpty(d, ctx, "admin", w.ID); !errors.Is(err, want) {
 			t.Fatalf("%s: %v", what, err)
 		}
 	}
@@ -116,12 +122,12 @@ func TestDeleteWorkspace(t *testing.T) {
 	_, anywhere, err := d.CreateAgentToken(ctx, "worker", "Agent", drive.ScopeMCPRead, "", "")
 	must(err)
 
-	if err := d.DeleteWorkspace(ctx, "worker", w.ID); !errors.Is(err, drive.ErrDenied) {
+	if err := deleteEmpty(d, ctx, "worker", w.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("non-admin deleted a workspace: %v", err)
 	}
 	mine, err := d.EnsurePersonalWorkspace(ctx, "admin")
 	must(err)
-	if err := d.DeleteWorkspace(ctx, "admin", mine); !errors.Is(err, drive.ErrDenied) {
+	if err := deleteEmpty(d, ctx, "admin", mine); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("My files deleted: %v", err)
 	}
 	refuse(drive.ErrConflict, "live items")
@@ -139,7 +145,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	refuse(drive.ErrConflict, "upload in progress")
 	must(drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET expires=0 WHERE id=?`, u.ID))
 
-	must(d.DeleteWorkspace(ctx, "admin", w.ID))
+	must(deleteEmpty(d, ctx, "admin", w.ID))
 
 	list, err := d.Workspaces(ctx, "admin", true)
 	must(err)
@@ -186,7 +192,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	}
 
 	// Deleting again changes nothing and records nothing.
-	must(d.DeleteWorkspace(ctx, "admin", w.ID))
+	must(deleteEmpty(d, ctx, "admin", w.ID))
 	got := events(t, d, "workspace.deleted")
 	want := w.ID + ` name="Organization" links=2 shares=1 grants=1 service_tokens=1 agent_tokens=1`
 	if len(got) != 1 || got[0] != want {
@@ -220,7 +226,7 @@ func TestDeleteWorkspaceRacesUploads(t *testing.T) {
 				published <- err
 			})
 		}
-		deleted := d.DeleteWorkspace(ctx, "admin", target.ID)
+		deleted := deleteEmpty(d, ctx, "admin", target.ID)
 		wg.Wait()
 		close(published)
 		landed := 0

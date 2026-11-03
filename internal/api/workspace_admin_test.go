@@ -87,3 +87,60 @@ func TestWorkspaceRenameAndDeleteRoutes(t *testing.T) {
 		t.Fatalf("audit: %s", body)
 	}
 }
+
+// A workspace holding files is deleted recoverably once the admin types its name, then listed
+// under deleted workspaces and restorable.
+func TestRecoverableWorkspaceDeleteRoutes(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	boss := loginAs(t, srv, st, "boss", "admin")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "crew", DisplayName: "Crew", ExternalID: "x-crew", Members: []string{"usr_boss"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	out := send(t, srv, "POST", "/api/drive/workspaces", `{"name":"Studio","quota":1048576}`, boss, "")
+	var w struct{ ID string }
+	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &w) != nil {
+		t.Fatalf("create: %d %s", out.Code, out.Body.String())
+	}
+	if err := st.Drive().Grant(ctx, "usr_boss", w.ID, "crew", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	expect := func(method, path, body string, want int) string {
+		t.Helper()
+		out := send(t, srv, method, path, body, boss, "")
+		if out.Code != want {
+			t.Fatalf("%s %s %s: %d, want %d: %s", method, path, body, out.Code, want, out.Body.String())
+		}
+		return out.Body.String()
+	}
+	ws := "/api/drive/workspaces/" + w.ID
+	expect("POST", ws+"/folders", `{"parent":"","name":"Drafts"}`, 201)
+	if body := expect("GET", "/api/drive/workspaces?admin=true", "", 200); !strings.Contains(body, `"items":1`) {
+		t.Fatalf("item count: %s", body)
+	}
+	if body := expect("DELETE", ws, `{"confirm":"studio"}`, 409); !strings.Contains(body, "confirm with its name") {
+		t.Fatalf("wrong name: %s", body)
+	}
+	expect("DELETE", ws, `{"confirm":"Studio","extra":1}`, 400)
+	if body := expect("DELETE", ws, `{"confirm":"Studio"}`, 200); !strings.Contains(body, `"recoverable":true`) {
+		t.Fatalf("delete: %s", body)
+	}
+	expect("GET", ws+"/folders", "", 403)
+	if body := expect("GET", "/api/drive/workspaces?admin=true", "", 200); strings.Contains(body, w.ID) {
+		t.Fatalf("deleted workspace listed: %s", body)
+	}
+	body := expect("GET", "/api/drive/deleted-workspaces", "", 200)
+	if !strings.Contains(body, `"purge_days":90`) || !strings.Contains(body, `"name":"Studio"`) || !strings.Contains(body, `"items":1`) || strings.Contains(body, "Drafts") {
+		t.Fatalf("deleted list: %s", body)
+	}
+	expect("POST", ws+"/restore", "", 200)
+	expect("POST", ws+"/restore", "", 404)
+	expect("GET", ws+"/folders", "", 200)
+	audit := expect("GET", "/api/drive/audit", "", 200)
+	if !strings.Contains(audit, `"workspace.deleted"`) || !strings.Contains(audit, `"workspace.restored"`) || !strings.Contains(audit, `recoverable=true`) {
+		t.Fatalf("audit: %s", audit)
+	}
+}
