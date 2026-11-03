@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -141,5 +142,55 @@ func TestResumableUploadRoutes(t *testing.T) {
 	}
 	if got := send(t, srv, "POST", "/api/drive/workspaces/"+o.ID+"/upload-sessions", `{"name":"x","size":1}`, nil, token); got.Code != 201 {
 		t.Fatalf("service token in its workspace %d %s", got.Code, got.Body.String())
+	}
+}
+
+// Completing a resumable upload re-seals the whole file in one request; its 201 must still
+// arrive after the server's write timeout, or the client retries a file already published.
+func TestCompletionOutlastsServerTimeouts(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	loginAs(t, srv, st, "slowupadmin", "admin")
+	user := loginAs(t, srv, st, "slowuploader", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "slowup", DisplayName: "Slow uploads", Members: []string{"usr_slowuploader"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_slowupadmin", "Slow uploads", 200<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_slowupadmin", w.ID, "slowup", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	const size, chunk = 32 << 20, 8 << 20
+	out := send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/upload-sessions", fmt.Sprintf(`{"name":"big.bin","size":%d}`, size), user, "")
+	var session struct{ ID string }
+	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &session) != nil {
+		t.Fatalf("start %d %s", out.Code, out.Body.String())
+	}
+	body := strings.Repeat("x", chunk)
+	for start := 0; start < size; start += chunk {
+		if got := putChunk(t, srv, user, session.ID, fmt.Sprintf("bytes %d-%d/%d", start, start+chunk-1, size), body); got.Code != 204 {
+			t.Fatalf("chunk at %d: %d %s", start, got.Code, got.Body.String())
+		}
+	}
+	ts := httptest.NewUnstartedServer(srv)
+	ts.Config.ReadTimeout, ts.Config.WriteTimeout = 20*time.Millisecond, 20*time.Millisecond
+	ts.Start()
+	defer ts.Close()
+	req, _ := http.NewRequest("POST", ts.URL+"/api/drive/upload-sessions/"+session.ID+"/complete", nil)
+	req.AddCookie(user)
+	api.SignCSRFForTest(srv, req)
+	began := time.Now()
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("completion after %v: %v", time.Since(began), err)
+	}
+	defer res.Body.Close()
+	if took := time.Since(began); res.StatusCode != 201 || took < 2*ts.Config.ReadTimeout {
+		t.Fatalf("completion: %d after %v (must outlast the 20ms timeouts to prove anything)", res.StatusCode, took)
 	}
 }

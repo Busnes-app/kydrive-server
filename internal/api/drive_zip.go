@@ -29,7 +29,7 @@ func (s *Server) driveFolderZip(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name + ".zip"}))
 	w.Header().Set("Cache-Control", "no-store")
-	z := zip.NewWriter(w)
+	z := zip.NewWriter(s.steady(w))
 	for _, e := range entries {
 		if err = s.zipEntry(z, e); err != nil {
 			log.Printf("folder zip %s: %v", r.PathValue("id"), err)

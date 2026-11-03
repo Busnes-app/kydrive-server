@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -176,6 +177,14 @@ func TestPutGetAndVersions(t *testing.T) {
 		t.Fatalf("revision %d", v)
 	}
 	e.want(e.do("worker", "PUT", e.org()+"/new.txt", strings.NewReader("x"), "If-Match", `*`), 412, "if-match on a missing file")
+	// An If-None-Match tag that differs from the file's is an ordinary update, even holding '*'.
+	e.want(e.do("worker", "PUT", path, strings.NewReader("tagged"), "If-None-Match", `"old*etag"`), 201, "if-none-match with a non-matching tag")
+	// If-None-Match: a create-only PUT never replaces an existing file, and still creates a new one.
+	e.want(e.do("worker", "PUT", path, strings.NewReader("clobber"), "If-None-Match", `*`), 412, "if-none-match on an existing file")
+	if v := e.versions("Résumé 2026.txt"); v != 4 {
+		t.Fatalf("if-none-match published: revision %d", v)
+	}
+	e.want(e.do("worker", "PUT", e.org()+"/created.txt", strings.NewReader("x"), "If-None-Match", `*`), 201, "if-none-match on a missing file")
 	// The reader sees only the team workspace, so its path has no suffix.
 	e.want(e.do("reader", "PUT", "/dav/Organization/R%C3%A9sum%C3%A9%202026.txt", strings.NewReader("reader")), 403, "reader put")
 	e.want(e.do("worker", "PUT", e.org()+"/Missing/x.txt", strings.NewReader("x")), 409, "put without parent")
@@ -227,6 +236,17 @@ func TestMoveCopyDelete(t *testing.T) {
 		t.Fatalf("after moves: %d %q", got.Code, got.Body.String())
 	}
 	e.want(e.do("worker", "COPY", e.org()+"/A/B/renamed.txt", nil, "Destination", host+e.org()+"/copy.txt"), 201, "copy")
+	// A folder never copies into its own subtree, and a MOVE never overwrites its own ancestor.
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/C"), 403, "copy into own subtree")
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+"/dav"+strings.TrimPrefix(e.org(), "/dav/")+"/A/C"), 403, "copy into own subtree, prefix without slash")
+	e.want(e.do("worker", "PROPFIND", e.org()+"/A/C", nil, "Depth", "0"), 404, "copy into own subtree created nothing")
+	e.want(e.do("worker", "COPY", "/dav/", nil, "Destination", host+e.org()+"/A/Root"), 403, "copy of the root")
+	// A shallow COPY makes one empty folder and never recurses.
+	e.want(e.do("worker", "COPY", e.org()+"/A", nil, "Destination", host+e.org()+"/A/Empty", "Depth", "0"), 201, "shallow copy into own subtree")
+	e.want(e.do("worker", "MOVE", e.org()+"/A/B", nil, "Destination", host+e.org()+"/A", "Overwrite", "T"), 403, "move onto own ancestor")
+	if got := e.do("worker", "GET", e.org()+"/A/B/renamed.txt", nil); got.Body.String() != "hello" {
+		t.Fatalf("after refused move onto ancestor: %d %q", got.Code, got.Body.String())
+	}
 	if got := e.do("worker", "GET", e.org()+"/copy.txt", nil); got.Body.String() != "hello" {
 		t.Fatalf("copy: %q", got.Body.String())
 	}
@@ -241,7 +261,7 @@ func TestMoveCopyDelete(t *testing.T) {
 	}
 	e.want(e.do("worker", "DELETE", e.org()+"/A", nil), 204, "delete folder")
 	trashedFolders, _ := e.st.Drive().Folders(ctx, "worker", e.team.ID, true)
-	if len(trashedFolders) != 2 {
+	if len(trashedFolders) != 3 { // A, A/B and the shallow copy A/Empty
 		t.Fatalf("folder delete trashed %d folders", len(trashedFolders))
 	}
 }
@@ -521,4 +541,57 @@ func TestDeletedWorkspaceIsGone(t *testing.T) {
 		t.Fatalf("root after delete:\n%s", root.Body.String())
 	}
 	e.want(e.do("worker", "PROPFIND", "/dav/Organization/", nil, "Depth", "0"), 207, "remaining workspace")
+}
+
+// raceBody runs before on its first read: something that happens while a body is arriving.
+type raceBody struct {
+	before func()
+	r      io.Reader
+}
+
+func (b *raceBody) Read(p []byte) (int, error) {
+	if b.before != nil {
+		b.before()
+		b.before = nil
+	}
+	return b.r.Read(p)
+}
+
+// A create-only PUT whose target appears while its body arrives never replaces that file.
+func TestIfNoneMatchHoldsWhileTheBodyArrives(t *testing.T) {
+	e := setup(t)
+	path := e.org() + "/race.txt"
+	body := &raceBody{before: func() { // a web upload: WebDAV's own lock would refuse a second PUT
+		v, err := drive.WriteBlob(e.blobs, testdb.Key, strings.NewReader("theirs"), 1<<20)
+		if err == nil {
+			_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "race.txt"}, v, 0)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}, r: strings.NewReader("mine")}
+	e.want(e.do("worker", "PUT", path, body, "If-None-Match", "*"), 412, "create-only over a file created meanwhile")
+	if got := e.do("worker", "GET", path, nil); got.Body.String() != "theirs" {
+		t.Fatalf("create-only PUT replaced the concurrent file: %q", got.Body.String())
+	}
+}
+
+// A create-only write refuses a file that appeared after the precondition was checked but before
+// the target was opened.
+func TestCreateOnlyRefusesAFileFoundAtOpen(t *testing.T) {
+	e := setup(t)
+	v, err := drive.WriteBlob(e.blobs, testdb.Key, strings.NewReader("theirs"), 1<<20)
+	if err == nil {
+		_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "open.txt"}, v, 0)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := dav.New(e.st.Drive(), "worker", e.blobs, testdb.Key, 1<<20, "")
+	fs.IfMatch, fs.CreateOnly = true, true
+	name := strings.TrimPrefix(e.org(), "/dav") + "/open.txt"
+	name = strings.ReplaceAll(name, "%20", " ")
+	if _, err := fs.OpenFile(context.Background(), name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644); err == nil || !errors.Is(fs.Err, drive.ErrConflict) {
+		t.Fatalf("create-only open of an existing file: %v (drive error %v)", err, fs.Err)
+	}
 }

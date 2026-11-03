@@ -33,6 +33,8 @@ type FS struct {
 	// IfMatch is set when the request's If-Match was checked: a write then publishes against
 	// exactly the revision opened, instead of retrying as last writer wins.
 	IfMatch bool
+	// CreateOnly is set by If-None-Match: *: opening an existing file for writing is a conflict.
+	CreateOnly bool
 	// Err is the last drive error, so the caller can answer with its real status: x/net
 	// reports every failed PUT as 405.
 	Err        error
@@ -291,7 +293,7 @@ func (f *FS) create(ctx context.Context, name string) (webdav.File, error) {
 	target := drive.File{Workspace: dir.workspace, Parent: dir.folder, Name: base}
 	it, err := f.store.Lookup(ctx, f.user, dir.workspace, dir.folder, base)
 	switch {
-	case err == nil && it.Folder != nil:
+	case err == nil && (it.Folder != nil || f.CreateOnly):
 		return nil, f.fail("create", name, drive.ErrConflict)
 	case err == nil:
 		target = *it.File

@@ -82,7 +82,7 @@ KyDrive is the suite's general drive backend. KyIdentity owns people/groups; KyD
 Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared verification and operator documentation. Domain packages own contracts in the Child DOX Index.
 
 ## Local Contracts
-- `apply-setup` is the installer boundary: bounded private bundle, capabilities, read-only check and explicit graceful restart. A private data-directory Unix socket reaches the running server. New directory identities and settings are audited and owned by stable setup ID; existing accounts are never adopted. See `docs/INSTALLER-SETUP.md` for supported fields and remaining setup gates.
+- `apply-setup` is the installer boundary: bounded private bundle, capabilities, read-only check and explicit graceful restart. A private data-directory Unix socket reaches the running server. New directory identities and settings are audited and owned by stable setup ID; existing accounts are never adopted. See `docs/INSTALLER-SETUP.md` for supported fields and remaining setup gates. CLI `deposit`, `export-capsule` and `backup-drill` apply the stored installer configuration as the server does (`openExisting`), so their capsules carry installer-supplied secrets.
 - `apply-setup --stage` prepares immutable secret-free metadata at
   `<KY_DATA_DIR>/installer/<setup UUID>/setup.json` through shared `applysetup` authority.
   It requires protected data-directory ancestry; check creates nothing. Preparation

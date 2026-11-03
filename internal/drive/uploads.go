@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,7 +21,8 @@ import (
 const (
 	uploadTTL      = 24 * time.Hour
 	uploadsPerUser = 8
-	// completionClaim outlives the longest request (KY_WRITE_TIMEOUT is at most 15m).
+	// completionClaim is how long a completion's claim holds; a running completion renews it
+	// every third of that (completion has no time limit), so only a crashed one's lapses.
 	completionClaim = 30 * time.Minute
 )
 
@@ -203,22 +205,12 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 	if err != nil {
 		return File{}, err
 	}
-	// Claim the session before the file-sized re-seal so concurrent completions cannot each
-	// write a full copy. A crashed request's claim expires; a failure releases it.
-	claim := time.Now().Unix()
-	res, err := s.db.ExecContext(ctx, `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND owner=? AND received=size AND completing<?`, claim, id, user, claim-int64(completionClaim/time.Second))
+	release, err := s.claimCompletion(ctx, user, id, completionClaim/3)
 	if err != nil {
 		return File{}, err
 	}
-	if n, err := res.RowsAffected(); err != nil || n != 1 {
-		return File{}, cmp.Or(err, fmt.Errorf("%w: upload incomplete or already completing", ErrConflict))
-	}
-	done := false
-	defer func() {
-		if !done {
-			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
-		}
-	}()
+	published := false
+	defer func() { release(published) }()
 	pr, pw := io.Pipe()
 	go func() { pw.CloseWithError(s.readSegments(ctx, pw, staging, key, id)) }()
 	v, err := WriteBlob(blobs, key, pr, max(u.Size, 1))
@@ -236,8 +228,57 @@ func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key [
 		RemoveBlobs(blobs, []string{v.Blob})
 		return f, err
 	}
-	done = true
-	return f, s.dropUpload(ctx, staging, id, nil)
+	published = true
+	// The file is published: a failed cleanup must not tell the client otherwise, or its
+	// retry publishes again. ExpireUploads removes what is left.
+	if err := s.dropUpload(context.WithoutCancel(ctx), staging, id, nil); err != nil {
+		log.Printf("upload %s: published, cleanup failed: %v", id, err)
+	}
+	return f, nil
+}
+
+// claimCompletion claims a fully received session before its file-sized re-seal, so concurrent
+// completions cannot each write a full copy, and renews the claim every interval until release,
+// since completion has no time limit: a long one is never taken for crashed by a second
+// completion, ExpireUploads or a workspace delete. Only a crashed request's claim lapses.
+// release(published) stops the renewal and, unless the file was published, gives the claim up.
+func (s *Store) claimCompletion(ctx context.Context, user, id string, every time.Duration) (release func(published bool), err error) {
+	claim := time.Now().Unix()
+	n, err := rowsAffected(s.db.ExecContext(ctx, `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND owner=? AND received=size AND completing<?`, claim, id, user, claim-int64(completionClaim/time.Second)))
+	if err != nil || n != 1 {
+		return nil, cmp.Or(err, fmt.Errorf("%w: upload incomplete or already completing", ErrConflict))
+	}
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				now := time.Now().Unix()
+				if n, _ := rowsAffected(s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=? WHERE id=? AND completing=?`, now, id, claim)); n == 1 {
+					claim = now
+				}
+			}
+		}
+	}()
+	return func(published bool) {
+		close(done)
+		<-stopped
+		if !published {
+			s.db.ExecContext(context.WithoutCancel(ctx), `UPDATE drive_upload_sessions SET completing=0 WHERE id=? AND completing=?`, id, claim)
+		}
+	}, nil
+}
+
+func rowsAffected(res sql.Result, err error) (int64, error) {
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, key []byte, id string) error {
@@ -303,17 +344,38 @@ func (s *Store) dropUpload(ctx context.Context, staging, id string, audit func(*
 	return os.RemoveAll(filepath.Join(staging, id))
 }
 
+// expireUpload drops one session only if the deleting transaction still finds it expired and
+// unclaimed, so a completion that claimed it after the selection keeps its bytes.
+func (s *Store) expireUpload(ctx context.Context, staging, id string, now int64) error {
+	gone := false
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		// Segments reference the session, so they go first; the session delete decides.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_segments WHERE session=? AND session IN (SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?)`, id, now, now-int64(completionClaim/time.Second)); err != nil {
+			return err
+		}
+		n, err := rowsAffected(tx.ExecContext(ctx, `DELETE FROM drive_upload_sessions WHERE id=? AND expires<=? AND completing<?`, id, now, now-int64(completionClaim/time.Second)))
+		gone = n == 1
+		return err
+	})
+	if err != nil || !gone {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(staging, id))
+}
+
 // ExpireUploads removes expired sessions, then staging directories with no session that are an
 // hour old (crash residue; the hour keeps a session that is starting up safe). Staging is not
 // user data.
 func (s *Store) ExpireUploads(ctx context.Context, staging string) (int, error) {
-	expired, err := column(ctx, s.db, `SELECT id FROM drive_upload_sessions WHERE expires<=?`, time.Now().Unix())
+	// A completion in progress holds its claim; expiring it would delete the bytes it is sealing.
+	now := time.Now().Unix()
+	expired, err := column(ctx, s.db, `SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?`, now, now-int64(completionClaim/time.Second))
 	if err != nil {
 		return 0, err
 	}
 	var errs []error
 	for _, id := range expired {
-		errs = append(errs, s.dropUpload(ctx, staging, id, nil))
+		errs = append(errs, s.expireUpload(ctx, staging, id, now))
 	}
 	entries, err := os.ReadDir(staging)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

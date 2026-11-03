@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -81,6 +82,10 @@ func (s *Server) driveAppendUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) driveCompleteUpload(w http.ResponseWriter, r *http.Request) {
+	// Completion re-seals the whole file, which can outlast KY_WRITE_TIMEOUT: the file would be
+	// published and its 201 lost. Lift the write deadline; the size cap bounds the work. (Go
+	// clears the read deadline once the body is read, so a long handler is not cancelled.)
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	f, err := s.store.Drive().CompleteUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, s.driveUser(r).ID, r.PathValue("sid"))
 	if err != nil {
 		s.driveError(w, err)

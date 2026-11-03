@@ -33,6 +33,10 @@ var SchemaVersion = len(schema)
 // KYB1SchemaVersion queues KYB1 blobs; LoginSchemaVersion binds editor sessions to sign-ins.
 const KYB1SchemaVersion, LoginSchemaVersion = 16, 17
 
+// ServiceTokenSchemaVersion binds editor sessions to the service token that opened them;
+// ClashSchemaVersion forbids a file and a folder sharing a name.
+const ServiceTokenSchemaVersion, ClashSchemaVersion = 19, clashVersion
+
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
 // MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:
@@ -235,4 +239,14 @@ func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
 // CheckStaged is the decrypt check a staged rewrite must pass before it replaces its blob.
 func CheckStaged(tmp string, key []byte, id string, size int64, digest string) error {
 	return checkStaged(tmp, key, id, size, digest)
+}
+
+// ExpireUpload is one session's expiry, as ExpireUploads runs it after its selection.
+func ExpireUpload(ctx context.Context, s *Store, staging, id string, now int64) error {
+	return s.expireUpload(ctx, staging, id, now)
+}
+
+// ClaimCompletion is CompleteUpload's claim, renewed every interval until release.
+func ClaimCompletion(ctx context.Context, s *Store, user, id string, interval time.Duration) (func(bool), error) {
+	return s.claimCompletion(ctx, user, id, interval)
 }

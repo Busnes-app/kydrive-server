@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // schema upgrades drive tables in place; entry i is version i+1. Append only: never edit
@@ -85,10 +88,132 @@ UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND user_id IN
 	`ALTER TABLE drive_workspaces ADD COLUMN deleted_at TEXT NOT NULL DEFAULT '';
 ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
 CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
+	// An editor session opened with a service token names it, so revoking the token ends it.
+	// Open sessions with no sign-in binding (login_at 0) came from service tokens, which no
+	// revocation could reach, or are local sign-ins older than schema 17: revoke them once, here.
+	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';
+UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND login_at=0);
+UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND login_at=0;`,
+	// A live file and a live folder never share a name in one parent: WebDAV and the desktop
+	// client could reach only one. The message makes uniqueViolation report ErrConflict.
+	`CREATE TRIGGER drive_file_name_free_insert BEFORE INSERT ON drive_files WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
+CREATE TRIGGER drive_file_name_free_update BEFORE UPDATE ON drive_files WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
+CREATE TRIGGER drive_folder_name_free_insert BEFORE INSERT ON drive_folders WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
+CREATE TRIGGER drive_folder_name_free_update BEFORE UPDATE ON drive_folders WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
+BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
 const nameVersion = 5
+
+// clashVersion is the schema version that forbids a file and a folder sharing a name; its
+// transaction renames the files of existing clashes (renameClashes).
+const clashVersion = 20
+
+// renameClashes renames each file that shares its parent and name with a folder in the same
+// state (both live, or both trashed and so restored together) to the first free "<name> (n)",
+// extension kept, so a handover or restore that moves both never trips the triggers. Folder
+// places are loaded once: no index serves an all-states file-to-folder lookup.
+func (s *Store) renameClashes(ctx context.Context, tx *sql.Tx) error {
+	type place struct {
+		workspace, parent, mac string
+		trashed                bool
+	}
+	folders := map[place]bool{}
+	rows, err := tx.QueryContext(ctx, `SELECT workspace,parent,name_hmac,trashed FROM drive_folders`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var p place
+		if err := rows.Scan(&p.workspace, &p.parent, &p.mac, &p.trashed); err != nil {
+			rows.Close()
+			return err
+		}
+		folders[p] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	type clash struct{ id, workspace, parent, stored string }
+	var clashes []clash
+	rows, err = tx.QueryContext(ctx, `SELECT id,workspace,parent,name_hmac,trashed,name FROM drive_files`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var c clash
+		var p place
+		if err := rows.Scan(&c.id, &p.workspace, &p.parent, &p.mac, &p.trashed, &c.stored); err != nil {
+			rows.Close()
+			return err
+		}
+		if folders[p] {
+			c.workspace, c.parent = p.workspace, p.parent
+			clashes = append(clashes, c)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, c := range clashes {
+		name, err := s.names.open("drive_files", c.id, c.stored)
+		if err != nil {
+			return err
+		}
+		for n := 2; ; n++ {
+			// Files in any state: a trashed one may come back in the same restore. Clashes are
+			// rare, so this per-candidate count (workspace index) stays cheap.
+			candidate := clashName(name, n)
+			mac := s.names.hmac(candidate)
+			var taken int
+			if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, c.workspace, c.parent, mac).Scan(&taken); err != nil {
+				return err
+			}
+			if taken > 0 || folders[place{c.workspace, c.parent, mac, true}] {
+				continue
+			}
+			stored, mac, err := s.names.seal("drive_files", c.id, candidate)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET name=?,name_hmac=? WHERE id=?`, stored, mac, c.id); err != nil {
+				return err
+			}
+			if err := change(ctx, tx, c.workspace, "file", c.id); err != nil {
+				return err
+			}
+			if err := event(ctx, tx, "system", "file.renamed", c.id+" name clashed with a folder"); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
+}
+
+// clashName is numbered(name, n) within ValidName's 255 bytes: whole runes are cut from the
+// end of the base, so the extension, which picks the editor, survives.
+func clashName(name string, n int) string {
+	for {
+		candidate := numbered(name, n)
+		if len(candidate) <= 255 {
+			return candidate
+		}
+		ext := path.Ext(name)
+		if ext == name {
+			ext = ""
+		}
+		base := strings.TrimSuffix(name, ext)
+		_, size := utf8.DecodeLastRuneInString(base) // base is never empty: then ext would be ""
+		name = base[:len(base)-size] + ext
+	}
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
@@ -105,6 +230,11 @@ func (s *Store) migrate(ctx context.Context) error {
 			}
 			if i+1 == nameVersion {
 				if err := s.names.encryptNames(ctx, tx); err != nil {
+					return fmt.Errorf("drive schema %d: %w", i+1, err)
+				}
+			}
+			if i+1 == clashVersion {
+				if err := s.renameClashes(ctx, tx); err != nil {
 					return fmt.Errorf("drive schema %d: %w", i+1, err)
 				}
 			}

@@ -27,6 +27,12 @@ type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | '
 const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
 const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
 
+// trashNotice tells what happens to trash. A workspace's trash_days of 0 follows the drive-wide
+// setting (default 90 days), which only administrators can read, so it never promises forever.
+export function trashNotice(days: number): string {
+  return days > 0 ? `Items here are deleted permanently after ${days} days.` : 'Items here may be deleted permanently after the trash period your administrator sets.';
+}
+
 export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
   const fileTarget = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
@@ -207,7 +213,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
         <button className="btn-ghost" onClick={() => setPicked(new Set())}><X size={16} aria-hidden="true" />Clear selection</button>
       </div>
     </div> : trash && <div className="drive-trash-banner">
-      <p>{current.trash_days > 0 ? `Items here are deleted permanently after ${current.trash_days} days.` : 'Deleted items stay here until they are restored or deleted permanently.'}</p>
+      <p>{trashNotice(current.trash_days)}</p>
       <div className="drive-toolbar-actions">
         <button className="btn-secondary" onClick={leaveTrash}><ArrowLeft size={16} aria-hidden="true" />Back to files</button>
         {canPurge && <button className="btn-danger-quiet" disabled={busy || visibleFiles.length + visibleFolders.length === 0} onClick={() => void emptyTrash()}>Empty trash</button>}

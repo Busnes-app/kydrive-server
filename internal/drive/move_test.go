@@ -3,6 +3,7 @@ package drive_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -306,5 +307,110 @@ func TestDocumentKeyRoundTrip(t *testing.T) {
 		if _, _, _, err := drive.ParseDocumentKey(bad); !errors.Is(err, drive.ErrInvalid) {
 			t.Errorf("%q accepted: %v", bad, err)
 		}
+	}
+}
+
+// A live file and a live folder never share a name in one parent, whichever way the name arrives.
+func TestFileAndFolderNeverShareAName(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	report, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Report"}, blob(t, root, "r"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Report"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("folder over a file's name: %v", err)
+	}
+	plans, err := d.AddFolder(ctx, "worker", w.ID, "", "Plans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Plans"}, blob(t, root, "p"), 0); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("file over a folder's name: %v", err)
+	}
+	if _, err = d.MoveFile(ctx, "worker", report.ID, 1, drive.Location{Workspace: w.ID, Name: "Plans"}); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("file renamed onto a folder's name: %v", err)
+	}
+	other, err := d.AddFolder(ctx, "worker", w.ID, "", "Other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.MoveFolder(ctx, "worker", other.ID, "", "Report"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("folder renamed onto a file's name: %v", err)
+	}
+	// Trashed items free their name, and restoring one into a clash is refused.
+	if err = d.SetFolderTrash(ctx, "worker", plans.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "Plans"}, blob(t, root, "p"), 0); err != nil {
+		t.Fatalf("name of a trashed folder: %v", err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", plans.ID, false); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("restored a folder over a file's name: %v", err)
+	}
+}
+
+// Clashes made before schema 20 are resolved by the upgrade: the file gets a free numbered name
+// that keeps its extension and fits 255 bytes, so a handover or restore that moves both never
+// trips the triggers. A live file beside a trashed folder of its name is left alone.
+func TestClashSchemaRenamesExistingClashes(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := drive.ExecSQL(ctx, d, `DROP TRIGGER drive_file_name_free_insert; DROP TRIGGER drive_file_name_free_update; DROP TRIGGER drive_folder_name_free_insert; DROP TRIGGER drive_folder_name_free_update; DELETE FROM drive_schema WHERE version=?`, drive.ClashSchemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("é", 125) + ".xlsx" // 255 bytes
+	publish := func(name string) drive.File {
+		t.Helper()
+		f, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: name}, blob(t, root, "x"), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	for _, name := range []string{"Budget.xlsx", long, "Old"} {
+		if _, err := d.AddFolder(ctx, "worker", w.ID, "", name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish("Budget (2).xlsx")
+	budget, longFile := publish("Budget.xlsx"), publish(long)
+	old, _ := d.AddFolder(ctx, "worker", w.ID, "", "Kept")
+	if err := d.SetFolderTrash(ctx, "worker", old.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	kept := publish("Kept")
+	// A pair trashed together, beside a trashed "Plan (2)", restores together after the upgrade.
+	box, err := d.AddFolder(ctx, "worker", w.ID, "", "Box")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.AddFolder(ctx, "worker", w.ID, box.ID, "Plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Plan (2)", "Plan"} {
+		if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Parent: box.ID, Name: name}, blob(t, root, "x"), 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = d.SetFolderTrash(ctx, "worker", box.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.Migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", box.ID, false); err != nil {
+		t.Fatalf("restoring a folder trashed with a clash: %v", err)
+	}
+	for f, want := range map[string]string{budget.ID: "Budget (3).xlsx", longFile.ID: strings.Repeat("é", 123) + " (2).xlsx", kept.ID: "Kept"} {
+		got, err := d.File(ctx, "worker", f, 1)
+		if err != nil || got.Name != want {
+			t.Fatalf("file after upgrade: %q, want %q: %v", got.Name, want, err)
+		}
+	}
+	if _, err := d.AddFolder(ctx, "worker", w.ID, "", "Budget (3).xlsx"); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("triggers not installed by the upgrade: %v", err)
 	}
 }
