@@ -176,6 +176,12 @@ func TestPutGetAndVersions(t *testing.T) {
 		t.Fatalf("revision %d", v)
 	}
 	e.want(e.do("worker", "PUT", e.org()+"/new.txt", strings.NewReader("x"), "If-Match", `*`), 412, "if-match on a missing file")
+	// If-None-Match: a create-only PUT never replaces an existing file, and still creates a new one.
+	e.want(e.do("worker", "PUT", path, strings.NewReader("clobber"), "If-None-Match", `*`), 412, "if-none-match on an existing file")
+	if v := e.versions("Résumé 2026.txt"); v != 3 {
+		t.Fatalf("if-none-match published: revision %d", v)
+	}
+	e.want(e.do("worker", "PUT", e.org()+"/created.txt", strings.NewReader("x"), "If-None-Match", `*`), 201, "if-none-match on a missing file")
 	// The reader sees only the team workspace, so its path has no suffix.
 	e.want(e.do("reader", "PUT", "/dav/Organization/R%C3%A9sum%C3%A9%202026.txt", strings.NewReader("reader")), 403, "reader put")
 	e.want(e.do("worker", "PUT", e.org()+"/Missing/x.txt", strings.NewReader("x")), 409, "put without parent")

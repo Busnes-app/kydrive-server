@@ -40,6 +40,11 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		}
 		f.IfMatch = true
 	}
+	// x/net ignores If-None-Match: a create-only PUT ("*") must not replace an existing file.
+	if m := r.Header.Get("If-None-Match"); m != "" && r.Method == http.MethodPut && matches(r, prefix, f, m) {
+		http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
+		return
+	}
 	h := &webdav.Handler{Prefix: prefix, FileSystem: f, LockSystem: locks.view(r.Context(), f, r.Method)}
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)
 }
