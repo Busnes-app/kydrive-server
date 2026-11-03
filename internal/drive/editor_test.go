@@ -484,3 +484,52 @@ func TestLoginSchemaRevokesUnboundDirectoryEditors(t *testing.T) {
 		t.Fatalf("second start revoked a later editor session: %v", err)
 	}
 }
+
+// An editor session opened with a service token ends when the token is revoked or expires,
+// as the token's own requests do; the same user's browser sessions stay open.
+func TestServiceTokenEditorSessionsEndWithTheToken(t *testing.T) {
+	st, w, root := fixture(t)
+	ctx := context.Background()
+	d := st.Drive()
+	if err := d.Grant(ctx, "admin", w.ID, "team", "manager"); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.docx"}, blob(t, root, "a"), 0)
+	open := func(token string) (drive.EditorSession, string) {
+		t.Helper()
+		id, err := d.CreateServiceToken(ctx, "worker", w.ID, "Robot", "editor", token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		user, access, err := d.ServiceToken(ctx, token)
+		if err != nil || access.Token != id {
+			t.Fatalf("service token %q: %v", access.Token, err)
+		}
+		e, err := d.EditorSession(drive.WithServiceAccess(ctx, access), user, f.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e, id
+	}
+	browser, err := d.EditorSession(ctx, "worker", f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revokedByHand, id := open("svc-editor-revoked")
+	if err = d.RevokeServiceToken(ctx, "worker", id); err != nil {
+		t.Fatal(err)
+	}
+	if !revoked(t, d, revokedByHand.ID) {
+		t.Fatal("revoking the token left its editor session open")
+	}
+	expired, id := open("svc-editor-expired")
+	if err = drive.ExecSQL(ctx, d, `UPDATE drive_service_tokens SET expires=? WHERE id=?`, time.Now().Add(-time.Minute).Unix(), id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PendingRevocations(ctx); err != nil || !revoked(t, d, expired.ID) {
+		t.Fatalf("expired token's editor session survived the sweep: %v", err)
+	}
+	if revoked(t, d, browser.ID) {
+		t.Fatal("the user's own browser editor session was revoked with the token")
+	}
+}

@@ -10,6 +10,7 @@ import (
 type ServiceAccess struct {
 	Workspace string
 	Rank      int
+	Token     string // the service token's ID
 }
 type serviceAccessKey struct{}
 
@@ -39,7 +40,7 @@ func (s *Store) CreateServiceToken(ctx context.Context, user, workspace, name, r
 func (s *Store) ServiceToken(ctx context.Context, token string) (string, ServiceAccess, error) {
 	var user, role string
 	var a ServiceAccess
-	err := s.db.QueryRowContext(ctx, `SELECT user_id,workspace,role FROM drive_service_tokens WHERE token_hash=? AND expires>? AND revoked=false`, tokenHash(token), time.Now().Unix()).Scan(&user, &a.Workspace, &role)
+	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,workspace,role FROM drive_service_tokens WHERE token_hash=? AND expires>? AND revoked=false`, tokenHash(token), time.Now().Unix()).Scan(&a.Token, &user, &a.Workspace, &role)
 	if err != nil {
 		return "", a, ErrDenied
 	}
@@ -63,6 +64,9 @@ func (s *Store) RevokeServiceToken(ctx context.Context, user, id string) error {
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE drive_service_tokens SET revoked=true WHERE id=?`, id)
 		if err != nil {
+			return err
+		}
+		if err := s.revokeEditors(ctx, tx, `service_token=?`, id); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "service.token_revoked", id)

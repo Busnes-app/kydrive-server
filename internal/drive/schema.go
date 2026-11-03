@@ -85,6 +85,8 @@ UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND user_id IN
 	`ALTER TABLE drive_workspaces ADD COLUMN deleted_at TEXT NOT NULL DEFAULT '';
 ALTER TABLE drive_workspaces ADD COLUMN deleted_by TEXT NOT NULL DEFAULT '';
 CREATE INDEX drive_folders_workspace ON drive_folders(workspace);`,
+	// An editor session opened with a service token names it, so revoking the token ends it.
+	`ALTER TABLE drive_editor_sessions ADD COLUMN service_token TEXT NOT NULL DEFAULT '';`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

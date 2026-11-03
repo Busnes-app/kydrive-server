@@ -87,6 +87,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 	e := EditorSession{ID: uuid.NewString(), FileID: id, User: user, Revision: f.Revision, Expires: time.Now().Add(12 * time.Hour).Unix()}
 	editable := s.AuthorizeItem(ctx, user, f.Workspace, f.Parent, f.ID, 2) == nil
 	login, _ := ctx.Value(loginKey{}).(Login)
+	service, _ := ctx.Value(serviceAccessKey{}).(ServiceAccess)
 	var loginAt int64
 	if !login.At.IsZero() {
 		loginAt = login.At.UnixNano()
@@ -120,7 +121,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 				e.Key, e.Revision = key, base
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable,epoch,sso_sid,login_at) VALUES(?,?,?,?,'',?,?,?,?,?)`, e.ID, id, e.Revision, user, e.Expires, editable, epoch, login.SSOSID, loginAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_editor_sessions(id,file_id,revision,user_id,token_hash,expires,editable,epoch,sso_sid,login_at,service_token) VALUES(?,?,?,?,'',?,?,?,?,?,?)`, e.ID, id, e.Revision, user, e.Expires, editable, epoch, login.SSOSID, loginAt, service.Token); err != nil {
 			return err
 		}
 		// A key closed without saves (status 4) names unchanged content and opens again.
@@ -209,7 +210,7 @@ func (s *Store) revokeEditors(ctx context.Context, tx *sql.Tx, where string, arg
 func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error) {
 	// Query live memberships at the boundary. No stale role snapshots authorize edits.
 	at := time.Now()
-	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+itemRankSQL("drive_editor_sessions.user_id", "f.workspace", "f.parent", "f.id")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END))`, at.Unix(), at.Add(-editorGrace).Unix())
+	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+itemRankSQL("drive_editor_sessions.user_id", "f.workspace", "f.parent", "f.id")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END) OR (service_token!='' AND NOT EXISTS(SELECT 1 FROM drive_service_tokens t WHERE t.id=drive_editor_sessions.service_token AND t.revoked=false AND t.expires>?)))`, at.Unix(), at.Add(-editorGrace).Unix(), at.Unix())
 	if err != nil {
 		return nil, err
 	}
