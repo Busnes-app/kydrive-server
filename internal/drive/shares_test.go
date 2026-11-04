@@ -466,6 +466,18 @@ func TestShareHolderCannotRemoveTheSharedItem(t *testing.T) {
 	if err = d.SetTrash(ctx, "worker", tr.inA.ID, 1, false); err != nil {
 		t.Errorf("member restore to the root: %v", err)
 	}
+	// The same for a folder: the share on the trashed folder a still counts, the root does not.
+	sub, err := d.AddFolder(ctx, "stranger", w.ID, tr.a.ID, "sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "stranger", sub.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", tr.a.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	denied("restore a folder to the workspace root", d.SetFolderTrash(ctx, "stranger", sub.ID, false))
 }
 
 // A workspace reader given an editor share on a folder finds it in Shared with me, where the

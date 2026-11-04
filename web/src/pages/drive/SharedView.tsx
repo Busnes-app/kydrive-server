@@ -23,7 +23,7 @@ async function children(id: string): Promise<{ folders: Folder[]; files: DriveFi
   return { folders: v.folders, files: v.files };
 }
 
-// SharedView lists what others shared with the user outside their own workspaces and browses
+// SharedView lists what others shared with the user beyond their own workspace access and browses
 // into shared folders. The path starts at the shared item: nothing above it is visible. Inside a
 // folder shared as editor or manager it offers what that role allows there: upload, new folder,
 // new document, rename and move to trash. Resharing stays off for share holders.

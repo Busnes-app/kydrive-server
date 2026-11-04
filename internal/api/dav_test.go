@@ -161,7 +161,7 @@ func TestDAVSignInLimit(t *testing.T) {
 	}
 }
 
-// A WebDAV PUT whose body takes longer than KY_WRITE_TIMEOUT (but less than KY_READ_TIMEOUT)
+// A WebDAV PUT or web upload whose body takes longer than KY_WRITE_TIMEOUT (but less than KY_READ_TIMEOUT)
 // is published; its 201 must arrive too, or the client reports a failure and retries.
 func TestDAVPutAnswersAfterASlowBody(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
@@ -170,7 +170,7 @@ func TestDAVPutAnswersAfterASlowBody(t *testing.T) {
 	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "slowdavadmin", "admin")
-	loginAs(t, srv, st, "slowdav", "user")
+	cookie := loginAs(t, srv, st, "slowdav", "user")
 	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "slowdav", DisplayName: "Slow", Members: []string{"usr_slowdav"}}, true); err != nil {
 		t.Fatal(err)
 	}
@@ -190,21 +190,30 @@ func TestDAVPutAnswersAfterASlowBody(t *testing.T) {
 	ts.Config.ReadTimeout, ts.Config.WriteTimeout = cfg.Server.ReadTimeout, cfg.Server.WriteTimeout
 	ts.Start()
 	defer ts.Close()
-	body, feed := io.Pipe()
-	go func() {
-		_, _ = feed.Write([]byte("slow "))
-		time.Sleep(4 * cfg.Server.WriteTimeout)
-		_, _ = feed.Write([]byte("body"))
-		_ = feed.Close()
-	}()
-	req, _ := http.NewRequest("PUT", ts.URL+"/dav/Slow/slow.txt", body)
-	req.SetBasicAuth("slowdav", secret)
-	res, err := ts.Client().Do(req)
-	if err != nil {
-		t.Fatalf("PUT lost its answer: %v", err)
+	slow := func() io.Reader {
+		body, feed := io.Pipe()
+		go func() {
+			_, _ = feed.Write([]byte("slow "))
+			time.Sleep(4 * cfg.Server.WriteTimeout)
+			_, _ = feed.Write([]byte("body"))
+			_ = feed.Close()
+		}()
+		return body
 	}
-	res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("PUT: %d", res.StatusCode)
+	put, _ := http.NewRequest("PUT", ts.URL+"/dav/Slow/slow.txt", slow())
+	put.SetBasicAuth("slowdav", secret)
+	// The single-request upload of the web app takes its body the same way.
+	post, _ := http.NewRequest("POST", ts.URL+"/api/drive/workspaces/"+w.ID+"/uploads?name=web.txt&revision=0", slow())
+	post.AddCookie(cookie)
+	api.SignCSRFForTest(srv, post)
+	for _, req := range []*http.Request{put, post} {
+		res, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatalf("%s lost its answer: %v", req.Method, err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusCreated {
+			t.Fatalf("%s: %d", req.Method, res.StatusCode)
+		}
 	}
 }

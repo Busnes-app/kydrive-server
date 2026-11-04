@@ -23,7 +23,7 @@ type Share struct {
 	Role          string `json:"role"`
 }
 
-// SharedItem is a folder or file someone shared with the user outside their own workspaces.
+// SharedItem is a folder or file someone shared with the user beyond their own workspace access.
 type SharedItem struct {
 	Kind          string `json:"kind"`
 	ID            string `json:"id"`

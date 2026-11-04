@@ -13,7 +13,7 @@ import (
 
 // SetRetention configures automatic purging for one workspace; 0 turns a rule off.
 func (s *Store) SetRetention(ctx context.Context, user, workspace string, trashDays, keepVersions int) error {
-	if trashDays < 0 || trashDays > 3650 || keepVersions < 0 || keepVersions > 1000 {
+	if trashDays < 0 || trashDays > 3650 || keepVersions < 0 || keepVersions > maxKeepVersions {
 		return ErrInvalid
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
@@ -42,9 +42,16 @@ const trashLimit = `COALESCE(NULLIF(w.trash_days,0),NULLIF(?,0))`
 // RestoreWorkspace or PurgeDeletedWorkspaces, as its delete dialog promises.
 const expiredFolders = `SELECT d.id FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE w.deleted_at='' AND d.trashed=true AND julianday(?)-julianday(d.trashed_at)>` + trashLimit + ` AND NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.parent=d.id) AND NOT EXISTS(SELECT 1 FROM drive_folders c WHERE c.parent=d.id)`
 
+// maxKeepVersions bounds keep_versions, so counting newer versions can stop there: a file with
+// thousands of versions costs at most that many steps per candidate, not all of them.
+const (
+	maxKeepVersions = 1000
+	maxKeep         = "1000"
+)
+
 const (
 	expiredFile    = `FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND f.trashed=true AND julianday(?)-julianday(f.trashed_at)>` + trashLimit
-	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND w.keep_versions>0 AND (SELECT COUNT(*) FROM drive_versions n WHERE n.file_id=v.file_id AND n.revision>v.revision)>=w.keep_versions`
+	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND w.keep_versions>0 AND (SELECT COUNT(*) FROM (SELECT 1 FROM drive_versions n WHERE n.file_id=v.file_id AND n.revision>v.revision LIMIT ` + maxKeep + `))>=w.keep_versions`
 	page           = 500
 )
 
