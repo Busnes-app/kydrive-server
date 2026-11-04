@@ -215,7 +215,7 @@ func JoinDatabase(dataDir string) error {
 	// ReadDir sorts by name, so a complete set is exactly part 0 to n-1 of n, in order.
 	_, count, _ := strings.Cut(parts[0], "-of-")
 	n, err := strconv.Atoi(count)
-	if err != nil {
+	if err != nil || len(parts) > n {
 		return fmt.Errorf("%w: %s", ErrDatabaseParts, parts[0])
 	}
 	for i, name := range parts {

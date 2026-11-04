@@ -130,6 +130,7 @@ func TestDrillJoinsManyPartsAndRefusesAMissingOne(t *testing.T) {
 
 func TestJoinDatabaseRefusesAnInconsistentSet(t *testing.T) {
 	for name, files := range map[string][]string{
+		"extra":                     {"ky_server.db.000-of-002", "ky_server.db.001-of-002", "ky_server.db.002-of-002"},
 		"gap":                       {"ky_server.db.000-of-003", "ky_server.db.002-of-003"},
 		"missing last":              {"ky_server.db.000-of-003", "ky_server.db.001-of-003"},
 		"duplicate":                 {"ky_server.db.000-of-002", "ky_server.db.001-of-002", "ky_server.db.001-of-003"},

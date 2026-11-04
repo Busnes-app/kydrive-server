@@ -62,8 +62,9 @@ export function AppPasswords() {
     sessionStorage.removeItem(PENDING);
     void run(async () => {
       const body: unknown = saved ? JSON.parse(saved) : null;
-      if (record(body) && Object.values(body).every(v => typeof v === 'string')) await issue(body as Record<string, string>);
-      else await load();
+      if (!record(body) || !Object.values(body).every(v => typeof v === 'string')) { await load(); return; }
+      // A refused resend still leaves the list on screen.
+      try { await issue(body as Record<string, string>); } catch (e) { await load().catch(() => {}); throw e; }
     });
   }, []);
 
