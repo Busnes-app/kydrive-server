@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
-import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { HttpError, bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -31,6 +31,12 @@ export const documentKinds: [DocumentKind, string][] = [['document', 'New docume
 // setting (default 90 days), which only administrators can read, so it never promises forever.
 export function trashNotice(days: number): string {
   return days > 0 ? `Items here are deleted permanently after ${days} days.` : 'Items here may be deleted permanently after the trash period your administrator sets.';
+}
+
+// parentsFirst orders chosen trashed folders so each comes after every trashed ancestor.
+export function parentsFirst(chosen: Folder[], trashed: Folder[]): Folder[] {
+  const depth = (d: Folder) => { let n = 0; for (let p = trashed.find(x => x.id === d.parent); p && n < trashed.length; p = trashed.find(x => x.id === p?.parent)) n++; return n; };
+  return [...chosen].sort((a, b) => depth(a) - depth(b));
 }
 
 export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
@@ -185,9 +191,16 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const allBox = useRef<HTMLInputElement>(null);
   useEffect(() => { if (allBox.current) allBox.current.indeterminate = chosen.length > 0 && chosen.length < visibleKeys.length; });
   const bulk = (action: () => Promise<unknown>) => void run(async () => { await action(); setPicked(new Set()); });
+  // Restore puts folders back parents first: one restored while its parent is still in the trash
+  // comes back at the top. An item its folder's restore already brought back answers 409 and is
+  // then done, not failed; one trashed on its own is restored after its folder.
+  const stillTrashed = async (kind: 'files' | 'folders', id: string) => (kind === 'files' ? await list(`/api/drive/workspaces/${selected}/files?trash=true`, file) : await list(`/api/drive/workspaces/${selected}/folders?trash=true`, folder)).some(x => x.id === id && x.trashed);
   const setTrashed = (trashed: boolean) => bulk(async () => {
-    for (const d of chosenFolders) await change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed });
-    for (const f of chosenFiles) await change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed });
+    const put = async (kind: 'files' | 'folders', id: string, body: Record<string, unknown>) => {
+      try { await change(`/api/drive/${kind}/${id}/trash`, 'PUT', { ...body, trashed }); } catch (e) { if (trashed || !(e instanceof HttpError) || e.status !== 409 || await stillTrashed(kind, id)) throw e; }
+    };
+    for (const d of trashed ? chosenFolders : parentsFirst(chosenFolders, folders)) await put('folders', d.id, {});
+    for (const f of chosenFiles) await put('files', f.id, { revision: f.revision });
   });
   async function purgeChosen() {
     const n = chosen.length;
