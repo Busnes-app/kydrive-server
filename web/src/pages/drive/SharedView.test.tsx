@@ -67,7 +67,7 @@ describe('SharedView', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move to trash' }));
     // The holder cannot open the owner's trash: confirm first, naming who can restore it.
     const ask = await screen.findByRole('dialog');
-    expect(ask.textContent).toContain('Only the owner can restore it');
+    expect(ask.textContent).toContain('Ask whoever shared it with you to restore it');
     expect(calls.some(c => c.includes('/trash'))).toBe(false);
     fireEvent.click(within(ask).getByRole('button', { name: 'Move to trash' }));
     await waitFor(() => expect(calls).toContain('PUT /api/drive/files/f1/trash {"revision":2,"trashed":true}'));

@@ -66,3 +66,12 @@ describe('outermost', () => {
     expect(outermost([dir('f', 'a'), dir('g', 'other'), dir('h', '')], chosen, all).map(x => x.id)).toEqual(['g', 'h']);
   });
 });
+
+describe('outermost at scale', () => {
+  it('filters thousands of picks in linear time', () => {
+    const all = Array.from({ length: 20000 }, (_, i) => ({ id: `d${i}`, name: `d${i}`, parent: '', trashed: true }));
+    const began = performance.now();
+    expect(outermost(all, all, all)).toHaveLength(20000);
+    expect(performance.now() - began).toBeLessThan(1000);
+  });
+});

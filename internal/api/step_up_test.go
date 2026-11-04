@@ -146,7 +146,21 @@ func TestSSOStepUp(t *testing.T) {
 	now := time.Now().Unix()
 	// A browser cannot back-date the start so that a stale auth_time passes (orchestrator, PR #112).
 	stale := map[string]any{"sub": "alice", "sid": "sid-1", "auth_time": now - 1800}
+	// A genuine cookie from another flow started an hour ago: its MAC is good, but for another state.
+	api.SetClockForTest(srv, func() time.Time { return time.Unix(now-3600, 0) })
+	req := httptest.NewRequest(http.MethodGet, "/api/sso/kysignon/login?step_up=1&return=/", nil)
+	req.AddCookie(alice)
+	early := httptest.NewRecorder()
+	srv.ServeHTTP(early, req)
+	api.SetClockForTest(srv, time.Now)
+	var otherFlow string
+	for _, c := range early.Result().Cookies() {
+		if strings.HasPrefix(c.Name, "ky_stepup_") {
+			otherFlow = c.Value
+		}
+	}
 	for name, forge := range map[string]func(*http.Cookie){
+		"another state's cookie": func(c *http.Cookie) { c.Value = otherFlow },
 		"unsigned start": func(c *http.Cookie) {
 			c.Value = base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(now-3600, 10) + "|/"))
 		},

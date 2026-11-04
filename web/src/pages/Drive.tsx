@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
-import { HttpError, bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { HttpError, bytes, breadcrumb, change, ownFilesRefused, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -44,7 +44,9 @@ export function parentsFirst(chosen: Folder[], trashed: Folder[]): Folder[] {
 // and a second purge of one would fail and stop the rest.
 export function outermost<T extends { parent: string }>(items: T[], chosenFolders: Folder[], all: Folder[]): T[] {
   const chosen = new Set(chosenFolders.map(d => d.id));
-  return items.filter(x => !breadcrumb(all, x.parent).some(a => chosen.has(a.id)));
+  const parent = new Map(all.map(d => [d.id, d.parent]));
+  const covered = (id: string | undefined) => { for (let n = 0; id && n <= parent.size; id = parent.get(id), n++) if (chosen.has(id)) return true; return false; };
+  return items.filter(x => !covered(x.parent));
 }
 
 // setTrashBatch trashes or restores chosen items. Restore puts folders back parents first: one
@@ -114,7 +116,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     const mine = ++generation.current;
     const stale = () => mine !== generation.current;
     // A dedicated installer administrator has no My files (403) but still manages shared workspaces.
-    await change('/api/drive/personal-workspace', 'POST', {}).catch(e => { if (!(e instanceof HttpError) || e.status !== 403) throw e; });
+    await change('/api/drive/personal-workspace', 'POST', {}).catch(e => { if (!ownFilesRefused(e)) throw e; });
     const listWorkspaces = await list(`/api/drive/workspaces${admin ? '?admin=true' : ''}`, workspace);
     if (stale()) return;
     onWorkspacesChange(listWorkspaces);

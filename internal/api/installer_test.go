@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/applysetup"
@@ -95,8 +96,9 @@ func TestInstallerSocketActivationAndAdministratorSeparation(t *testing.T) {
 		}
 		if subject == "owner-subject" {
 			for _, route := range [][2]string{{"POST", "/api/drive/personal-workspace"}, {"GET", "/api/drive/files/anything/download"}, {"GET", "/editor.html"}, {"POST", "/api/drive/workspaces/anything/tokens"}} {
-				if got := do(t, srv, route[0], route[1], cookie); got.Code != http.StatusForbidden {
-					t.Fatal("administrator ordinary use", route, got.Code)
+				// The web app recognises this refusal by its message (ownFilesRefused, web/src/pages/drive/client.ts).
+				if got := do(t, srv, route[0], route[1], cookie); got.Code != http.StatusForbidden || !strings.Contains(got.Body.String(), "Use your everyday identity") {
+					t.Fatal("administrator ordinary use", route, got.Code, got.Body.String())
 				}
 			}
 			if got := do(t, srv, "GET", "/api/settings", cookie); got.Code != 200 || json.Valid(got.Body.Bytes()) == false {

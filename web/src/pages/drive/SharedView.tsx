@@ -77,9 +77,9 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   }
 
   const cap = (r: string) => r[0].toUpperCase() + r.slice(1);
-  // A share holder cannot see the owner's trash, so trashing here is confirmed and says who can undo it.
+  // A share holder cannot open the trash the item goes to, so trashing here is confirmed and says who can undo it.
   const trashing = async (name: string, trash: () => Promise<unknown>) => {
-    if (await confirm({ title: `Move ${name} to trash?`, body: 'It goes to the owner’s trash, which you cannot open. Only the owner can restore it.', confirm: 'Move to trash', danger: true })) void run(trash);
+    if (await confirm({ title: `Move ${name} to trash?`, body: 'It goes to the trash of the drive it was shared from, which you cannot open here. Ask whoever shared it with you to restore it.', confirm: 'Move to trash', danger: true })) void run(trash);
   };
   const editing = (name: string, rename: () => void, trash: () => Promise<unknown>): MenuEntry[] => canEdit ? ['separator',
     { label: 'Rename', icon: <PenLine size={16} />, onSelect: rename },

@@ -821,29 +821,35 @@ func TestDetachedTrackingCoversADepositInFlight(t *testing.T) {
 	}
 }
 
-// A drill on a large repository outlasts KY_WRITE_TIMEOUT; its report must still arrive
-// (pass 4 R4), as the deposit's receipt does.
-func TestDrillOutlastsWriteTimeout(t *testing.T) {
-	srv, st, _ := setupSQLiteServer(t)
+// A drill or export on a large repository outlasts KY_WRITE_TIMEOUT; its report or capsule must
+// still arrive (pass 4 R4), as the deposit's receipt does.
+func TestDrillAndExportOutlastWriteTimeout(t *testing.T) {
+	srv, st, cfg := setupSQLiteServer(t)
+	priv, _ := recoverykey.Generate()
+	if err := recoveryclient.StoreRecoveryKey(cfg.Database.DataDir, backupSettings(context.Background(), st), recoveryclient.RecoveryKey{Public: priv.Public(), Threshold: 2, TotalShares: 3}); err != nil {
+		t.Fatal(err)
+	}
 	session := loginAs(t, srv, st, "slow-drill-admin", "admin")
 	ts := httptest.NewUnstartedServer(srv)
 	ts.Config.WriteTimeout = 2 * time.Millisecond
 	ts.Start()
 	defer ts.Close()
-	req, _ := http.NewRequest("POST", ts.URL+"/api/backup/drill", nil)
-	req.AddCookie(session)
-	api.SignCSRFForTest(srv, req)
-	began := time.Now()
-	res, err := ts.Client().Do(req)
-	if err != nil {
-		t.Fatalf("drill after %v: %v", time.Since(began), err)
-	}
-	defer res.Body.Close()
-	var result recoveryclient.DrillResult
-	if err := json.NewDecoder(res.Body).Decode(&result); err != nil || res.StatusCode != http.StatusOK {
-		t.Fatalf("drill: %d %v", res.StatusCode, err)
-	}
-	if took := time.Since(began); took < 2*ts.Config.WriteTimeout {
-		t.Fatalf("drill took %v; it must outlast the 2ms write timeout to prove anything", took)
+	for _, path := range []string{"/api/backup/drill", "/api/backup/export-capsule"} {
+		req, _ := http.NewRequest("POST", ts.URL+path, nil)
+		req.AddCookie(session)
+		api.SignCSRFForTest(srv, req)
+		began := time.Now()
+		res, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatalf("%s after %v: %v", path, time.Since(began), err)
+		}
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil || res.StatusCode != http.StatusOK || len(body) == 0 {
+			t.Fatalf("%s: %d %v", path, res.StatusCode, err)
+		}
+		if took := time.Since(began); took < 2*ts.Config.WriteTimeout {
+			t.Fatalf("%s took %v; it must outlast the 2ms write timeout to prove anything", path, took)
+		}
 	}
 }
