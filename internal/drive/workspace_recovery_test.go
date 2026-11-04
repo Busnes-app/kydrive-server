@@ -249,6 +249,32 @@ func TestPurgeDeletedWorkspaces(t *testing.T) {
 	}
 }
 
+// A purge whose commit fails returns none of its blobs: the rolled-back rows still name them.
+func TestFailedWorkspacePurgeKeepsBlobs(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "solo.txt"}, blob(t, blobs, "solo"), 0)
+	must(err)
+	_, err = d.DeleteWorkspace(ctx, "admin", w.ID, "Organization")
+	must(err)
+	at := time.Now()
+	must(drive.ExecSQL(ctx, d, `UPDATE drive_workspaces SET deleted_at=? WHERE id=?`, at.Add(-91*24*time.Hour).UTC().Format(time.RFC3339Nano), w.ID))
+	// A deferred foreign key fails only at COMMIT, after the purge statements all succeeded.
+	must(drive.ExecSQL(ctx, d, `CREATE TABLE fail_commit(ref TEXT REFERENCES drive_workspaces(id) DEFERRABLE INITIALLY DEFERRED)`))
+	must(drive.ExecSQL(ctx, d, `CREATE TRIGGER fail_purge AFTER DELETE ON drive_workspaces BEGIN INSERT INTO fail_commit VALUES(OLD.id); END`))
+	purged, err := d.PurgeDeletedWorkspaces(ctx, at, 90)
+	if err == nil || len(purged) != 0 {
+		t.Fatalf("failed purge returned blobs %v, err %v", purged, err)
+	}
+}
+
 // A file still open in an editor (drop not delivered) holds the purge back.
 func TestPurgeDeletedWorkspaceWaitsForEditorDrop(t *testing.T) {
 	st, w, blobs := fixture(t)
