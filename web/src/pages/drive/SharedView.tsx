@@ -109,7 +109,7 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   ];
 
   return <section className="page drive-page">
-    <header className="page-header"><div><h1>Shared with me</h1><p className="page-desc">Files and folders people shared with you outside your own workspaces</p></div>
+    <header className="page-header"><div><h1>Shared with me</h1><p className="page-desc">Files and folders people shared with you beyond your own workspace access</p></div>
       {ready && canEdit && <div className="page-actions">
         <button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>
         <Menu label="New" trigger="primary" items={newMenu} />

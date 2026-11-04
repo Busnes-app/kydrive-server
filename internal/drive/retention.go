@@ -44,7 +44,7 @@ const expiredFolders = `SELECT d.id FROM drive_folders d JOIN drive_workspaces w
 
 const (
 	expiredFile    = `FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND f.trashed=true AND julianday(?)-julianday(f.trashed_at)>` + trashLimit
-	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND w.keep_versions>0 AND v.revision<=f.revision-w.keep_versions`
+	expiredVersion = `FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.deleted_at='' AND w.keep_versions>0 AND (SELECT COUNT(*) FROM drive_versions n WHERE n.file_id=v.file_id AND n.revision>v.revision)>=w.keep_versions`
 	page           = 500
 )
 
@@ -61,7 +61,8 @@ func retainFile(ctx context.Context, tx *sql.Tx, id, stamp string, days int) ([]
 	return purgeFile(ctx, tx, id)
 }
 
-// retainVersion purges one version if the policy still expires it, judged against the file's current revision.
+// retainVersion purges one version if the policy still expires it: keep_versions newer versions
+// exist, counted, not inferred from revision numbers that a manual purge leaves gaps in.
 func retainVersion(ctx context.Context, tx *sql.Tx, id string, revision int64) ([]string, error) {
 	var current int64
 	err := tx.QueryRowContext(ctx, `SELECT f.revision `+expiredVersion+` AND v.file_id=? AND v.revision=?`, id, revision).Scan(&current)

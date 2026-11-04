@@ -467,3 +467,30 @@ func TestShareHolderCannotRemoveTheSharedItem(t *testing.T) {
 		t.Errorf("member restore to the root: %v", err)
 	}
 }
+
+// A workspace reader given an editor share on a folder finds it in Shared with me, where the
+// web app offers editing; a share no higher than their membership stays out.
+func TestSharedWithMeRaisesAMembersRole(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	tr := layout(t, d, w, blobs)
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "readers", DisplayName: "Readers", ExternalID: "x-readers", Members: []string{"stranger"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Grant(ctx, "admin", w.ID, "readers", "reader"); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []struct{ kind, id, role string }{{"folder", tr.a.ID, "editor"}, {"file", tr.inC.ID, "reader"}} {
+		if _, err := d.Share(ctx, "worker", s.kind, s.id, "user", "stranger", s.role); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := d.SharedWithMe(ctx, "stranger")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].ID != tr.a.ID || items[0].Role != "editor" {
+		t.Fatalf("got %+v, want only folder a as editor", items)
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/appversion"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
+	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -28,9 +29,20 @@ const errRecoveryKeyMismatch = "Recovery key file does not match the pinned key 
 // the pairing and the run refusals end with it.
 const privateRecoveryHint = " (set KY_BACKUP_ALLOW_PRIVATE_RECOVERY=true for a KyRecovery on your own network)"
 
-// depositWriteBudget is how long the admin's connection may stay open for the receipt: the
-// upload budget plus room for sealing. The listener's WriteTimeout is sized for JSON replies.
+// depositWriteBudget is the upload budget plus room for sealing and the reply. The listener's
+// WriteTimeout is sized for JSON replies.
 const depositWriteBudget = 16 * time.Minute
+
+// backupWriteBudget is how long a backup route's connection may stay open for its answer:
+// the collection's own limit (a first bulk snapshot can take hours), the drill's when it runs
+// one, plus depositWriteBudget.
+func backupWriteBudget(b config.BackupConfig, drill bool) time.Duration {
+	d := b.CollectTimeout + depositWriteBudget
+	if drill {
+		d += b.DrillTimeout
+	}
+	return d
+}
 
 // AuditDetails flattens the lib's details map into the bounded audit column. Locally
 // derived fields go first so a long remote error cannot displace the useful facts.
@@ -102,8 +114,8 @@ func (s *Server) handleBackupDrill(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
-	// Collecting and restoring a large repository can outlast KY_WRITE_TIMEOUT; give it the deposit's budget.
-	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+	// Collecting and restoring a large repository can outlast KY_WRITE_TIMEOUT.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(backupWriteBudget(s.config.Backup, true))); err != nil {
 		log.Printf("[BACKUP] drill response keeps the default write timeout: %v", err)
 	}
 	ctx := r.Context()
@@ -138,7 +150,7 @@ func (s *Server) handleExportCapsule(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
-	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(backupWriteBudget(s.config.Backup, false))); err != nil {
 		log.Printf("[BACKUP] export response keeps the default write timeout: %v", err)
 	}
 	ctx := r.Context()
@@ -284,7 +296,7 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
-	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(backupWriteBudget(s.config.Backup, false))); err != nil {
 		log.Printf("[BACKUP] deposit response keeps the default write timeout: %v", err)
 	}
 	// The acting admin is resolved while the request is still live; the audit row is written

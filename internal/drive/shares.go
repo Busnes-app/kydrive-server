@@ -204,8 +204,9 @@ func (s *Store) Shares(ctx context.Context, user, kind, id string) ([]Share, err
 	return out, rows.Err()
 }
 
-// SharedWithMe lists live items shared with the user or their groups in workspaces where the
-// user has no access of their own, folders first, then by name. Each item appears once, at
+// SharedWithMe lists live items shared with the user or their groups at a higher role than
+// the user's own access to the workspace (none, for most), folders first, then by name: a
+// workspace reader with an editor share edits from there. Each item appears once, at
 // its highest shared role.
 func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, error) {
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
@@ -226,7 +227,7 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
  WHERE (f.id IS NOT NULL OR d.id IS NOT NULL)
  AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active')
  AND (p.workspace IS NULL OR EXISTS(SELECT 1 FROM users WHERE id=p.owner AND status='active'))
- AND `+rankSQL("q.u", "g.workspace")+`=0`, user)
+ AND `+rankSQL("q.u", "g.workspace")+`<CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END`, user)
 	if err != nil {
 		return nil, err
 	}

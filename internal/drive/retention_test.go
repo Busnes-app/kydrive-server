@@ -239,3 +239,38 @@ func TestRetentionSparesDeletedWorkspaces(t *testing.T) {
 		t.Fatalf("retention after restore: %v %v", blobs, err)
 	}
 }
+
+// keep_versions keeps the newest N versions that exist: a manual purge leaves gaps in the
+// revision numbers, and retention must not count those gaps as kept versions.
+func TestRetentionKeepsExistingVersionsAcrossGaps(t *testing.T) {
+	d, w, root := managerFixture(t)
+	ctx := context.Background()
+	f, _ := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "a.txt"}, blob(t, root, "v1"), 0)
+	for rev := int64(1); rev < 6; rev++ {
+		var err error
+		if f, err = d.Publish(ctx, "worker", f, blob(t, root, "v"+string(rune('2'+rev-1))), rev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, rev := range []int64{3, 4, 5} { // leaves 1, 2 and 6
+		if _, err := d.PurgeVersion(ctx, "worker", f.ID, rev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.SetRetention(ctx, "admin", w.ID, 0, 3); err != nil {
+		t.Fatal(err)
+	}
+	if blobs, err := d.ApplyRetention(ctx, time.Now(), 0); err != nil || len(blobs) != 0 {
+		t.Fatalf("purged within the kept count: %v %v", blobs, err)
+	}
+	if err := d.SetRetention(ctx, "admin", w.ID, 0, 2); err != nil {
+		t.Fatal(err)
+	}
+	if blobs, err := d.ApplyRetention(ctx, time.Now(), 0); err != nil || len(blobs) != 1 {
+		t.Fatalf("expected revision 1 purged: %v %v", blobs, err)
+	}
+	vs, _ := d.Versions(ctx, "worker", f.ID)
+	if len(vs) != 2 {
+		t.Fatalf("versions left: %+v", vs)
+	}
+}

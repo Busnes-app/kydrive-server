@@ -40,6 +40,19 @@ describe('Drive', () => {
     expect(screen.queryByText(/everyday identity/)).toBeNull();
   });
 
+  // Pass 5: the quota field starts at the selected workspace's quota, not a fixed 1024 MiB.
+  it('shows the selected workspace\'s quota in the quota field', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/drive/workspaces?')) return json([{ ...ws('w2', 'shared', ''), quota: 100 * (1 << 30) }]);
+      if (url === '/api/drive/directory') return json({ groups: [] });
+      return json(url.endsWith('/grants') ? [] : {});
+    }));
+    render(<Harness admin selected="w2" />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Workspace settings' }));
+    expect((await screen.findByLabelText('Quota (MiB)') as HTMLInputElement).value).toBe('102400');
+  });
+
   it('still reports any other failure to set up My files', async () => {
     installerServer(json({ error: 'Invalid CSRF token' }, 403));
     render(<Harness admin selected="w2" />);
