@@ -194,8 +194,8 @@ func TestSCIMPatchAcceptsSchemaURNPaths(t *testing.T) {
 	}
 	const urn = "urn:ietf:params:scim:schemas:core:2.0:User:"
 	for name, op := range map[string]map[string]any{
-		"urn path":  {"op": "replace", "path": urn + "active", "value": false},
-		"urn key":   {"op": "replace", "value": map[string]any{urn + "active": false}},
+		"urn path": {"op": "replace", "path": urn + "active", "value": false},
+		"urn key":  {"op": "replace", "value": map[string]any{urn + "active": false}},
 	} {
 		w := do("POST", "/scim/v2/Users", map[string]any{"schemas": []string{scim.SchemaUser}, "userName": "urn_" + name[4:], "active": true})
 		var created struct{ ID string }
