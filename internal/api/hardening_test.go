@@ -60,19 +60,33 @@ func TestLoginFailuresAreIndistinguishable(t *testing.T) {
 	}
 }
 
-func TestLoginLimitsGuessesPerAccountAcrossClients(t *testing.T) {
+// The account window is per client (IPv6 by /64) and answers like a wrong password, so guessing
+// from elsewhere never keeps the owner out (DECISIONS: login lockout).
+func TestLoginLockoutIsPerClient(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
 	hash, _ := password.Hash("SuperSecretPass123!")
 	if err := st.Users().CreateUser(context.Background(), &store.User{ID: "usr_t", Username: "target", PasswordHash: hash, Role: "user", Status: "active", SSOProvider: "local"}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 1; i <= 10; i++ {
-		if w := postLogin(srv, "198.51.100."+strconv.Itoa(i), map[string]string{"username": "Target", "password": "WrongPassword123!"}); w.Code != http.StatusUnauthorized {
-			t.Fatalf("guess %d: %d", i, w.Code)
+	right := map[string]string{"username": "target", "password": "SuperSecretPass123!"}
+	for _, c := range []struct{ guesser, same, other string }{
+		{"198.51.100.7", "198.51.100.7", "198.51.100.99"},
+		{"[2001:db8:0:1::1]", "[2001:db8:0:1::2]", "[2001:db8:0:2::1]"},
+	} {
+		var wrong string
+		for i := 1; i <= 10; i++ {
+			w := postLogin(srv, c.guesser, map[string]string{"username": "Target", "password": "WrongPassword123!"})
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("guess %d: %d", i, w.Code)
+			}
+			wrong = w.Body.String()
 		}
-	}
-	if w := postLogin(srv, "198.51.100.99", map[string]string{"username": "target", "password": "SuperSecretPass123!"}); w.Code != http.StatusTooManyRequests {
-		t.Fatalf("11th attempt from a new client: got %d, want 429", w.Code)
+		if w := postLogin(srv, c.same, right); w.Code != http.StatusUnauthorized || w.Body.String() != wrong {
+			t.Fatalf("right password from the guessing client %s: %d %s", c.same, w.Code, w.Body)
+		}
+		if w := postLogin(srv, c.other, right); w.Code != http.StatusOK {
+			t.Fatalf("owner from another client %s: %d %s", c.other, w.Code, w.Body)
+		}
 	}
 }
 

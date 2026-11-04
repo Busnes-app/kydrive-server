@@ -122,8 +122,8 @@ func TestDAVAuthentication(t *testing.T) {
 	expect(davRequest(srv, "PROPFIND", "/dav/", "davuser", secret, nil, "Depth", "0"), 401, "revoked password")
 }
 
-// Failed sign-ins are limited per username; a correct password does not get through once the
-// limit is reached, and good requests never count.
+// Failed sign-ins are limited per username and client; a correct password from that client does
+// not get through once the limit is reached, and good requests never count.
 func TestDAVSignInLimit(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
 	if st.Drive() == nil {
@@ -145,8 +145,17 @@ func TestDAVSignInLimit(t *testing.T) {
 			t.Fatalf("bad guess: %d", got.Code)
 		}
 	}
-	got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil, "Depth", "0")
-	if got.Code != http.StatusTooManyRequests || got.Header().Get("Retry-After") == "" {
+	// The account window is per client and answers like a wrong password; another client gets in.
+	if got := davRequest(srv, "PROPFIND", "/dav/", "limited", secret, nil, "Depth", "0"); got.Code != http.StatusUnauthorized {
 		t.Fatalf("after 10 failures: %d", got.Code)
+	}
+	r := httptest.NewRequest("PROPFIND", "/dav/", nil)
+	r.SetBasicAuth("limited", secret)
+	r.Header.Set("Depth", "0")
+	r.RemoteAddr = "198.51.100.42:40000"
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, r)
+	if w.Code != 207 {
+		t.Fatalf("another client after 10 failures elsewhere: %d", w.Code)
 	}
 }

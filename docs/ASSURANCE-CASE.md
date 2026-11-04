@@ -97,7 +97,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 
 | Weakness | Counter | Where |
 |---|---|---|
-| Broken authentication, credential stuffing | Passwords of at least 12 characters, hashed by `ky-primitives/password`; per-client and per-account limits (10 per 15 minutes for one username); one answer for unknown, inactive and wrong-password attempts | `internal/auth/policy.go`, `internal/api/auth_handlers.go` |
+| Broken authentication, credential stuffing | Passwords of at least 12 characters, hashed by `ky-primitives/password`; per-client and per-account limits (10 per 15 minutes for one username from one client, an IPv6 one by its /64, answered like a wrong password so nobody can lock the owner out from elsewhere); one answer for unknown, inactive and wrong-password attempts | `internal/auth/policy.go`, `internal/api/auth_handlers.go` |
 | Undersized TOTP secrets | Shared RFC 4226/6238 validator requires 16 decoded bytes; generates 20. Short sealed records remain readable for deliberate recovery/re-enrollment | `internal/auth/totp_strength_test.go`, [migration](../SECURITY.md#totp-key-minimum-and-existing-accounts) |
 | Undersized signing and verification keys | Session and webhook HMAC secrets need 16 bytes, the editor JWT secret 32, the deployment key exactly 32; OIDC JWKS RSA keys need 2048 bits; `GODEBUG=fips140=on` limits outbound TLS chains to RSA-2048+/P-256+ | `internal/config/key_strength_test.go`, `internal/sso/strong_crypto_test.go`, [STRONG-CRYPTO.md](STRONG-CRYPTO.md) |
 | Session theft from storage | Only the SHA-256 of the session token is stored; cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed with `Secure` | `internal/auth/session.go`, `internal/store/sqlstore.go` |

@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -249,6 +250,16 @@ func bumpWindow(entry attemptWindow, now time.Time, window time.Duration) attemp
 // keying on a caller-supplied header would make every limit here bypassable.
 func (s *Server) requestIP(r *http.Request) string {
 	return auth.ClientIP(r, s.config.Security.TrustedProxies)
+}
+
+// accountKey is a per-account failure window for one client (an IPv6 address by its /64, which
+// one host holds whole), so guessing from elsewhere never locks the account's owner out.
+func (s *Server) accountKey(kind, username string, r *http.Request) string {
+	client := s.requestIP(r)
+	if ip, err := netip.ParseAddr(client); err == nil && ip.Is6() && !ip.Is4In6() {
+		client = netip.PrefixFrom(ip, 64).Masked().String()
+	}
+	return kind + ":" + strings.ToLower(username) + "|" + client
 }
 
 func (s *Server) routes() {

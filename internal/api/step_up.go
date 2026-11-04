@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
@@ -55,7 +54,7 @@ func (s *Server) handleStepUp(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "Password is required")
 		return
 	}
-	accountKey := "login-user:" + strings.ToLower(user.Username)
+	accountKey := s.accountKey("login-user", user.Username, r)
 	if !s.allowAttempt("login:"+s.requestIP(r), 20, time.Minute) || !s.allowAttempt(accountKey, 10, 15*time.Minute) {
 		s.writeError(w, http.StatusTooManyRequests, "Too many attempts. Wait a few minutes and try again.")
 		return

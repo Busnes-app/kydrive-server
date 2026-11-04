@@ -81,9 +81,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accountKey := "login-user:" + strings.ToLower(req.Username)
+	// An exhausted account window looks like a wrong password, and it is per client, so nobody
+	// can keep the account's owner out from elsewhere.
+	accountKey := s.accountKey("login-user", req.Username, r)
 	if !s.allowAttempt(accountKey, 10, 15*time.Minute) {
-		s.writeError(w, http.StatusTooManyRequests, "Too many login attempts")
+		s.writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
