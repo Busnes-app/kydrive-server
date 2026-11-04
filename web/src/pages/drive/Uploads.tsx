@@ -37,11 +37,11 @@ export function useUploads(onIdle: () => void) {
   const enqueue = useCallback((u: Upload) => {
     pending.current++;
     queue.current = queue.current.then(async () => {
-      let session = u.session;
+      let session = u.session, acked = 0;
       try {
         session ??= await startUpload(u.workspace, u.parent, u.file, u.target);
         update(u.key, { session, error: '', conflict: false });
-        await sendUpload(session, u.file, done => update(u.key, { done }));
+        await sendUpload(session, u.file, done => { acked = done; update(u.key, { done }); });
         update(u.key, { finished: true, done: u.file.size, session: undefined });
       } catch (e) {
         if (e instanceof UploadInterrupted) {
@@ -49,10 +49,11 @@ export function useUploads(onIdle: () => void) {
         } else if (!session && e instanceof HttpError && e.status === 409) {
           // The name was taken (or the file changed) after the batch was checked: ask again.
           update(u.key, { conflict: true, error: '' });
-        } else if (session && !(e instanceof HttpError && e.status < 500)) {
-          // Not refused (a dropped connection, a proxy timeout, a server error): the bytes stay
-          // staged, so Retry resumes from the server's count and completes without resending.
-          update(u.key, { error: e instanceof Error ? e.message : 'Upload failed', session });
+        } else if (session && (!(e instanceof HttpError) || [409, 502, 503, 504].includes(e.status))) {
+          // Not refused: no answer, a proxy or restart in the way, or a completion still running
+          // (409; the server will not cancel it either). The bytes stay staged, so Retry resumes
+          // from what the server acknowledged and completes without resending.
+          update(u.key, { error: e instanceof Error ? e.message : 'Upload failed', session: { ...session, received: acked } });
         } else {
           // A refused upload cannot be resumed; free its session now rather than at expiry.
           if (session) void secureFetch(`/api/drive/upload-sessions/${session.id}`, { method: 'DELETE' }).catch(() => {});

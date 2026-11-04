@@ -16,7 +16,7 @@ function Harness({ files, onIdle, decide = async () => 'cancel' }: { files: File
 
 // server answers like the drive API: the folder listing, session starts (recording their
 // bodies), chunk PUTs and completion.
-function server({ listing = [] as unknown[], folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = 0 } = {}) {
+function server({ listing = [] as unknown[], folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = [] as (number | 'network')[] } = {}) {
   const starts: Record<string, unknown>[] = [], calls: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET';
@@ -31,7 +31,11 @@ function server({ listing = [] as unknown[], folders = [] as unknown[], refuse =
     }
     if (method === 'PUT') return url.endsWith('/bad.txt') ? json({ error: 'Upload or workspace quota exceeded' }, 413) : new Response(null, { status: 204 });
     if (method === 'DELETE') return new Response(null, { status: 204 });
-    if (url.endsWith('/complete') && completeFails-- > 0) throw new TypeError('Failed to fetch');
+    if (url.endsWith('/complete') && completeFails.length) {
+      const f = completeFails.shift();
+      if (f === 'network') throw new TypeError('Failed to fetch');
+      return json({ error: 'revision conflict: upload incomplete or already completing' }, f);
+    }
     return json({ id: 'f', name: 'ok.txt', parent: '', revision: 1, size: 2, trashed: false }, 201);
   }));
   return { starts, calls };
@@ -104,14 +108,24 @@ describe('upload queue', () => {
     expect(await screen.findByText('Done')).toBeTruthy();
   });
 
-  it('keeps the staged bytes when completion fails in transit, so Retry completes them', async () => {
-    const { starts, calls } = server({ completeFails: 1 });
+  it.each([['in transit', 'network'], ['behind a proxy timeout', 504], ['while the server still completes it', 409]] as const)('keeps the staged bytes when completion fails %s, so Retry completes them', async (_, failure) => {
+    const { starts, calls } = server({ completeFails: [failure] });
     render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Go' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('Done')).toBeTruthy();
     expect(starts).toHaveLength(1);
     expect(calls.filter(c => c.startsWith('DELETE'))).toEqual([]);
+    // Retry goes straight to completion: every byte was acknowledged, none is sent again.
+    expect(calls.filter(c => c.startsWith('PUT'))).toHaveLength(1);
+  });
+
+  it('frees the session when completion fails for good', async () => {
+    const { calls } = server({ completeFails: [500] });
+    render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+    await screen.findByRole('button', { name: 'Retry' });
+    await waitFor(() => expect(calls).toContain('DELETE /api/drive/upload-sessions/ok.txt'));
   });
 });
 

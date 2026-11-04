@@ -660,6 +660,14 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			_, agent, err := d.CreateAgentToken(ctx, "worker", "agent", "mcp:read", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, err := d.ApproveLink(ctx, "worker", "Laptop", "linux", challengeOf(verifier), "http://127.0.0.1:8080/cb")
+			if err != nil {
+				t.Fatal(err)
+			}
 			if _, err = d.CreateServiceToken(ctx, "worker", w.ID, "sync", "editor", "service-secret"); err != nil {
 				t.Fatal(err)
 			}
@@ -684,6 +692,12 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 			}
 			if _, err = d.AppPasswordUser(ctx, "worker", secret); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("WebDAV password survived: %v", err)
+			}
+			if _, _, err = d.AgentTokenUser(ctx, agent, time.Now()); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("agent token survived: %v", err)
+			}
+			if _, _, err = d.RedeemLink(ctx, code, verifier); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("a computer link approved before the reset was redeemed after it: %v", err)
 			}
 			if _, _, err = d.ServiceToken(ctx, "service-secret"); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("service token survived: %v", err)

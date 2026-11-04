@@ -268,6 +268,32 @@ func TestUploadOwnedByCreator(t *testing.T) {
 	}
 }
 
+// A cancel never takes the staged bytes from a completion that holds its claim, nor from one
+// that crashed less than a claim ago: a retry may still complete them.
+func TestCancelWaitsForACompletionClaim(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Minute).Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CancelUpload(ctx, staging, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("cancel during a completion: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
+		t.Fatalf("staged bytes gone: %v", err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Hour).Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); err != nil {
+		t.Fatalf("retry after the claim lapsed: %v", err)
+	}
+}
+
 func TestExpiredUploadSessionsRemoved(t *testing.T) {
 	st, w, _ := fixture(t)
 	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
