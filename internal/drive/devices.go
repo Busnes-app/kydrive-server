@@ -69,6 +69,9 @@ func (s *Store) ApproveLink(ctx context.Context, user, name, platform, challenge
 	}
 	code := secret256()
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
 		if err := deviceSlot(ctx, tx, user); err != nil {
 			return err
 		}

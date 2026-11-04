@@ -94,6 +94,9 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 		return p, ErrDenied
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
 		var active, count int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active'`, user).Scan(&active); err != nil {
 			return err

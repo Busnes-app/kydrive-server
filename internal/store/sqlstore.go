@@ -871,7 +871,7 @@ func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash,
 		if n != 1 {
 			return ErrNotFound
 		}
-		return u.revokePasswordGrants(ctx, tx, userID, "forced replacement; sessions revoked", ip, now)
+		return u.revokePasswordGrants(ctx, tx, userID, "forced replacement; sessions and credentials revoked", ip, now)
 	})
 }
 
@@ -894,7 +894,7 @@ func (u *userStore) ResetAdminPassword(ctx context.Context, userID, newHash stri
 	if n != 1 {
 		return ErrNotFound
 	}
-	if err := u.revokePasswordGrants(ctx, tx, userID, "operator reset; sessions revoked", "", now); err != nil {
+	if err := u.revokePasswordGrants(ctx, tx, userID, "operator reset; sessions and credentials revoked", "", now); err != nil {
 		return err
 	}
 	return tx.Commit()

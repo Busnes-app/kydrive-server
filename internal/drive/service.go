@@ -26,6 +26,9 @@ func (s *Store) CreateServiceToken(ctx context.Context, user, workspace, name, r
 	}
 	id := uuid.NewString()
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
 		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
 			return err
 		}
