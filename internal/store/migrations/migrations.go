@@ -286,6 +286,14 @@ CREATE TABLE IF NOT EXISTS sso_subject_logouts (
 );
 ` + endUnboundSSOLogins,
 	},
+	{
+		// step_up_at is when the session's user last re-proved who they are (password or a
+		// KyIdentity sign-in with max_age=0); minting a session-outliving credential needs it recent.
+		Version:  10,
+		Name:     "session_step_up",
+		SQLite:   `ALTER TABLE sessions ADD COLUMN step_up_at DATETIME;`,
+		Postgres: `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS step_up_at TIMESTAMPTZ;`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

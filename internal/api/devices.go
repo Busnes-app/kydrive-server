@@ -23,7 +23,7 @@ const (
 )
 
 func (s *Server) deviceRoutes() {
-	s.mux.HandleFunc("POST /api/devices/approve", s.requireAuthenticated(s.handleApproveDevice))
+	s.mux.HandleFunc("POST /api/devices/approve", s.requireAuthenticated(s.requireStepUp(s.handleApproveDevice)))
 	s.mux.HandleFunc("POST /api/devices/token", s.handleDeviceToken)
 	s.mux.HandleFunc("GET /api/devices", s.requireAuthenticated(s.handleDevices))
 	s.mux.HandleFunc("DELETE /api/devices/{id}", s.requireAuthenticated(s.handleRevokeDevice))

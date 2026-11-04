@@ -82,6 +82,8 @@ type SessionStore interface {
 	// CreateSession refuses when the password or the MFA state changed since the caller checked them.
 	CreateSession(ctx context.Context, s *Session, expectedPasswordHash string, mfaEnabled bool) error
 	GetSession(ctx context.Context, tokenHash string) (*Session, error)
+	// StepUp records at as the session's latest step-up; ErrNotFound when the session is gone.
+	StepUp(ctx context.Context, tokenHash string, at time.Time) error
 	DeleteSession(ctx context.Context, tokenHash string) error
 	DeleteUserSessions(ctx context.Context, userID string) error
 	// EndSSOSubject ends the provider subject's sessions whose credentials were verified

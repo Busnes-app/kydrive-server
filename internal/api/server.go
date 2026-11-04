@@ -270,7 +270,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))
 	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
-	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.handleCreateAppPassword))
+	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
+	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.requireStepUp(s.handleCreateAppPassword)))
 	s.mux.HandleFunc("PATCH /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleSetAgentScope))
 	s.mux.HandleFunc("DELETE /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleRevokeAppPassword))
 	// The agent skill holds no user or instance data.
@@ -384,6 +385,7 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		ctx := drive.WithLogin(r.Context(), drive.Login{TokenHash: sess.TokenHash, SSOSID: sess.SSOSID, At: sess.CreatedAt})
+		ctx = context.WithValue(ctx, sessionKey{}, sess)
 		h(w, r.WithContext(context.WithValue(ctx, driveUserKey{}, user)))
 	}
 }

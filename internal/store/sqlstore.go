@@ -747,7 +747,11 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 		if enabled != mfaEnabled {
 			return ErrNotFound
 		}
-		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid) VALUES (?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID)
+		var stepUp any
+		if !sess.StepUpAt.IsZero() {
+			stepUp = sess.StepUpAt
+		}
+		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID, stepUp)
 		return err
 	})
 	if err != nil {
@@ -913,14 +917,16 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 
 func (s *sessionStore) GetSession(ctx context.Context, tokenHash string) (*Session, error) {
 	q := s.store.rebind(`
-SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid
+SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at
 FROM sessions WHERE token_hash = ?
 `)
 	var sess Session
+	var stepUp sql.NullTime
 	err := s.store.db.QueryRowContext(ctx, q, tokenHash).Scan(
 		&sess.TokenHash, &sess.UserID, &sess.UserAgent, &sess.IPAddress,
-		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID, &stepUp,
 	)
+	sess.StepUpAt = stepUp.Time
 	if err != nil {
 		if errorsIs(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -932,6 +938,17 @@ FROM sessions WHERE token_hash = ?
 		return nil, errors.Join(ErrSessionExpired, s.DeleteSession(ctx, tokenHash))
 	}
 	return &sess, nil
+}
+
+func (s *sessionStore) StepUp(ctx context.Context, tokenHash string, at time.Time) error {
+	res, err := s.store.db.ExecContext(ctx, s.store.rebind(`UPDATE sessions SET step_up_at = ? WHERE token_hash = ? AND expires_at > ?`), at.UTC(), tokenHash, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return errors.Join(ErrNotFound, err)
+	}
+	return nil
 }
 
 func (s *sessionStore) DeleteSession(ctx context.Context, tokenHash string) error {

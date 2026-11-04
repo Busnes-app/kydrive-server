@@ -56,8 +56,8 @@ in KyDrive, version history and restore tools.
 - **HTTPS.** As for WebDAV, plain HTTP is refused outside `KY_ENV=development`.
 - **Administrators.** KyDrive administrators may hold files; only dedicated installer
   administrators are refused (403), as on WebDAV.
-- **Changing access** needs a session but no step-up: KyDrive has no step-up, and minting a write
-  token already needs only a session.
+- **Changing access** needs a session but no step-up. Minting a token needs a step-up within
+  five minutes (council pass 3, Q2; `internal/api/AGENTS.md`).
 
 ## Authentication at `/mcp`
 

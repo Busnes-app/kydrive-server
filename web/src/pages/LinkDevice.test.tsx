@@ -76,6 +76,16 @@ describe('LinkDevice', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it('sends a KyIdentity account to confirm it is them and keeps the request for the return', async () => {
+    open(request());
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input) === '/healthz' ? json({ clientIp: '203.0.113.7' }) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403)));
+    render(<LinkDevice onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue to KyIdentity' }));
+    expect(String(assign.mock.calls[0][0])).toMatch(/^\/api\/sso\/kysignon\/login\?step_up=1&return=%2F/);
+    expect(hasLinkRequest()).toBe(true);
+  });
+
   it('cancels without posting', async () => {
     open(request());
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => json({ clientIp: '203.0.113.7' }));

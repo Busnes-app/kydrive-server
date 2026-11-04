@@ -4,6 +4,7 @@ import { secureFetch } from '../api';
 import { change, record, response } from './drive/client';
 import { Alert } from '../components/Alert';
 import { useConfirm } from '../components/Dialog';
+import { useStepUp } from '../components/StepUp';
 import { When } from '../components/When';
 
 type Scope = 'dav' | 'mcp:read' | 'mcp:write';
@@ -36,6 +37,7 @@ export function AppPasswords() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, confirmNode] = useConfirm();
+  const [stepUp, stepUpNode] = useStepUp();
 
   async function run(action: () => Promise<void>) {
     setError(''); setBusy(true);
@@ -50,7 +52,7 @@ export function AppPasswords() {
 
   const create = (e: FormEvent) => { e.preventDefault(); void run(async () => {
     const body = agent ? { name: name.trim(), scope: write ? 'mcp:write' : 'mcp:read', folder: folder.trim() } : { name: name.trim() };
-    const v = await change('/api/auth/app-passwords', 'POST', body);
+    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body));
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
   }); };
@@ -121,6 +123,7 @@ export function AppPasswords() {
       </li>)}</ul>}
     </div>
     {confirmNode}
+    {stepUpNode}
   </section>;
 }
 

@@ -110,4 +110,36 @@ describe('AppPasswords', () => {
       expect(text).not.toMatch(/an app|wants access/i);
     }
   });
+
+  it('asks for the password when the server wants a step-up, then creates on the retry', async () => {
+    const calls: string[] = [];
+    let confirmed = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push(`${method} ${String(input)}`);
+      if (String(input) === '/api/auth/step-up') { confirmed = JSON.parse(String(init?.body)).password === 'right one'; return confirmed ? json({ confirmed: true }) : json({ error: 'Incorrect password' }, 403); }
+      if (method === 'POST') return confirmed ? json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-once', username: 'alice', url: 'https://drive.example/dav/' }, 201) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'password' }, 403);
+      return json([]);
+    }));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'wrong' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(await within(dialog).findByText('Incorrect password')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'right one' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByText('secret-once')).toBeTruthy();
+    expect(calls.filter(c => c === 'POST /api/auth/app-passwords')).toHaveLength(2);
+  });
+
+  it('creates nothing when the step-up is cancelled', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'password' }, 403) : json([])));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    await answer('Cancel');
+    expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
+  });
 });

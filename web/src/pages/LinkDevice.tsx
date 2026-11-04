@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { change, record } from './drive/client';
 import { Alert } from '../components/Alert';
+import { useStepUp } from '../components/StepUp';
 
 // The desktop app opens /link?redirect=&challenge=&state=&name=&platform=. The request moves to
 // session storage at once, so it survives a KyIdentity sign-in, and waits for an explicit
@@ -28,7 +29,9 @@ function parse(search: string): LinkRequest | null {
 }
 
 export function LinkDevice({ onClose }: { onClose: () => void }) {
-  const [request] = useState(() => parse(sessionStorage.getItem(pending) ?? ''));
+  const [raw] = useState(() => sessionStorage.getItem(pending) ?? '');
+  const [request] = useState(() => parse(raw));
+  const [stepUp, stepUpNode] = useStepUp();
   const [at] = useState(() => new Date());
   const [ip, setIp] = useState('');
   const [error, setError] = useState('');
@@ -45,7 +48,8 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
     once.current = true; setSent(true);
     sessionStorage.removeItem(pending);
     try {
-      const v = await change('/api/devices/approve', 'POST', request);
+      // A KyIdentity confirmation leaves the page: keep the request so it shows again on return.
+      const v = await stepUp(() => change('/api/devices/approve', 'POST', request), () => sessionStorage.setItem(pending, raw));
       if (!record(v) || typeof v.redirect !== 'string' || !v.redirect.startsWith(request.redirect + '?')) throw new Error('Unexpected server response.');
       location.assign(v.redirect);
     } catch (e) { setError(e instanceof Error ? e.message : 'Linking failed.'); }
@@ -70,6 +74,7 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
         </div>
         {error && <div style={{ marginTop: '1rem' }}><Alert>{error} Start linking again from the KyDrive app.</Alert></div>}
       </>}
+      {stepUpNode}
     </section>
   </main>;
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"golang.org/x/oauth2"
 )
 
 // KySignOnClient manages interactions with the central KySignOn identity provider.
@@ -27,8 +28,12 @@ func NewKySignOnClient(cfg config.SSOConfig, st store.Store) *KySignOnClient {
 	}
 }
 
-// BuildAuthURL generates the authorization code URL with PKCE for KySignOn.
-func (k *KySignOnClient) BuildAuthURL(ctx context.Context, redirectURI, state, verifier, nonce string) (string, error) {
+// BuildAuthURL generates the authorization code URL with PKCE for KySignOn. A step-up sends
+// max_age=0 so KyIdentity makes the user sign in again rather than reuse its session.
+func (k *KySignOnClient) BuildAuthURL(ctx context.Context, redirectURI, state, verifier, nonce string, stepUp bool) (string, error) {
+	if stepUp {
+		return k.flow.authCodeURL(ctx, redirectURI, state, verifier, nonce, oauth2.SetAuthURLParam("max_age", "0"))
+	}
 	return k.flow.authCodeURL(ctx, redirectURI, state, verifier, nonce)
 }
 
