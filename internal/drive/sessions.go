@@ -181,6 +181,27 @@ func (s *Store) RevokeUserEditors(ctx context.Context, tx *sql.Tx, user string) 
 	return s.revokeEditors(ctx, tx, `user_id=?`, user)
 }
 
+// RevokeUserCredentials ends, in the caller's transaction, the credentials user issued that
+// outlive a password: WebDAV passwords, agent tokens and pending computer links are deleted,
+// linked computers revoked (no wipe) and service tokens revoked, which also ends the editors
+// opened through them. Nil (no drive store) is a no-op.
+func (s *Store) RevokeUserCredentials(ctx context.Context, tx *sql.Tx, user string) error {
+	if s == nil {
+		return nil
+	}
+	for _, q := range []string{
+		`DELETE FROM drive_app_passwords WHERE user_id=?`,
+		`DELETE FROM drive_device_codes WHERE user_id=?`,
+		`UPDATE drive_service_tokens SET revoked=true WHERE user_id=? AND revoked=false`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, user); err != nil {
+			return err
+		}
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE drive_devices SET revoked_at=?,wipe=0 WHERE user_id=? AND revoked_at=0`, time.Now().Unix(), user)
+	return err
+}
+
 // RevokeSSOEditors revokes, like RevokeUserEditors, the editor sessions opened through the
 // SSO login sid, whether or not its browser session still exists.
 func (s *Store) RevokeSSOEditors(ctx context.Context, tx *sql.Tx, sid string) error {

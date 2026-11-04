@@ -561,3 +561,59 @@ func TestServiceTokenEditorSessionsEndWithTheToken(t *testing.T) {
 		t.Fatal("the user's own browser editor session was revoked with the token")
 	}
 }
+
+// A password reset or replacement ends the credentials that outlive a password: WebDAV
+// passwords, agent tokens, service tokens and linked computers stop at once, as sessions do.
+func TestPasswordChangeRevokesCredentials(t *testing.T) {
+	ctx := context.Background()
+	for name, change := range map[string]func(store.Store) error{
+		"forced replacement": func(st store.Store) error {
+			return st.Users().CompletePasswordChange(ctx, "worker", "old", "new", "")
+		},
+		"operator reset": func(st store.Store) error {
+			return st.Users().ResetAdminPassword(ctx, "worker", "reset")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, w, _ := fixture(t)
+			d := st.Drive()
+			managers(t, d, w)
+			_, secret, err := d.CreateAppPassword(ctx, "worker", "laptop")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.CreateServiceToken(ctx, "worker", w.ID, "sync", "editor", "service-secret"); err != nil {
+				t.Fatal(err)
+			}
+			if err = drive.ExecSQL(ctx, d, `UPDATE users SET sso_provider='local',password_hash='old',must_change_password=true WHERE id='worker'`); err != nil {
+				t.Fatal(err)
+			}
+			token := "kyd_device"
+			if err = drive.ExecSQL(ctx, d, `INSERT INTO drive_devices(id,user_id,name,platform,hash,created,last_used) VALUES('dev','worker','pc','linux',?,'2026-01-01',?)`, drive.TokenHash(token), time.Now().Unix()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.AppPasswordUser(ctx, "worker", secret); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err = d.ServiceToken(ctx, "service-secret"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.DeviceUser(ctx, token); err != nil {
+				t.Fatal(err)
+			}
+			if err = change(st); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.AppPasswordUser(ctx, "worker", secret); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("WebDAV password survived: %v", err)
+			}
+			if _, _, err = d.ServiceToken(ctx, "service-secret"); !errors.Is(err, drive.ErrDenied) {
+				t.Fatalf("service token survived: %v", err)
+			}
+			var wipe drive.ErrDeviceRevoked
+			if _, err = d.DeviceUser(ctx, token); !errors.As(err, &wipe) || wipe.Wipe {
+				t.Fatalf("device survived or was wiped: %v", err)
+			}
+		})
+	}
+}

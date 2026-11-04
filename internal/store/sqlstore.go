@@ -904,6 +904,9 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 	if err := u.store.revokeGrants(ctx, tx, userID); err != nil {
 		return err
 	}
+	if err := u.store.drive.RevokeUserCredentials(ctx, tx, userID); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, "auth.password_changed", "user", details, ip, now)
 	return err
 }

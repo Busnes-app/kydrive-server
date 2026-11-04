@@ -103,7 +103,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `docker-compose.yml` and `.env.example` default `KY_IMAGE` to `ghcr.io/busnes-app/kydrive-server:stable`, which `release-image.yml` moves to each newest release, `vX.Y.Z.N` included (`TestComposeDefaultsToStable`, `internal/api`; quick start; the README tells production to pin the digest); `docker-compose.build.yml` overrides it with the local `kydrive-server:local` build. The agent skill's `version` is the line in `internal/appversion/VERSION` (`TestAgentSkill`); bump it with `VERSION`.
 
 ## User Preferences
-- Bootstrap and operator-reset passwords must be replaced before privileged use; resets revoke sessions/MFA.
+- Bootstrap and operator-reset passwords must be replaced before privileged use; resets and replacements revoke sessions/MFA and every credential the account issued (WebDAV passwords, agent and service tokens, linked computers).
 - Euro-Office may run in production on Docker (`docker-compose.office.yml`, `docs/EURO-DOCKER.md`) or Kubernetes; both require the existing provenance, HTTPS and acceptance gates.
 - Euro-Office is the editor; no Nextcloud or ONLYOFFICE product deployment. Inherited Euro code/branding does not prove an independent artifact build chain.
 - People/groups live in KyIdentity. Group permission administration lives in KyDrive. The installation owner’s KyIdentity account must receive an explicit KyDrive administrator grant; do not leave owner administration dependent on an undisclosed local recovery login. Use the audited set-directory-role CLI with the exact directory subject.

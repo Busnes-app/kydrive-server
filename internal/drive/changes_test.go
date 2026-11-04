@@ -317,6 +317,7 @@ var noChange = map[string]string{
 	"RevokeServiceToken":      "credential",
 	"RevokeSSOEditors":        "editor bookkeeping",
 	"RevokeUserEditors":       "editor bookkeeping",
+	"RevokeUserCredentials":   "credential",
 	"RevokeUserEditorsBefore": "editor bookkeeping",
 	"SealLegacyBlobs":         "same bytes under a new blob ID; digest and revision unchanged",
 	"UpgradeBlobs":            "same bytes and blob ID, new sealing format",
