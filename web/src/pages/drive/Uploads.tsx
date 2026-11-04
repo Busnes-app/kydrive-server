@@ -49,9 +49,10 @@ export function useUploads(onIdle: () => void) {
         } else if (!session && e instanceof HttpError && e.status === 409) {
           // The name was taken (or the file changed) after the batch was checked: ask again.
           update(u.key, { conflict: true, error: '' });
-        } else if (session && (!(e instanceof HttpError) || [409, 502, 503, 504].includes(e.status))) {
+        } else if (session && (!(e instanceof HttpError) || [502, 503, 504].includes(e.status) || (e.status === 409 && e.message.includes('already completing')))) {
           // Not refused: no answer, a proxy or restart in the way, or a completion still running
-          // (409; the server will not cancel it either). The bytes stay staged, so Retry resumes
+          // (the server will not cancel that either). Any other 409, such as a file changed since
+          // the start, never clears and is freed below. The bytes stay staged, so Retry resumes
           // from what the server acknowledged and completes without resending.
           update(u.key, { error: e instanceof Error ? e.message : 'Upload failed', session: { ...session, received: acked } });
         } else {

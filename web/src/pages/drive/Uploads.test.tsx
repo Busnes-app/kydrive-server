@@ -16,7 +16,7 @@ function Harness({ files, onIdle, decide = async () => 'cancel' }: { files: File
 
 // server answers like the drive API: the folder listing, session starts (recording their
 // bodies), chunk PUTs and completion.
-function server({ listing = [] as unknown[], folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = [] as (number | 'network')[] } = {}) {
+function server({ listing = [] as unknown[], folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = [] as (number | 'network' | 'stale')[] } = {}) {
   const starts: Record<string, unknown>[] = [], calls: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET';
@@ -34,6 +34,7 @@ function server({ listing = [] as unknown[], folders = [] as unknown[], refuse =
     if (url.endsWith('/complete') && completeFails.length) {
       const f = completeFails.shift();
       if (f === 'network') throw new TypeError('Failed to fetch');
+      if (f === 'stale') return json({ error: 'revision conflict: file changed' }, 409);
       return json({ error: 'revision conflict: upload incomplete or already completing' }, f);
     }
     return json({ id: 'f', name: 'ok.txt', parent: '', revision: 1, size: 2, trashed: false }, 201);
@@ -120,8 +121,8 @@ describe('upload queue', () => {
     expect(calls.filter(c => c.startsWith('PUT'))).toHaveLength(1);
   });
 
-  it('frees the session when completion fails for good', async () => {
-    const { calls } = server({ completeFails: [500] });
+  it.each([['with a server error', 500], ['because the file changed since the start', 'stale']] as const)('frees the session when completion fails for good %s', async (_, failure) => {
+    const { calls } = server({ completeFails: [failure] });
     render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Go' }));
     await screen.findByRole('button', { name: 'Retry' });
