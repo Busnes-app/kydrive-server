@@ -821,6 +821,30 @@ func TestDetachedTrackingCoversADepositInFlight(t *testing.T) {
 	}
 }
 
+// The backup routes install backupWriteBudget, not a fixed 16 minutes: with collection and
+// drill limits that sum to a zero budget, every one of them loses its answer.
+func TestBackupRoutesInstallTheirWriteBudget(t *testing.T) {
+	srv, st, cfg := setupSQLiteServer(t)
+	priv, _ := recoverykey.Generate()
+	if err := recoveryclient.StoreRecoveryKey(cfg.Database.DataDir, backupSettings(context.Background(), st), recoveryclient.RecoveryKey{Public: priv.Public(), Threshold: 2, TotalShares: 3}); err != nil {
+		t.Fatal(err)
+	}
+	session := loginAs(t, srv, st, "budget-admin", "admin")
+	cfg.Backup.CollectTimeout, cfg.Backup.DrillTimeout = -16*time.Minute, 0 // budget = 0
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	for _, path := range []string{"/api/backup/drill", "/api/backup/export-capsule", "/api/backup/deposit"} {
+		req, _ := http.NewRequest("POST", ts.URL+path, nil)
+		req.AddCookie(session)
+		api.SignCSRFForTest(srv, req)
+		res, err := ts.Client().Do(req)
+		if err == nil {
+			res.Body.Close()
+			t.Errorf("%s answered %d under a zero write budget: the route does not use backupWriteBudget", path, res.StatusCode)
+		}
+	}
+}
+
 // A drill or export on a large repository outlasts KY_WRITE_TIMEOUT; its report or capsule must
 // still arrive (pass 4 R4), as the deposit's receipt does.
 func TestDrillAndExportOutlastWriteTimeout(t *testing.T) {

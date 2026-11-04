@@ -133,6 +133,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   }, [admin, selected, trash, onWorkspacesChange, onSelectWorkspace]);
   const uploads = useUploads(useCallback(() => { void reload().catch(e => setMessage(e instanceof Error ? e.message : 'Drive unavailable')); }, [reload]));
   useEffect(() => { setTrashDays(current?.trash_days ?? 0); setKeepVersions(current?.keep_versions ?? 0); }, [current?.id, current?.trash_days, current?.keep_versions]);
+  useEffect(() => { if (current) setQuota(Math.round(current.quota / 1048576)); }, [current?.id, current?.quota]);
   // A search result in another workspace opens its folder once that workspace is selected.
   const openAfterSwitch = useRef('');
   // Rows of the previous workspace must not linger under the new one: Rename and Move would send them there.

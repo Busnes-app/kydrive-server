@@ -45,7 +45,8 @@ func (s *Store) moveFile(ctx context.Context, user string, f File, expected int6
 		if to.Workspace != f.Workspace {
 			need = 3 // taking a file out of its workspace is a manager's call
 		}
-		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, need); err != nil {
+		// Through the parent without the file's own share: a file shared on its own stays put.
+		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, "", need); err != nil {
 			return err
 		}
 		if err := authorizeItem(ctx, tx, user, to.Workspace, to.Parent, "", 2); err != nil {
@@ -140,14 +141,16 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 		return f, ErrInvalid
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_folders WHERE id=? AND trashed=false`, id).Scan(&f.Workspace)
+		var from string
+		err := tx.QueryRowContext(ctx, `SELECT workspace,parent FROM drive_folders WHERE id=? AND trashed=false`, id).Scan(&f.Workspace, &from)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrDenied
 		}
 		if err != nil {
 			return err
 		}
-		if err := authorizeItem(ctx, tx, user, f.Workspace, id, "", 2); err != nil {
+		// Through the folder's parent: a share on the folder itself does not move the owner's folder.
+		if err := authorizeItem(ctx, tx, user, f.Workspace, from, "", 2); err != nil {
 			return err
 		}
 		if err := authorizeItem(ctx, tx, user, f.Workspace, parent, "", 2); err != nil {

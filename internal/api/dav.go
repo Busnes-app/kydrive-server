@@ -78,6 +78,7 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, mtime := int64(1<<20), ""
 	if r.Method == http.MethodPut {
+		s.answerAfterBody(w)
 		limit = s.config.Drive.MaxFileSize + 1
 		var err error
 		if mtime, err = dav.Mtime(r.Header.Get("X-OC-Mtime")); err != nil {

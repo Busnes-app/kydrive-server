@@ -401,3 +401,108 @@ func TestMoveAuthorizesTheCurrentParent(t *testing.T) {
 		t.Fatalf("file moved to %s", now.Parent)
 	}
 }
+
+// An editor share holder cannot trash, restore or move the shared item itself: those are
+// authorized through its parent, as a rename is. Inside the shared folder nothing changes.
+func TestShareHolderCannotRemoveTheSharedItem(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	tr := layout(t, d, w, blobs)
+	for _, s := range [][2]string{{"folder", tr.a.ID}, {"folder", tr.c.ID}, {"file", tr.rootFile}} {
+		if _, err := d.Share(ctx, "worker", s[0], s[1], "user", "stranger", "editor"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	denied := func(what string, err error) {
+		t.Helper()
+		if !errors.Is(err, drive.ErrDenied) {
+			t.Errorf("%s: %v, want ErrDenied", what, err)
+		}
+	}
+	denied("trash the shared folder", d.SetFolderTrash(ctx, "stranger", tr.a.ID, true))
+	denied("trash the shared file", d.SetTrash(ctx, "stranger", tr.rootFile, 1, true))
+	_, err := d.MoveFolder(ctx, "stranger", tr.c.ID, tr.a.ID, "c")
+	denied("move one shared folder into another", err)
+	_, err = d.MoveFile(ctx, "stranger", tr.rootFile, 1, drive.Location{Workspace: w.ID, Parent: tr.a.ID, Name: "root.txt"})
+	denied("move the shared file into a shared folder", err)
+	// The owner trashes them; the holder cannot restore them either.
+	if err = d.SetFolderTrash(ctx, "worker", tr.c.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetTrash(ctx, "worker", tr.rootFile, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	denied("restore the shared folder", d.SetFolderTrash(ctx, "stranger", tr.c.ID, false))
+	denied("restore the shared file", d.SetTrash(ctx, "stranger", tr.rootFile, 1, false))
+	// Inside the shared folder the editor still trashes, restores and moves.
+	if err = d.SetFolderTrash(ctx, "stranger", tr.b.ID, true); err != nil {
+		t.Errorf("trash inside the share: %v", err)
+	}
+	if err = d.SetFolderTrash(ctx, "stranger", tr.b.ID, false); err != nil {
+		t.Errorf("restore inside the share: %v", err)
+	}
+	if err = d.SetTrash(ctx, "stranger", tr.inA.ID, 1, true); err != nil {
+		t.Errorf("trash a file inside the share: %v", err)
+	}
+	if err = d.SetTrash(ctx, "stranger", tr.inA.ID, 1, false); err != nil {
+		t.Errorf("restore a file inside the share: %v", err)
+	}
+	if _, err = d.MoveFile(ctx, "stranger", tr.inA.ID, 1, drive.Location{Workspace: w.ID, Parent: tr.b.ID, Name: "inA.txt"}); err != nil {
+		t.Errorf("move a file inside the share: %v", err)
+	}
+	if _, err = d.MoveFolder(ctx, "stranger", tr.b.ID, tr.a.ID, "b2"); err != nil {
+		t.Errorf("rename a folder inside the share: %v", err)
+	}
+	// A file inside the share whose folder the owner then trashed would come back at the
+	// workspace root, outside the share: refused.
+	if err = d.SetTrash(ctx, "stranger", tr.inA.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", tr.b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	denied("restore to the workspace root", d.SetTrash(ctx, "stranger", tr.inA.ID, 1, false))
+	if err = d.SetTrash(ctx, "worker", tr.inA.ID, 1, false); err != nil {
+		t.Errorf("member restore to the root: %v", err)
+	}
+	// The same for a folder: the share on the trashed folder a still counts, the root does not.
+	sub, err := d.AddFolder(ctx, "stranger", w.ID, tr.a.ID, "sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "stranger", sub.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", tr.a.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	denied("restore a folder to the workspace root", d.SetFolderTrash(ctx, "stranger", sub.ID, false))
+}
+
+// A workspace reader given an editor share on a folder finds it in Shared with me, where the
+// web app offers editing; a share no higher than their membership stays out.
+func TestSharedWithMeRaisesAMembersRole(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	tr := layout(t, d, w, blobs)
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "readers", DisplayName: "Readers", ExternalID: "x-readers", Members: []string{"stranger"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Grant(ctx, "admin", w.ID, "readers", "reader"); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []struct{ kind, id, role string }{{"folder", tr.a.ID, "editor"}, {"file", tr.inC.ID, "reader"}} {
+		if _, err := d.Share(ctx, "worker", s.kind, s.id, "user", "stranger", s.role); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := d.SharedWithMe(ctx, "stranger")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].ID != tr.a.ID || items[0].Role != "editor" {
+		t.Fatalf("got %+v, want only folder a as editor", items)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -157,5 +158,62 @@ func TestDAVSignInLimit(t *testing.T) {
 	srv.ServeHTTP(w, r)
 	if w.Code != 207 {
 		t.Fatalf("another client after 10 failures elsewhere: %d", w.Code)
+	}
+}
+
+// A WebDAV PUT or web upload whose body takes longer than KY_WRITE_TIMEOUT (but less than KY_READ_TIMEOUT)
+// is published; its 201 must arrive too, or the client reports a failure and retries.
+func TestDAVPutAnswersAfterASlowBody(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	loginAs(t, srv, st, "slowdavadmin", "admin")
+	cookie := loginAs(t, srv, st, "slowdav", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "slowdav", DisplayName: "Slow", Members: []string{"usr_slowdav"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_slowdavadmin", "Slow", 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_slowdavadmin", w.ID, "slowdav", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := st.Drive().CreateAppPassword(ctx, "usr_slowdav", "Laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Server.ReadTimeout, cfg.Server.WriteTimeout = 5*time.Second, 100*time.Millisecond
+	ts := httptest.NewUnstartedServer(srv)
+	ts.Config.ReadTimeout, ts.Config.WriteTimeout = cfg.Server.ReadTimeout, cfg.Server.WriteTimeout
+	ts.Start()
+	defer ts.Close()
+	slow := func() io.Reader {
+		body, feed := io.Pipe()
+		go func() {
+			_, _ = feed.Write([]byte("slow "))
+			time.Sleep(4 * cfg.Server.WriteTimeout)
+			_, _ = feed.Write([]byte("body"))
+			_ = feed.Close()
+		}()
+		return body
+	}
+	put, _ := http.NewRequest("PUT", ts.URL+"/dav/Slow/slow.txt", slow())
+	put.SetBasicAuth("slowdav", secret)
+	// The single-request upload of the web app takes its body the same way.
+	post, _ := http.NewRequest("POST", ts.URL+"/api/drive/workspaces/"+w.ID+"/uploads?name=web.txt&revision=0", slow())
+	post.AddCookie(cookie)
+	api.SignCSRFForTest(srv, post)
+	for _, req := range []*http.Request{put, post} {
+		res, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatalf("%s lost its answer: %v", req.Method, err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusCreated {
+			t.Fatalf("%s: %d", req.Method, res.StatusCode)
+		}
 	}
 }
