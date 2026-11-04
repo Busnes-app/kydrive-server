@@ -25,7 +25,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const BulkManifestPath = "data/drive-bulk.json"
+const (
+	bulkManifestName = "drive-bulk.json"
+	BulkManifestPath = "data/" + bulkManifestName
+)
 
 type BulkFile struct {
 	Blob   string `json:"blob"`
@@ -427,6 +430,10 @@ var freeSpace = func(dir string) (uint64, error) {
 // RestoreBulk accepts only a manifest from an opened, verified capsule. It checks every
 // referenced blob before publishing the restored directory; absence never becomes success.
 func RestoreBulk(ctx context.Context, openedDir string, repository Repository, target string) error {
+	// A large manifest is sealed as parts, like the database.
+	if err := JoinDatabase(filepath.Join(openedDir, "data")); err != nil {
+		return err
+	}
 	raw, err := os.ReadFile(filepath.Join(openedDir, BulkManifestPath))
 	if err != nil {
 		return err

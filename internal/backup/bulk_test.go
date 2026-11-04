@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -786,5 +787,44 @@ func TestBulkInitRerun(t *testing.T) {
 	}
 	if repoDigest(t, f.repo) != before {
 		t.Fatal("a foreign repository was changed")
+	}
+}
+
+// A bulk manifest past one capsule member is sealed as ordered parts, like the database, and
+// the restore reassembles it (pass 4 O-R4, the "Large databases in backups" decision).
+func TestBulkManifestSplitsAcrossMembers(t *testing.T) {
+	f := newBulkFixture(t)
+	_, v := f.publish(t, "many.txt", "kept in parts")
+	backup.SetDBPartBytes(t, 128)
+	payload := f.collect(t, backup.PurposeDeposit)
+	// At this part size the database is hundreds of parts; lay it down whole.
+	var parts, files []recoveryclient.File
+	var db []byte
+	for _, m := range payload.Files {
+		switch {
+		case m.Path == backup.BulkManifestPath:
+			t.Fatal("manifest sealed whole past the part size")
+		case strings.HasPrefix(m.Path, backup.BulkManifestPath+"."):
+			parts = append(parts, m)
+		case strings.HasPrefix(m.Path, "data/ky_server.db."):
+			db = append(db, m.Data...)
+		default:
+			files = append(files, m)
+		}
+	}
+	if len(parts) < 2 || parts[0].Path != backup.BulkManifestPath+".000-of-"+fmt.Sprintf("%03d", len(parts)) {
+		t.Fatalf("manifest members %d, first %q", len(parts), parts[0].Path)
+	}
+	files = append(append(files, parts...), recoveryclient.File{Path: "data/ky_server.db", Data: db})
+	opened := openCapsule(t, recoveryclient.Payload{Files: files})
+	target := filepath.Join(t.TempDir(), "blobs")
+	if err := backup.RestoreBulk(context.Background(), opened, backup.Repository{URL: f.repo}, target); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.read(t, target, v, true); got != "kept in parts" {
+		t.Fatalf("restored %q", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(opened, backup.BulkManifestPath+".*")); len(left) != 0 {
+		t.Fatalf("parts left after joining: %v", left)
 	}
 }
