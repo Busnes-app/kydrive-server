@@ -133,7 +133,6 @@ func TestJoinDatabaseRefusesAnInconsistentSet(t *testing.T) {
 		"gap":             {"ky_server.db.000-of-003", "ky_server.db.002-of-003"},
 		"missing last":    {"ky_server.db.000-of-003", "ky_server.db.001-of-003"},
 		"duplicate":       {"ky_server.db.000-of-002", "ky_server.db.001-of-002", "ky_server.db.001-of-003"},
-		"unnumbered":      {"ky_server.db.000-of-001", "ky_server.db.old"},
 		"whole and parts": {"ky_server.db", "ky_server.db.000-of-001"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -183,5 +182,21 @@ func TestSizeWarningAtEightyPercent(t *testing.T) {
 	}
 	if w := backup.SizeWarningFor(limit + 1); !strings.Contains(w, "80%") {
 		t.Fatalf("no warning past 80%%: %q", w)
+	}
+}
+
+// Files that only share the name, such as an operator's copy, are not parts.
+func TestJoinDatabaseIgnoresOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"ky_server.db", "ky_server.db.bak", "ky_server.db-wal"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte(f), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := backup.JoinDatabase(dir); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "ky_server.db")); err != nil || string(got) != "ky_server.db" {
+		t.Fatalf("database changed: %q %v", got, err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -184,6 +185,9 @@ func dbMembers(db []byte) []recoveryclient.File {
 	return files
 }
 
+// dbPartPattern names a part; other ky_server.db.* files (an operator's .bak) are left alone.
+var dbPartPattern = regexp.MustCompile(`^ky_server\.db\.[0-9]{3}-of-[0-9]{3}$`)
+
 func dbPartName(i, n int) string { return fmt.Sprintf("%s.%03d-of-%03d", dbName, i, n) }
 
 // JoinDatabase reassembles a database sealed as parts into dataDir/ky_server.db and removes
@@ -200,7 +204,7 @@ func JoinDatabase(dataDir string) error {
 	}
 	var parts []string
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), dbName+".") {
+		if dbPartPattern.MatchString(e.Name()) {
 			parts = append(parts, e.Name())
 		}
 	}
