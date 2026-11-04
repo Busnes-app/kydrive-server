@@ -102,6 +102,10 @@ func (s *Server) handleBackupDrill(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
+	// Collecting and restoring a large repository can outlast KY_WRITE_TIMEOUT; give it the deposit's budget.
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+		log.Printf("[BACKUP] drill response keeps the default write timeout: %v", err)
+	}
 	ctx := r.Context()
 	payload, err := backup.Collect(ctx, s.config, appversion.String(), backup.PurposeDrill)
 	if errors.Is(err, backup.ErrNoDatabaseSnapshot) {
@@ -133,6 +137,9 @@ func (s *Server) handleExportCapsule(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
+	}
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(depositWriteBudget)); err != nil {
+		log.Printf("[BACKUP] export response keeps the default write timeout: %v", err)
 	}
 	ctx := r.Context()
 	actor := s.actorID(r)

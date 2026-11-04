@@ -820,3 +820,30 @@ func TestDetachedTrackingCoversADepositInFlight(t *testing.T) {
 		t.Error("the wait returned but no receipt was recorded: it did not cover the write it exists for")
 	}
 }
+
+// A drill on a large repository outlasts KY_WRITE_TIMEOUT; its report must still arrive
+// (pass 4 R4), as the deposit's receipt does.
+func TestDrillOutlastsWriteTimeout(t *testing.T) {
+	srv, st, _ := setupSQLiteServer(t)
+	session := loginAs(t, srv, st, "slow-drill-admin", "admin")
+	ts := httptest.NewUnstartedServer(srv)
+	ts.Config.WriteTimeout = 2 * time.Millisecond
+	ts.Start()
+	defer ts.Close()
+	req, _ := http.NewRequest("POST", ts.URL+"/api/backup/drill", nil)
+	req.AddCookie(session)
+	api.SignCSRFForTest(srv, req)
+	began := time.Now()
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("drill after %v: %v", time.Since(began), err)
+	}
+	defer res.Body.Close()
+	var result recoveryclient.DrillResult
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("drill: %d %v", res.StatusCode, err)
+	}
+	if took := time.Since(began); took < 2*ts.Config.WriteTimeout {
+		t.Fatalf("drill took %v; it must outlast the 2ms write timeout to prove anything", took)
+	}
+}

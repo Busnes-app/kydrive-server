@@ -63,7 +63,7 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Store verifier in short-lived cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "ky_pkce_" + state,
+		Name:     s.flowCookie("ky_pkce_") + state,
 		Value:    verifier,
 		Path:     "/",
 		MaxAge:   300,
@@ -72,9 +72,9 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{
-		Name:     "ky_nonce_" + state,
+		Name:     s.flowCookie("ky_nonce_") + state,
 		Value:    nonce,
-		Path:     "/api/sso/kysignon/callback",
+		Path:     "/",
 		MaxAge:   300,
 		HttpOnly: true,
 		Secure:   s.config.Security.CookieSecure,
@@ -93,13 +93,13 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
-	cookie, err := r.Cookie("ky_pkce_" + state)
+	cookie, err := r.Cookie(s.flowCookie("ky_pkce_") + state)
 	if err != nil || cookie.Value == "" {
 		s.writeError(w, http.StatusBadRequest, "Invalid or expired SSO state")
 		return
 	}
 	verifier := cookie.Value
-	nonceCookie, err := r.Cookie("ky_nonce_" + state)
+	nonceCookie, err := r.Cookie(s.flowCookie("ky_nonce_") + state)
 	if err != nil || nonceCookie.Value == "" {
 		s.writeError(w, http.StatusBadRequest, "Invalid or expired SSO nonce")
 		return
@@ -156,6 +156,16 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// flowCookie names a sign-in flow cookie host-only (__Host-, as the session cookie is) on a
+// secure deployment without a shared cookie domain, so a sibling subdomain cannot plant its own
+// PKCE verifier and nonce and sign this browser into the planter's account.
+func (s *Server) flowCookie(base string) string {
+	if s.config.Security.CookieSecure && s.config.Security.CookieDomain == "" {
+		return "__Host-" + base
+	}
+	return base
 }
 
 // localPath reports whether back is a path on this site: no scheme, host, backslash or control

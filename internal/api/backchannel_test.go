@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
@@ -299,5 +300,44 @@ func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
 		if _, err = st.Drive().CallbackActor(ctx, id, revision, epoch); !errors.Is(err, drive.ErrDenied) {
 			t.Fatalf("logout %d left the editor authorized: %v", i, err)
 		}
+	}
+}
+
+// On a secure host-only deployment the PKCE verifier and nonce ride in __Host- cookies, so a
+// sibling subdomain cannot plant a pair for its own code and sign this browser into its account
+// (pass 4 R3).
+func TestSSOFlowCookiesAreHostOnly(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	f := newFakeKySignOn(t)
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
+	cfg.Security.CookieSecure = true
+	srv = api.NewServer(cfg, st)
+	signedIn := func(w *httptest.ResponseRecorder) bool {
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "__Host-"+auth.SessionCookieName && c.Value != "" {
+				return true
+			}
+		}
+		return false
+	}
+	if got := ssoLogin(t, srv, f, "alice", "sid-1"); got.Code != http.StatusFound || !signedIn(got) {
+		t.Fatalf("host-only sign-in: %d %s", got.Code, got.Body.String())
+	}
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/sso/kysignon/login", nil))
+	q := func() url.Values { u, _ := url.Parse(w.Header().Get("Location")); return u.Query() }()
+	f.idToken = f.sign(t, "", map[string]any{"sub": "mallory", "sid": "sid-m", "nonce": q.Get("nonce"), "preferred_username": "mallory", "iat": time.Now().Unix()})
+	req := httptest.NewRequest(http.MethodGet, "/api/sso/kysignon/callback?code=c&state="+q.Get("state"), nil)
+	for _, c := range w.Result().Cookies() {
+		if !strings.HasPrefix(c.Name, "__Host-") || !c.Secure || c.Path != "/" || c.Domain != "" {
+			t.Fatalf("flow cookie %s is not host-only: %+v", c.Name, c)
+		}
+		// A cookie set for the parent domain reaches the server without the prefix.
+		req.AddCookie(&http.Cookie{Name: strings.TrimPrefix(c.Name, "__Host-"), Value: c.Value})
+	}
+	got := httptest.NewRecorder()
+	srv.ServeHTTP(got, req)
+	if got.Code != http.StatusBadRequest || signedIn(got) {
+		t.Fatalf("planted flow cookies: %d %s", got.Code, got.Body.String())
 	}
 }
