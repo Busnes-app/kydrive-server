@@ -32,6 +32,11 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 	if err != nil {
 		return recipeFailure("required_files: " + err.Error())
 	}
+	// A split database is checked as the one file its parts reassemble into.
+	if err := JoinDatabase(filepath.Join(dir, "data")); err != nil {
+		return []recoveryclient.Check{{Name: "Database parts", Message: err.Error()}}
+	}
+	required = joinedMembers(required)
 	sqlitePaths, err := recipeStrings(recipe["sqlite_paths"])
 	if err != nil {
 		return recipeFailure("sqlite_paths: " + err.Error())
@@ -58,8 +63,9 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 	}
 	members := make(map[string]bool, len(opened.Files))
 	for _, file := range opened.Files {
-		members[file.Path] = true
-		if !slices.Contains(required, file.Path) {
+		name := joinedMember(file.Path)
+		members[name] = true
+		if !slices.Contains(required, name) {
 			return recipeFailure("required_files omits a capsule member")
 		}
 	}
@@ -114,6 +120,24 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 		checks = append(checks, check)
 	}
 	return checks
+}
+
+// joinedMember names a database part as the database JoinDatabase made of it.
+func joinedMember(name string) string {
+	if strings.HasPrefix(name, dbPath+".") {
+		return dbPath
+	}
+	return name
+}
+
+func joinedMembers(names []string) []string {
+	var out []string
+	for _, name := range names {
+		if name = joinedMember(name); !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func recipeFailure(message string) []recoveryclient.Check {

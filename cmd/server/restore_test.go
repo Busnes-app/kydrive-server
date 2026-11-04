@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/ky-primitives/recoverykey"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
+	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -26,6 +29,14 @@ import (
 const restoreFixtureToken = "public-fixture-session-token"
 
 func sealFixture(t *testing.T, service string) (string, []string) {
+	t.Helper()
+	return sealFixtureWith(t, service, func(db []byte) []recoveryclient.File {
+		return []recoveryclient.File{{Path: "data/ky_server.db", Data: db, Mode: 0600}}
+	})
+}
+
+// sealFixtureWith seals the fixture with the database as dbMembers lays it out.
+func sealFixtureWith(t *testing.T, service string, dbMembers func([]byte) []recoveryclient.File) (string, []string) {
 	t.Helper()
 	priv, err := recoverykey.Generate()
 	if err != nil {
@@ -78,12 +89,12 @@ func sealFixture(t *testing.T, service string) (string, []string) {
 		t.Fatal(err)
 	}
 	payload := recoveryclient.Payload{ServiceName: service, AppVersion: "1.0.0",
-		Files: []recoveryclient.File{
-			{Path: "data/x.db", Data: []byte("payload"), Mode: 0600},
-			{Path: "data/ky_server.db", Data: db, Mode: 0600},
-			{Path: "data/encryption.key", Data: []byte(hex.EncodeToString(keyBytes) + "\n"), Mode: 0600},
-			{Path: "config/integrations.json", Data: []byte(`{"reference":"retained"}`), Mode: 0600},
-		}}
+		Files: append(append([]recoveryclient.File{
+			{Path: "data/x.db", Data: []byte("payload"), Mode: 0600}},
+			dbMembers(db)...),
+			recoveryclient.File{Path: "data/encryption.key", Data: []byte(hex.EncodeToString(keyBytes) + "\n"), Mode: 0600},
+			recoveryclient.File{Path: "config/integrations.json", Data: []byte(`{"reference":"retained"}`), Mode: 0600},
+		)}
 	raw, _, err := recoveryclient.Seal(payload, key)
 	if err != nil {
 		t.Fatal(err)
@@ -269,5 +280,55 @@ func TestRestoreResetDoesNotInitializeAnEmptyOrUnrelatedDatabase(t *testing.T) {
 				t.Fatal("invalid database was changed", err)
 			}
 		})
+	}
+}
+
+// splitDB lays the database out as parts of three, as Collect does past one member's limit,
+// keeping only the parts keep allows.
+func splitDB(keep func(i int) bool) func([]byte) []recoveryclient.File {
+	return func(db []byte) []recoveryclient.File {
+		size := (len(db) + 2) / 3
+		var files []recoveryclient.File
+		for i := range 3 {
+			if keep(i) {
+				files = append(files, recoveryclient.File{Path: fmt.Sprintf("data/ky_server.db.%03d-of-003", i), Data: db[i*size : min((i+1)*size, len(db))], Mode: 0600})
+			}
+		}
+		return files
+	}
+}
+
+func TestRestoreJoinsASplitDatabase(t *testing.T) {
+	path, shares := sealFixtureWith(t, "busnes_app", splitDB(func(int) bool { return true }))
+	target := t.TempDir()
+	if err := restore(path, target, "busnes_app", shares, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(target, "data", "ky_server.db.*")); len(left) != 0 {
+		t.Fatalf("parts left after restore: %v", left)
+	}
+	st, err := store.Open(context.Background(), config.DatabaseConfig{Driver: "sqlite", DSN: filepath.Join(target, "data", "ky_server.db")}, bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if value, err := st.Settings().GetSetting(context.Background(), "integration-reference"); err != nil || value != "retained" {
+		t.Fatal("split restore lost the database contents", value, err)
+	}
+	// restore-reset on the joined directory still works.
+	if err := resetRestored(context.Background(), filepath.Join(target, "data")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRestoreRefusesASplitDatabaseMissingAPart(t *testing.T) {
+	path, shares := sealFixtureWith(t, "busnes_app", splitDB(func(i int) bool { return i != 1 }))
+	target := t.TempDir()
+	err := restore(path, target, "busnes_app", shares, io.Discard)
+	if !errors.Is(err, backup.ErrDatabaseParts) {
+		t.Fatalf("got %v, want ErrDatabaseParts", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "data", "ky_server.db")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("an incomplete split produced a database", err)
 	}
 }

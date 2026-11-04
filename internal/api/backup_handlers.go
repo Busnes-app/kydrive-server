@@ -570,6 +570,9 @@ func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request) {
 			out["bulk_repository"] = loc
 		}
 	}
+	if w := backup.SizeWarning(s.config); w != "" {
+		out["capsule_size_warning"] = w
+	}
 	if s.config.Backup.Dir != "" {
 		out["local_dir"] = s.config.Backup.Dir
 		out["local_keep"] = s.config.Backup.Keep

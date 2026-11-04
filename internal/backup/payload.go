@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/Busnes-app/ky-primitives/capsule"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	_ "modernc.org/sqlite"
@@ -24,6 +27,24 @@ const encryptionKeyPath = "data/encryption.key"
 // recoveryPubPath is where a restore drops the suite recovery public key, matching the
 // <DataDir>/recovery.pub that recoveryclient.RecoveryKeyPath reads.
 const recoveryPubPath = "data/recovery.pub"
+
+// dbName is the restored database file; dbPath is its capsule member when it fits in one.
+const (
+	dbName = "ky_server.db"
+	dbPath = "data/" + dbName
+)
+
+// dbPartBytes is the most of a snapshot one capsule member carries. A larger snapshot is
+// sealed as ordered parts (ky_server.db.000-of-NNN, ...) that JoinDatabase reassembles.
+// The library limit is never raised; tests lower this instead of writing 64 MiB fixtures.
+var dbPartBytes = int(capsule.MaxFileBytes)
+
+// warnBytes is 80% of the tar stream one capsule may hold (capsule.MaxExpandedBytes).
+const warnBytes = capsule.MaxExpandedBytes / 5 * 4
+
+// ErrDatabaseParts refuses a split database that is incomplete, out of order or beside a
+// whole one.
+var ErrDatabaseParts = errors.New("backup: database parts are incomplete or inconsistent")
 
 // ErrNoDatabaseSnapshot is returned when the payload cannot carry a consistent copy of the
 // database, so a capsule without one is never sealed as if it were a backup.
@@ -47,8 +68,8 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 	if err != nil {
 		return recoveryclient.Payload{}, err
 	}
-	const dbPath = "data/ky_server.db"
-	files := []recoveryclient.File{{Path: dbPath, Data: dbBytes, Mode: 0600}}
+	files := dbMembers(dbBytes)
+	// The integrity check runs on the database the drill reassembles, never on a part.
 	sqlitePaths := []string{dbPath}
 
 	cfgJSON, err := json.MarshalIndent(map[string]any{
@@ -99,6 +120,13 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 	if len(bulk) > 0 {
 		files = append(files, recoveryclient.File{Path: BulkManifestPath, Data: bulk, Mode: 0600})
 	}
+	var total int64
+	for _, f := range files {
+		total += int64(len(f.Data))
+	}
+	if w := sizeWarning(total); w != "" {
+		log.Printf("[BACKUP] warning: %s", w)
+	}
 	payload := recoveryclient.Payload{
 		ServiceName: cfg.Server.AppName,
 		AppVersion:  appVersion,
@@ -139,6 +167,107 @@ func snapshotSQLite(ctx context.Context, dsn, dataDir string) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %v", ErrNoDatabaseSnapshot, err)
 	}
 	return os.ReadFile(path)
+}
+
+// dbMembers is the snapshot as one member when it fits, else as ordered parts each within
+// capsule.MaxFileBytes.
+func dbMembers(db []byte) []recoveryclient.File {
+	if len(db) <= dbPartBytes {
+		return []recoveryclient.File{{Path: dbPath, Data: db, Mode: 0600}}
+	}
+	n := (len(db) + dbPartBytes - 1) / dbPartBytes
+	files := make([]recoveryclient.File, 0, n)
+	for i := range n {
+		part := db[i*dbPartBytes : min((i+1)*dbPartBytes, len(db))]
+		files = append(files, recoveryclient.File{Path: "data/" + dbPartName(i, n), Data: part, Mode: 0600})
+	}
+	return files
+}
+
+func dbPartName(i, n int) string { return fmt.Sprintf("%s.%03d-of-%03d", dbName, i, n) }
+
+// JoinDatabase reassembles a database sealed as parts into dataDir/ky_server.db and removes
+// the parts, before anything opens it. Without parts it does nothing, so a single-member
+// capsule or an already joined directory passes unchanged. It refuses a missing, extra or
+// renumbered part, and parts beside a whole database.
+func JoinDatabase(dataDir string) error {
+	entries, err := os.ReadDir(dataDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var parts []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), dbName+".") {
+			parts = append(parts, e.Name())
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	whole := filepath.Join(dataDir, dbName)
+	if _, err := os.Lstat(whole); !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w: %s and its parts are both present", ErrDatabaseParts, dbName)
+	}
+	// ReadDir sorts by name, so a complete set is exactly part 0 to n-1 of n, in order.
+	for i, name := range parts {
+		if name != dbPartName(i, len(parts)) {
+			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, dbPartName(i, len(parts)))
+		}
+	}
+	tmp, err := os.CreateTemp(dataDir, ".join-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	for _, name := range parts {
+		if err := appendFile(tmp, filepath.Join(dataDir, name)); err != nil {
+			tmp.Close()
+			return err
+		}
+	}
+	if err := errors.Join(tmp.Chmod(0600), tmp.Sync(), tmp.Close()); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), whole); err != nil {
+		return err
+	}
+	for _, name := range parts {
+		if err := os.Remove(filepath.Join(dataDir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func appendFile(dst io.Writer, path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(dst, f)
+	return err
+}
+
+// sizeWarning is non-empty once a capsule's members pass 80% of what one may hold.
+func sizeWarning(n int64) string {
+	if n <= warnBytes {
+		return ""
+	}
+	return fmt.Sprintf("Backups are %d MiB, over 80%% of the %d MiB a capsule holds; they fail once the database outgrows it", n>>20, capsule.MaxExpandedBytes>>20)
+}
+
+// SizeWarning is sizeWarning for the live database file, for the status route.
+func SizeWarning(cfg *config.Config) string {
+	path, _, _ := strings.Cut(strings.TrimPrefix(cfg.Database.DSN, "file:"), "?")
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return sizeWarning(fi.Size())
 }
 
 // Members names what a capsule carries, for the screen; it is what Collect would seal now.

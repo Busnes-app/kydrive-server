@@ -344,8 +344,9 @@ func TestExportCapsuleRefusesAMismatchedRecoveryKey(t *testing.T) {
 	}
 }
 
-// A database that has outgrown the capsule's per-member cap must say so: an operator whose
-// backups have silently stopped working needs the limit, not a bare 500.
+// A database that has outgrown the capsule's total cap must say so: an operator whose
+// backups have stopped working needs the limit, not a bare 500. One past the per-member cap
+// is split into parts and seals (internal/backup split_test.go).
 func TestExportCapsuleRejectsAnOversizedPayload(t *testing.T) {
 	srv, st, cfg := setupSQLiteServer(t)
 	ctx := context.Background()
@@ -359,14 +360,14 @@ func TestExportCapsuleRejectsAnOversizedPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A real database one blob past the per-member cap: the collector snapshots with VACUUM
+	// A real database one blob past the total cap: the collector snapshots with VACUUM
 	// INTO, so the file has to be a database, and zeroblob makes a large one instantly.
 	big := filepath.Join(t.TempDir(), "oversized.db")
 	db, err := sql.Open("sqlite", big)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(fmt.Sprintf("CREATE TABLE big(b BLOB); INSERT INTO big VALUES (zeroblob(%d))", recoveryclient.MaxCapsuleFileBytes+1)); err != nil {
+	if _, err := db.Exec(fmt.Sprintf("CREATE TABLE big(b BLOB); INSERT INTO big VALUES (zeroblob(%d))", recoveryclient.MaxCapsuleTotalBytes+1)); err != nil {
 		t.Fatal(err)
 	}
 	_ = db.Close()
@@ -378,7 +379,7 @@ func TestExportCapsuleRejectsAnOversizedPayload(t *testing.T) {
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized export: got %d, want 413: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "64 MiB per file") {
+	if !strings.Contains(w.Body.String(), "256 MiB total") {
 		t.Errorf("body does not name the limit: %s", w.Body.String())
 	}
 }

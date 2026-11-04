@@ -21,12 +21,21 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
 - `Collect` snapshots SQLite with the lib's `SQLiteSnapshot` (`VACUUM INTO`; the store runs in
   WAL mode, so a plain file read misses uncheckpointed commits) and returns
   `ErrNoDatabaseSnapshot` for any other driver, so a capsule without a consistent database is
-  never sealed. It also carries the encryption key (`data/encryption.key`, required — without it
+  never sealed. A snapshot over `capsule.MaxFileBytes` (64 MiB, `dbPartBytes`) is sealed as
+  ordered members `data/ky_server.db.000-of-NNN` ... each within it; one that fits stays the
+  single `data/ky_server.db` member. The library limits are never raised. `Collect` logs a
+  warning once its members pass 80% of `capsule.MaxExpandedBytes` (256 MiB); `SizeWarning`
+  gives the status route the same warning for the live database file. It also carries the encryption key (`data/encryption.key`, required — without it
   the restored files and names are unreadable) and the pinned recovery public key
   (`data/recovery.pub`, only when paired).
+- `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` and removes them before
+  anything opens the database; with no parts it does nothing. It refuses a missing, extra or
+  renumbered part and parts beside a whole database (`ErrDatabaseParts`). `Checks` and
+  `cmd/server` `resetRestored` (capsule `restore` and `restore-reset`) call it first.
 - `Checks(dir, opened)` reads the opened capsule's manifest, normalizes JSON lists and
   fails malformed or incomplete recipes. Required files include all capsule members and
-  the database, settings and encryption key; SQLite integrity and required environment
+  the database, settings and encryption key (a split database's parts count as the
+  database); SQLite integrity and required environment
   checks cannot be disabled. File checks accept only clean relative manifest members;
   SQLite opens read-only and missing/empty databases fail.
 - HTTP and CLI call `RunDrill`, which holds an OS advisory lock on `<data dir>/drill.lock`
@@ -67,6 +76,10 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   subprocess lock contention/exit, scratch cleanup and the synthetic KyDrive pairing fixture
   in `testdata/pairing-kydrive.json`. The fixture uses a 32-byte 0x01 deployment key and retains
   no recovery private key.
+- `split_test.go` pins a database over the real 64 MiB member limit sealing as parts the
+  library accepts and reassembling byte-identical, many parts at a lowered `dbPartBytes`,
+  refusal of a missing part, gap, duplicate or whole-plus-parts, and the 80% warning;
+  `cmd/server` `restore_test.go` restores a split capsule and refuses one missing a part.
 - `repokey_test.go` pins the key move against a fake runner (`runRestic` seam), including interruption after add and during add; `TestBulkRawKeyRepositoryIsMoved` checks it with real Restic.
 - `bulk_test.go` also pins that an unchanged blob is not re-read until the weekly full pass, that `KY_BACKUP_COLLECT_TIMEOUT` kills a hung `restic` (a fake on PATH) and that a restore without free space is refused before publishing.
 - `bulk_test.go` needs `restic` on PATH (it skips otherwise; run with `-v` and confirm it did not skip). It pins that a purged blob

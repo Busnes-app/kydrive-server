@@ -122,6 +122,12 @@ describe('Backup', () => {
     expect(await screen.findByText(/encryption key is stored in the data directory/)).toBeTruthy();
   });
 
+  it('warns when the database nears the capsule limit', async () => {
+    mockStatus({ ...PAIRED, capsule_size_warning: 'Backups are 210 MiB, over 80% of the 256 MiB a capsule holds' });
+    render(<Backup />);
+    expect(await screen.findByText(/over 80% of the 256 MiB a capsule holds/)).toBeTruthy();
+  });
+
   it('shows the offsite repository and its integrity check', async () => {
     mockStatus({ ...PAIRED, bulk_repository: 'rest:https://backup.example/kydrive', bulk_last_check: { at: '2026-10-13T00:00:00Z' } });
     render(<Backup />);
