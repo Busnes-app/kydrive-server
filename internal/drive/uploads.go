@@ -97,9 +97,9 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 			return err
 		}
 		if u.File == "" {
-			// Refuse a taken name before the bytes are sent; Publish still decides.
+			// Refuse a name a live file or folder holds before the bytes are sent; Publish still decides.
 			var taken int
-			if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_files WHERE workspace=? AND parent=? AND name_hmac=? AND trashed=false`, u.Workspace, u.Parent, mac).Scan(&taken); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, u.Workspace, u.Parent, mac).Scan(&taken); err != nil {
 				return err
 			}
 			if taken > 0 {

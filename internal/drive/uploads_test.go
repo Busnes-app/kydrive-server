@@ -221,6 +221,13 @@ func TestUploadNewVersion(t *testing.T) {
 	if _, err = d.StartUpload(ctx, "worker", drive.UploadSession{Workspace: w.ID, Name: "notes.txt", Size: 2}, maxUpload); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("taken name: %v", err)
 	}
+	// A folder's name is refused too, before any bytes are sent.
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Backup"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.StartUpload(ctx, "worker", drive.UploadSession{Workspace: w.ID, Name: "Backup", Size: 2}, maxUpload); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("name a folder holds: %v", err)
+	}
 	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, File: f.ID, Expected: 1, Size: 2})
 	if u.Name != "notes.txt" {
 		t.Fatalf("new version renamed the file: %+v", u)
