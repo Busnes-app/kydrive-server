@@ -44,7 +44,7 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     "ky_stepup_" + state,
-			Value:    base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(s.now().Unix(), 10) + "|" + back)),
+			Value:    s.stepUpCookie(state, strconv.FormatInt(s.now().Unix(), 10)+"|"+back),
 			Path:     "/api/sso/kysignon/callback",
 			MaxAge:   300,
 			HttpOnly: true,
@@ -112,7 +112,7 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if c, err := r.Cookie("ky_stepup_" + state); err == nil {
-		s.finishSSOStepUp(w, r, c.Value, claims)
+		s.finishSSOStepUp(w, r, state, c.Value, claims)
 		return
 	}
 
@@ -166,13 +166,21 @@ func localPath(back string) bool {
 		!strings.ContainsFunc(back, func(r rune) bool { return r == '\\' || r < 0x20 || r == 0x7f })
 }
 
+// stepUpCookie carries the step-up start and return path, MACed with the session secret and
+// bound to the OAuth state, so the browser cannot back-date the start or reuse it for another state.
+func (s *Server) stepUpCookie(state, value string) string {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(value))
+	return payload + "." + crypto.ComputeHMACSHA256([]byte("ky-stepup:"+state+"|"+payload), s.config.Security.SessionSecret)
+}
+
 // finishSSOStepUp dates the current session's step-up from the KyIdentity auth_time, which
 // max_age=0 made fresh. It never signs anyone in: the token must name the session's own account.
-func (s *Server) finishSSOStepUp(w http.ResponseWriter, r *http.Request, cookie string, claims *sso.IdentityClaims) {
-	raw, err := base64.RawURLEncoding.DecodeString(cookie)
+func (s *Server) finishSSOStepUp(w http.ResponseWriter, r *http.Request, state, cookie string, claims *sso.IdentityClaims) {
+	payload, mac, _ := strings.Cut(cookie, ".")
+	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	startText, back, found := strings.Cut(string(raw), "|")
 	start, perr := strconv.ParseInt(startText, 10, 64)
-	if err != nil || !found || perr != nil {
+	if !crypto.VerifyHMACSHA256([]byte("ky-stepup:"+state+"|"+payload), s.config.Security.SessionSecret, mac) || err != nil || !found || perr != nil {
 		s.writeError(w, http.StatusBadRequest, "Invalid or expired SSO state")
 		return
 	}
