@@ -2,6 +2,7 @@ import React from 'react';
 import { Appearance } from './Appearance';
 import { AppPasswords } from './AppPasswords';
 import { Devices } from './Devices';
+import { OwnPassword } from './OwnPassword';
 
 export const SETTINGS_SECTIONS = [
   { id: 'account', label: 'Account' },
@@ -12,7 +13,7 @@ export const SETTINGS_SECTIONS = [
 
 interface PersonalSettingsProps {
   section: string;
-  user: { display_name: string; username: string; role: string };
+  user: { display_name: string; username: string; role: string; sso_provider?: string };
   openInNewTab: boolean;
   onOpenInNewTabChange: (value: boolean) => void;
 }
@@ -39,6 +40,7 @@ export const PersonalSettings: React.FC<PersonalSettingsProps> = ({ section, use
       {/* Appearance's pair cards take the full width, as before; the other sections keep the settings width. */}
       <section className={open.id === 'appearance' ? undefined : 'stack settings-panel'} aria-label={open.label}>
         <p className="settings-intro">{intro}</p>
+        {open.id === 'account' && <OwnPassword local={user.sso_provider === 'local'} />}
         {open.id === 'devices' && <><AppPasswords /><Devices /></>}
         {open.id === 'appearance' && <Appearance />}
         {open.id === 'files' && <div className="account-preferences">
