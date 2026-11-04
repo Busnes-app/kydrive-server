@@ -78,6 +78,18 @@ func TestShareRoutes(t *testing.T) {
 	}
 	expect(send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=notes.txt&parent="+folder.ID+"&revision=0", "n", guest, "").Code, 201, "editor upload into share")
 	expect(send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/uploads?name=root.txt&revision=0", "n", guest, "").Code, 403, "editor upload outside share")
+	// Every action Shared with me offers an editor inside a shared folder (Q1) is item-authorized.
+	sub := send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/folders", `{"parent":"`+folder.ID+`","name":"Drafts"}`, guest, "")
+	var subFolder struct{ ID string }
+	if sub.Code != 201 || json.Unmarshal(sub.Body.Bytes(), &subFolder) != nil {
+		t.Fatalf("editor new folder %d %s", sub.Code, sub.Body.String())
+	}
+	expect(send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/documents", `{"parent":"`+folder.ID+`","name":"Plan","kind":"document"}`, guest, "").Code, 201, "editor new document")
+	expect(send(t, srv, "POST", "/api/drive/workspaces/"+w.ID+"/upload-sessions", `{"parent":"`+folder.ID+`","name":"big.bin","size":1}`, guest, "").Code, 201, "editor resumable upload")
+	expect(send(t, srv, "PUT", "/api/drive/folders/"+subFolder.ID+"/location", `{"parent":"`+folder.ID+`","name":"Old drafts"}`, guest, "").Code, 200, "editor renames a folder")
+	expect(send(t, srv, "PUT", "/api/drive/files/"+file.ID+"/location", `{"revision":1,"workspace":"`+w.ID+`","parent":"`+folder.ID+`","name":"draft v1.txt"}`, guest, "").Code, 200, "editor renames a file")
+	expect(send(t, srv, "PUT", "/api/drive/folders/"+subFolder.ID+"/trash", `{"trashed":true}`, guest, "").Code, 200, "editor trashes a folder")
+	expect(send(t, srv, "PUT", "/api/drive/folders/"+folder.ID+"/location", `{"parent":"","name":"Renamed share"}`, guest, "").Code, 403, "editor renames the shared folder itself")
 
 	expect(send(t, srv, "DELETE", "/api/drive/shares/"+sh.ID, "", guest, "").Code, 403, "share holder removes share")
 	expect(send(t, srv, "DELETE", "/api/drive/shares/"+sh.ID, "", owner, "").Code, 204, "owner removes share")

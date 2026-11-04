@@ -12,10 +12,13 @@ export type Choice = 'replace' | 'keep' | 'cancel';
 // Decide asks the user once per batch, naming the files that clash.
 export type Decide = (names: string[]) => Promise<Choice>;
 
-// liveFiles lists the files currently in a workspace, so a choice uses fresh revisions.
-async function liveFiles(workspace: string): Promise<DriveFile[]> {
-  return (await list(`/api/drive/workspaces/${workspace}/files?trash=false`, file)).filter(f => !f.trashed);
-}
+// Listing loads what an upload's folder holds now, so a choice uses fresh revisions. The default
+// lists the whole workspace; Shared with me, which cannot, lists the one shared folder.
+export type Listing = (workspace: string, parent: string) => Promise<{ files: DriveFile[]; folders: Folder[] }>;
+const workspaceListing: Listing = async workspace => {
+  const [files, folders] = await Promise.all([list(`/api/drive/workspaces/${workspace}/files?trash=false`, file), list(`/api/drive/workspaces/${workspace}/folders?trash=false`, folder)]);
+  return { files: files.filter(f => !f.trashed), folders: folders.filter(d => !d.trashed) };
+};
 
 // targetFor applies a choice to one clashing upload: a new version of the existing file, or a
 // numbered name nothing in the folder uses yet (taken grows so a batch never picks one twice).
@@ -27,7 +30,9 @@ function targetFor(choice: 'replace' | 'keep', name: string, existing: DriveFile
 }
 
 // useUploads runs uploads one at a time and calls onIdle when the queue drains.
-export function useUploads(onIdle: () => void) {
+export function useUploads(onIdle: () => void, listing: Listing = workspaceListing) {
+  const listed = useRef(listing);
+  listed.current = listing;
   const [items, setItems] = useState<Upload[]>([]);
   const queue = useRef(Promise.resolve());
   const pending = useRef(0);
@@ -69,7 +74,7 @@ export function useUploads(onIdle: () => void) {
   const add = useCallback(async (workspace: string, parent: string, tree: { dirs: string[][]; files: Entry[] }, folders: Folder[], decide: Decide) => {
     const ids = await makeFolders(workspace, parent, tree.dirs, folders);
     if (tree.files.length === 0) { onIdle(); return; }
-    const existing = await liveFiles(workspace);
+    const existing = (await listed.current(workspace, parent)).files;
     const placed = tree.files.map(e => ({ file: e.file, parent: ids.get(e.dirs.join('/')) ?? parent }));
     const clash = (p: { file: File; parent: string }) => existing.find(f => f.parent === p.parent && f.name === p.file.name);
     const clashing = placed.filter(clash);
@@ -94,9 +99,9 @@ export function useUploads(onIdle: () => void) {
   const resolve = useCallback(async (u: Upload, choice: Choice) => {
     if (choice === 'cancel') { setItems(xs => xs.filter(x => x.key !== u.key)); return; }
     try {
-      const [existing, folders] = await Promise.all([liveFiles(u.workspace), list(`/api/drive/workspaces/${u.workspace}/folders?trash=false`, folder)]);
+      const { files: existing, folders } = await listed.current(u.workspace, u.parent);
       const found = existing.find(f => f.parent === u.parent && f.name === u.target.name);
-      const siblings = [...existing, ...folders.filter(d => !d.trashed)].filter(x => x.parent === u.parent);
+      const siblings = [...existing, ...folders].filter(x => x.parent === u.parent);
       const taken = new Set([u.target.name, ...siblings.map(x => x.name)]);
       // Keep both always picks a new name; Replace with nothing left to replace uploads it as new,
       // and a name a folder holds cannot be replaced, so it takes a new name too.

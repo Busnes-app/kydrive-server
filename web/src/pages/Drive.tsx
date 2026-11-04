@@ -23,9 +23,9 @@ import { When } from '../components/When';
 
 export type { Workspace } from './drive/client';
 
-type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
-const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
-const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
+export type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
+export const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
+export const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
 
 // trashNotice tells what happens to trash. A workspace's trash_days of 0 follows the drive-wide
 // setting (default 90 days), which only administrators can read, so it never promises forever.
