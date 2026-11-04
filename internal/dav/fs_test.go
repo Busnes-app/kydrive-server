@@ -595,3 +595,78 @@ func TestCreateOnlyRefusesAFileFoundAtOpen(t *testing.T) {
 		t.Fatalf("create-only open of an existing file: %v (drive error %v)", err, fs.Err)
 	}
 }
+
+// If-Match holds from the check to the write: a revision published after the check but before
+// the target is opened is not overwritten, and a file gone meanwhile is not recreated.
+func TestIfMatchRefusesARevisionFoundAtOpen(t *testing.T) {
+	e := setup(t)
+	path := e.org() + "/match.txt"
+	e.want(e.do("worker", "PUT", path, strings.NewReader("one")), 201, "create")
+	old := e.do("worker", "GET", path, nil).Header().Get("ETag")
+	files, err := e.st.Drive().Files(context.Background(), "worker", e.team.ID, false)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("files %v %v", files, err)
+	}
+	v, err := drive.WriteBlob(e.blobs, testdb.Key, strings.NewReader("two"), 1<<20)
+	if err == nil {
+		_, err = e.st.Drive().Publish(context.Background(), "worker", files[0], v, files[0].Revision)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := e.do("worker", "GET", path, nil).Header().Get("ETag")
+	name := strings.ReplaceAll(strings.TrimPrefix(e.org(), "/dav")+"/match.txt", "%20", " ")
+	open := func(match string) error {
+		fs := dav.New(e.st.Drive(), "worker", e.blobs, testdb.Key, 1<<20, "")
+		fs.IfMatch, fs.Match = true, match
+		f, err := fs.OpenFile(context.Background(), name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
+		if err == nil {
+			err = errors.Join(f.Close(), fs.Err)
+		} else if !errors.Is(fs.Err, drive.ErrConflict) {
+			t.Fatalf("open with %s: %v (drive error %v)", match, err, fs.Err)
+		}
+		return err
+	}
+	if open(old) == nil {
+		t.Fatal("If-Match on the old revision overwrote the new one")
+	}
+	if err := open(current); err != nil {
+		t.Fatalf("If-Match on the current revision: %v", err)
+	}
+	e.want(e.do("worker", "DELETE", path, nil), 204, "trash")
+	if open("*") == nil {
+		t.Fatal("If-Match: * recreated a file gone since the check")
+	}
+}
+
+// A COPY whose source fails to read partway publishes no truncated destination.
+func TestFailedCopyPublishesNothing(t *testing.T) {
+	e := setup(t)
+	content := strings.Repeat("0123456789abcdef", 200<<10/16) // several 64 KiB chunks
+	e.want(e.do("worker", "PUT", e.org()+"/big.txt", strings.NewReader(content)), 201, "create")
+	files, err := e.st.Drive().Files(context.Background(), "worker", e.team.ID, false)
+	if err != nil || len(files) != 1 {
+		t.Fatalf("files %v %v", files, err)
+	}
+	vs, err := e.st.Drive().Versions(context.Background(), "worker", files[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := drive.BlobPath(e.blobs, vs[0].Blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)/2] ^= 0xff // a damaged middle chunk: the blob opens, reading it fails later
+	if err = os.WriteFile(p, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	host := "http://example.com"
+	e.want(e.do("worker", "COPY", e.org()+"/big.txt", nil, "Destination", host+e.org()+"/copy.txt"), 500, "copy of a damaged file")
+	if n := e.versions("copy.txt"); n != 0 {
+		t.Fatalf("damaged copy published %d versions", n)
+	}
+}

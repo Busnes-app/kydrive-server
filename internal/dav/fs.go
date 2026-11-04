@@ -33,6 +33,9 @@ type FS struct {
 	// IfMatch is set when the request's If-Match was checked: a write then publishes against
 	// exactly the revision opened, instead of retrying as last writer wins.
 	IfMatch bool
+	// Match is the If-Match value that matched ("*": any file): the file opened for writing
+	// must still carry it, or the write is a conflict.
+	Match string
 	// CreateOnly is set by If-None-Match: *: opening an existing file for writing is a conflict.
 	CreateOnly bool
 	// Err is the last drive error, so the caller can answer with its real status: x/net
@@ -281,7 +284,7 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 	if err != nil {
 		return nil, err
 	}
-	return &readFile{ReadSeekCloser: r, n: n}, nil
+	return &readFile{ReadSeekCloser: r, n: n, fs: f}, nil
 }
 
 // create opens name for writing: bytes stream into a sealed blob, published on Close.
@@ -299,6 +302,9 @@ func (f *FS) create(ctx context.Context, name string) (webdav.File, error) {
 		target = *it.File
 	case !errors.Is(err, drive.ErrNotFound):
 		return nil, f.fail("create", name, err)
+	}
+	if f.Match != "" && (target.ID == "" || f.Match != "*" && etag(target) != f.Match) {
+		return nil, f.fail("create", name, drive.ErrConflict) // replaced or gone since the check
 	}
 	if err = f.store.AuthorizeItem(ctx, f.user, dir.workspace, dir.folder, target.ID, 2); err != nil {
 		return nil, f.fail("create", name, err)
@@ -386,7 +392,18 @@ func (w *writeFile) Patch(p []webdav.Proppatch) ([]webdav.Propstat, error) { ret
 
 type readFile struct {
 	io.ReadSeekCloser
-	n node
+	n  node
+	fs *FS
+}
+
+// Read remembers a failed source read like a failed body read: x/net's COPY closes the
+// destination even when copying failed, and a truncated copy must not be published.
+func (r *readFile) Read(p []byte) (int, error) {
+	n, err := r.ReadSeekCloser.Read(p)
+	if err != nil && err != io.EOF {
+		r.fs.bodyErr = err
+	}
+	return n, err
 }
 
 func (r *readFile) Write([]byte) (int, error)                             { return 0, fs.ErrPermission }

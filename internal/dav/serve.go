@@ -49,7 +49,7 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 		r.Body = f.Body(r.Body)
 	}
 	if m := r.Header.Get("If-Match"); m != "" && r.Method == http.MethodPut {
-		if !matches(r, prefix, f, m) {
+		if f.Match = matches(r, prefix, f, m); f.Match == "" {
 			http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
 			return
 		}
@@ -59,7 +59,7 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 	// whether it exists now, when the target is opened (CreateOnly) or by publication (IfMatch
 	// makes the publish conflict final). Each answers 412.
 	if m := r.Header.Get("If-None-Match"); m != "" && r.Method == http.MethodPut {
-		if matches(r, prefix, f, m) {
+		if matches(r, prefix, f, m) != "" {
 			http.Error(w, "Precondition Failed", http.StatusPreconditionFailed)
 			return
 		}
@@ -69,19 +69,20 @@ func Serve(w http.ResponseWriter, r *http.Request, prefix string, f *FS, locks *
 	h.ServeHTTP(&statusWriter{ResponseWriter: w, fs: f, method: r.Method}, r)
 }
 
-// matches reports whether the target's current ETag is one of the If-Match values ("*": any).
-func matches(r *http.Request, prefix string, f *FS, header string) bool {
+// matches returns the first of the If-Match values that the target's current ETag matches
+// ("*": any file), or "" when none does.
+func matches(r *http.Request, prefix string, f *FS, header string) string {
 	fi, err := f.Stat(r.Context(), strings.TrimPrefix(r.URL.Path, prefix))
 	if err != nil || fi.IsDir() {
-		return false
+		return ""
 	}
 	current := fi.(*fileInfo).etag
 	for _, v := range strings.Split(header, ",") {
 		if v = strings.TrimSpace(v); v == "*" || v == current {
-			return true
+			return v
 		}
 	}
-	return false
+	return ""
 }
 
 // x/net answers most failures with a fixed status (405 for every failed PUT, 404 for a
