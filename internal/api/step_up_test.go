@@ -159,6 +159,11 @@ func TestSSOStepUp(t *testing.T) {
 			otherFlow = c.Value
 		}
 	}
+	// A genuine flow saved for an hour and completed now is refused, whatever auth_time says.
+	api.SetClockForTest(srv, func() time.Time { return time.Unix(now-3600, 0) })
+	if got := stepUpWith(stale, "/", func(*http.Cookie) { api.SetClockForTest(srv, time.Now) }); got.Code != http.StatusBadRequest {
+		t.Fatalf("replayed old flow: %d %s", got.Code, got.Body.String())
+	}
 	for name, forge := range map[string]func(*http.Cookie){
 		"another state's cookie": func(c *http.Cookie) { c.Value = otherFlow },
 		"unsigned start": func(c *http.Cookie) {

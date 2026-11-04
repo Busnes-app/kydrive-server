@@ -177,7 +177,8 @@ func localPath(back string) bool {
 }
 
 // stepUpCookie carries the step-up start and return path, MACed with the session secret and
-// bound to the OAuth state, so the browser cannot back-date the start or reuse it for another state.
+// bound to the OAuth state, so the browser cannot edit the start or reuse it for another state;
+// finishSSOStepUp refuses a flow older than the cookie's five minutes, so a saved one cannot be replayed.
 func (s *Server) stepUpCookie(state, value string) string {
 	payload := base64.RawURLEncoding.EncodeToString([]byte(value))
 	return payload + "." + crypto.ComputeHMACSHA256([]byte("ky-stepup:"+state+"|"+payload), s.config.Security.SessionSecret)
@@ -190,7 +191,8 @@ func (s *Server) finishSSOStepUp(w http.ResponseWriter, r *http.Request, state, 
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	startText, back, found := strings.Cut(string(raw), "|")
 	start, perr := strconv.ParseInt(startText, 10, 64)
-	if !crypto.VerifyHMACSHA256([]byte("ky-stepup:"+state+"|"+payload), s.config.Security.SessionSecret, mac) || err != nil || !found || perr != nil {
+	if !crypto.VerifyHMACSHA256([]byte("ky-stepup:"+state+"|"+payload), s.config.Security.SessionSecret, mac) || err != nil || !found || perr != nil ||
+		s.now().Sub(time.Unix(start, 0)) > 6*time.Minute { // the cookie's 300 s plus a minute of skew
 		s.writeError(w, http.StatusBadRequest, "Invalid or expired SSO state")
 		return
 	}
