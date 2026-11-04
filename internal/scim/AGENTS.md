@@ -9,7 +9,7 @@ Owns local persistence adapters and bearer authentication; the library owns `/sc
 ## Local Contracts
 - Content-Type for all SCIM endpoints must be `application/scim+json`.
 - Requests must be authenticated with the configured bearer token.
-- User de-provisioning via `PATCH` with `active: false` updates user status to `inactive`.
+- User de-provisioning via `PATCH` with `active: false` updates user status to `inactive`; user attributes may be named plainly or by their full core-schema URN (`urn:ietf:params:scim:schemas:core:2.0:User:active`), as a path or a value key (`TestSCIMPatchAcceptsSchemaURNPaths`).
 - SCIM protocol models and parsing must come from `github.com/elimity-com/scim`; do not add parallel local request/response implementations.
 
 - KyIdentity is the directory authority. Support exact, bounded `externalId` lookup for Users/Groups and replayable PUT membership replacement. External identifiers are immutable; filter attributes must not fall back to substring search.
