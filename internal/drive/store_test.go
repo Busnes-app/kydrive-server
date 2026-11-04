@@ -310,7 +310,7 @@ func TestPersonalWorkspaceIsolationAndOffboarding(t *testing.T) {
 func TestSharedWorkspaceNamesAreUnique(t *testing.T) {
 	st, _, _ := fixture(t)
 	d, ctx := st.Drive(), context.Background()
-	for _, name := range []string{"Organization", "organization"} {
+	for _, name := range []string{"Organization", "organization", "My files", "my FILES"} {
 		if _, err := d.CreateWorkspace(ctx, "admin", name, 100); !errors.Is(err, drive.ErrConflict) {
 			t.Fatalf("second workspace named %q: %v", name, err)
 		}

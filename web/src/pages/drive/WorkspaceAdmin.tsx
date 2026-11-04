@@ -27,7 +27,7 @@ export function WorkspaceAdmin({ workspace, onRenamed, onDeleted }: { workspace:
     try { await action(); return true; } catch (e) { setMessage(e instanceof HttpError && e.status === 409 ? conflict(e.message) : e instanceof Error ? e.message : 'Operation failed'); return false; } finally { setBusy(false); }
   }
   async function rename() {
-    if (await act(() => change(`/api/drive/workspaces/${workspace.id}/name`, 'PUT', { name: wanted }), server => server.includes('Deleted workspaces') ? `A deleted workspace named “${wanted}” is waiting in Deleted workspaces. Restore and rename it, or pick another name.` : `A shared workspace named “${wanted}” already exists.`)) onRenamed();
+    if (await act(() => change(`/api/drive/workspaces/${workspace.id}/name`, 'PUT', { name: wanted }), server => server.includes('My files') ? 'My files is the name of each person’s own files. Pick another name.' : server.includes('Deleted workspaces') ? `A deleted workspace named “${wanted}” is waiting in Deleted workspaces. Restore and rename it, or pick another name.` : `A shared workspace named “${wanted}” already exists.`)) onRenamed();
   }
   async function destroy() {
     if (!empty) {

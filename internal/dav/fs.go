@@ -123,11 +123,18 @@ func (f *FS) spaces(ctx context.Context) (map[string]string, error) {
 }
 
 // WorkspaceNames maps each workspace's display name to its ID; duplicate names get " (2)",
-// " (3)" in workspace ID order. The MCP tools use it so agents see the WebDAV tree.
+// " (3)" in workspace ID order, after the user's own My files, which always keeps its name.
+// The MCP tools use it so agents see the WebDAV tree.
 func WorkspaceNames(list []drive.Workspace) map[string]string {
+	shared := func(w drive.Workspace) int {
+		if w.Kind == "personal" {
+			return 0
+		}
+		return 1
+	}
 	list = slices.Clone(list)
 	slices.SortFunc(list, func(a, b drive.Workspace) int {
-		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ID, b.ID))
+		return cmp.Or(strings.Compare(a.Name, b.Name), cmp.Compare(shared(a), shared(b)), strings.Compare(a.ID, b.ID))
 	})
 	names := map[string]string{}
 	for _, w := range list {

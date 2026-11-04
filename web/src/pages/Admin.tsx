@@ -27,7 +27,7 @@ export function AdminWorkspaces({ workspaces, onWorkspacesChange, onOpen }: { wo
       setCreating(false); setName('');
       await reload();
     } catch (err) {
-      setMessage(err instanceof HttpError && err.status === 409 ? (err.message.includes('Deleted workspaces') ? `A deleted workspace named “${name.trim()}” is waiting in Deleted workspaces. Restore it, or pick another name.` : `A shared workspace named “${name.trim()}” already exists.`) : err instanceof Error ? err.message : 'Could not create the workspace');
+      setMessage(err instanceof HttpError && err.status === 409 ? (err.message.includes('My files') ? 'My files is the name of each person’s own files. Pick another name.' : err.message.includes('Deleted workspaces') ? `A deleted workspace named “${name.trim()}” is waiting in Deleted workspaces. Restore it, or pick another name.` : `A shared workspace named “${name.trim()}” already exists.`) : err instanceof Error ? err.message : 'Could not create the workspace');
     } finally { setBusy(false); }
   }
   return <section className="page">
