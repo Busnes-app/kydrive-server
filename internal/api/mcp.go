@@ -217,7 +217,7 @@ func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_file", Annotations: read,
 		Description: "Read part of a UTF-8 text file, or the text of a Word, Excel, PowerPoint or OpenDocument file, or of a PDF when KyDrive has Euro-Office; other files are refused. Call again with next_offset for more." + untrustedNote}, t.readFile)
 	mcp.AddTool(srv, &mcp.Tool{Name: "write_file", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: false, OpenWorldHint: boolPtr(false)},
-		Description: "Create a file, or replace one when you pass its current revision; the old content stays in its version history. Confirm with the user first."}, t.writeFile)
+		Description: "Create a file, or replace one when you pass its current revision; the old content stays in its version history unless the workspace keeps only a few versions. Confirm with the user first."}, t.writeFile)
 	mcp.AddTool(srv, &mcp.Tool{Name: "create_folder", Annotations: add,
 		Description: "Create a folder. Its parent must exist. Confirm with the user first."}, t.createFolder)
 	mcp.AddTool(srv, &mcp.Tool{Name: "move_item", Annotations: add,

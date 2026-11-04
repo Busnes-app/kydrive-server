@@ -22,7 +22,7 @@ export function grant(name: string, scope: Scope, root?: string): string {
   return `AI agent "${name}" gets ${scope === 'mcp:write' ? 'read and write' : 'read-only'} access to ${where}.`;
 }
 
-const WRITE_WARNING = 'The agent can create, replace, rename, move and trash files you can edit. Anyone who can message the agent can try to make it do so. It can never delete anything for good.';
+const WRITE_WARNING = 'The agent can create, replace, rename, move and trash files you can edit. Anyone who can message the agent can try to make it do so. It can never delete anything for good itself: trashed items stay in the trash for the administrator\'s trash period (90 days by default).';
 
 // AppPasswords lets a user connect WebDAV clients (file managers, LibreOffice) and AI agents with
 // credentials that each work only for their kind and can be revoked one by one.

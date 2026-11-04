@@ -68,7 +68,8 @@ days unused. The user creates a new one the same way.
 ## Writing
 
 - `write_file` creates a file in an existing folder. To replace a file, pass its `revision` from
-  `get_file_info` or `read_file`; the old content stays in its version history. Without a
+  `get_file_info` or `read_file`; the old content stays in its version history, unless the
+  workspace's version retention keeps only the newest few. Without a
   revision an existing name is refused, so you never overwrite a file by accident.
 - Use `content` for text, or `content_base64` for other bytes. One write holds at most 4 MiB.
 - `move_item` renames or moves to a full new path whose folder exists and whose name is free.
