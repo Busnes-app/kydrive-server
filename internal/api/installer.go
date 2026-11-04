@@ -45,7 +45,8 @@ func (s *Server) allowInstallerActor(w http.ResponseWriter, r *http.Request, use
 		return true
 	}
 	switch r.Pattern {
-	case "GET /api/drive/workspaces", "GET /api/drive/workspaces/{id}/directory", "GET /api/drive/workspaces/{id}/grants", "PUT /api/drive/workspaces/{id}/grants/{group}", "DELETE /api/drive/tokens/{id}":
+	case "GET /api/drive/workspaces", "GET /api/drive/workspaces/{id}/directory", "GET /api/drive/workspaces/{id}/grants", "PUT /api/drive/workspaces/{id}/grants/{group}", "DELETE /api/drive/tokens/{id}",
+		"GET /api/drive/guest-links-policy", "GET /api/drive/device-policy": // read by Settings > Guest links and Computers
 		return true
 	}
 	s.writeError(w, 403, "Use your everyday identity for personal files and editing")

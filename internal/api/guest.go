@@ -195,6 +195,7 @@ func (s *Server) guestDownload(w http.ResponseWriter, r *http.Request) {
 
 // guestUpload takes a raw body like the signed-in upload, with the token and password in headers.
 func (s *Server) guestUpload(w http.ResponseWriter, r *http.Request) {
+	s.answerAfterBody(w)
 	token, secret := r.Header.Get("X-Link-Token"), r.Header.Get("X-Link-Password")
 	if !s.guestGate(w, r, token, secret) {
 		return

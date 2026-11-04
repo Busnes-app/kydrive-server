@@ -360,6 +360,7 @@ func (s *Server) discardBlob(id string) {
 const editorConfigLifetime = 10 * time.Minute
 
 func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
+	s.answerAfterBody(w)
 	user := s.driveUser(r).ID
 	f := drive.File{Workspace: r.PathValue("id"), Parent: r.URL.Query().Get("parent"), Name: r.URL.Query().Get("name"), ID: r.URL.Query().Get("file")}
 	expected, err := strconv.ParseInt(r.URL.Query().Get("revision"), 10, 64)
@@ -461,6 +462,17 @@ func (w steadyWriter) Write(b []byte) (int, error) {
 }
 
 func (w steadyWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// answerAfterBody lets an upload whose body may stream for up to KY_READ_TIMEOUT still send
+// its reply: net/http fixes the write deadline at headers + KY_WRITE_TIMEOUT, which the body
+// alone can use up, and the file would be published with its 201 lost.
+func (s *Server) answerAfterBody(w http.ResponseWriter) {
+	deadline := time.Time{} // an unbounded read gets an unbounded reply
+	if t := s.config.Server.ReadTimeout; t > 0 {
+		deadline = time.Now().Add(t + s.config.Server.WriteTimeout)
+	}
+	_ = http.NewResponseController(w).SetWriteDeadline(deadline)
+}
 func (s *Server) driveFileInfo(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r).ID
 	f, err := s.store.Drive().File(r.Context(), user, r.PathValue("id"), 1)

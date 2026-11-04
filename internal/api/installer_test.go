@@ -104,6 +104,12 @@ func TestInstallerSocketActivationAndAdministratorSeparation(t *testing.T) {
 			if got := do(t, srv, "GET", "/api/settings", cookie); got.Code != 200 || json.Valid(got.Body.Bytes()) == false {
 				t.Fatal("admin settings unavailable")
 			}
+			// Settings > Guest links and Computers read these before the admin-only PUTs.
+			for _, path := range []string{"/api/drive/guest-links-policy", "/api/drive/device-policy"} {
+				if got := do(t, srv, "GET", path, cookie); got.Code != 200 {
+					t.Fatal("admin policy unavailable", path, got.Code, got.Body.String())
+				}
+			}
 		}
 		// Deprovision through the public SCIM receiver, then re-use the existing
 		// session. A dedicated owner is disabled just like an everyday identity.
