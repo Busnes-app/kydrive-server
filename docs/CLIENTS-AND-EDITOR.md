@@ -30,6 +30,7 @@ The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive
 
 - **Settings → Phones & apps → Computers** lists linked computers with their last use, at most 20 per user. **Revoke** stops one at once. Its dialog offers *Also remove KyDrive files from this computer*: the files go the next time the computer reaches KyDrive, edits that never uploaded move to an `Unsynced` folder, and a computer offline for 30 days is never told. It is not a guaranteed remote wipe.
 - **Server settings → Computers** (administrators) sets whether that box starts checked, on by default, and can lock it with *Users cannot change this*.
+- For the app: the token exchange (`POST /api/devices/token`) also returns the account's immutable `user_id`, and `GET /api/drive/device` with the computer's credential answers `{user_id, user}`, so the app can tell which account a stored credential belongs to. `PUT /api/drive/folders/{id}/trash` takes the change-feed `head` the app last saw and answers 409, trashing nothing, when the folder or anything still in it was changed, added or moved in since; without `head` it trashes as before.
 - A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
 
 ## AI agents

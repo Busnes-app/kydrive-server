@@ -20,7 +20,7 @@ var (
 		"AddFolder", "AppendUpload", "Authorize", "AuthorizeItem", "CancelUpload", "Changes", "Children", "CompleteUpload",
 		"CopyFile", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderPath", "FolderTree", "Folders",
 		"GuestLinks", "Grants", "Links", "Lookup", "MoveFile", "MoveFolder", "People", "Publish", "PurgeFile",
-		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchContent", "SearchFolder", "SearchFolderContent", "SetFolderTrash", "SetTrash", "SharedWithMe",
+		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchContent", "SearchFolder", "SearchFolderContent", "SetFolderTrash", "SetFolderTrashSince", "SetTrash", "SharedWithMe",
 		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.

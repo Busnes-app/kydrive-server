@@ -28,6 +28,7 @@ func (s *Server) deviceRoutes() {
 	s.mux.HandleFunc("GET /api/devices", s.requireAuthenticated(s.handleDevices))
 	s.mux.HandleFunc("DELETE /api/devices/{id}", s.requireAuthenticated(s.handleRevokeDevice))
 	s.mux.HandleFunc("DELETE /api/devices/self", s.handleUnlinkDevice)
+	s.mux.HandleFunc("GET /api/drive/device", s.handleDeviceAccount)
 	s.mux.HandleFunc("GET /api/drive/device-policy", s.requireAuthenticated(s.driveDevicePolicy))
 	s.mux.HandleFunc("PUT /api/drive/device-policy", s.requireAdmin(s.driveSetDevicePolicy))
 }
@@ -76,7 +77,23 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	s.writeJSON(w, 200, map[string]string{"token": token, "user": user.Username, "devices_url": s.config.Server.AppURL + "/"})
+	// user_id is the account's immutable ID: the client keys its pairing on it, since a username can change.
+	s.writeJSON(w, 200, map[string]string{"token": token, "user_id": user.ID, "user": user.Username, "devices_url": s.config.Server.AppURL + "/"})
+}
+
+// handleDeviceAccount tells a linked computer which account its own device token belongs to.
+// Only a device token answers; a session or any other credential gets 401.
+func (s *Server) handleDeviceAccount(w http.ResponseWriter, r *http.Request) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || !strings.HasPrefix(token, drive.DevicePrefix) {
+		s.writeError(w, 401, "Device credential required")
+		return
+	}
+	user, ok := s.deviceUser(w, r, token)
+	if !ok {
+		return
+	}
+	s.writeJSON(w, 200, map[string]string{"user_id": user.ID, "user": user.Username})
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {

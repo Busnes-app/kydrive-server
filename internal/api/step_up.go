@@ -22,7 +22,7 @@ func stepUpMethod(u *store.User) string {
 }
 
 // requireStepUp guards creation of credentials that outlive the session (WebDAV passwords, agent
-// and service tokens, linked computers): the session must have re-proved its user within
+// and service tokens, linked computers, guest links): the session must have re-proved its user within
 // stepUpWindow. Bearer callers have no session and are refused the same way.
 func (s *Server) requireStepUp(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

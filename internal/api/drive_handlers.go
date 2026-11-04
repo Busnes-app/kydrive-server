@@ -786,13 +786,21 @@ func (s *Server) driveMoveFolder(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) driveFolderTrash(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Trashed bool `json:"trashed"`
+		Trashed bool   `json:"trashed"`
+		Head    *int64 `json:"head"` // optional: 409 when the folder's subtree changed after this change-feed position
 	}
 	if decodeDrive(r, &in) != nil {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	if err := s.store.Drive().SetFolderTrash(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Trashed); err != nil {
+	user, id := s.driveUser(r).ID, r.PathValue("id")
+	var err error
+	if in.Head != nil {
+		err = s.store.Drive().SetFolderTrashSince(r.Context(), user, id, in.Trashed, *in.Head)
+	} else {
+		err = s.store.Drive().SetFolderTrash(r.Context(), user, id, in.Trashed)
+	}
+	if err != nil {
 		s.driveError(w, err)
 		return
 	}

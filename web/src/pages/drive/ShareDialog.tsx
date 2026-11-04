@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from '../../components/Alert';
 import { Dialog } from '../../components/Dialog';
+import { useStepUp } from '../../components/StepUp';
 import { When } from '../../components/When';
 import { secureFetch } from '../../api';
 import { change, list, person, record, response, share } from './client';
@@ -32,6 +33,7 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
   const [role, setRole] = useState('reader');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [stepUp, stepUpNode] = useStepUp();
 
   const load = useCallback(async () => {
     setShares(await list(base, share));
@@ -62,13 +64,14 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
   });
   const revokeLink = (l: { id: string }) => run(async () => { const r = await secureFetch(`/api/drive/links/${l.id}`, { method: 'DELETE' }); if (!r.ok) await response(r); });
   const createGuest = () => run(async () => {
-    const v = await change(`${item}/guest-links`, 'POST', { days: guestDays, password: guestPassword, upload_only: uploadOnly });
+    // A guest link outlives the session, so the server asks for a fresh step-up first.
+    const v = await stepUp(() => change(`${item}/guest-links`, 'POST', { days: guestDays, password: guestPassword, upload_only: uploadOnly }));
     if (!record(v) || typeof v.url !== 'string') throw new Error('Invalid link response');
     setNewGuest(v.url); setGuestPassword('');
   });
 
   const cap = (r: string) => r[0].toUpperCase() + r.slice(1);
-  return <Dialog wide title={`Share ${name}`} description={`${kind === 'folder' ? 'People you add can open everything in this folder.' : 'People you add can open this file.'} They need a KyDrive account.`} onClose={onClose}
+  return <><Dialog wide title={`Share ${name}`} description={`${kind === 'folder' ? 'People you add can open everything in this folder.' : 'People you add can open this file.'} They need a KyDrive account.`} onClose={onClose}
     footer={<button type="button" className="btn-secondary" onClick={onClose}>Done</button>}>
     <div className="form-row share-person-row">
       <div className="field grow">
@@ -114,5 +117,5 @@ export function ShareDialog({ kind, id, name, groups, maxRole, onClose }: { kind
       {guests.length > 0 && <ul aria-label="Guest links" className="item-list">{guests.map(g => <li key={g.id}><div className="item-main"><span className="item-title">{g.upload_only ? 'Upload-only' : 'View'} guest link</span><span className="item-meta">Expires <When value={g.expires} dateOnly />{g.has_password ? ' · password' : ''}</span></div><div className="item-actions"><button type="button" className="btn-danger-quiet btn-sm" disabled={busy} onClick={() => void revokeLink(g)}>Revoke</button></div></li>)}</ul>}
     </section>}
     {error && <Alert>{error}</Alert>}
-  </Dialog>;
+  </Dialog>{stepUpNode}</>;
 }

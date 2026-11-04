@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -25,8 +26,9 @@ func stepUpCode(w *httptest.ResponseRecorder) string {
 	return body.Method
 }
 
-// TestStepUpGuardsSessionOutlivingCredentials pins Q2: WebDAV passwords, agent tokens, service
-// tokens and linked computers are minted only within five minutes of re-proving the user.
+// TestStepUpGuardsSessionOutlivingCredentials pins Q2 and Q3: WebDAV passwords, agent tokens,
+// service tokens, linked computers and guest links are minted only within five minutes of
+// re-proving the user.
 func TestStepUpGuardsSessionOutlivingCredentials(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
 	if st.Drive() == nil {
@@ -43,14 +45,22 @@ func TestStepUpGuardsSessionOutlivingCredentials(t *testing.T) {
 	if err == nil {
 		err = st.Drive().Grant(ctx, "usr_stepper", w.ID, "steppers", "manager")
 	}
+	var folder drive.Folder
+	if err == nil {
+		folder, err = st.Drive().AddFolder(ctx, "usr_stepper", w.ID, "", "Out")
+	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got := send(t, srv, "PUT", "/api/drive/guest-links-policy", `{"enabled":true,"max_days":30}`, user, ""); got.Code != http.StatusOK {
+		t.Fatalf("guest policy: %d", got.Code)
 	}
 	creates := []struct{ path, body string }{
 		{"/api/auth/app-passwords", `{"name":"Laptop"}`},
 		{"/api/auth/app-passwords", `{"name":"Agent","scope":"mcp:write"}`},
 		{"/api/drive/workspaces/" + w.ID + "/tokens", `{"name":"Robot","role":"editor"}`},
 		{"/api/devices/approve", approveBody("http://127.0.0.1:53682/cb")},
+		{"/api/drive/folders/" + folder.ID + "/guest-links", `{"days":7}`}, // Q3: a guest link outlives the session too
 	}
 	// A password sign-in is itself a fresh proof.
 	for _, c := range creates {

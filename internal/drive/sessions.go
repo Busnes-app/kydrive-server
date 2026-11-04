@@ -194,8 +194,9 @@ func (s *Store) RevokeUserEditors(ctx context.Context, tx *sql.Tx, user string) 
 
 // RevokeUserCredentials ends, in the caller's transaction, the credentials user issued that
 // outlive a password: WebDAV passwords, agent tokens and pending computer links are deleted,
-// linked computers revoked (no wipe) and service tokens revoked, which also ends the editors
-// opened through them. Nil (no drive store) is a no-op.
+// linked computers revoked (no wipe), and service tokens and guest links revoked; revoking a
+// service token also ends the editors opened through it. Organisation links stay: they need a
+// signed-in opener. Nil (no drive store) is a no-op.
 func (s *Store) RevokeUserCredentials(ctx context.Context, tx *sql.Tx, user string) error {
 	if s == nil {
 		return nil
@@ -204,6 +205,7 @@ func (s *Store) RevokeUserCredentials(ctx context.Context, tx *sql.Tx, user stri
 		`DELETE FROM drive_app_passwords WHERE user_id=?`,
 		`DELETE FROM drive_device_codes WHERE user_id=?`,
 		`UPDATE drive_service_tokens SET revoked=true WHERE user_id=? AND revoked=false`,
+		`UPDATE drive_links SET revoked=1 WHERE created_by=? AND scope='guest' AND revoked=0`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, user); err != nil {
 			return err

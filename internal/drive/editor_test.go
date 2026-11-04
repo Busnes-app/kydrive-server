@@ -608,8 +608,16 @@ func TestCredentialsNeedALiveLogin(t *testing.T) {
 	if err := drive.ExecSQL(context.Background(), d, `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at) VALUES('live','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00')`); err != nil {
 		t.Fatal(err)
 	}
+	folder, err := d.AddFolder(context.Background(), "worker", w.ID, "", "shared")
+	if err != nil {
+		t.Fatal(err)
+	}
 	challenge := challengeOf(verifier)
 	mint := map[string]func(context.Context) error{
+		"guest link": func(ctx context.Context) error {
+			_, _, err := d.CreateGuestLink(ctx, "worker", "folder", folder.ID, inDays(1), "", false, week)
+			return err
+		},
 		"app password": func(ctx context.Context) error { _, _, err := d.CreateAppPassword(ctx, "worker", "laptop"); return err },
 		"agent token": func(ctx context.Context) error {
 			_, _, err := d.CreateAgentToken(ctx, "worker", "agent", "mcp:read", "", "")
@@ -701,5 +709,103 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 				t.Fatalf("device survived or was wiped: %v", err)
 			}
 		})
+	}
+}
+
+// Q3: guest links are session-outliving credentials. A password replacement, operator reset or
+// directory deactivation revokes the account's guest links, and reactivation does not bring them
+// back; organisation links, which need a signed-in opener, stay.
+func TestAccountSecurityRevokesGuestLinks(t *testing.T) {
+	ctx := context.Background()
+	local := func(st store.Store) error {
+		return drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET sso_provider='local',password_hash='old',must_change_password=true WHERE id='worker'`)
+	}
+	for name, change := range map[string]func(store.Store) error{
+		"forced replacement": func(st store.Store) error {
+			if err := local(st); err != nil {
+				return err
+			}
+			return st.Users().CompletePasswordChange(ctx, "worker", "old", "new", "")
+		},
+		"operator reset": func(st store.Store) error {
+			if err := local(st); err != nil {
+				return err
+			}
+			return st.Users().ResetAdminPassword(ctx, "worker", "reset")
+		},
+		"deactivation and reactivation": func(st store.Store) error {
+			for _, active := range []bool{false, true} {
+				if _, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Active: active}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, w, _ := fixture(t)
+			d := st.Drive()
+			managers(t, d, w)
+			folder, err := d.AddFolder(ctx, "worker", w.ID, "", "Out")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, guest, err := d.CreateGuestLink(ctx, "worker", "folder", folder.ID, time.Now().Add(time.Hour).Unix(), "", false, 24*time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, org, err := d.CreateLink(ctx, "worker", "folder", folder.ID, "reader", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.GuestView(ctx, guest, "", ""); err != nil {
+				t.Fatal(err)
+			}
+			if err = change(st); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.GuestView(ctx, guest, "", ""); !errors.Is(err, drive.ErrNotFound) {
+				t.Fatalf("guest link survived: %v", err)
+			}
+			if _, err = d.OpenLink(ctx, "stranger", org); err != nil {
+				t.Fatalf("organisation link ended: %v", err)
+			}
+		})
+	}
+}
+
+// The request's old login was authenticated before reset, but issuance resumes only after
+// reset committed. The request must not leave a new credential behind the revocation.
+func TestGuestLinkIssuanceAfterPasswordReset(t *testing.T) {
+	ctx := context.Background()
+	st, w, _ := fixture(t)
+	d := st.Drive()
+	managers(t, d, w)
+	folder, err := d.AddFolder(ctx, "worker", w.ID, "", "shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE users SET sso_provider='local',password_hash='old' WHERE id='worker'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at) VALUES('old-login','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00')`); err != nil {
+		t.Fatal(err)
+	}
+	admitted := drive.WithLogin(ctx, drive.Login{TokenHash: "old-login"})
+	if err := st.Users().ResetAdminPassword(ctx, "worker", "replacement"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := d.CreateGuestLink(admitted, "worker", "folder", folder.ID, inDays(1), "", false, week); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("old request issued a guest link after password reset: %v", err)
+	}
+	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_links WHERE created_by='worker' AND scope='guest' AND revoked=0`); err != nil || n != 0 {
+		t.Fatalf("unrevoked guest links after refused issuance: count=%d err=%v", n, err)
+	}
+	if err := drive.ExecSQL(ctx, d, `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at) VALUES('fresh-login','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00')`); err != nil {
+		t.Fatal(err)
+	}
+	fresh := drive.WithLogin(ctx, drive.Login{TokenHash: "fresh-login"})
+	if _, _, err := d.CreateGuestLink(fresh, "worker", "folder", folder.ID, inDays(1), "", false, week); err != nil {
+		t.Fatalf("fresh login cannot create a guest link: %v", err)
 	}
 }

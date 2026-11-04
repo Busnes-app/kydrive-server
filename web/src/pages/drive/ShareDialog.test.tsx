@@ -67,4 +67,22 @@ describe('ShareDialog', () => {
     await waitFor(() => expect(screen.queryByText(/Editor link/)).toBeNull());
     expect(calls.some(c => c.method === 'DELETE' && c.url === '/api/drive/links/l1')).toBe(true);
   });
+
+  it('asks the user to confirm it is them before creating a guest link', async () => {
+    let confirmed = false;
+    const posts: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input), method = init?.method ?? 'GET';
+      if (url === '/api/drive/guest-links-policy') return json({ enabled: true, max_days: 30 });
+      if (url === '/api/auth/step-up') { confirmed = JSON.parse(String(init?.body)).password === 'right one'; return json({ confirmed: true }); }
+      if (method === 'POST') { posts.push(url); return confirmed ? json({ link: {}, url: 'https://drive.example/g/#guest' }, 201) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'password' }, 403); }
+      return json([]);
+    }));
+    render(<ShareDialog kind="folder" id="d1" name="Reports" groups={[]} maxRole="manager" onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Create guest link' }));
+    fireEvent.change(await screen.findByLabelText('Password', { selector: '#step-up-password' }), { target: { value: 'right one' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByText('https://drive.example/g/#guest')).toBeTruthy();
+    expect(posts).toEqual(['/api/drive/folders/d1/guest-links', '/api/drive/folders/d1/guest-links']);
+  });
 });
