@@ -177,7 +177,10 @@ func splitMembers(path string, data []byte) []recoveryclient.File {
 	if len(data) <= dbPartBytes {
 		return []recoveryclient.File{{Path: path, Data: data, Mode: 0600}}
 	}
-	n := (len(data) + dbPartBytes - 1) / dbPartBytes
+	n := len(data) / dbPartBytes
+	if len(data)%dbPartBytes != 0 {
+		n++
+	}
 	files := make([]recoveryclient.File, 0, n)
 	for i := range n {
 		part := data[i*dbPartBytes : min((i+1)*dbPartBytes, len(data))]
