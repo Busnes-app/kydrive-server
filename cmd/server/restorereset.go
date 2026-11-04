@@ -71,7 +71,7 @@ func resetRestored(ctx context.Context, dataDir string) error {
 	return errors.Join(st.ResetAfterRestore(ctx), st.Close())
 }
 
-const resetDone = "Access grants reset. Sign in again; recreate app passwords, device links, service tokens and sharing links."
+const resetDone = "Access grants reset. Sign in again; recreate app passwords, device links, service tokens and sharing links.\nScheduled backups are off. Turn them back on in Backup & recovery once this server is the one in service."
 
 func runRestoreReset(args []string) {
 	fs := flag.NewFlagSet("restore-reset", flag.ExitOnError)

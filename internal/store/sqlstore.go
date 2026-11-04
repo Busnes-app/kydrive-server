@@ -72,7 +72,8 @@ func (s *SQLStore) Driver() string                 { return s.driver }
 func (s *SQLStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 func (s *SQLStore) Close() error                   { return s.db.Close() }
 
-// ResetAfterRestore ends restored access grants in one transaction. Passwords, MFA secrets,
+// ResetAfterRestore ends restored access grants and turns scheduled deposits off in one
+// transaction. Passwords, MFA secrets,
 // directory membership and content remain as backed up; operators reconcile those separately.
 func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 	if s.drive == nil {
@@ -101,8 +102,14 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=?`, epoch+1); err != nil {
 		return err
 	}
+	// A restored copy must not deposit over the history of the server still in service: scheduled
+	// deposits stay off (a stored 0 overrides KY_BACKUP_DEPOSIT_INTERVAL) until an admin turns them on.
+	now := time.Now().UTC()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('backup_interval_sec','0',?) ON CONFLICT(key) DO UPDATE SET value='0', updated_at=excluded.updated_at`, now); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`,
-		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked", "", time.Now().UTC()); err != nil {
+		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked; scheduled deposits turned off", "", now); err != nil {
 		return err
 	}
 	return tx.Commit()
