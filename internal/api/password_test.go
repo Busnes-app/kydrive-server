@@ -178,11 +178,46 @@ func TestRestrictedSessionCannotInheritClearedFlag(t *testing.T) {
 	}
 }
 
-func TestReplacementRefusesUnflaggedAndFederatedAccounts(t *testing.T) {
+// A local account changes its own password at any time (DECISIONS: local accounts can change
+// their own password); every session and credential goes with the old one.
+func TestLocalAccountChangesItsOwnPassword(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "rotator", "admin")
+	other := loginAs(t, srv, st, "bystander", "user")
+	_, secret, err := st.Drive().CreateAppPassword(context.Background(), "usr_rotator", "Laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := send(t, srv, "POST", "/api/auth/change-password", `{"current_password":"wrong password","new_password":"AnotherPassword123!"}`, user, ""); got.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong current password: %d %s", got.Code, got.Body.String())
+	}
+	if got := send(t, srv, "POST", "/api/auth/change-password", `{"current_password":"SuperSecretPass123!","new_password":"AnotherPassword123!"}`, user, ""); got.Code != http.StatusOK {
+		t.Fatalf("voluntary change: %d %s", got.Code, got.Body.String())
+	}
+	if signedIn(t, srv, user) || !signedIn(t, srv, other) {
+		t.Fatal("the change must end the account's sessions, and only its own")
+	}
+	if _, err := st.Drive().AppPasswordUser(context.Background(), "rotator", secret); err == nil {
+		t.Fatal("WebDAV password outlived the change")
+	}
+	records, _, err := st.Audit().ListAuditRecords(context.Background(), 0, 50)
+	found := false
+	for _, r := range records {
+		found = found || (r.Action == "auth.password_changed" && r.UserID == "usr_rotator" && strings.HasPrefix(r.Details, "changed by its owner"))
+	}
+	if err != nil || !found {
+		t.Fatalf("voluntary change not audited: %v", err)
+	}
+}
+
+func TestReplacementRefusesAccountsWithoutALocalPassword(t *testing.T) {
 	for _, tc := range []struct {
 		name, provider string
 		flag           bool
-	}{{"unflagged", "local", false}, {"federated", "kysignon", true}} {
+	}{{"no password", "local", false}, {"federated", "kysignon", true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, st, cfg := setupTestServer(t)
 			ctx := context.Background()

@@ -908,7 +908,15 @@ func (s *sessionStore) deleteSessions(ctx context.Context, revokeLogin func(*sql
 func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash, newHash, ip string) error {
 	return u.store.withPassword(ctx, userID, oldHash, func(tx *sql.Tx) error {
 		now := time.Now().UTC()
-		result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ? AND must_change_password = ? AND sso_provider = 'local'`), newHash, false, now, userID, true)
+		details := "changed by its owner; sessions and credentials revoked"
+		var forced bool
+		if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT must_change_password FROM users WHERE id = ?`), userID).Scan(&forced); err != nil {
+			return err
+		}
+		if forced {
+			details = "forced replacement; sessions and credentials revoked"
+		}
+		result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ? AND sso_provider = 'local'`), newHash, false, now, userID)
 		if err != nil {
 			return err
 		}
@@ -919,7 +927,7 @@ func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash,
 		if n != 1 {
 			return ErrNotFound
 		}
-		return u.revokePasswordGrants(ctx, tx, userID, "forced replacement; sessions and credentials revoked", ip, now)
+		return u.revokePasswordGrants(ctx, tx, userID, details, ip, now)
 	})
 }
 
