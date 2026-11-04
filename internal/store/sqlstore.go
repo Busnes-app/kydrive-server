@@ -212,8 +212,8 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 }
 
 // caseVariantFree is true when account $ID may hold username $NAME: no other account holds it in
-// another case, unless $ID already holds it that way. Used inside the write itself, so a check
-// and the insert or update cannot interleave with another writer.
+// another case, unless $ID already holds it that way. Used inside the write itself, so on SQLite
+// (the supported store, one writer) a check and the insert or update cannot interleave.
 const caseVariantFree = `NOT (EXISTS(SELECT 1 FROM users v WHERE LOWER(v.username)=LOWER(?) AND v.id<>?) AND NOT EXISTS(SELECT 1 FROM users s WHERE s.id=? AND LOWER(s.username)=LOWER(?)))`
 
 // caseVariantTaken refuses giving account id a username another account holds in a different

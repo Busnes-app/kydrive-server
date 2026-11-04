@@ -29,10 +29,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusConflict, "This account's password is managed by KyIdentity")
 		return
 	}
-	// Checking the current password is a sign-in guess: it spends the login window too, so a
-	// left-open session cannot guess faster here than at the sign-in page.
-	if !s.allowAttempt("password-change:"+s.requestIP(r), 10, time.Minute) || !s.allowAttempt("password-change-user:"+user.ID, 5, time.Minute) ||
-		!s.allowAttempt(s.accountKey("login-user", user.Username, r), 10, 15*time.Minute) {
+	if !s.allowAttempt("password-change:"+s.requestIP(r), 10, time.Minute) || !s.allowAttempt("password-change-user:"+user.ID, 5, time.Minute) {
 		s.writeError(w, http.StatusTooManyRequests, "Too many password change attempts")
 		return
 	}
@@ -56,11 +53,19 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "Choose a different password")
 		return
 	}
+	// Checking the current password is a sign-in guess: it spends the login window too, so a
+	// left-open session cannot guess faster here than at the sign-in page.
+	accountKey := s.accountKey("login-user", user.Username, r)
+	if !s.allowAttempt(accountKey, 10, 15*time.Minute) {
+		s.writeError(w, http.StatusTooManyRequests, "Too many password change attempts")
+		return
+	}
 	ok, err := password.Verify(req.CurrentPassword, user.PasswordHash)
 	if err != nil || !ok {
 		s.writeError(w, http.StatusUnauthorized, "Current password is incorrect")
 		return
 	}
+	s.resetAttempts(accountKey)
 	hash, err := password.Hash(req.NewPassword)
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Failed to secure password")
