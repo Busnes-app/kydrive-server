@@ -406,8 +406,13 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 		}
 		return nil, err
 	}
+	// Disabling ends every credential, not just sessions: re-enabling must not revive a WebDAV
+	// password, agent or service token or linked computer minted before (by an intruder, say).
 	if !d.Active {
 		if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+			return nil, err
+		}
+		if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
 			return nil, err
 		}
 	}

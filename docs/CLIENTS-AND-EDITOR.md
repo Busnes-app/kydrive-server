@@ -12,7 +12,7 @@ The file list shows a type icon for every file and a thumbnail for PNG, JPEG, GI
 
 ## WebDAV
 
-Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** in Settings → Phones & apps (the gear beside Sign out); it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account stops all of its app passwords on the next request. A password reset or forced password replacement deletes them, with the account's AI agent and service tokens, and unlinks its computers.
+Workspaces can be opened in file managers and office apps at `<KY_APP_URL>/dav/`. Each user creates an **app password** in Settings → Phones & apps (the gear beside Sign out); it is shown once, works only for WebDAV, and can be revoked on its own. Sign in with your KyDrive username and the app password. Deactivating an account (in KyIdentity or by SCIM), a password reset or a forced password replacement deletes all of its app passwords, with the account's AI agent and service tokens, and unlinks its computers; re-enabling the account brings none of them back.
 
 - **Windows:** File Explorer → *Map network drive* → `https://drive.example.com/dav/`. Windows refuses downloads over 50 MB by default; raise `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes` (up to `4294967295`) and restart the WebClient service.
 - **macOS:** Finder → *Go* → *Connect to Server* → `https://drive.example.com/dav/`.
