@@ -67,6 +67,9 @@ func (s *Store) CreateGuestLink(ctx context.Context, user, kind, id string, expi
 	rand.Read(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
 		workspace, folder, file, trashed, err := resource(ctx, tx, kind, id)
 		if err != nil {
 			return err
