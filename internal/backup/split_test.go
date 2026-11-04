@@ -218,3 +218,28 @@ func TestJoinDatabaseFinishesAnInterruptedJoin(t *testing.T) {
 		t.Fatalf("left behind: %v", entries)
 	}
 }
+
+// Removal stopped after the last part: the leading parts left behind still finish.
+func TestJoinDatabaseFinishesAnInterruptedCleanup(t *testing.T) {
+	dir := t.TempDir()
+	for name, data := range map[string]string{"ky_server.db.000-of-002": "first half ", "ky_server.db": "first half second half"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := backup.JoinDatabase(dir); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Fatalf("left behind: %v", entries)
+	}
+	// A leftover that does not match the database is refused, and nothing is removed.
+	for name, data := range map[string]string{"ky_server.db.000-of-002": "other bytes"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := backup.JoinDatabase(dir); !errors.Is(err, backup.ErrDatabaseParts) {
+		t.Fatalf("mismatched leftover: %v", err)
+	}
+}

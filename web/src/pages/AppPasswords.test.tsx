@@ -166,4 +166,23 @@ describe('AppPasswords', () => {
     expect(posts).toEqual([{ name: 'Laptop' }, { name: 'Laptop' }]);
     expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
   });
+
+  it('keeps a saved request when the return trip loses its connection, and sends it on the next load', async () => {
+    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    render(<AppPasswords />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(sessionStorage.getItem('ky-pending-app-password')).not.toBeNull();
+    cleanup();
+    const posts: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') return json([]);
+      posts.push(JSON.parse(String(init.body)));
+      return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-on-retry', username: 'alice', url: 'https://drive.example/dav/' }, 201);
+    }));
+    render(<AppPasswords />);
+    expect(await screen.findByText('secret-on-retry')).toBeTruthy();
+    expect(posts).toHaveLength(1);
+    expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
+  });
 });

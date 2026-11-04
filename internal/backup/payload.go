@@ -213,16 +213,22 @@ func JoinDatabase(dataDir string) error {
 		return nil
 	}
 	// ReadDir sorts by name, so a complete set is exactly part 0 to n-1 of n, in order.
+	_, count, _ := strings.Cut(parts[0], "-of-")
+	n, err := strconv.Atoi(count)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrDatabaseParts, parts[0])
+	}
 	for i, name := range parts {
-		if name != dbPartName(i, len(parts)) {
-			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, dbPartName(i, len(parts)))
+		if name != dbPartName(i, n) {
+			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, dbPartName(i, n))
 		}
 	}
 	whole := filepath.Join(dataDir, dbName)
 	if _, err := os.Lstat(whole); !errors.Is(err, os.ErrNotExist) {
-		// A join interrupted after publishing leaves the parts behind: finish it when the
-		// database is exactly their concatenation, and refuse anything else.
-		same, err := equalsParts(whole, dataDir, parts)
+		// A join interrupted after publishing leaves the parts behind, a leading run of them
+		// when it stopped while removing them (last first): finish it when the database begins
+		// with exactly those bytes (and is exactly all of them), and refuse anything else.
+		same, err := equalsParts(whole, dataDir, parts, len(parts) == n)
 		if err != nil {
 			return err
 		}
@@ -230,6 +236,9 @@ func JoinDatabase(dataDir string) error {
 			return fmt.Errorf("%w: %s and its parts are both present and differ", ErrDatabaseParts, dbName)
 		}
 		return removeParts(dataDir, parts)
+	}
+	if len(parts) != n {
+		return fmt.Errorf("%w: %d of %d parts present", ErrDatabaseParts, len(parts), n)
 	}
 	tmp, err := os.CreateTemp(dataDir, ".join-*")
 	if err != nil {
@@ -251,17 +260,19 @@ func JoinDatabase(dataDir string) error {
 	return removeParts(dataDir, parts)
 }
 
+// removeParts removes the last part first, so an interruption always leaves a leading run.
 func removeParts(dataDir string, parts []string) error {
-	for _, name := range parts {
-		if err := os.Remove(filepath.Join(dataDir, name)); err != nil {
+	for i := len(parts) - 1; i >= 0; i-- {
+		if err := os.Remove(filepath.Join(dataDir, parts[i])); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// equalsParts reports whether the file at path holds exactly the parts, in order.
-func equalsParts(path, dataDir string, parts []string) (bool, error) {
+// equalsParts reports whether the file at path begins with the parts, in order, and, when
+// complete, holds nothing more.
+func equalsParts(path, dataDir string, parts []string, complete bool) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return false, err
@@ -290,6 +301,9 @@ func equalsParts(path, dataDir string, parts []string) (bool, error) {
 			}
 		}
 		p.Close()
+	}
+	if !complete {
+		return true, nil
 	}
 	n, _ := f.Read(got[:1])
 	return n == 0, nil

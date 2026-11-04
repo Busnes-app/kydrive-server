@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { secureFetch } from '../api';
-import { change, record, response } from './drive/client';
+import { HttpError, change, record, response } from './drive/client';
 import { Alert } from '../components/Alert';
 import { useConfirm } from '../components/Dialog';
 import { useStepUp } from '../components/StepUp';
@@ -52,17 +52,24 @@ export function AppPasswords() {
   // A KyIdentity confirmation leaves the page: the request waits in session storage and is sent
   // once on return, so the user does not fill the form in again.
   const issue = async (body: Record<string, string>) => {
-    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
+    let v: unknown;
+    try {
+      v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
+    } catch (e) {
+      // Kept only while no answer came, so a dropped connection can still finish on reload.
+      if (e instanceof HttpError) sessionStorage.removeItem(PENDING);
+      throw e;
+    }
+    sessionStorage.removeItem(PENDING); // created: never send it twice
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
   };
   useEffect(() => {
-    const saved = sessionStorage.getItem(PENDING);
-    sessionStorage.removeItem(PENDING);
     void run(async () => {
-      await load();
+      const saved = sessionStorage.getItem(PENDING);
       const body: unknown = saved ? JSON.parse(saved) : null;
       if (record(body) && Object.values(body).every(v => typeof v === 'string')) await issue(body as Record<string, string>);
+      else { sessionStorage.removeItem(PENDING); await load(); }
     });
   }, []);
 
