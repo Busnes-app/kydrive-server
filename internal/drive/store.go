@@ -532,8 +532,22 @@ func setTrash(ctx context.Context, tx *sql.Tx, user, id, workspace string, expec
 		}
 		return err
 	}
-	if err := authorizeItem(ctx, tx, user, workspace, parent, id, 2); err != nil {
+	// Authorized through the parent without the file's own share, as a rename is: a file shared
+	// on its own stays where its owner put it.
+	if err := authorizeItem(ctx, tx, user, workspace, parent, "", 2); err != nil {
 		return err
+	}
+	if !trash && parent != "" {
+		// A file whose folder is still in the trash comes back at the workspace root.
+		var live int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND trashed=false`, parent).Scan(&live); err != nil {
+			return err
+		}
+		if live == 0 {
+			if err := authorizeItem(ctx, tx, user, workspace, "", "", 2); err != nil {
+				return err
+			}
+		}
 	}
 	query := `UPDATE drive_files SET trashed=true,trashed_at=?,trash_batch=? WHERE id=? AND workspace=? AND revision=? AND trashed=false`
 	args := []any{now(), uuid.NewString(), id, workspace, expected}

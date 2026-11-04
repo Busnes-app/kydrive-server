@@ -48,7 +48,9 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 			}
 			return err
 		}
-		if err := authorizeItem(ctx, tx, user, workspace, id, "", 2); err != nil {
+		// Authorized through the parent: a share on the folder itself does not let its holder
+		// trash or restore the owner's folder.
+		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 2); err != nil {
 			return err
 		}
 		if trashed == trash {
@@ -83,6 +85,10 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 				return err
 			}
 			if live == 0 {
+				// It comes back at the workspace root, so it needs editor rights there.
+				if err = authorizeItem(ctx, tx, user, workspace, "", "", 2); err != nil {
+					return err
+				}
 				if _, err = tx.ExecContext(ctx, `UPDATE drive_folders SET parent='' WHERE id=?`, id); err != nil {
 					return err
 				}
