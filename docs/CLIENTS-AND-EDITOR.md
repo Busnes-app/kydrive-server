@@ -22,7 +22,7 @@ For a cached drive, an offline folder (rclone) or Cyberduck, see [Desktop access
 
 The top level lists your workspaces by name; two with the same name show as `Name` and `Name (2)`. Workspaces cannot be created, renamed or deleted over WebDAV. Deleting a file or folder moves it to the trash. Saving over a file creates a new version; with `If-Match` a stale save is refused (412), otherwise the last save wins and the earlier one stays in the history. A `PUT` may carry `X-OC-Mtime` (Unix seconds, as rclone's `owncloud` vendor sends it) to keep the file's own modification time. Uploads are capped at `KYDRIVE_MAX_FILE_SIZE` and one `PUT` must finish within `KY_READ_TIMEOUT`.
 
-WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating proxy, list the proxy in `KY_TRUSTED_PROXIES` so its `X-Forwarded-Proto` is believed, and let it pass request bodies up to `KYDRIVE_MAX_FILE_SIZE`. Failed WebDAV sign-ins are limited to 20 a minute per client and 10 per 15 minutes per username. Locks are held in memory and lost on restart; clients take them again.
+WebDAV requires HTTPS outside `KY_ENV=development`. Behind a TLS-terminating proxy, list the proxy in `KY_TRUSTED_PROXIES` so its `X-Forwarded-Proto` is believed, and let it pass request bodies up to `KYDRIVE_MAX_FILE_SIZE`. Failed WebDAV sign-ins are limited to 20 a minute per client and 10 per 15 minutes per username from one client; past that, that client's sign-ins are refused like a wrong password, so guessing from elsewhere never locks out your own devices. Locks are held in memory and lost on restart; clients take them again.
 
 ## Linked computers
 

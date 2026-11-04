@@ -48,4 +48,14 @@ func TestCaseVariantsRefusedWhileClashesRemain(t *testing.T) {
 	if u, err = s.Users().GetUserByUsername(ctx, "Alice"); err != nil || u.ID != "u-Alice" {
 		t.Fatalf("sign-in by the other spelling: %+v %v", u, err)
 	}
+	// The repair command renames the exact spelling it was given.
+	if _, err := s.db.ExecContext(ctx, `UPDATE users SET role='admin'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Users().RenameLocalAdmin(ctx, "alice", "alice-old"); err != nil {
+		t.Fatal(err)
+	}
+	if u, err = s.Users().GetUserByID(ctx, "u-alice"); err != nil || u.Username != "alice-old" {
+		t.Fatalf("rename picked the wrong account: %+v %v", u, err)
+	}
 }

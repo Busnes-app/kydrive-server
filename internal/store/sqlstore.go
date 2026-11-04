@@ -194,7 +194,8 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 		return ErrAlreadyExists
 	}
 	var id string
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin'`), oldName).Scan(&id); err != nil {
+	// While case-only clashes remain, the exact spelling picks the account, never chance.
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin' ORDER BY username = ? DESC, id LIMIT 1`), oldName, oldName).Scan(&id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -209,6 +210,11 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 	}
 	return tx.Commit()
 }
+
+// caseVariantFree is true when account $ID may hold username $NAME: no other account holds it in
+// another case, unless $ID already holds it that way. Used inside the write itself, so a check
+// and the insert or update cannot interleave with another writer.
+const caseVariantFree = `NOT (EXISTS(SELECT 1 FROM users v WHERE LOWER(v.username)=LOWER(?) AND v.id<>?) AND NOT EXISTS(SELECT 1 FROM users s WHERE s.id=? AND LOWER(s.username)=LOWER(?)))`
 
 // caseVariantTaken refuses giving account id a username another account holds in a different
 // case, unless id already holds it that way. Until existing case-only clashes are renamed the
@@ -227,9 +233,6 @@ func caseVariantTaken(ctx context.Context, q interface {
 }
 
 func (u *userStore) CreateUser(ctx context.Context, user *User) error {
-	if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
-		return err
-	}
 	now := time.Now().UTC()
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = now
@@ -247,26 +250,29 @@ INSERT INTO users (
     sso_provider, sso_subject, totp_secret_enc, totp_enabled,
     recovery_codes_hash, must_change_password,
     created_at, updated_at, last_login_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`)
+) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ` + caseVariantFree)
 
 	var lastLogin sql.NullTime
 	if user.LastLoginAt != nil {
 		lastLogin = sql.NullTime{Time: *user.LastLoginAt, Valid: true}
 	}
 
-	_, err := u.store.db.ExecContext(ctx, q,
+	res, err := u.store.db.ExecContext(ctx, q,
 		user.ID, user.Username, user.Email, user.DisplayName, user.PasswordHash,
 		user.Role, user.Status, user.SSOProvider, user.SSOSubject,
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
 		user.MustChangePassword,
 		user.CreatedAt, user.UpdatedAt, lastLogin,
+		user.Username, user.ID, user.ID, user.Username,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate key") {
 			return ErrAlreadyExists
 		}
 		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return errors.Join(ErrAlreadyExists, err)
 	}
 	return nil
 }
@@ -341,9 +347,6 @@ FROM users WHERE sso_provider = ? AND sso_subject = ?
 }
 
 func (u *userStore) UpdateUser(ctx context.Context, user *User) error {
-	if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
-		return err
-	}
 	user.UpdatedAt = time.Now().UTC()
 	var lastLogin sql.NullTime
 	if user.LastLoginAt != nil {
@@ -357,8 +360,7 @@ UPDATE users SET
     totp_secret_enc = ?, totp_enabled = ?, recovery_codes_hash = ?,
     must_change_password = ?, updated_at = ?,
     last_login_at = ?
-WHERE id = ?
-`)
+WHERE id = ? AND ` + caseVariantFree)
 
 	res, err := u.store.db.ExecContext(ctx, q,
 		user.Username, user.Email, user.DisplayName, user.PasswordHash,
@@ -366,6 +368,7 @@ WHERE id = ?
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
 		user.MustChangePassword, user.UpdatedAt,
 		lastLogin, user.ID,
+		user.Username, user.ID, user.ID, user.Username,
 	)
 	if err != nil {
 		return err
@@ -375,6 +378,10 @@ WHERE id = ?
 		return err
 	}
 	if rows == 0 {
+		// Refused for its name, or no such account.
+		if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
+			return err
+		}
 		return ErrNotFound
 	}
 	return nil

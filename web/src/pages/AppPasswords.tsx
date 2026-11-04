@@ -14,6 +14,7 @@ const scopes: Scope[] = ['dav', 'mcp:read', 'mcp:write'];
 function appPassword(v: unknown): v is AppPassword { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.created === 'string' && typeof v.last_used === 'number' && scopes.includes(v.scope as Scope); }
 function created(v: unknown): v is Created { return record(v) && ['name', 'password', 'url'].every(k => typeof v[k] === 'string') && scopes.includes(v.scope as Scope); }
 const isAgent = (s: Scope) => s !== 'dav';
+const PENDING = 'ky-pending-app-password';
 
 // grant says who gets a credential and what it can do. Every screen that issues or widens one
 // shows it, so no prompt ever asks for "access" without naming the agent and its level.
@@ -48,14 +49,24 @@ export function AppPasswords() {
     if (!Array.isArray(v) || !v.every(appPassword)) throw new Error('Unexpected server response.');
     setList(v);
   };
-  useEffect(() => { void run(load); }, []);
-
-  const create = (e: FormEvent) => { e.preventDefault(); void run(async () => {
-    const body = agent ? { name: name.trim(), scope: write ? 'mcp:write' : 'mcp:read', folder: folder.trim() } : { name: name.trim() };
-    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body));
+  // A KyIdentity confirmation leaves the page: the request waits in session storage and is sent
+  // once on return, so the user does not fill the form in again.
+  const issue = async (body: Record<string, string>) => {
+    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
-  }); };
+  };
+  useEffect(() => {
+    const saved = sessionStorage.getItem(PENDING);
+    sessionStorage.removeItem(PENDING);
+    void run(async () => {
+      await load();
+      const body: unknown = saved ? JSON.parse(saved) : null;
+      if (record(body) && Object.values(body).every(v => typeof v === 'string')) await issue(body as Record<string, string>);
+    });
+  }, []);
+
+  const create = (e: FormEvent) => { e.preventDefault(); void run(() => issue(agent ? { name: name.trim(), scope: write ? 'mcp:write' : 'mcp:read', folder: folder.trim() } : { name: name.trim() })); };
   const revoke = async (p: AppPassword) => { if (await confirm({ title: `Revoke "${p.name}"?`, body: isAgent(p.scope) ? 'The agent loses access at once.' : 'Devices using it stop syncing.', confirm: 'Revoke', danger: true })) void run(async () => {
     const r = await secureFetch(`/api/auth/app-passwords/${p.id}`, { method: 'DELETE' });
     if (!r.ok) await response(r);

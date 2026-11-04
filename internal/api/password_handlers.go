@@ -29,7 +29,10 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusConflict, "This account's password is managed by KyIdentity")
 		return
 	}
-	if !s.allowAttempt("password-change:"+s.requestIP(r), 10, time.Minute) || !s.allowAttempt("password-change-user:"+user.ID, 5, time.Minute) {
+	// Checking the current password is a sign-in guess: it spends the login window too, so a
+	// left-open session cannot guess faster here than at the sign-in page.
+	if !s.allowAttempt("password-change:"+s.requestIP(r), 10, time.Minute) || !s.allowAttempt("password-change-user:"+user.ID, 5, time.Minute) ||
+		!s.allowAttempt(s.accountKey("login-user", user.Username, r), 10, 15*time.Minute) {
 		s.writeError(w, http.StatusTooManyRequests, "Too many password change attempts")
 		return
 	}

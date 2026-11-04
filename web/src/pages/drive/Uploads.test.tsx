@@ -16,12 +16,12 @@ function Harness({ files, onIdle, decide = async () => 'cancel' }: { files: File
 
 // server answers like the drive API: the folder listing, session starts (recording their
 // bodies), chunk PUTs and completion.
-function server({ listing = [] as unknown[] | (() => unknown[]), folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = [] as (number | 'network' | 'stale')[] } = {}) {
+function server({ listing = [] as unknown[], folders = [] as unknown[], refuse = (() => false) as (b: Record<string, unknown>) => boolean, completeFails = [] as (number | 'network' | 'stale')[] } = {}) {
   const starts: Record<string, unknown>[] = [], calls: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET';
     calls.push(`${method} ${url}`);
-    if (url.includes('/files?trash=false')) return json(typeof listing === 'function' ? listing() : listing);
+    if (url.includes('/files?trash=false')) return json(listing);
     if (url.includes('/folders?trash=false')) return json(folders);
     if (url.endsWith('/upload-sessions')) {
       const b = JSON.parse(String(init?.body));
@@ -121,16 +121,21 @@ describe('upload queue', () => {
     expect(calls.filter(c => c.startsWith('PUT'))).toHaveLength(1);
   });
 
-  it('counts a completion whose answer was lost as done when the file is there', async () => {
-    let published = false;
-    const { calls } = server({ completeFails: [504, 403], listing: () => published ? [{ id: 'f', name: 'ok.txt', parent: '', revision: 1, size: 2, trashed: false }] : [] });
+  it('says a refused retry of a lost completion may already be saved, never Done', async () => {
+    server({ completeFails: [504, 403] });
     render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Go' }));
-    const retry = await screen.findByRole('button', { name: 'Retry' });
-    published = true;
-    fireEvent.click(retry);
-    expect(await screen.findByText('Done')).toBeTruthy();
-    expect(calls.filter(c => c.startsWith('DELETE'))).toEqual([]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText(/may already be in the folder/)).toBeTruthy();
+    expect(screen.queryByText('Done')).toBeNull();
+  });
+
+  it('reports a first completion refused with 403 as the server said', async () => {
+    server({ completeFails: [403] });
+    render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(await screen.findByText(/revision conflict/)).toBeTruthy();
+    expect(screen.queryByText(/may already be in the folder/)).toBeNull();
   });
 
   it.each([['with a server error', 500], ['because the file changed since the start', 'stale']] as const)('frees the session when completion fails for good %s', async (_, failure) => {

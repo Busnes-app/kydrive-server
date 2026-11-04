@@ -85,4 +85,27 @@ describe('SharedView', () => {
     expect(screen.queryByRole('button', { name: 'Upload files' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'New' })).toBeNull();
   });
+
+  it('never shows or acts on the previous folder while another loads or fails', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input), method = init?.method ?? 'GET';
+      if (method !== 'GET') calls.push(`${method} ${url}`);
+      if (url === '/api/drive/shared-with-me') return json([
+        { kind: 'folder', id: 'a', workspace: 'w1', workspace_name: 'Finance', parent: '', name: 'A', role: 'editor' },
+        { kind: 'folder', id: 'b', workspace: 'w1', workspace_name: 'Finance', parent: '', name: 'B', role: 'editor' },
+      ]);
+      if (url === '/api/drive/folders/a/children') return json({ folders: [], files: [{ id: 'fa', name: 'a.txt', parent: 'a', revision: 1, size: 1, trashed: false }] });
+      return new Response(JSON.stringify({ error: 'Folder unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }));
+    render(<SharedView openInNewTab={false} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'A' }));
+    expect(await screen.findByRole('link', { name: 'a.txt' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Shared with me' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'B' }));
+    expect(await screen.findByText('Folder unavailable')).toBeTruthy();
+    expect(screen.queryByText('a.txt')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload files' })).toBeNull();
+    expect(calls).toEqual([]);
+  });
 });

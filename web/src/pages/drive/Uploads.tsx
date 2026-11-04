@@ -39,11 +39,6 @@ export function useUploads(onIdle: () => void, listing: Listing = workspaceListi
   const nextKey = useRef(0);
   const update = (key: number, patch: Partial<Upload>) => setItems(xs => xs.map(x => x.key === key ? { ...x, ...patch } : x));
 
-  const landed = async (u: Upload) => {
-    try {
-      return (await listed.current(u.workspace, u.parent)).files.some(f => f.parent === u.parent && f.name === u.target.name && f.size === u.file.size && (!u.target.replace || f.revision > u.target.replace.revision));
-    } catch { return false; }
-  };
   const enqueue = useCallback((u: Upload) => {
     pending.current++;
     queue.current = queue.current.then(async () => {
@@ -65,10 +60,11 @@ export function useUploads(onIdle: () => void, listing: Listing = workspaceListi
           // the start, never clears and is freed below. The bytes stay staged, so Retry resumes
           // from what the server acknowledged and completes without resending.
           update(u.key, { error: e instanceof Error ? e.message : 'Upload failed', session: { ...session, received: acked } });
-        } else if (session && acked === u.file.size && e instanceof HttpError && e.status === 403 && await landed(u)) {
-          // A completion whose answer was lost (a proxy timeout) published the file and dropped
-          // its session, so the retry is refused: the file is there, so the upload is done.
-          update(u.key, { finished: true, done: u.file.size, session: undefined, error: '' });
+        } else if (u.session && acked === u.file.size && e instanceof HttpError && e.status === 403) {
+          // A retry of a completion whose answer was lost (a proxy timeout) is refused because
+          // that completion may have published the file and dropped its session. Only the user
+          // can tell, so say so instead of inviting a second copy.
+          update(u.key, { error: 'The connection dropped while KyDrive was saving this file, so it may already be in the folder. Check there before uploading it again.', session: undefined });
         } else {
           // A refused upload cannot be resumed; free its session now rather than at expiry.
           if (session) void secureFetch(`/api/drive/upload-sessions/${session.id}`, { method: 'DELETE' }).catch(() => {});

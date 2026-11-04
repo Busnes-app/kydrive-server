@@ -146,9 +146,11 @@ func TestSSOStepUp(t *testing.T) {
 			t.Fatalf("%s granted a step-up: %d", name, got.Code)
 		}
 	}
-	// An off-site return path falls back to the app.
-	if got := stepUp(map[string]any{"sub": "alice", "sid": "sid-1", "auth_time": now}, "//evil.example/x"); got.Code != http.StatusFound || got.Header().Get("Location") != "/" {
-		t.Fatalf("off-site return: %d %q", got.Code, got.Header().Get("Location"))
+	// An off-site return path falls back to the app, however it is disguised.
+	for _, back := range []string{"//evil.example/x", "/\t/evil.example", "/\\evil.example", "https://evil.example/", "/\n/evil.example"} {
+		if got := stepUp(map[string]any{"sub": "alice", "sid": "sid-1", "auth_time": now}, back); got.Code != http.StatusFound || got.Header().Get("Location") != "/" {
+			t.Fatalf("off-site return %q: %d %q", back, got.Code, got.Header().Get("Location"))
+		}
 	}
 	if got := send(t, srv, "POST", "/api/auth/app-passwords", create, alice, ""); got.Code != http.StatusCreated {
 		t.Fatalf("after SSO step-up: %d %s", got.Code, got.Body.String())
@@ -172,7 +174,7 @@ func TestSSOStepUp(t *testing.T) {
 			audited++
 		}
 	}
-	if err != nil || audited != 2 {
+	if err != nil || audited != 6 { // five off-site returns and the second step-up
 		t.Fatalf("SSO step-ups audited %d times: %v", audited, err)
 	}
 }

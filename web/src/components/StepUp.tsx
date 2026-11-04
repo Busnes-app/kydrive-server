@@ -9,7 +9,7 @@ type Ask = { method: 'password' | 'sso'; resolve: (ok: boolean) => void; beforeL
 // useStepUp runs a request that mints a credential outliving the session (WebDAV password, agent
 // token, linked computer). When the server answers step_up_required it asks the user to confirm
 // it's them and retries once: by password in place, or through KyIdentity, which leaves the page
-// and returns to it; the user then repeats the action. beforeLeave saves what the return needs.
+// and returns to it. beforeLeave saves what the return needs to finish the action.
 export function useStepUp(): [<T>(action: () => Promise<T>, beforeLeave?: () => void) => Promise<T>, ReactNode] {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [password, setPassword] = useState('');
@@ -41,7 +41,7 @@ export function useStepUp(): [<T>(action: () => Promise<T>, beforeLeave?: () => 
     </Dialog>
     : <Dialog title="Confirm it's you" onClose={() => done(false)}
       footer={<><button type="button" className="btn-secondary" onClick={() => done(false)}>Cancel</button><button type="button" autoFocus onClick={toKyIdentity}>Continue to KyIdentity</button></>}>
-      <p>KyIdentity will ask you to sign in again. You then come back here and choose the same action again within five minutes.</p>
+      <p>KyIdentity will ask you to sign in again, then bring you back here to finish.</p>
     </Dialog>);
   return [guarded, node];
 }

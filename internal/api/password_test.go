@@ -197,6 +197,16 @@ func TestLocalAccountChangesItsOwnPassword(t *testing.T) {
 	if got := send(t, srv, "POST", "/api/auth/change-password", `{"current_password":"SuperSecretPass123!","new_password":"AnotherPassword123!"}`, user, ""); got.Code != http.StatusOK {
 		t.Fatalf("voluntary change: %d %s", got.Code, got.Body.String())
 	}
+	// Checking the current password shares the sign-in window: after ten wrong sign-ins from
+	// this client, a session here cannot keep guessing.
+	guesser := loginAs(t, srv, st, "guessed", "user")
+	for i := 0; i < 10; i++ {
+		postLogin(srv, "192.0.2.1", map[string]string{"username": "guessed", "password": "wrong password here"}) // httptest's client address
+	}
+	if got := send(t, srv, "POST", "/api/auth/change-password", `{"current_password":"SuperSecretPass123!","new_password":"AnotherPassword123!"}`, guesser, ""); got.Code != http.StatusTooManyRequests {
+		t.Fatalf("change-password past the sign-in window: %d %s", got.Code, got.Body.String())
+	}
+
 	if signedIn(t, srv, user) || !signedIn(t, srv, other) {
 		t.Fatal("the change must end the account's sessions, and only its own")
 	}

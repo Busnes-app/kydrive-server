@@ -30,7 +30,9 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   (`data/recovery.pub`, only when paired).
 - `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` and removes them before
   anything opens the database; with no parts it does nothing. It refuses a missing, extra or
-  renumbered part and parts beside a whole database (`ErrDatabaseParts`). `Checks` and
+  renumbered part and parts beside a different whole database (`ErrDatabaseParts`); a whole
+  database that is exactly their concatenation is a join interrupted after publishing, so it
+  removes the parts and succeeds. Only `ky_server.db.NNN-of-NNN` names are parts. `Checks` and
   `cmd/server` `resetRestored` (capsule `restore` and `restore-reset`) call it first.
 - `Checks(dir, opened)` reads the opened capsule's manifest, normalizes JSON lists and
   fails malformed or incomplete recipes. Required files include all capsule members and

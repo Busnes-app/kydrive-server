@@ -130,10 +130,10 @@ func TestDrillJoinsManyPartsAndRefusesAMissingOne(t *testing.T) {
 
 func TestJoinDatabaseRefusesAnInconsistentSet(t *testing.T) {
 	for name, files := range map[string][]string{
-		"gap":             {"ky_server.db.000-of-003", "ky_server.db.002-of-003"},
-		"missing last":    {"ky_server.db.000-of-003", "ky_server.db.001-of-003"},
-		"duplicate":       {"ky_server.db.000-of-002", "ky_server.db.001-of-002", "ky_server.db.001-of-003"},
-		"whole and parts": {"ky_server.db", "ky_server.db.000-of-001"},
+		"gap":                       {"ky_server.db.000-of-003", "ky_server.db.002-of-003"},
+		"missing last":              {"ky_server.db.000-of-003", "ky_server.db.001-of-003"},
+		"duplicate":                 {"ky_server.db.000-of-002", "ky_server.db.001-of-002", "ky_server.db.001-of-003"},
+		"whole and different parts": {"ky_server.db", "ky_server.db.000-of-001"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -198,5 +198,23 @@ func TestJoinDatabaseIgnoresOtherFiles(t *testing.T) {
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "ky_server.db")); err != nil || string(got) != "ky_server.db" {
 		t.Fatalf("database changed: %q %v", got, err)
+	}
+}
+
+// A join interrupted after it published the database finishes on the next run.
+func TestJoinDatabaseFinishesAnInterruptedJoin(t *testing.T) {
+	dir := t.TempDir()
+	parts := map[string]string{"ky_server.db.000-of-002": "first half ", "ky_server.db.001-of-002": "second half", "ky_server.db": "first half second half"}
+	for name, data := range parts {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := backup.JoinDatabase(dir); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "ky_server.db" {
+		t.Fatalf("left behind: %v", entries)
 	}
 }

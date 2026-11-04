@@ -142,4 +142,28 @@ describe('AppPasswords', () => {
     await answer('Cancel');
     expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
   });
+
+  it('finishes an app password after a KyIdentity confirmation without asking again', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign, pathname: '/', search: '', hash: '#/settings/devices' });
+    let confirmed = false;
+    const posts: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') return json([]);
+      posts.push(JSON.parse(String(init.body)));
+      return confirmed ? json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-after-sso', username: 'alice', url: 'https://drive.example/dav/' }, 201) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403);
+    }));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue to KyIdentity' }));
+    expect(String(assign.mock.calls[0][0])).toBe('/api/sso/kysignon/login?step_up=1&return=%2F%23%2Fsettings%2Fdevices');
+    cleanup();
+    // Back from KyIdentity: the page opens again and sends the saved request once.
+    confirmed = true;
+    render(<AppPasswords />);
+    expect(await screen.findByText('secret-after-sso')).toBeTruthy();
+    expect(posts).toEqual([{ name: 'Laptop' }, { name: 'Laptop' }]);
+    expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
+  });
 });

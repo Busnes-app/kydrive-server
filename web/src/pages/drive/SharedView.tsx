@@ -31,7 +31,8 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   const target = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [items, setItems] = useState<SharedItem[]>([]);
   const [path, setPath] = useState<Place[]>([]);
-  const [contents, setContents] = useState<{ folders: Folder[]; files: DriveFile[] }>({ folders: [], files: [] });
+  // contents names the folder it was loaded for: rows of another folder are never shown or acted on.
+  const [contents, setContents] = useState<{ of: string; folders: Folder[]; files: DriveFile[] }>({ of: '', folders: [], files: [] });
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ id: string; name: string } | null>(null);
   const [renaming, setRenaming] = useState<Item | null>(null);
@@ -41,6 +42,8 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   const [confirm, confirmNode] = useConfirm();
   const uploadInput = useRef<HTMLInputElement>(null);
   const at = path[path.length - 1];
+  const ready = at && contents.of === at.id;
+  const shown = ready ? contents : { folders: [], files: [] };
   const canEdit = at?.role === 'editor' || at?.role === 'manager';
   const refresh = useCallback(() => setLoaded(n => n + 1), []);
   const uploads = useUploads(refresh, useCallback(async (_: string, parent: string) => children(parent), []));
@@ -49,13 +52,13 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   useEffect(() => {
     if (!at) return;
     let active = true;
-    void children(at.id).then(c => { if (active) setContents(c); }, e => { if (active) setError(e instanceof Error ? e.message : 'Folder unavailable'); });
+    void children(at.id).then(c => { if (active) setContents({ of: at.id, ...c }); }, e => { if (active) setError(e instanceof Error ? e.message : 'Folder unavailable'); });
     return () => { active = false; };
   }, [at, loaded]);
 
   async function run(action: () => Promise<unknown>) { setBusy(true); setError(''); try { await action(); refresh(); return true; } catch (e) { setError(e instanceof Error ? e.message : 'Operation failed'); return false; } finally { setBusy(false); } }
   const decide = async (names: string[]): Promise<Choice> => await confirm({ title: names.length === 1 ? `${names[0]} already exists` : `${names.length} files already exist`, body: 'Replace uploads each as a new version; earlier versions stay in Version history. Cancel skips them; other files still upload.', confirm: 'Replace (new version)' }) ? 'replace' : 'cancel';
-  const upload = (chosen: File[]) => { if (at) void run(() => uploads.add(at.workspace, at.id, { dirs: [], files: chosen.map(f => ({ dirs: [], file: f })) }, contents.folders, decide)); };
+  const upload = (chosen: File[]) => { if (at) void run(() => uploads.add(at.workspace, at.id, { dirs: [], files: chosen.map(f => ({ dirs: [], file: f })) }, shown.folders, decide)); };
   function create() {
     if (!at || !creating) return;
     const kind = creating.kind;
@@ -94,7 +97,7 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
       ...(inside ? editing(() => setRenaming({ kind: 'folder', folder: inside }), () => change(`/api/drive/folders/${inside.id}/trash`, 'PUT', { trashed: true })) : [])]} /></td>
   </tr>;
   const open = (p: Place) => { setError(''); setPath([...path, p]); };
-  const rows = at ? contents.folders.length + contents.files.length : items.length;
+  const rows = at ? shown.folders.length + shown.files.length : items.length;
   const newMenu: MenuEntry[] = [
     { label: 'New folder', icon: <FolderPlus size={16} />, onSelect: () => setCreating({ kind: 'folder', name: '' }) },
     'separator',
@@ -103,7 +106,7 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
 
   return <section className="page drive-page">
     <header className="page-header"><div><h1>Shared with me</h1><p className="page-desc">Files and folders people shared with you outside your own workspaces</p></div>
-      {at && canEdit && <div className="page-actions">
+      {ready && canEdit && <div className="page-actions">
         <button className="btn-secondary" disabled={busy} onClick={() => uploadInput.current?.click()}><Upload size={16} aria-hidden="true" />Upload files</button>
         <Menu label="New" trigger="primary" items={newMenu} />
         <input ref={uploadInput} type="file" multiple hidden aria-label="Choose files to upload" onChange={e => { const chosen = Array.from(e.target.files ?? []); e.target.value = ''; upload(chosen); }} />
@@ -118,11 +121,11 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
       <UploadList {...uploads} />
       {rows > 0 && <div className="drive-table"><table><thead><tr><th>Name</th><th className="num">{at ? 'Size' : 'Shared from'}</th><th className="col-actions"><span className="sr-only">Actions</span></th></tr></thead><tbody>
         {at ? <>
-          {contents.folders.map(d => folderRow(d.id, d.name, 'Folder', { workspace: at.workspace, role: at.role }, d))}
-          {contents.files.map(f => fileRow(f, bytes(f.size), f))}
+          {shown.folders.map(d => folderRow(d.id, d.name, 'Folder', { workspace: at.workspace, role: at.role }, d))}
+          {shown.files.map(f => fileRow(f, bytes(f.size), f))}
         </> : items.map(i => i.kind === 'folder' ? folderRow(i.id, i.name, `${i.workspace_name} · ${cap(i.role)}`, { workspace: i.workspace, role: i.role }) : fileRow(i, `${i.workspace_name} · ${cap(i.role)}`))}
       </tbody></table></div>}
-      {rows === 0 && !error && <div className="drive-empty"><Users size={32} aria-hidden="true" />{at ? <><h3>This folder is empty</h3><p>{canEdit ? 'Upload files or create a document from New.' : 'Nothing has been added to it yet.'}</p></> : <><h3>Nothing shared with you yet</h3><p>When someone shares a file or folder with you, it appears here.</p></>}</div>}
+      {rows === 0 && !error && (!at || ready) && <div className="drive-empty"><Users size={32} aria-hidden="true" />{at ? <><h3>This folder is empty</h3><p>{canEdit ? 'Upload files or create a document from New.' : 'Nothing has been added to it yet.'}</p></> : <><h3>Nothing shared with you yet</h3><p>When someone shares a file or folder with you, it appears here.</p></>}</div>}
     </div>
     {creating && at && <Dialog title={creating.kind === 'folder' ? 'New folder' : documentKinds.find(([k]) => k === creating.kind)?.[1] ?? 'New document'} description={`Create in ${at.name}`} onClose={() => setCreating(null)} onSubmit={create}
       footer={<><button type="button" className="btn-secondary" onClick={() => setCreating(null)}>Cancel</button><button disabled={busy || !creating.name.trim()}>{creating.kind === 'folder' ? 'Create' : 'Create & open'}</button></>}>

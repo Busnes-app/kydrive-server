@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -211,15 +212,24 @@ func JoinDatabase(dataDir string) error {
 	if len(parts) == 0 {
 		return nil
 	}
-	whole := filepath.Join(dataDir, dbName)
-	if _, err := os.Lstat(whole); !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("%w: %s and its parts are both present", ErrDatabaseParts, dbName)
-	}
 	// ReadDir sorts by name, so a complete set is exactly part 0 to n-1 of n, in order.
 	for i, name := range parts {
 		if name != dbPartName(i, len(parts)) {
 			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, dbPartName(i, len(parts)))
 		}
+	}
+	whole := filepath.Join(dataDir, dbName)
+	if _, err := os.Lstat(whole); !errors.Is(err, os.ErrNotExist) {
+		// A join interrupted after publishing leaves the parts behind: finish it when the
+		// database is exactly their concatenation, and refuse anything else.
+		same, err := equalsParts(whole, dataDir, parts)
+		if err != nil {
+			return err
+		}
+		if !same {
+			return fmt.Errorf("%w: %s and its parts are both present and differ", ErrDatabaseParts, dbName)
+		}
+		return removeParts(dataDir, parts)
 	}
 	tmp, err := os.CreateTemp(dataDir, ".join-*")
 	if err != nil {
@@ -238,12 +248,51 @@ func JoinDatabase(dataDir string) error {
 	if err := os.Rename(tmp.Name(), whole); err != nil {
 		return err
 	}
+	return removeParts(dataDir, parts)
+}
+
+func removeParts(dataDir string, parts []string) error {
 	for _, name := range parts {
 		if err := os.Remove(filepath.Join(dataDir, name)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// equalsParts reports whether the file at path holds exactly the parts, in order.
+func equalsParts(path, dataDir string, parts []string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	got, want := make([]byte, 1<<16), make([]byte, 1<<16)
+	for _, name := range parts {
+		p, err := os.Open(filepath.Join(dataDir, name))
+		if err != nil {
+			return false, err
+		}
+		for {
+			n, rerr := io.ReadFull(p, want)
+			if n > 0 {
+				if _, err := io.ReadFull(f, got[:n]); err != nil || !bytes.Equal(got[:n], want[:n]) {
+					p.Close()
+					return false, nil
+				}
+			}
+			if rerr == io.EOF || rerr == io.ErrUnexpectedEOF {
+				break
+			}
+			if rerr != nil {
+				p.Close()
+				return false, rerr
+			}
+		}
+		p.Close()
+	}
+	n, _ := f.Read(got[:1])
+	return n == 0, nil
 }
 
 func appendFile(dst io.Writer, path string) error {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func (s *Server) handleKySignOnLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		back := r.URL.Query().Get("return")
-		if !strings.HasPrefix(back, "/") || strings.HasPrefix(back, "//") || strings.HasPrefix(back, "/\\") {
+		if !localPath(back) {
 			back = "/"
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -155,6 +156,14 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// localPath reports whether back is a path on this site: no scheme, host, backslash or control
+// character (browsers drop tabs and newlines, so "/\t/evil" would read as "//evil").
+func localPath(back string) bool {
+	u, err := url.Parse(back)
+	return err == nil && u.Scheme == "" && u.Host == "" && strings.HasPrefix(back, "/") && !strings.HasPrefix(back, "//") &&
+		!strings.ContainsFunc(back, func(r rune) bool { return r == '\\' || r < 0x20 || r == 0x7f })
 }
 
 // finishSSOStepUp dates the current session's step-up from the KyIdentity auth_time, which
