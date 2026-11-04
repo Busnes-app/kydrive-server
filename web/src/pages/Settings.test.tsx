@@ -15,6 +15,8 @@ describe('TrashRetention', () => {
     }));
     render(<TrashRetention />);
     expect((await screen.findByRole('status')).textContent).toBe('Trashed items are permanently deleted after 90 days.');
+    // Lowering the age also purges deleted workspaces; the panel says so before anyone saves.
+    expect(screen.getByText(/Deleted workspaces are kept this long too/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Delete trashed items after (days)'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Trash is kept until someone empties it.')).toBeTruthy();
