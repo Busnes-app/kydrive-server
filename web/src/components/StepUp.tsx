@@ -7,9 +7,9 @@ import { Dialog } from './Dialog';
 type Ask = { method: 'password' | 'sso'; resolve: (ok: boolean) => void; beforeLeave?: () => void };
 
 // useStepUp runs a request that mints a credential outliving the session (WebDAV password, agent
-// token, linked computer). When the server answers step_up_required it asks the user to confirm
-// it's them and retries once: by password in place, or through KyIdentity, which leaves the page
-// and returns to it. beforeLeave saves what the return needs to finish the action.
+// token, linked computer, guest link). When the server answers step_up_required it asks the user
+// to confirm it's them and retries once: by password in place, or through KyIdentity, which
+// leaves the page and returns to it. beforeLeave saves what the return needs to finish the action.
 export function useStepUp(): [<T>(action: () => Promise<T>, beforeLeave?: () => void) => Promise<T>, ReactNode] {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [password, setPassword] = useState('');

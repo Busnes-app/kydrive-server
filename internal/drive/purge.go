@@ -93,7 +93,6 @@ func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace, parent string
-		file := id
 		var trashed bool
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &trashed); err != nil {
 			if err == sql.ErrNoRows {
@@ -101,7 +100,9 @@ func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error
 			}
 			return err
 		}
-		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
+		// Authorized through the parent, without the file's own share, as trash is: a share on
+		// the file never lets its holder destroy the owner's file.
+		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 3); err != nil {
 			return err
 		}
 		if !trashed {
@@ -122,16 +123,17 @@ func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error
 func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		var workspace string
+		var workspace, parent string
 		var trashed bool
-		parent, file := id, "" // a folder is checked on itself
-		if err := tx.QueryRowContext(ctx, `SELECT workspace,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &trashed); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &parent, &trashed); err != nil {
 			if err == sql.ErrNoRows {
 				return ErrDenied
 			}
 			return err
 		}
-		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
+		// Authorized through the parent, as trash is: a share on the folder never lets its
+		// holder destroy the owner's folder.
+		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 3); err != nil {
 			return err
 		}
 		if !trashed {
@@ -176,7 +178,6 @@ func (s *Store) PurgeVersion(ctx context.Context, user, id string, revision int6
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace, parent string
-		file := id
 		var current int64
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,revision FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &current); err != nil {
 			if err == sql.ErrNoRows {
@@ -184,7 +185,8 @@ func (s *Store) PurgeVersion(ctx context.Context, user, id string, revision int6
 			}
 			return err
 		}
-		if err := authorizeItem(ctx, tx, user, workspace, parent, file, 3); err != nil {
+		// Through the parent, without the file's own share, like PurgeFile.
+		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 3); err != nil {
 			return err
 		}
 		var err error

@@ -480,6 +480,71 @@ func TestShareHolderCannotRemoveTheSharedItem(t *testing.T) {
 	denied("restore a folder to the workspace root", d.SetFolderTrash(ctx, "stranger", sub.ID, false))
 }
 
+// Q5: purges authorize through the parent at manager rank, like trash. The owner trashes a
+// folder and a file each shared as manager; the holder cannot purge either, nor a version of the
+// file, while inside the shared folder the manager share still purges.
+func TestShareHolderCannotPurgeTheSharedItem(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	managers(t, d, w)
+	tr := layout(t, d, w, blobs)
+	for _, s := range [][2]string{{"folder", tr.a.ID}, {"folder", tr.c.ID}, {"file", tr.rootFile}} {
+		if _, err := d.Share(ctx, "worker", s[0], s[1], "user", "stranger", "manager"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.Publish(ctx, "worker", drive.File{ID: tr.rootFile, Workspace: w.ID, Name: "root.txt"}, blob(t, blobs, "y"), 1); err != nil {
+		t.Fatal(err)
+	}
+	denied := func(what string, err error) {
+		t.Helper()
+		if !errors.Is(err, drive.ErrDenied) {
+			t.Errorf("%s: %v, want ErrDenied", what, err)
+		}
+	}
+	_, err := d.PurgeVersion(ctx, "stranger", tr.rootFile, 1)
+	denied("purge an old version of the shared file", err)
+	if err = d.SetFolderTrash(ctx, "worker", tr.c.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetTrash(ctx, "worker", tr.rootFile, 2, true); err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.PurgeFolder(ctx, "stranger", tr.c.ID)
+	denied("purge the trashed shared folder", err)
+	_, err = d.PurgeFile(ctx, "stranger", tr.rootFile)
+	denied("purge the trashed shared file", err)
+	if _, err = d.File(ctx, "worker", tr.inC.ID, 1); err != nil {
+		t.Errorf("the owner's trashed tree went: %v", err)
+	}
+	// Inside the shared folder a the manager share still purges.
+	if err = d.SetFolderTrash(ctx, "stranger", tr.b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PurgeFolder(ctx, "stranger", tr.b.ID); err != nil {
+		t.Errorf("purge a folder inside the share: %v", err)
+	}
+	if tr.inA, err = d.Publish(ctx, "stranger", drive.File{ID: tr.inA.ID, Workspace: w.ID, Parent: tr.a.ID, Name: "inA.txt"}, blob(t, blobs, "z"), 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PurgeVersion(ctx, "stranger", tr.inA.ID, 1); err != nil {
+		t.Errorf("purge a version inside the share: %v", err)
+	}
+	if err = d.SetTrash(ctx, "stranger", tr.inA.ID, 2, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.PurgeFile(ctx, "stranger", tr.inA.ID); err != nil {
+		t.Errorf("purge a file inside the share: %v", err)
+	}
+	// The owner, a workspace manager, purges both shared items.
+	if _, err = d.PurgeFolder(ctx, "worker", tr.c.ID); err != nil {
+		t.Errorf("owner purge of the folder: %v", err)
+	}
+	if _, err = d.PurgeFile(ctx, "worker", tr.rootFile); err != nil {
+		t.Errorf("owner purge of the file: %v", err)
+	}
+}
+
 // A workspace reader given an editor share on a folder finds it in Shared with me, where the
 // web app offers editing; a share no higher than their membership stays out.
 func TestSharedWithMeRaisesAMembersRole(t *testing.T) {

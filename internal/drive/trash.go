@@ -39,6 +39,21 @@ func subtree(ctx context.Context, tx *sql.Tx, root, cond string, args ...any) ([
 // exactly that batch. Items trashed earlier stay in the trash. A folder whose parent is
 // still trashed comes back at the workspace root.
 func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool) error {
+	return s.setFolderTrash(ctx, user, id, trash, nil)
+}
+
+// SetFolderTrashSince is SetFolderTrash on the condition that nothing in the folder's live
+// subtree changed after head, the workspace change-log position the caller last saw (a desktop
+// client's cursor). A change row after head naming the folder or a live folder or file beneath
+// it, or a head below the pruned floor, is ErrConflict and changes nothing.
+func (s *Store) SetFolderTrashSince(ctx context.Context, user, id string, trash bool, head int64) error {
+	if head < 0 {
+		return ErrInvalid
+	}
+	return s.setFolderTrash(ctx, user, id, trash, &head)
+}
+
+func (s *Store) setFolderTrash(ctx context.Context, user, id string, trash bool, head *int64) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		var workspace, parent, batch string
 		var trashed bool
@@ -55,6 +70,17 @@ func (s *Store) SetFolderTrash(ctx context.Context, user, id string, trash bool)
 		}
 		if trashed == trash {
 			return ErrConflict
+		}
+		if head != nil {
+			var changed bool
+			if err := tx.QueryRowContext(ctx, `WITH RECURSIVE tree(id) AS (SELECT ? UNION SELECT d.id FROM drive_folders d JOIN tree t ON d.parent=t.id WHERE d.trashed=false)
+SELECT ? < (SELECT COALESCE(MAX(seq),0) FROM drive_change_floor WHERE workspace=?) OR EXISTS(SELECT 1 FROM drive_changes c WHERE c.workspace=? AND c.seq>? AND (c.item IN (SELECT id FROM tree) OR c.item IN (SELECT f.id FROM drive_files f JOIN tree t ON f.parent=t.id WHERE f.trashed=false)))`,
+				id, *head, workspace, workspace, *head).Scan(&changed); err != nil {
+				return err
+			}
+			if changed {
+				return fmt.Errorf("%w: folder changed since head", ErrConflict)
+			}
 		}
 		if err := change(ctx, tx, workspace, "folder", id); err != nil {
 			return err

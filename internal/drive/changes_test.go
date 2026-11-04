@@ -189,6 +189,12 @@ var mutators = []mutatorCase{
 			return []string{row(e.w, "folder", f.ID)}, e.d.SetFolderTrash(e.ctx, "worker", f.ID, true)
 		}
 	}},
+	{"SetFolderTrashSince", func(t *testing.T, e *changeEnv) func() ([]string, error) {
+		f := e.folder(t, e.w, "worker", "Docs")
+		return func() ([]string, error) {
+			return []string{row(e.w, "folder", f.ID)}, e.d.SetFolderTrashSince(e.ctx, "worker", f.ID, true, 1<<40)
+		}
+	}},
 	{"SetFolderTrash/restore", func(t *testing.T, e *changeEnv) func() ([]string, error) {
 		f := e.folder(t, e.w, "worker", "Docs")
 		if err := e.d.SetFolderTrash(e.ctx, "worker", f.ID, true); err != nil {

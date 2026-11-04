@@ -22,7 +22,7 @@ const (
 func (s *Server) guestRoutes() {
 	for _, kind := range []string{"files", "folders"} {
 		s.mux.HandleFunc("GET /api/drive/"+kind+"/{id}/guest-links", s.requireAuthenticated(s.driveGuestLinks))
-		s.mux.HandleFunc("POST /api/drive/"+kind+"/{id}/guest-links", s.requireAuthenticated(s.driveCreateGuestLink))
+		s.mux.HandleFunc("POST /api/drive/"+kind+"/{id}/guest-links", s.requireAuthenticated(s.requireStepUp(s.driveCreateGuestLink)))
 	}
 	s.mux.HandleFunc("GET /api/drive/guest-links-policy", s.requireAuthenticated(s.driveGuestPolicy))
 	s.mux.HandleFunc("PUT /api/drive/guest-links-policy", s.requireAdmin(s.driveSetGuestPolicy))

@@ -368,3 +368,38 @@ func TestDeviceSelfUnlink(t *testing.T) {
 	}
 	expect(send(t, srv, "DELETE", "/api/devices/self", "", nil, "kyd_unknown"), 401, "unknown token")
 }
+
+// TestDeviceAccount pins kydrive-desktop Q6/Q7: the token exchange names the account's immutable
+// ID, and GET /api/drive/device tells a device token, and only a device token, whose it is.
+func TestDeviceAccount(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "acct", "user")
+	type account struct {
+		UserID string `json:"user_id"`
+		User   string
+		Token  string
+	}
+	out := redeem(srv, approve(t, srv, user), linkVerifier)
+	var got account
+	if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &got) != nil || got.UserID != "usr_acct" || got.User != "acct" {
+		t.Fatalf("token reply %d %s", out.Code, out.Body.String())
+	}
+	me := send(t, srv, "GET", "/api/drive/device", "", nil, got.Token)
+	var who account
+	if me.Code != 200 || json.Unmarshal(me.Body.Bytes(), &who) != nil || who.UserID != "usr_acct" || who.User != "acct" {
+		t.Fatalf("device account %d %s", me.Code, me.Body.String())
+	}
+	if got := send(t, srv, "GET", "/api/drive/device", "", user, ""); got.Code != 401 {
+		t.Fatalf("a session asked whose device: %d %s", got.Code, got.Body.String())
+	}
+	expect := send(t, srv, "DELETE", "/api/devices/self", "", nil, got.Token)
+	if expect.Code != 204 {
+		t.Fatalf("unlink %d", expect.Code)
+	}
+	if got := send(t, srv, "GET", "/api/drive/device", "", nil, got.Token); got.Code != 401 || !strings.Contains(got.Body.String(), "device_revoked") {
+		t.Fatalf("a revoked token: %d %s", got.Code, got.Body.String())
+	}
+}

@@ -201,3 +201,44 @@ func TestChangeRoutes(t *testing.T) {
 		t.Fatalf("head cursor after prune %d", got.Code)
 	}
 }
+
+// kydrive-desktop Q9: PUT /api/drive/folders/{id}/trash with head answers 409 when the folder's
+// subtree changed since; without head it trashes as before.
+func TestFolderTrashHead(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	ctx := context.Background()
+	user := loginAs(t, srv, st, "trasher", "user")
+	d := st.Drive()
+	w, err := d.EnsurePersonalWorkspace(ctx, "usr_trasher")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := func(parent, name string) string {
+		t.Helper()
+		f, err := d.AddFolder(ctx, "usr_trasher", w, parent, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	a, b := folder("", "A"), folder("", "B")
+	var snap snapshotPage
+	got := send(t, srv, "GET", "/api/drive/workspaces/"+w+"/snapshot", "", user, "")
+	decode(t, got.Code, got.Body.Bytes(), &snap)
+	folder(a, "Added")
+	trash := func(id, body string) int {
+		return send(t, srv, "PUT", "/api/drive/folders/"+id+"/trash", body, user, "").Code
+	}
+	if code := trash(a, fmt.Sprintf(`{"trashed":true,"head":%d}`, snap.Head)); code != http.StatusConflict {
+		t.Fatalf("changed subtree: %d, want 409", code)
+	}
+	if code := trash(b, fmt.Sprintf(`{"trashed":true,"head":%d}`, snap.Head)); code != http.StatusOK {
+		t.Fatalf("unchanged subtree: %d", code)
+	}
+	if code := trash(a, `{"trashed":true}`); code != http.StatusOK {
+		t.Fatalf("without head: %d", code)
+	}
+}

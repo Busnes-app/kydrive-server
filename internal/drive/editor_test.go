@@ -703,3 +703,65 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 		})
 	}
 }
+
+// Q3: guest links are session-outliving credentials. A password replacement, operator reset or
+// directory deactivation revokes the account's guest links, and reactivation does not bring them
+// back; organisation links, which need a signed-in opener, stay.
+func TestAccountSecurityRevokesGuestLinks(t *testing.T) {
+	ctx := context.Background()
+	local := func(st store.Store) error {
+		return drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET sso_provider='local',password_hash='old',must_change_password=true WHERE id='worker'`)
+	}
+	for name, change := range map[string]func(store.Store) error{
+		"forced replacement": func(st store.Store) error {
+			if err := local(st); err != nil {
+				return err
+			}
+			return st.Users().CompletePasswordChange(ctx, "worker", "old", "new", "")
+		},
+		"operator reset": func(st store.Store) error {
+			if err := local(st); err != nil {
+				return err
+			}
+			return st.Users().ResetAdminPassword(ctx, "worker", "reset")
+		},
+		"deactivation and reactivation": func(st store.Store) error {
+			for _, active := range []bool{false, true} {
+				if _, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Active: active}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, w, _ := fixture(t)
+			d := st.Drive()
+			managers(t, d, w)
+			folder, err := d.AddFolder(ctx, "worker", w.ID, "", "Out")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, guest, err := d.CreateGuestLink(ctx, "worker", "folder", folder.ID, time.Now().Add(time.Hour).Unix(), "", false, 24*time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, org, err := d.CreateLink(ctx, "worker", "folder", folder.ID, "reader", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.GuestView(ctx, guest, "", ""); err != nil {
+				t.Fatal(err)
+			}
+			if err = change(st); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = d.GuestView(ctx, guest, "", ""); !errors.Is(err, drive.ErrNotFound) {
+				t.Fatalf("guest link survived: %v", err)
+			}
+			if _, err = d.OpenLink(ctx, "stranger", org); err != nil {
+				t.Fatalf("organisation link ended: %v", err)
+			}
+		})
+	}
+}

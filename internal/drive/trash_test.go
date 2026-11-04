@@ -203,3 +203,60 @@ func TestTrashIsBoundToTheAuthorizedWorkspace(t *testing.T) {
 		t.Fatalf("colleague trashed a file outside its workspaces: %v", err)
 	}
 }
+
+// kydrive-desktop Q9: SetFolderTrashSince trashes only when nothing in the folder's live
+// subtree changed after the caller's head; changes elsewhere in the workspace do not count.
+func TestFolderTrashSinceHead(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	head := func() int64 {
+		t.Helper()
+		_, _, h, _, err := d.Snapshot(ctx, "worker", w.ID, "", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	docs, err := d.AddFolder(ctx, "worker", w.ID, "", "Docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := d.AddFolder(ctx, "worker", w.ID, docs.ID, "Sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := head()
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrashSince(ctx, "worker", docs.ID, true, seen); err != nil {
+		t.Fatalf("a change outside the folder refused the trash: %v", err)
+	}
+	if err = d.SetFolderTrash(ctx, "worker", docs.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	// A file published deep inside after head: refused, and nothing is trashed.
+	seen = head()
+	if _, err = d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Parent: sub.ID, Name: "new.txt"}, blob(t, blobs, "new"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrashSince(ctx, "worker", docs.ID, true, seen); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("trash over a newer change: %v, want ErrConflict", err)
+	}
+	if !names(t, d, "worker", w.ID, false)["new.txt"] {
+		t.Fatal("a refused trash moved the file")
+	}
+	// A head below the pruned floor cannot be checked: refused. A negative one is invalid.
+	if err = drive.ExecSQL(ctx, d, `INSERT INTO drive_change_floor(workspace,seq) VALUES(?,?)`, w.ID, head()); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.SetFolderTrashSince(ctx, "worker", docs.ID, true, head()-1); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("head below the floor: %v, want ErrConflict", err)
+	}
+	if err = d.SetFolderTrashSince(ctx, "worker", docs.ID, true, -1); !errors.Is(err, drive.ErrInvalid) {
+		t.Fatalf("negative head: %v", err)
+	}
+	if err = d.SetFolderTrashSince(ctx, "worker", docs.ID, true, head()); err != nil {
+		t.Fatalf("trash at the current head: %v", err)
+	}
+}
