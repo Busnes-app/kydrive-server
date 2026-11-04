@@ -269,17 +269,11 @@ func (s *Server) routes() {
 	// Auth
 	s.mux.HandleFunc("/api/auth/pow-challenge", s.handlePoWChallenge)
 	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
-	s.mux.HandleFunc("/api/auth/mfa/totp", s.handleMFATOTP)
-	s.mux.HandleFunc("/api/auth/mfa/recovery-code", s.handleMFARecovery)
 	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
 	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
 	s.mux.HandleFunc("GET /api/suite/apps", s.requireAuthenticated(s.handleSuiteApps))
-	// Session routes: CSRF-checked, unlike the pre-session MFA login routes above.
-	s.mux.HandleFunc("POST /api/auth/mfa/enroll", s.requireAuthenticated(s.handleMFAEnroll))
-	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))
-	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
 	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
 	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.requireStepUp(s.handleCreateAppPassword)))
@@ -459,7 +453,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusForbidden, "Cross-site request refused")
 			return
 		}
-		// Login and MFA predate a session; JSON-only keeps HTML forms from posting them.
+		// Login predates a session; JSON-only keeps HTML forms from posting it.
 		if credentialRoute(r.URL.Path) && !isJSON(r) {
 			s.writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 			return
@@ -496,10 +490,9 @@ func isUnsafeMethod(method string) bool {
 	return method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
 }
 
-// credentialRoute is a pre-session sign-in step. Exact paths: MFA enrolment under the same
-// prefix is a session route and must keep its CSRF check.
+// credentialRoute is the pre-session sign-in step.
 func credentialRoute(path string) bool {
-	return path == "/api/auth/login" || path == "/api/auth/mfa/totp" || path == "/api/auth/mfa/recovery-code"
+	return path == "/api/auth/login"
 }
 
 // guestPath is a guest link page (/g/) or its public API.

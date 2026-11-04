@@ -68,7 +68,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    `ky-primitives/recoveryclient`; a private-network KyRecovery URL is refused unless
    `KY_BACKUP_ALLOW_PRIVATE_RECOVERY` is set (`internal/api/backup_handlers.go`). Bulk-repository
    credentials reach only the restic child process.
-6. **KyDrive → its data directory.** Blobs, file and folder names and TOTP secrets are sealed
+6. **KyDrive → its data directory.** Blobs and file and folder names are sealed
    under keys derived from the deployment key before they are written.
 
 ## Secure design principles applied
@@ -86,10 +86,10 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 - **Economy of mechanism.** One HKDF-SHA256 key derivation and one AES-256-GCM helper
   (`internal/crypto`); OIDC and OAuth come from `coreos/go-oidc` and `golang.org/x/oauth2`, SCIM
   parsing from `elimity-com/scim`, passwords from `ky-primitives/password`.
-- **Separation of privilege.** Local accounts can add TOTP as a second factor; administration of
+- **Separation of privilege.** Two-factor sign-in is enforced by KyIdentity, not KyDrive; administration of
   workspaces does not grant read access to their content.
 - **Open design.** Only published algorithms: AES-256-GCM, HKDF-SHA256, HMAC-SHA256, SHA-256,
-  Argon2id through `ky-primitives/password`, TOTP, OIDC with PKCE.
+  Argon2id through `ky-primitives/password`, OIDC with PKCE.
 - **Psychological acceptability.** Startup and the Recovery screen warn when the deployment key
   lives in the data directory; the agent token page shows the access it grants.
 
@@ -98,7 +98,6 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Weakness | Counter | Where |
 |---|---|---|
 | Broken authentication, credential stuffing | Passwords of at least 12 characters, hashed by `ky-primitives/password`; per-client and per-account limits (10 per 15 minutes for one username from one client, an IPv6 one by its /64, answered like a wrong password so nobody can lock the owner out from elsewhere); one answer for unknown, inactive and wrong-password attempts | `internal/auth/policy.go`, `internal/api/auth_handlers.go` |
-| Undersized TOTP secrets | Shared RFC 4226/6238 validator requires 16 decoded bytes; generates 20. Short sealed records remain readable for deliberate recovery/re-enrollment | `internal/auth/totp_strength_test.go`, [migration](../SECURITY.md#totp-key-minimum-and-existing-accounts) |
 | Undersized signing and verification keys | Session and webhook HMAC secrets need 16 bytes, the editor JWT secret 32, the deployment key exactly 32; OIDC JWKS RSA keys need 2048 bits; `GODEBUG=fips140=on` limits outbound TLS chains to RSA-2048+/P-256+ | `internal/config/key_strength_test.go`, `internal/sso/strong_crypto_test.go`, [STRONG-CRYPTO.md](STRONG-CRYPTO.md) |
 | Session theft from storage | Only the SHA-256 of the session token is stored; cookies are `HttpOnly`, `SameSite=Lax`, `__Host-` prefixed with `Secure` | `internal/auth/session.go`, `internal/store/sqlstore.go` |
 | CSRF | Token is `HMAC-SHA256(session secret, "ky-csrf:" + session token)`, recomputed on each check, so a planted cookie is worthless; `TestAgentTokenWritesRefuseForgedCrossSiteRequests` | `internal/auth/session.go` (`ValidateCSRF`), `internal/api/browser_origin_test.go` |
@@ -111,7 +110,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Forged directory events | HMAC-SHA256 checked in constant time before parsing; five-minute window; older events ignored; payload `role` ignored | `internal/sso/kysignon.go`, `internal/crypto/crypto.go` |
 | Forged editor callbacks, SSRF through the editor | Signed JWT callbacks; output fetched only from the editor origin with redirects refused | `internal/editor` |
 | SSRF through the recovery URL | `recoveryclient.ValidateURL` refuses private destinations unless explicitly allowed | `internal/api/backup_handlers.go` |
-| Secrets and files at rest | Blobs: age v1 streaming encryption (random file key, 64 KiB authenticated chunks) with the file key wrapped under HKDF of the deployment key, bound to the blob ID (KYB2; KYB1 read until migrated); names and TOTP secrets AES-GCM with the row as AAD | `internal/drive/sealed.go`, `internal/drive/names.go`, `internal/auth/totp.go` |
+| Secrets and files at rest | Blobs: age v1 streaming encryption (random file key, 64 KiB authenticated chunks) with the file key wrapped under HKDF of the deployment key, bound to the blob ID (KYB2; KYB1 read until migrated); names AES-GCM with the row as AAD | `internal/drive/sealed.go`, `internal/drive/names.go` |
 | Vulnerable dependencies | Dependabot; `npm audit --audit-level=high` in CI; OSV ignore list with reasons; dependency releases ship daily | `.github/`, `osv-scanner.toml` |
 | Supply-chain tampering | Actions and base images pinned by digest; release images carry build provenance verified before `:stable` moves; the binary rebuilds to the same bytes | [VERIFYING-RELEASES.md](VERIFYING-RELEASES.md) |
 
@@ -123,7 +122,6 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 - **Not end-to-end.** The server, its operator and Euro-Office read plaintext. Workspace, group and
   service-token names are stored in plaintext; backups taken before name encryption hold plaintext
   names; the content search index reveals word-frequency and shared-word patterns.
-- **Legacy TOTP rows** are not bound to their row until their next use reseals them.
 - **Rate limits and proof-of-work spent salts are process-local** (single-instance server).
 - **AI agents may follow instructions in file contents.** The README says to give write access only
   when everyone who can message the agent is trusted.

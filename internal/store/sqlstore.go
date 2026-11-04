@@ -502,22 +502,6 @@ func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql
 	return ErrNotFound
 }
 
-func (u *userStore) UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, newHashes string) error {
-	q := u.store.rebind("UPDATE users SET recovery_codes_hash = ?, updated_at = ? WHERE id = ? AND recovery_codes_hash = ?")
-	res, err := u.store.db.ExecContext(ctx, q, newHashes, time.Now().UTC(), userID, oldHashes)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
 func (u *userStore) OpenInNewTab(ctx context.Context, userID string) (bool, error) {
 	var v bool
 	err := u.store.db.QueryRowContext(ctx, u.store.rebind("SELECT open_in_new_tab FROM users WHERE id = ?"), userID).Scan(&v)
@@ -538,78 +522,6 @@ func (u *userStore) SetOpenInNewTab(ctx context.Context, userID string, v bool) 
 		return ErrNotFound
 	}
 	return nil
-}
-
-func (u *userStore) SpendTOTPCounter(ctx context.Context, userID string, counter int64) error {
-	q := u.store.rebind("UPDATE users SET totp_last_counter = ?, updated_at = ? WHERE id = ? AND totp_last_counter < ?")
-	res, err := u.store.db.ExecContext(ctx, q, counter, time.Now().UTC(), userID, counter)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
-func (u *userStore) SetTOTPSecret(ctx context.Context, userID, oldEnc, newEnc string, enabled bool) error {
-	q := u.store.rebind("UPDATE users SET totp_secret_enc = ?, updated_at = ? WHERE id = ? AND totp_secret_enc = ? AND totp_enabled = ?")
-	res, err := u.store.db.ExecContext(ctx, q, newEnc, time.Now().UTC(), userID, oldEnc, enabled)
-	if err != nil {
-		return err
-	}
-	if rows, err := res.RowsAffected(); err != nil {
-		return err
-	} else if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
-func (u *userStore) EnableTOTP(ctx context.Context, userID, secretEnc, recoveryHashes, keepSession, ip string) error {
-	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_enabled",
-		"UPDATE users SET totp_enabled = ?, recovery_codes_hash = ?, updated_at = ? WHERE id = ? AND totp_enabled = ? AND totp_secret_enc = ? AND totp_secret_enc <> ''",
-		true, recoveryHashes, time.Now().UTC(), userID, false, secretEnc)
-}
-
-func (u *userStore) DisableTOTP(ctx context.Context, userID, keepSession, ip string) error {
-	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_disabled",
-		"UPDATE users SET totp_enabled = ?, totp_secret_enc = '', recovery_codes_hash = '[]', updated_at = ? WHERE id = ? AND totp_enabled = ?",
-		false, time.Now().UTC(), userID, true)
-}
-
-func (u *userStore) totpTransition(ctx context.Context, userID, keepSession, ip, action, update string, args ...any) error {
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, u.store.rebind(update), args...)
-	if err != nil {
-		return err
-	}
-	if rows, err := res.RowsAffected(); err != nil {
-		return err
-	} else if rows != 1 {
-		return ErrAlreadyExists
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?"), userID, keepSession); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM mfa_challenges WHERE user_id = ?"), userID); err != nil {
-		return err
-	}
-	if err = u.store.drive.RevokeUserEditors(ctx, tx, userID); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, action, "user", "other sessions revoked", ip, time.Now().UTC()); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 func (u *userStore) DeleteUser(ctx context.Context, id string) error {

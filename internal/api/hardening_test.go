@@ -125,7 +125,7 @@ func TestPoWSolutionIsSingleUse(t *testing.T) {
 
 func TestCredentialRoutesRefuseFormPosts(t *testing.T) {
 	srv, _, _ := setupTestServer(t)
-	for _, path := range []string{"/api/auth/login", "/api/auth/mfa/totp", "/api/auth/mfa/recovery-code"} {
+	for _, path := range []string{"/api/auth/login"} {
 		for _, ct := range []string{"text/plain", "application/x-www-form-urlencoded", ""} {
 			req := httptest.NewRequest("POST", path, strings.NewReader(`{"username":"a","password":"b"}`))
 			if ct != "" {
@@ -156,7 +156,7 @@ func TestCrossSiteWritesAreRefused(t *testing.T) {
 		{"Sec-Fetch-Site", "cross-site"},
 		{"Sec-Fetch-Site", "same-site"},
 	} {
-		for _, path := range []string{"/api/auth/login", "/api/auth/mfa/totp", "/api/settings/theme"} {
+		for _, path := range []string{"/api/auth/login", "/api/settings/theme"} {
 			req := httptest.NewRequest("POST", path, strings.NewReader(`{"theme":"oled"}`))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set(tc.header, tc.value)
@@ -242,40 +242,6 @@ func TestCSRFTokenIsBoundToTheSession(t *testing.T) {
 		}
 	}
 	t.Fatal("/api/auth/me did not refresh the CSRF cookie")
-}
-
-func TestRecoveryCodeIsSingleUse(t *testing.T) {
-	srv, st, cfg := setupTestServer(t)
-	ctx := context.Background()
-	codes, hashed, err := auth.GenerateRecoveryCodes(4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	enc, _ := crypto.EncryptAESGCM([]byte("JBSWY3DPEHPK3PXP"), cfg.Security.EncryptionKey)
-	if err := st.Users().CreateUser(ctx, &store.User{ID: "usr_rc", Username: "rc", Role: "user", Status: "active", SSOProvider: "local", TOTPEnabled: true, TOTPSecretEnc: enc, RecoveryCodesHash: hashed}); err != nil {
-		t.Fatal(err)
-	}
-	redeem := func(code string) int {
-		raw := crypto.RandomHex(32)
-		if err := st.Sessions().CreateMFAChallenge(ctx, &store.MFAChallenge{TokenHash: crypto.SHA256Hex([]byte(raw)), UserID: "usr_rc", ExpiresAt: time.Now().Add(time.Minute)}, ""); err != nil {
-			t.Fatal(err)
-		}
-		body, _ := json.Marshal(map[string]string{"mfa_token": raw, "code": code})
-		req := httptest.NewRequest("POST", "/api/auth/mfa/recovery-code", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-		return w.Code
-	}
-	if got := redeem(codes[0]); got != http.StatusOK {
-		t.Fatalf("first redemption: %d", got)
-	}
-	if got := redeem(codes[0]); got != http.StatusUnauthorized {
-		t.Fatalf("spent code: got %d, want 401", got)
-	}
-	if got := redeem(codes[1]); got != http.StatusOK {
-		t.Fatalf("unspent code: %d", got)
-	}
 }
 
 func TestSSOErrorsDoNotLeakDetail(t *testing.T) {

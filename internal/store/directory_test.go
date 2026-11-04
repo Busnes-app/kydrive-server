@@ -3,7 +3,6 @@ package store_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -101,38 +100,6 @@ func TestCleanExpiredRows(t *testing.T) {
 	}
 }
 
-func TestRecoveryCodeRedemptionIsSingleUseUnderConcurrency(t *testing.T) {
-	ctx := context.Background()
-	st := newTestStore(t)
-	if err := st.Users().CreateUser(ctx, &store.User{ID: "rc", Username: "rc", Role: "user", Status: "active", RecoveryCodesHash: `["a","b"]`}); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	results := make([]error, 8)
-	for i := range results {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			results[i] = st.Users().UpdateRecoveryCodes(ctx, "rc", `["a","b"]`, `["","b"]`)
-		}()
-	}
-	wg.Wait()
-	ok := 0
-	for _, err := range results {
-		if err == nil {
-			ok++
-		} else if !errors.Is(err, store.ErrAlreadyExists) {
-			t.Fatal(err)
-		}
-	}
-	if ok != 1 {
-		t.Fatalf("%d concurrent redemptions of one code succeeded", ok)
-	}
-	if err := st.Users().UpdateRecoveryCodes(ctx, "rc", `["a","b"]`, `["","b"]`); !errors.Is(err, store.ErrAlreadyExists) {
-		t.Fatal("spent code redeemed again", err)
-	}
-}
-
 func TestDirectoryTimestampTieFavoursTheRestrictiveEvent(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
@@ -181,25 +148,27 @@ func TestDirectoryDeactivatesLegacyUsername(t *testing.T) {
 	}
 }
 
-// A password login that read the account before MFA was enabled must not get a session after it.
+// A login that read the account before its stored totp_enabled changed must not get a session after it.
 func TestSessionRefusedWhenMFAChangedSinceLogin(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
 	if err := st.Users().CreateUser(ctx, &store.User{ID: "m", Username: "m", PasswordHash: "h", Role: "user", Status: "active", TOTPSecretEnc: "sealed", RecoveryCodesHash: "[]"}); err != nil {
 		t.Fatal(err)
 	}
-	seen, err := st.Users().GetUserByID(ctx, "m") // the login's view: MFA off
+	seen, err := st.Users().GetUserByID(ctx, "m") // the login's view: totp_enabled off
 	if err != nil || seen.TOTPEnabled {
 		t.Fatal(seen, err)
 	}
-	if err = st.Users().EnableTOTP(ctx, "m", "sealed", "[]", "", ""); err != nil {
+	changed := *seen
+	changed.TOTPEnabled = true
+	if err = st.Users().UpdateUser(ctx, &changed); err != nil {
 		t.Fatal(err)
 	}
 	sess := &store.Session{TokenHash: "late", UserID: "m", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
 	if err = st.Sessions().CreateSession(ctx, sess, seen.PasswordHash, seen.TOTPEnabled); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("password-only session issued after MFA was enabled: %v", err)
+		t.Fatalf("session issued after totp_enabled changed: %v", err)
 	}
 	if err = st.Sessions().CreateSession(ctx, sess, "h", true); err != nil {
-		t.Fatalf("MFA-verified session refused: %v", err)
+		t.Fatalf("session for the current totp_enabled refused: %v", err)
 	}
 }

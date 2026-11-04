@@ -193,10 +193,6 @@ check "cookie write rejects missing CSRF" \
   "$(status -b "$WORK/cookies" -H 'Content-Type: application/json' -d "$PREFS" -X PUT "$BASE/api/auth/preferences")" "403"
 check "cookie write with CSRF" \
   "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PREFS" -X PUT "$BASE/api/auth/preferences")" "200"
-check "MFA enrolment rejects missing CSRF" \
-  "$(status -b "$WORK/cookies" -H 'Content-Type: application/json' -d '{}' -X POST "$BASE/api/auth/mfa/enroll")" "403"
-contains "MFA enrolment returns an otpauth URI" \
-  "$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{}' -X POST "$BASE/api/auth/mfa/enroll")" '"otpauth_uri":"otpauth://totp/'
 SESSION="$(awk '$6 == "ky_session" { print $7 }' "$WORK/cookies")"
 check "session cookie captured" "$([ -n "$SESSION" ] && echo yes)" "yes"
 check "session token is not a Bearer credential" \

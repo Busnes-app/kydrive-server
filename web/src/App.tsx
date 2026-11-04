@@ -229,13 +229,12 @@ export const App: React.FC = () => {
       {activeTab === 'backup' && <Backup />}
       {activeTab === 'server-settings' && <Settings settings={settings} onOpenAppearance={() => go('settings/appearance')} />}
       {activeTab.startsWith('settings/') && <PersonalSettings section={activeTab.slice('settings/'.length)} user={user}
-        onTwoFactorChange={(enabled) => setUser({ ...user, totp_enabled: enabled })}
         openInNewTab={openInNewTab} onOpenInNewTabChange={value => void changeOpenInNewTab(value)} />}
     </AppHeader>
   );
 };
 
-interface DriveUser { id: string; username: string; display_name: string; role: string; must_change_password?: boolean; totp_enabled?: boolean; sso_provider?: string }
+interface DriveUser { id: string; username: string; display_name: string; role: string; must_change_password?: boolean }
 function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
 function isSuiteApp(v: unknown): v is SuiteApp { return isRecord(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.url === 'string' && v.url.startsWith('https://'); }
 function isDriveUser(v: unknown): v is DriveUser { return isRecord(v) && typeof v.id === 'string' && typeof v.username === 'string' && typeof v.display_name === 'string' && typeof v.role === 'string' && (v.must_change_password === undefined || typeof v.must_change_password === 'boolean'); }

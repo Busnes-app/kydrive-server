@@ -34,6 +34,7 @@ To build from source instead, add the build overlay to every command, which tags
 
 ### Upgrading
 
+- After 0.6.0: local two-factor sign-in (authenticator codes and recovery codes) is removed; two-factor is now provided by KyIdentity sign-in. Local password accounts, such as the recovery administrator, sign in with their password alone, so nobody is locked out by losing a factor. TOTP secrets and recovery codes stored by earlier releases stay in the database, unused; no column or data is dropped.
 - 0.4.3: Compose defaults to the published image instead of `kydrive-server:local`. Installs that build from source keep working with the build overlay. An install that ran a separately built `kydrive-server:local` without the overlay, and has no `KY_IMAGE` in `.env`, now pulls the release image: set `KY_IMAGE=kydrive-server:local` to keep the local build.
 - 0.4.3: the Compose default moves from `:0.4.2` to `:stable`, so `docker compose pull` takes each new release, daily dependency releases included. An install that wants to stay on a version sets `KY_IMAGE` to it (or pins the digest).
 - To move to a new release on `:stable`, check out its tag, then `docker compose pull` and `docker compose up -d`. With a pinned `KY_IMAGE`, set it to the new version or digest first.

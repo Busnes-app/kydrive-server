@@ -21,8 +21,8 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
 - `Collect` snapshots SQLite with the lib's `SQLiteSnapshot` (`VACUUM INTO`; the store runs in
   WAL mode, so a plain file read misses uncheckpointed commits) and returns
   `ErrNoDatabaseSnapshot` for any other driver, so a capsule without a consistent database is
-  never sealed. It also carries the encryption key (`data/encryption.key`, required — restores
-  a database whose MFA secrets are gone otherwise) and the pinned recovery public key
+  never sealed. It also carries the encryption key (`data/encryption.key`, required — without it
+  the restored files and names are unreadable) and the pinned recovery public key
   (`data/recovery.pub`, only when paired).
 - `Checks(dir, opened)` reads the opened capsule's manifest, normalizes JSON lists and
   fails malformed or incomplete recipes. Required files include all capsule members and

@@ -135,7 +135,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `internal/dav/` — WebDAV file system over the drive store for app-password clients.
 - `internal/editor/` — Euro-Office JWT, scoped output fetching and revocation commands.
 - `internal/crypto/` — inherited application encryption helpers over shared primitives.
-- `internal/auth/` — local/bootstrap authentication, MFA, sessions, CAPTCHA and CSRF.
+- `internal/auth/` — local/bootstrap password authentication, sessions, CAPTCHA and CSRF. Two-factor sign-in is KyIdentity's; KyDrive has no local MFA.
 - `internal/sso/` — KySignOn OIDC verification and signed directory webhook.
 - `internal/scim/` — KyIdentity-compatible Users/Groups provisioning.
 - `internal/backup/` — recoveryclient adapter, consistent metadata, Restic bulk binding and restore drill.

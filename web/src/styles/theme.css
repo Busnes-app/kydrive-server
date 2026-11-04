@@ -403,7 +403,6 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 .auth-card .panel { padding: 1.5rem; }
 .auth-card form { display: grid; gap: 1rem; }
 .auth-card button[type="submit"], .auth-card .btn { width: 100%; }
-.otp-input { font-family: var(--font-mono); font-size: 1.15rem; letter-spacing: .15em; text-align: center; }
 
 /* ---------- Backup & recovery ---------- */
 @keyframes dr-spin { to { transform: rotate(360deg); } }
