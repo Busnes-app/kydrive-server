@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { secureFetch } from '../api';
-import { HttpError, change, record, response } from './drive/client';
+import { change, record, response } from './drive/client';
 import { Alert } from '../components/Alert';
 import { useConfirm } from '../components/Dialog';
 import { useStepUp } from '../components/StepUp';
@@ -49,27 +49,21 @@ export function AppPasswords() {
     if (!Array.isArray(v) || !v.every(appPassword)) throw new Error('Unexpected server response.');
     setList(v);
   };
-  // A KyIdentity confirmation leaves the page: the request waits in session storage and is sent
-  // once on return, so the user does not fill the form in again.
+  // A KyIdentity confirmation leaves the page: the request waits in session storage and, on
+  // return, is taken once and sent before anything else loads, so the user need not fill the form
+  // in again. Taken means at most one send: a lost answer or a Cancel never replays it.
   const issue = async (body: Record<string, string>) => {
-    let v: unknown;
-    try {
-      v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
-    } catch (e) {
-      // Kept only while no answer came, so a dropped connection can still finish on reload.
-      if (e instanceof HttpError) sessionStorage.removeItem(PENDING);
-      throw e;
-    }
-    sessionStorage.removeItem(PENDING); // created: never send it twice
+    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
   };
   useEffect(() => {
+    const saved = sessionStorage.getItem(PENDING);
+    sessionStorage.removeItem(PENDING);
     void run(async () => {
-      const saved = sessionStorage.getItem(PENDING);
       const body: unknown = saved ? JSON.parse(saved) : null;
       if (record(body) && Object.values(body).every(v => typeof v === 'string')) await issue(body as Record<string, string>);
-      else { sessionStorage.removeItem(PENDING); await load(); }
+      else await load();
     });
   }, []);
 

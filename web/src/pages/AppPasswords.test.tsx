@@ -167,22 +167,36 @@ describe('AppPasswords', () => {
     expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
   });
 
-  it('keeps a saved request when the return trip loses its connection, and sends it on the next load', async () => {
+  it('sends a saved request once, before the list, and never replays it after a lost answer or a Cancel', async () => {
+    const calls: string[] = [];
+    // A listing failure on return does not lose the request: it is sent first.
     sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
-    render(<AppPasswords />);
-    expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(sessionStorage.getItem('ky-pending-app-password')).not.toBeNull();
-    cleanup();
-    const posts: unknown[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method !== 'POST') return json([]);
-      posts.push(JSON.parse(String(init.body)));
-      return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-on-retry', username: 'alice', url: 'https://drive.example/dav/' }, 201);
+      calls.push(init?.method ?? 'GET');
+      if (init?.method !== 'POST') throw new TypeError('Failed to fetch');
+      return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-first', username: 'alice', url: 'https://drive.example/dav/' }, 201);
     }));
     render(<AppPasswords />);
-    expect(await screen.findByText('secret-on-retry')).toBeTruthy();
-    expect(posts).toHaveLength(1);
+    expect(await screen.findByText('secret-first')).toBeTruthy();
+    expect(calls[0]).toBe('POST');
+    cleanup();
+    // The answer to the send is lost: reloading creates nothing more.
+    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    let posts = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === 'POST') { posts++; throw new TypeError('Failed to fetch'); } return json([]); }));
+    render(<AppPasswords />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    cleanup();
+    render(<AppPasswords />);
+    await screen.findByText('No app passwords or agent tokens yet.');
+    expect(posts).toBe(1);
+    cleanup();
+    // Still no fresh step-up on return, and the user cancels: nothing waits for later.
+    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403) : json([])));
+    render(<AppPasswords />);
+    await answer('Cancel');
+    expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
     expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
   });
 });
