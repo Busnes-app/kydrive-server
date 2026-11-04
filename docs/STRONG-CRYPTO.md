@@ -21,12 +21,11 @@ the recovery pin or delete accounts.
 
 | Boundary | Default | Smaller keys |
 | --- | --- | --- |
-| Deployment key (blobs, names, TOTP rows, search index, Restic password) | 32 random bytes in `data/encryption.key`, or `KY_ENCRYPTION_KEY` | Refused: the key must decode to exactly 32 bytes; a wrong-length file is refused, never overwritten. Blobs use age v1 with AES-256-GCM-wrapped file keys; names and TOTP rows use AES-256-GCM under HKDF-SHA256 subkeys. |
+| Deployment key (blobs, names, search index, Restic password) | 32 random bytes in `data/encryption.key`, or `KY_ENCRYPTION_KEY` | Refused: the key must decode to exactly 32 bytes; a wrong-length file is refused, never overwritten. Blobs use age v1 with AES-256-GCM-wrapped file keys; names use AES-256-GCM under HKDF-SHA256 subkeys. |
 | Session secret (CSRF and proof-of-work HMAC-SHA256) | 32 random bytes (development); production requires an explicit value | Refused at startup below 16 bytes (`KY_SESSION_SECRET`). Use `openssl rand -hex 32`. |
 | Directory webhook HMAC-SHA256 | Unset (webhook off) | `KY_KYSIGNON_HMAC_SECRET` below 16 bytes is refused at startup, and the webhook refuses to verify with one before touching any account. |
 | Euro-Office JWT (HS256) | Operator-supplied | `KYDRIVE_EDITOR_SECRET` below 32 bytes is refused; the editor Compose overlay refuses the same. |
 | OIDC ID tokens | Verified by `coreos/go-oidc` against the provider's JWKS | Every RSA key in the fetched JWKS must have at least 2048 modulus bits, or the whole set is refused and sign-in fails. The check reads JWK members the way the verifier does. EC/Ed25519 key handling stays with go-jose. |
-| TOTP | 20 random bytes (HMAC-SHA1, RFC 6238) | Authentication requires 16 decoded bytes ([existing accounts](../SECURITY.md#totp-key-minimum-and-existing-accounts)). HMAC-SHA1 is a keyed PRF here; no collision resistance is relied on. |
 | Recovery capsules | Sealed by `ky-primitives/recoveryclient` to the pinned fixed-suite public key | No size is selectable; the suite is fixed. |
 | Generated tokens | Session, service, device, sharing-link and guest tokens 256 random bits; app passwords and agent tokens 160; stored as SHA-256 hashes | Not operator-supplied. |
 
@@ -114,7 +113,6 @@ the Compose check. The regressions cover:
   OIDC refused in the profile; a P-256 leaf under a 1024/2047-bit trusted root
   refused in the profile, accepted otherwise, and a 2048-bit root accepted.
 - `internal/sso/jwks_strength_test.go`: JWKS size, redirect and malformed input.
-- `internal/auth/totp_strength_test.go`: the TOTP floor.
 
 Local tests use generated keys and local servers; they do not prove a live
 provider, editor or proxy. After rollout check sign-in, the editor, a deposit and

@@ -53,19 +53,6 @@ type UserStore interface {
 	RenameLocalAdmin(ctx context.Context, oldName, newName string) error
 	SetDirectoryRole(ctx context.Context, subject, role string) error
 	CompletePasswordChange(ctx context.Context, userID, oldHash, newHash, ip string) error
-	UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, newHashes string) error
-	// SpendTOTPCounter records counter as used. It returns ErrAlreadyExists when counter is
-	// not greater than the stored one, which is how a replayed code inside the skew window fails.
-	SpendTOTPCounter(ctx context.Context, userID string, counter int64) error
-	// SetTOTPSecret replaces the sealed secret oldEnc with newEnc while totp_enabled equals
-	// enabled: a pending enrolment (false) or resealing a legacy row. ErrAlreadyExists if
-	// either changed.
-	SetTOTPSecret(ctx context.Context, userID, oldEnc, newEnc string, enabled bool) error
-	// EnableTOTP turns on the pending secret secretEnc with recoveryHashes; DisableTOTP clears
-	// secret and codes. Both revoke every other session (keepSession is the caller's token
-	// hash) and all MFA challenges, audit, and return ErrAlreadyExists if the state changed.
-	EnableTOTP(ctx context.Context, userID, secretEnc, recoveryHashes, keepSession, ip string) error
-	DisableTOTP(ctx context.Context, userID, keepSession, ip string) error
 	DeleteUser(ctx context.Context, id string) error
 	// OpenInNewTab is the user's choice to open files in a new browser tab (default true).
 	// It lives outside User so profile and directory updates never overwrite it.
@@ -82,6 +69,8 @@ type SessionStore interface {
 	// CreateSession refuses when the password or the MFA state changed since the caller checked them.
 	CreateSession(ctx context.Context, s *Session, expectedPasswordHash string, mfaEnabled bool) error
 	GetSession(ctx context.Context, tokenHash string) (*Session, error)
+	// StepUp records at as the session's latest step-up; ErrNotFound when the session is gone.
+	StepUp(ctx context.Context, tokenHash string, at time.Time) error
 	DeleteSession(ctx context.Context, tokenHash string) error
 	DeleteUserSessions(ctx context.Context, userID string) error
 	// EndSSOSubject ends the provider subject's sessions whose credentials were verified

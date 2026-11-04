@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -251,6 +252,16 @@ func (s *Server) requestIP(r *http.Request) string {
 	return auth.ClientIP(r, s.config.Security.TrustedProxies)
 }
 
+// accountKey is a per-account failure window for one client (an IPv6 address by its /64, which
+// one host holds whole), so guessing from elsewhere never locks the account's owner out.
+func (s *Server) accountKey(kind, username string, r *http.Request) string {
+	client := s.requestIP(r)
+	if ip, err := netip.ParseAddr(client); err == nil && ip.Is6() && !ip.Is4In6() {
+		client = netip.PrefixFrom(ip, 64).Masked().String()
+	}
+	return kind + ":" + strings.ToLower(username) + "|" + client
+}
+
 func (s *Server) routes() {
 	if s.store.Drive() != nil {
 		s.driveRoutes()
@@ -258,19 +269,14 @@ func (s *Server) routes() {
 	// Auth
 	s.mux.HandleFunc("/api/auth/pow-challenge", s.handlePoWChallenge)
 	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
-	s.mux.HandleFunc("/api/auth/mfa/totp", s.handleMFATOTP)
-	s.mux.HandleFunc("/api/auth/mfa/recovery-code", s.handleMFARecovery)
 	s.mux.HandleFunc("/api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/auth/me", s.handleMe)
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
 	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
 	s.mux.HandleFunc("GET /api/suite/apps", s.requireAuthenticated(s.handleSuiteApps))
-	// Session routes: CSRF-checked, unlike the pre-session MFA login routes above.
-	s.mux.HandleFunc("POST /api/auth/mfa/enroll", s.requireAuthenticated(s.handleMFAEnroll))
-	s.mux.HandleFunc("POST /api/auth/mfa/enroll/confirm", s.requireAuthenticated(s.handleMFAEnrollConfirm))
-	s.mux.HandleFunc("POST /api/auth/mfa/disable", s.requireAuthenticated(s.handleMFADisable))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
-	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.handleCreateAppPassword))
+	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
+	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.requireStepUp(s.handleCreateAppPassword)))
 	s.mux.HandleFunc("PATCH /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleSetAgentScope))
 	s.mux.HandleFunc("DELETE /api/auth/app-passwords/{id}", s.requireAuthenticated(s.handleRevokeAppPassword))
 	// The agent skill holds no user or instance data.
@@ -384,6 +390,7 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		ctx := drive.WithLogin(r.Context(), drive.Login{TokenHash: sess.TokenHash, SSOSID: sess.SSOSID, At: sess.CreatedAt})
+		ctx = context.WithValue(ctx, sessionKey{}, sess)
 		h(w, r.WithContext(context.WithValue(ctx, driveUserKey{}, user)))
 	}
 }
@@ -446,7 +453,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusForbidden, "Cross-site request refused")
 			return
 		}
-		// Login and MFA predate a session; JSON-only keeps HTML forms from posting them.
+		// Login predates a session; JSON-only keeps HTML forms from posting it.
 		if credentialRoute(r.URL.Path) && !isJSON(r) {
 			s.writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 			return
@@ -483,10 +490,9 @@ func isUnsafeMethod(method string) bool {
 	return method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions
 }
 
-// credentialRoute is a pre-session sign-in step. Exact paths: MFA enrolment under the same
-// prefix is a session route and must keep its CSRF check.
+// credentialRoute is the pre-session sign-in step.
 func credentialRoute(path string) bool {
-	return path == "/api/auth/login" || path == "/api/auth/mfa/totp" || path == "/api/auth/mfa/recovery-code"
+	return path == "/api/auth/login"
 }
 
 // guestPath is a guest link page (/g/) or its public API.

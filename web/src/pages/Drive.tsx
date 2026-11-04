@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
-import { bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { HttpError, bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -23,14 +23,38 @@ import { When } from '../components/When';
 
 export type { Workspace } from './drive/client';
 
-type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
-const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
-const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
+export type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'markdown' | 'rtf' | 'whiteboard';
+export const extensions: Record<DocumentKind, string> = { document: 'docx', spreadsheet: 'xlsx', presentation: 'pptx', markdown: 'md', rtf: 'rtf', whiteboard: 'excalidraw' };
+export const documentKinds: [DocumentKind, string][] = [['document', 'New document'], ['spreadsheet', 'New spreadsheet'], ['presentation', 'New presentation'], ['markdown', 'New markdown'], ['rtf', 'New rich text'], ['whiteboard', 'New whiteboard']];
 
 // trashNotice tells what happens to trash. A workspace's trash_days of 0 follows the drive-wide
 // setting (default 90 days), which only administrators can read, so it never promises forever.
 export function trashNotice(days: number): string {
   return days > 0 ? `Items here are deleted permanently after ${days} days.` : 'Items here may be deleted permanently after the trash period your administrator sets.';
+}
+
+// parentsFirst orders chosen trashed folders so each comes after every trashed ancestor.
+export function parentsFirst(chosen: Folder[], trashed: Folder[]): Folder[] {
+  const parent = new Map(trashed.map(d => [d.id, d.parent]));
+  const depth = (d: Folder) => { let n = 0; for (let p = parent.get(d.id); p !== undefined && parent.has(p) && n < parent.size; p = parent.get(p)) n++; return n; };
+  return chosen.map(d => ({ d, n: depth(d) })).sort((a, b) => a.n - b.n).map(x => x.d);
+}
+
+// setTrashBatch trashes or restores chosen items. Restore puts folders back parents first: one
+// restored while its parent is still in the trash comes back at the top. An item its folder's
+// restore already brought back answers 409 and is then done, not failed; one trashed on its own
+// is restored after its folder. The trash is listed at most once between successful changes.
+export async function setTrashBatch(workspace: string, folders: Folder[], files: DriveFile[], allTrashed: Folder[], trashed: boolean): Promise<void> {
+  let inTrash: Set<string> | null = null;
+  const put = async (kind: 'files' | 'folders', id: string, body: Record<string, unknown>) => {
+    try { await change(`/api/drive/${kind}/${id}/trash`, 'PUT', { ...body, trashed }); inTrash = null; } catch (e) {
+      if (trashed || !(e instanceof HttpError) || e.status !== 409) throw e;
+      inTrash ??= new Set([...await list(`/api/drive/workspaces/${workspace}/files?trash=true`, file), ...await list(`/api/drive/workspaces/${workspace}/folders?trash=true`, folder)].filter(x => x.trashed).map(x => x.id));
+      if (inTrash.has(id)) throw e;
+    }
+  };
+  for (const d of trashed ? folders : parentsFirst(folders, allTrashed)) await put('folders', d.id, {});
+  for (const f of files) await put('files', f.id, { revision: f.revision });
 }
 
 export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
@@ -185,10 +209,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const allBox = useRef<HTMLInputElement>(null);
   useEffect(() => { if (allBox.current) allBox.current.indeterminate = chosen.length > 0 && chosen.length < visibleKeys.length; });
   const bulk = (action: () => Promise<unknown>) => void run(async () => { await action(); setPicked(new Set()); });
-  const setTrashed = (trashed: boolean) => bulk(async () => {
-    for (const d of chosenFolders) await change(`/api/drive/folders/${d.id}/trash`, 'PUT', { trashed });
-    for (const f of chosenFiles) await change(`/api/drive/files/${f.id}/trash`, 'PUT', { revision: f.revision, trashed });
-  });
+  const setTrashed = (trashed: boolean) => bulk(() => setTrashBatch(selected, chosenFolders, chosenFiles, folders, trashed));
   async function purgeChosen() {
     const n = chosen.length;
     if (!await confirm({ title: `Delete ${n} ${n === 1 ? 'item' : 'items'} permanently?`, body: 'They are removed from the drive at once and cannot be restored here; only a backup can bring them back.', confirm: 'Delete permanently', danger: true })) return;

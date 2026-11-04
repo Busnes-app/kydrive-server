@@ -26,7 +26,7 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/directory", s.requireAuthenticated(s.driveWorkspaceDirectory))
 	s.mux.HandleFunc("GET /editor.html", s.requireAuthenticated(s.editorPage))
 	s.mux.HandleFunc("GET /editor-bootstrap.js", s.editorScript)
-	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/tokens", s.requireAuthenticated(s.driveCreateToken))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/tokens", s.requireAuthenticated(s.requireStepUp(s.driveCreateToken)))
 	s.mux.HandleFunc("DELETE /api/drive/tokens/{id}", s.requireAuthenticated(s.driveRevokeToken))
 	s.mux.HandleFunc("POST /api/drive/personal-workspace", s.requireAuthenticated(s.drivePersonalWorkspace))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/documents", s.requireAuthenticated(s.driveNewDocument))

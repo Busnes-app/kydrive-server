@@ -182,10 +182,10 @@ test('the trash has a title and the Settings sections have the app layout', asyn
   const sections = page.getByRole('navigation', { name: 'Settings sections' });
   await expect(sections.getByRole('link')).toHaveText(['Account', 'Phones & apps', 'Appearance', 'Files']);
   await expect(sections.getByRole('link', { name: 'Account' })).toHaveAttribute('aria-current', 'page');
-  const card = page.getByRole('region', { name: 'Two-factor authentication' });
+  const panel = page.getByRole('region', { name: 'Account' });
   const main = await page.locator('.ky-content').boundingBox();
-  const box = await card.boundingBox();
-  // Cards sit inside the page's padding, not flush against the sidebar.
+  const box = await panel.boundingBox();
+  // The section sits inside the page's padding, not flush against the sidebar.
   expect(box.x - main.x).toBeGreaterThanOrEqual(testInfo.project.use.viewport.width < 720 ? 12 : 32);
   await sections.getByRole('link', { name: 'Files' }).click();
   await expect(page.getByLabel('Open files in a new tab')).toBeVisible();

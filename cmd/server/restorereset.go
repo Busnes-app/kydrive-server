@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Busnes-app/ky-primitives/keyfile"
+	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
@@ -35,6 +36,9 @@ func resetRestored(ctx context.Context, dataDir string) error {
 		return err
 	}
 	if err := checkRestorePath(dataDir); err != nil {
+		return err
+	}
+	if err := backup.JoinDatabase(dataDir); err != nil {
 		return err
 	}
 	path := filepath.Join(dataDir, "ky_server.db")
@@ -71,7 +75,7 @@ func resetRestored(ctx context.Context, dataDir string) error {
 	return errors.Join(st.ResetAfterRestore(ctx), st.Close())
 }
 
-const resetDone = "Access grants reset. Sign in again; recreate app passwords, device links, service tokens and sharing links."
+const resetDone = "Access grants reset. Sign in again; recreate app passwords, device links, service tokens and sharing links.\nScheduled backups are off. Turn them back on in Backup & recovery once this server is the one in service."
 
 func runRestoreReset(args []string) {
 	fs := flag.NewFlagSet("restore-reset", flag.ExitOnError)

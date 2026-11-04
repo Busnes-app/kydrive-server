@@ -1,77 +1,12 @@
 package auth_test
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/Busnes-app/ky-primitives/totp"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
-	"github.com/Busnes-app/kydrive-server/internal/crypto"
 )
-
-func TestTOTPValidateReturnsCounter(t *testing.T) {
-	secret, err := auth.GenerateTOTPSecret()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if uri := auth.GenerateTOTPURL("BusnesApp", "alice", secret); !strings.HasPrefix(uri, "otpauth://totp/") {
-		t.Fatalf("uri %q", uri)
-	}
-	now := time.Now()
-	code, err := totp.Code(secret, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	counter, ok := auth.ValidateTOTP(secret, code)
-	if !ok {
-		t.Fatal("fresh code rejected")
-	}
-	if want := now.Unix() / totp.Period; counter < want-1 || counter > want+1 {
-		t.Fatalf("counter %d not within one step of %d", counter, want)
-	}
-	if _, ok := auth.ValidateTOTP(secret, "000000"); ok {
-		if _, ok2 := auth.ValidateTOTP(secret, "999999"); ok2 {
-			t.Fatal("two arbitrary codes both valid")
-		}
-	}
-}
-
-func TestRecoveryCodes(t *testing.T) {
-	codes, hashedJSON, err := auth.GenerateRecoveryCodes(8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(codes) != 8 || len(codes[0]) != 14 { // xxxx-xxxx-xxxx
-		t.Fatalf("codes %v", codes)
-	}
-
-	// Typed in upper case without dashes: still redeems.
-	typed := strings.ToUpper(strings.ReplaceAll(codes[3], "-", ""))
-	updated, ok := auth.RedeemRecoveryCode(typed, hashedJSON)
-	if !ok {
-		t.Fatalf("normalised form of %q rejected", codes[3])
-	}
-
-	// The slot is blanked, not removed: still 8 entries, one empty.
-	var digests []string
-	if err := json.Unmarshal([]byte(updated), &digests); err != nil {
-		t.Fatal(err)
-	}
-	if len(digests) != 8 || digests[3] != "" {
-		t.Fatalf("slot 3 not blanked in place: %v", digests)
-	}
-
-	if _, again := auth.RedeemRecoveryCode(codes[3], updated); again {
-		t.Fatal("redeemed code accepted twice")
-	}
-	if _, other := auth.RedeemRecoveryCode(codes[4], updated); !other {
-		t.Fatal("unrelated code rejected after a redemption")
-	}
-}
 
 func TestProofOfWorkChallenge(t *testing.T) {
 	const secret = "test-signing-secret"
@@ -155,27 +90,5 @@ func TestPoWSpentRefusesReplay(t *testing.T) {
 	}
 	if spent.Verify(token, secret) {
 		t.Fatal("accepted a replayed solution")
-	}
-}
-
-func TestTOTPSecretSealing(t *testing.T) {
-	key := bytes.Repeat([]byte{0x01}, 32)
-	sealed, err := auth.SealTOTPSecret(key, "usr_a", "JBSWY3DPEHPK3PXP")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, legacy, err := auth.OpenTOTPSecret(key, "usr_a", sealed); err != nil || legacy || got != "JBSWY3DPEHPK3PXP" {
-		t.Fatalf("round trip: %q %v %v", got, legacy, err)
-	}
-	// Copied to another user's row, or opened as the legacy raw-key form, it fails.
-	if _, _, err := auth.OpenTOTPSecret(key, "usr_b", sealed); err == nil {
-		t.Fatal("a secret sealed for usr_a opened for usr_b")
-	}
-	if _, err := crypto.DecryptAESGCM(sealed, key); err == nil {
-		t.Fatal("the derived form opened under the raw deployment key")
-	}
-	old, _ := crypto.EncryptAESGCM([]byte("JBSWY3DPEHPK3PXP"), key)
-	if got, legacy, err := auth.OpenTOTPSecret(key, "usr_a", old); err != nil || !legacy || got != "JBSWY3DPEHPK3PXP" {
-		t.Fatalf("legacy: %q %v %v", got, legacy, err)
 	}
 }

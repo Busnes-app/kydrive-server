@@ -56,12 +56,6 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			_, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Email: "worker@local.test", Active: false})
 			return err
 		},
-		"mfa disable": func(st store.Store) error {
-			if err := drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET totp_enabled=true WHERE id='worker'`); err != nil {
-				return err
-			}
-			return st.Users().DisableTOTP(ctx, "worker", "", "")
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			st, w, root := fixture(t)

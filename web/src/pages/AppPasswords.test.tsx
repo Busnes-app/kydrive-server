@@ -110,4 +110,93 @@ describe('AppPasswords', () => {
       expect(text).not.toMatch(/an app|wants access/i);
     }
   });
+
+  it('asks for the password when the server wants a step-up, then creates on the retry', async () => {
+    const calls: string[] = [];
+    let confirmed = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push(`${method} ${String(input)}`);
+      if (String(input) === '/api/auth/step-up') { confirmed = JSON.parse(String(init?.body)).password === 'right one'; return confirmed ? json({ confirmed: true }) : json({ error: 'Incorrect password' }, 403); }
+      if (method === 'POST') return confirmed ? json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-once', username: 'alice', url: 'https://drive.example/dav/' }, 201) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'password' }, 403);
+      return json([]);
+    }));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'wrong' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(await within(dialog).findByText('Incorrect password')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'right one' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByText('secret-once')).toBeTruthy();
+    expect(calls.filter(c => c === 'POST /api/auth/app-passwords')).toHaveLength(2);
+  });
+
+  it('creates nothing when the step-up is cancelled', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'password' }, 403) : json([])));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    await answer('Cancel');
+    expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
+  });
+
+  it('finishes an app password after a KyIdentity confirmation without asking again', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign, pathname: '/', search: '', hash: '#/settings/devices' });
+    let confirmed = false;
+    const posts: unknown[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') return json([]);
+      posts.push(JSON.parse(String(init.body)));
+      return confirmed ? json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-after-sso', username: 'alice', url: 'https://drive.example/dav/' }, 201) : json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403);
+    }));
+    render(<AppPasswords />);
+    fireEvent.change(await screen.findByLabelText('Device or app name'), { target: { value: 'Laptop' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create app password' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue to KyIdentity' }));
+    expect(String(assign.mock.calls[0][0])).toBe('/api/sso/kysignon/login?step_up=1&return=%2F%23%2Fsettings%2Fdevices');
+    cleanup();
+    // Back from KyIdentity: the page opens again and sends the saved request once.
+    confirmed = true;
+    render(<AppPasswords />);
+    expect(await screen.findByText('secret-after-sso')).toBeTruthy();
+    expect(posts).toEqual([{ name: 'Laptop' }, { name: 'Laptop' }]);
+    expect(sessionStorage.getItem('ky-pending-new-app-access')).toBeNull();
+  });
+
+  it('sends a saved request once, before the list, and never replays it after a lost answer or a Cancel', async () => {
+    const calls: string[] = [];
+    // A listing failure on return does not lose the request: it is sent first.
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.method ?? 'GET');
+      if (init?.method !== 'POST') throw new TypeError('Failed to fetch');
+      return json({ id: 'p1', name: 'Laptop', created: '2026-10-15T10:00:00Z', scope: 'dav', password: 'secret-first', username: 'alice', url: 'https://drive.example/dav/' }, 201);
+    }));
+    render(<AppPasswords />);
+    expect(await screen.findByText('secret-first')).toBeTruthy();
+    expect(calls[0]).toBe('POST');
+    cleanup();
+    // The answer to the send is lost: reloading creates nothing more.
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
+    let posts = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === 'POST') { posts++; throw new TypeError('Failed to fetch'); } return json([]); }));
+    render(<AppPasswords />);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    cleanup();
+    render(<AppPasswords />);
+    await screen.findByText('No app passwords or agent tokens yet.');
+    expect(posts).toBe(1);
+    cleanup();
+    // Still no fresh step-up on return, and the user cancels: nothing waits for later.
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403) : json([])));
+    render(<AppPasswords />);
+    await answer('Cancel');
+    expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
+    expect(sessionStorage.getItem('ky-pending-new-app-access')).toBeNull();
+  });
 });

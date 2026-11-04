@@ -121,6 +121,23 @@ describe('upload queue', () => {
     expect(calls.filter(c => c.startsWith('PUT'))).toHaveLength(1);
   });
 
+  it('says a refused retry of a lost completion may already be saved, never Done', async () => {
+    server({ completeFails: [504, 403] });
+    render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText(/may already be in the folder/)).toBeTruthy();
+    expect(screen.queryByText('Done')).toBeNull();
+  });
+
+  it('reports a first completion refused with 403 as the server said', async () => {
+    server({ completeFails: [403] });
+    render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go' }));
+    expect(await screen.findByText(/revision conflict/)).toBeTruthy();
+    expect(screen.queryByText(/may already be in the folder/)).toBeNull();
+  });
+
   it.each([['with a server error', 500], ['because the file changed since the start', 'stale']] as const)('frees the session when completion fails for good %s', async (_, failure) => {
     const { calls } = server({ completeFails: [failure] });
     render(<Harness files={[new File(['ok'], 'ok.txt')]} onIdle={() => {}} />);

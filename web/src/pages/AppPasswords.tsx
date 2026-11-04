@@ -4,6 +4,7 @@ import { secureFetch } from '../api';
 import { change, record, response } from './drive/client';
 import { Alert } from '../components/Alert';
 import { useConfirm } from '../components/Dialog';
+import { useStepUp } from '../components/StepUp';
 import { When } from '../components/When';
 
 type Scope = 'dav' | 'mcp:read' | 'mcp:write';
@@ -13,6 +14,7 @@ const scopes: Scope[] = ['dav', 'mcp:read', 'mcp:write'];
 function appPassword(v: unknown): v is AppPassword { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.created === 'string' && typeof v.last_used === 'number' && scopes.includes(v.scope as Scope); }
 function created(v: unknown): v is Created { return record(v) && ['name', 'password', 'url'].every(k => typeof v[k] === 'string') && scopes.includes(v.scope as Scope); }
 const isAgent = (s: Scope) => s !== 'dav';
+const PENDING = 'ky-pending-new-app-access';
 
 // grant says who gets a credential and what it can do. Every screen that issues or widens one
 // shows it, so no prompt ever asks for "access" without naming the agent and its level.
@@ -36,6 +38,7 @@ export function AppPasswords() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, confirmNode] = useConfirm();
+  const [stepUp, stepUpNode] = useStepUp();
 
   async function run(action: () => Promise<void>) {
     setError(''); setBusy(true);
@@ -46,14 +49,26 @@ export function AppPasswords() {
     if (!Array.isArray(v) || !v.every(appPassword)) throw new Error('Unexpected server response.');
     setList(v);
   };
-  useEffect(() => { void run(load); }, []);
-
-  const create = (e: FormEvent) => { e.preventDefault(); void run(async () => {
-    const body = agent ? { name: name.trim(), scope: write ? 'mcp:write' : 'mcp:read', folder: folder.trim() } : { name: name.trim() };
-    const v = await change('/api/auth/app-passwords', 'POST', body);
+  // A KyIdentity confirmation leaves the page: the request waits in session storage and, on
+  // return, is taken once and sent before anything else loads, so the user need not fill the form
+  // in again. Taken means at most one send: a lost answer or a Cancel never replays it.
+  const issue = async (body: Record<string, string>) => {
+    const v = await stepUp(() => change('/api/auth/app-passwords', 'POST', body), () => sessionStorage.setItem(PENDING, JSON.stringify(body)));
     if (!created(v)) throw new Error('Unexpected server response.');
     setShown(v); setName(''); setFolder(''); await load();
-  }); };
+  };
+  useEffect(() => {
+    const saved = sessionStorage.getItem(PENDING);
+    sessionStorage.removeItem(PENDING);
+    void run(async () => {
+      const body: unknown = saved ? JSON.parse(saved) : null;
+      if (!record(body) || !Object.values(body).every(v => typeof v === 'string')) { await load(); return; }
+      // A refused resend still leaves the list on screen.
+      try { await issue(body as Record<string, string>); } catch (e) { await load().catch(() => {}); throw e; }
+    });
+  }, []);
+
+  const create = (e: FormEvent) => { e.preventDefault(); void run(() => issue(agent ? { name: name.trim(), scope: write ? 'mcp:write' : 'mcp:read', folder: folder.trim() } : { name: name.trim() })); };
   const revoke = async (p: AppPassword) => { if (await confirm({ title: `Revoke "${p.name}"?`, body: isAgent(p.scope) ? 'The agent loses access at once.' : 'Devices using it stop syncing.', confirm: 'Revoke', danger: true })) void run(async () => {
     const r = await secureFetch(`/api/auth/app-passwords/${p.id}`, { method: 'DELETE' });
     if (!r.ok) await response(r);
@@ -121,6 +136,7 @@ export function AppPasswords() {
       </li>)}</ul>}
     </div>
     {confirmNode}
+    {stepUpNode}
   </section>;
 }
 

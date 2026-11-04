@@ -14,9 +14,11 @@ export function folder(v: unknown): v is Folder { return record(v) && typeof v.i
 export function grant(v: unknown): v is Grant { return record(v) && typeof v.group_id === 'string' && typeof v.name === 'string' && typeof v.role === 'string'; }
 export function group(v: unknown): v is Group { return record(v) && typeof v.id === 'string' && typeof v.display_name === 'string'; }
 export function version(v: unknown): v is Version { return record(v) && typeof v.revision === 'number' && typeof v.size === 'number' && typeof v.created === 'string'; }
-// HttpError keeps the status so callers can react to a conflict (409) without reading the message.
-export class HttpError extends Error { constructor(message: string, readonly status: number) { super(message); } }
-export async function response(r: Response): Promise<unknown> { const v: unknown = await r.json().catch(() => null); if (!r.ok) throw new HttpError(record(v) && typeof v.error === 'string' ? v.error : 'Drive request failed', r.status); return v; }
+// HttpError keeps the status, and the server's code and step-up method when it sends them, so
+// callers can react to a conflict (409) or step_up_required without reading the message.
+export class HttpError extends Error { constructor(message: string, readonly status: number, readonly code = '', readonly method = '') { super(message); } }
+const text = (v: unknown, k: string) => record(v) && typeof v[k] === 'string' ? v[k] : '';
+export async function response(r: Response): Promise<unknown> { const v: unknown = await r.json().catch(() => null); if (!r.ok) throw new HttpError(text(v, 'error') || 'Drive request failed', r.status, text(v, 'code'), text(v, 'method')); return v; }
 export async function list<T>(url: string, guard: (v: unknown) => v is T): Promise<T[]> { const v = await response(await fetch(url)); if (!Array.isArray(v) || !v.every(guard)) throw new Error('Invalid server response'); return v; }
 export async function change(url: string, method: string, body: unknown): Promise<unknown> { return response(await secureFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })); }
 export const bytes = (n: number) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(1)} GiB`;

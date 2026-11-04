@@ -31,10 +31,15 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 	}
 	username, secret, ok := r.BasicAuth()
 	token, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	ipKey, userKey := "dav:"+s.requestIP(r), "dav-user:"+strings.ToLower(username)
-	if s.attemptsExceeded(ipKey, 20) || (ok && s.attemptsExceeded(userKey, 10)) {
+	ipKey, userKey := "dav:"+s.requestIP(r), s.accountKey("dav-user", username, r)
+	if s.attemptsExceeded(ipKey, 20) {
 		w.Header().Set("Retry-After", "60")
 		http.Error(w, "Too many failed sign-ins", http.StatusTooManyRequests)
+		return
+	}
+	// An exhausted account window, per client, answers like a wrong password.
+	if ok && s.attemptsExceeded(userKey, 10) {
+		challenge(w)
 		return
 	}
 	var id string

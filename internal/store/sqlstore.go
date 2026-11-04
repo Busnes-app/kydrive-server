@@ -72,7 +72,8 @@ func (s *SQLStore) Driver() string                 { return s.driver }
 func (s *SQLStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 func (s *SQLStore) Close() error                   { return s.db.Close() }
 
-// ResetAfterRestore ends restored access grants in one transaction. Passwords, MFA secrets,
+// ResetAfterRestore ends restored access grants and turns scheduled deposits off in one
+// transaction. Passwords, MFA secrets,
 // directory membership and content remain as backed up; operators reconcile those separately.
 func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 	if s.drive == nil {
@@ -101,8 +102,14 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=?`, epoch+1); err != nil {
 		return err
 	}
+	// A restored copy must not deposit over the history of the server still in service: scheduled
+	// deposits stay off (a stored 0 overrides KY_BACKUP_DEPOSIT_INTERVAL) until an admin turns them on.
+	now := time.Now().UTC()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('backup_interval_sec','0',?) ON CONFLICT(key) DO UPDATE SET value='0', updated_at=excluded.updated_at`, now); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`,
-		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked", "", time.Now().UTC()); err != nil {
+		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked; scheduled deposits turned off", "", now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -187,7 +194,8 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 		return ErrAlreadyExists
 	}
 	var id string
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin'`), oldName).Scan(&id); err != nil {
+	// While case-only clashes remain, the exact spelling picks the account, never chance.
+	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin' ORDER BY username = ? DESC, id LIMIT 1`), oldName, oldName).Scan(&id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -201,6 +209,27 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 		return err
 	}
 	return tx.Commit()
+}
+
+// caseVariantFree is true when account $ID may hold username $NAME: no other account holds it in
+// another case, unless $ID already holds it that way. Used inside the write itself, so on SQLite
+// (the supported store, one writer) a check and the insert or update cannot interleave.
+const caseVariantFree = `NOT (EXISTS(SELECT 1 FROM users v WHERE LOWER(v.username)=LOWER(?) AND v.id<>?) AND NOT EXISTS(SELECT 1 FROM users s WHERE s.id=? AND LOWER(s.username)=LOWER(?)))`
+
+// caseVariantTaken refuses giving account id a username another account holds in a different
+// case, unless id already holds it that way. Until existing case-only clashes are renamed the
+// unique index is absent (migration 8), so this keeps new ones out; nothing is renamed.
+func caseVariantTaken(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, rebind func(string) string, name, id string) error {
+	var taken bool
+	if err := q.QueryRowContext(ctx, rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username)=LOWER(?) AND id<>?) AND NOT EXISTS(SELECT 1 FROM users WHERE id=? AND LOWER(username)=LOWER(?))`), name, id, id, name).Scan(&taken); err != nil {
+		return err
+	}
+	if taken {
+		return ErrAlreadyExists
+	}
+	return nil
 }
 
 func (u *userStore) CreateUser(ctx context.Context, user *User) error {
@@ -221,26 +250,29 @@ INSERT INTO users (
     sso_provider, sso_subject, totp_secret_enc, totp_enabled,
     recovery_codes_hash, must_change_password,
     created_at, updated_at, last_login_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`)
+) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ` + caseVariantFree)
 
 	var lastLogin sql.NullTime
 	if user.LastLoginAt != nil {
 		lastLogin = sql.NullTime{Time: *user.LastLoginAt, Valid: true}
 	}
 
-	_, err := u.store.db.ExecContext(ctx, q,
+	res, err := u.store.db.ExecContext(ctx, q,
 		user.ID, user.Username, user.Email, user.DisplayName, user.PasswordHash,
 		user.Role, user.Status, user.SSOProvider, user.SSOSubject,
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
 		user.MustChangePassword,
 		user.CreatedAt, user.UpdatedAt, lastLogin,
+		user.Username, user.ID, user.ID, user.Username,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate key") {
 			return ErrAlreadyExists
 		}
 		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return errors.Join(ErrAlreadyExists, err)
 	}
 	return nil
 }
@@ -286,8 +318,10 @@ SELECT id, username, email, display_name, password_hash, role, status,
        recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE LOWER(username) = LOWER(?)
+ORDER BY username = ? DESC, id LIMIT 1
 `)
-	return u.scanUser(u.store.db.QueryRowContext(ctx, q, username))
+	// Until case-only clashes are renamed, the exact spelling picks the account, never chance.
+	return u.scanUser(u.store.db.QueryRowContext(ctx, q, username, username))
 }
 
 func (u *userStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -326,8 +360,7 @@ UPDATE users SET
     totp_secret_enc = ?, totp_enabled = ?, recovery_codes_hash = ?,
     must_change_password = ?, updated_at = ?,
     last_login_at = ?
-WHERE id = ?
-`)
+WHERE id = ? AND ` + caseVariantFree)
 
 	res, err := u.store.db.ExecContext(ctx, q,
 		user.Username, user.Email, user.DisplayName, user.PasswordHash,
@@ -335,6 +368,7 @@ WHERE id = ?
 		user.TOTPSecretEnc, user.TOTPEnabled, user.RecoveryCodesHash,
 		user.MustChangePassword, user.UpdatedAt,
 		lastLogin, user.ID,
+		user.Username, user.ID, user.ID, user.Username,
 	)
 	if err != nil {
 		return err
@@ -344,6 +378,10 @@ WHERE id = ?
 		return err
 	}
 	if rows == 0 {
+		// Refused for its name, or no such account.
+		if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
+			return err
+		}
 		return ErrNotFound
 	}
 	return nil
@@ -372,10 +410,18 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 			return nil, fmt.Errorf("unknown directory provider %q", d.Provider)
 		}
 		id = "usr_" + crypto.RandomHex(12)
+		if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+			return nil, err
+		}
 		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_ts, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
 			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.EventTime, now, now)
 	} else {
 		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
+		if d.Active {
+			if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+				return nil, err
+			}
+		}
 		if !d.Active {
 			set, args = "status = ?", []any{status}
 		}
@@ -399,8 +445,13 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 		}
 		return nil, err
 	}
+	// Disabling ends every credential, not just sessions: re-enabling must not revive a WebDAV
+	// password, agent or service token or linked computer minted before (by an intruder, say).
 	if !d.Active {
 		if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+			return nil, err
+		}
+		if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
 			return nil, err
 		}
 	}
@@ -458,22 +509,6 @@ func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql
 	return ErrNotFound
 }
 
-func (u *userStore) UpdateRecoveryCodes(ctx context.Context, userID, oldHashes, newHashes string) error {
-	q := u.store.rebind("UPDATE users SET recovery_codes_hash = ?, updated_at = ? WHERE id = ? AND recovery_codes_hash = ?")
-	res, err := u.store.db.ExecContext(ctx, q, newHashes, time.Now().UTC(), userID, oldHashes)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
 func (u *userStore) OpenInNewTab(ctx context.Context, userID string) (bool, error) {
 	var v bool
 	err := u.store.db.QueryRowContext(ctx, u.store.rebind("SELECT open_in_new_tab FROM users WHERE id = ?"), userID).Scan(&v)
@@ -494,78 +529,6 @@ func (u *userStore) SetOpenInNewTab(ctx context.Context, userID string, v bool) 
 		return ErrNotFound
 	}
 	return nil
-}
-
-func (u *userStore) SpendTOTPCounter(ctx context.Context, userID string, counter int64) error {
-	q := u.store.rebind("UPDATE users SET totp_last_counter = ?, updated_at = ? WHERE id = ? AND totp_last_counter < ?")
-	res, err := u.store.db.ExecContext(ctx, q, counter, time.Now().UTC(), userID, counter)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
-func (u *userStore) SetTOTPSecret(ctx context.Context, userID, oldEnc, newEnc string, enabled bool) error {
-	q := u.store.rebind("UPDATE users SET totp_secret_enc = ?, updated_at = ? WHERE id = ? AND totp_secret_enc = ? AND totp_enabled = ?")
-	res, err := u.store.db.ExecContext(ctx, q, newEnc, time.Now().UTC(), userID, oldEnc, enabled)
-	if err != nil {
-		return err
-	}
-	if rows, err := res.RowsAffected(); err != nil {
-		return err
-	} else if rows != 1 {
-		return ErrAlreadyExists
-	}
-	return nil
-}
-
-func (u *userStore) EnableTOTP(ctx context.Context, userID, secretEnc, recoveryHashes, keepSession, ip string) error {
-	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_enabled",
-		"UPDATE users SET totp_enabled = ?, recovery_codes_hash = ?, updated_at = ? WHERE id = ? AND totp_enabled = ? AND totp_secret_enc = ? AND totp_secret_enc <> ''",
-		true, recoveryHashes, time.Now().UTC(), userID, false, secretEnc)
-}
-
-func (u *userStore) DisableTOTP(ctx context.Context, userID, keepSession, ip string) error {
-	return u.totpTransition(ctx, userID, keepSession, ip, "auth.mfa_disabled",
-		"UPDATE users SET totp_enabled = ?, totp_secret_enc = '', recovery_codes_hash = '[]', updated_at = ? WHERE id = ? AND totp_enabled = ?",
-		false, time.Now().UTC(), userID, true)
-}
-
-func (u *userStore) totpTransition(ctx context.Context, userID, keepSession, ip, action, update string, args ...any) error {
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, u.store.rebind(update), args...)
-	if err != nil {
-		return err
-	}
-	if rows, err := res.RowsAffected(); err != nil {
-		return err
-	} else if rows != 1 {
-		return ErrAlreadyExists
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?"), userID, keepSession); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind("DELETE FROM mfa_challenges WHERE user_id = ?"), userID); err != nil {
-		return err
-	}
-	if err = u.store.drive.RevokeUserEditors(ctx, tx, userID); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, action, "user", "other sessions revoked", ip, time.Now().UTC()); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 func (u *userStore) DeleteUser(ctx context.Context, id string) error {
@@ -747,7 +710,11 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 		if enabled != mfaEnabled {
 			return ErrNotFound
 		}
-		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid) VALUES (?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID)
+		var stepUp any
+		if !sess.StepUpAt.IsZero() {
+			stepUp = sess.StepUpAt
+		}
+		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID, stepUp)
 		return err
 	})
 	if err != nil {
@@ -860,7 +827,15 @@ func (s *sessionStore) deleteSessions(ctx context.Context, revokeLogin func(*sql
 func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash, newHash, ip string) error {
 	return u.store.withPassword(ctx, userID, oldHash, func(tx *sql.Tx) error {
 		now := time.Now().UTC()
-		result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ? AND must_change_password = ? AND sso_provider = 'local'`), newHash, false, now, userID, true)
+		details := "changed by its owner; sessions and credentials revoked"
+		var forced bool
+		if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT must_change_password FROM users WHERE id = ?`), userID).Scan(&forced); err != nil {
+			return err
+		}
+		if forced {
+			details = "forced replacement; sessions and credentials revoked"
+		}
+		result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, updated_at = ? WHERE id = ? AND sso_provider = 'local'`), newHash, false, now, userID)
 		if err != nil {
 			return err
 		}
@@ -871,7 +846,7 @@ func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash,
 		if n != 1 {
 			return ErrNotFound
 		}
-		return u.revokePasswordGrants(ctx, tx, userID, "forced replacement; sessions and credentials revoked", ip, now)
+		return u.revokePasswordGrants(ctx, tx, userID, details, ip, now)
 	})
 }
 
@@ -913,14 +888,16 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 
 func (s *sessionStore) GetSession(ctx context.Context, tokenHash string) (*Session, error) {
 	q := s.store.rebind(`
-SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid
+SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at
 FROM sessions WHERE token_hash = ?
 `)
 	var sess Session
+	var stepUp sql.NullTime
 	err := s.store.db.QueryRowContext(ctx, q, tokenHash).Scan(
 		&sess.TokenHash, &sess.UserID, &sess.UserAgent, &sess.IPAddress,
-		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID, &stepUp,
 	)
+	sess.StepUpAt = stepUp.Time
 	if err != nil {
 		if errorsIs(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -932,6 +909,17 @@ FROM sessions WHERE token_hash = ?
 		return nil, errors.Join(ErrSessionExpired, s.DeleteSession(ctx, tokenHash))
 	}
 	return &sess, nil
+}
+
+func (s *sessionStore) StepUp(ctx context.Context, tokenHash string, at time.Time) error {
+	res, err := s.store.db.ExecContext(ctx, s.store.rebind(`UPDATE sessions SET step_up_at = ? WHERE token_hash = ? AND expires_at > ?`), at.UTC(), tokenHash, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return errors.Join(ErrNotFound, err)
+	}
+	return nil
 }
 
 func (s *sessionStore) DeleteSession(ctx context.Context, tokenHash string) error {

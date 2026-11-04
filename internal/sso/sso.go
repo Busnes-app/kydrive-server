@@ -24,4 +24,6 @@ type IdentityClaims struct {
 	SessionID string `json:"sid,omitempty"`
 	// IssuedAt is the ID token's iat: when the provider vouched for this login.
 	IssuedAt time.Time `json:"-"`
+	// AuthTime is the ID token's auth_time, when the user last authenticated at the provider; zero if absent.
+	AuthTime time.Time `json:"-"`
 }

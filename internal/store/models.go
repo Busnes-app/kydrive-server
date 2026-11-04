@@ -51,6 +51,8 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	// SSOSID is the identity provider's sid for an SSO login; empty for local sign-in.
 	SSOSID string `json:"-"`
+	// StepUpAt is when the user last re-proved who they are in this session; zero if never.
+	StepUpAt time.Time `json:"-"`
 }
 
 type MFAChallenge struct {

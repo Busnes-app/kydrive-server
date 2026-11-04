@@ -155,7 +155,7 @@ func TestOIDCStrongModeRequiresDirectHTTPS(t *testing.T) {
 			defer idp.Close()
 			issuer = idp.URL
 			client := sso.NewKySignOnClient(config.SSOConfig{KySignOnIssuer: issuer, KySignOnClientID: "client"}, nil)
-			_, err := client.BuildAuthURL(oidc.ClientContext(context.Background(), idp.Client()), "https://app.example/callback", "state", "verifier", "nonce")
+			_, err := client.BuildAuthURL(oidc.ClientContext(context.Background(), idp.Client()), "https://app.example/callback", "state", "verifier", "nonce", false)
 			if (err != nil) != fips140.Enabled() {
 				t.Fatalf("configured=%v, error=%v", fips140.Enabled(), err)
 			}
@@ -223,7 +223,7 @@ func TestOIDCTLSChecksTrustedRootKeyFloor(t *testing.T) {
 			trusting := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}
 			before := calls.Load()
 			client := sso.NewKySignOnClient(config.SSOConfig{KySignOnIssuer: issuer, KySignOnClientID: "client"}, nil)
-			_, err = client.BuildAuthURL(oidc.ClientContext(context.Background(), trusting), "https://app.example/callback", "state", "verifier", "nonce")
+			_, err = client.BuildAuthURL(oidc.ClientContext(context.Background(), trusting), "https://app.example/callback", "state", "verifier", "nonce", false)
 			refuse := bits < 2048 && fips140.Enabled()
 			if (err != nil) != refuse {
 				t.Fatalf("RSA-%d root, configured=%v: %v", bits, fips140.Enabled(), err)

@@ -65,6 +65,7 @@ export interface BackupStatus {
   bulk_last_check?: { at: string; error?: string };
   bulk_repository?: string;
   bulk_repository_error?: string;
+  capsule_size_warning?: string;
 }
 
 interface DrillCheck {
@@ -401,6 +402,7 @@ export const Backup: React.FC = () => {
           with pg_dump on its own schedule.
         </Alert>
       )}
+      {status?.capsule_size_warning && <Alert kind="warn">{status.capsule_size_warning}</Alert>}
       {status?.key_in_data_dir && (
         <Alert kind="warn">
           The encryption key is stored in the data directory, so a stolen copy of that directory can decrypt every file.

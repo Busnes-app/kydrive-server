@@ -62,6 +62,9 @@ func restoreStore(t *testing.T) (*SQLStore, drive.File) {
 			t.Fatal(q, err)
 		}
 	}
+	if err := s.Settings().SetSetting(ctx, "backup_interval_sec", "3600"); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Settings().SetSetting(ctx, "installer.integration", "retained-config-reference"); err != nil {
 		t.Fatal(err)
 	}
@@ -104,6 +107,9 @@ func TestResetAfterRestore(t *testing.T) {
 			t.Fatal("editor key epoch was reused", epoch, previousEpoch, err)
 		}
 		previousEpoch = epoch
+		if value, err := s.Settings().GetSetting(ctx, "backup_interval_sec"); err != nil || value != "0" {
+			t.Fatal("restored copy keeps depositing on schedule", value, err)
+		}
 		var audits int
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_records WHERE action='system.restore_reset' AND user_id='system'`).Scan(&audits); err != nil || audits != attempt {
 			t.Fatal("missing reset audit", audits, err)
