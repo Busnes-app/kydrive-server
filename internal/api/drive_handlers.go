@@ -168,12 +168,20 @@ func (s *Server) driveCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 201, out)
 }
 func (s *Server) driveDirectory(w http.ResponseWriter, r *http.Request) {
-	groups, _, err := s.store.Groups().ListGroups(r.Context(), 0, 200)
-	if err != nil {
-		s.driveError(w, err)
-		return
+	// Every group, page by page: a picker missing some cannot grant to them.
+	groups := []*store.Group{}
+	for {
+		page, total, err := s.store.Groups().ListGroups(r.Context(), len(groups), 200)
+		if err != nil {
+			s.driveError(w, err)
+			return
+		}
+		groups = append(groups, page...)
+		if len(page) == 0 || len(groups) >= total {
+			break
+		}
 	}
-	s.writeJSON(w, 200, map[string]any{"groups": append([]*store.Group{}, groups...), "identity_url": identityURL(), "authority": "KyIdentity"})
+	s.writeJSON(w, 200, map[string]any{"groups": groups, "identity_url": identityURL(), "authority": "KyIdentity"})
 }
 func (s *Server) driveAudit(w http.ResponseWriter, r *http.Request) {
 	out, err := s.store.Drive().Events(r.Context(), s.driveUser(r).ID)
