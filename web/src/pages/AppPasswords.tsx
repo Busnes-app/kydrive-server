@@ -14,7 +14,7 @@ const scopes: Scope[] = ['dav', 'mcp:read', 'mcp:write'];
 function appPassword(v: unknown): v is AppPassword { return record(v) && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.created === 'string' && typeof v.last_used === 'number' && scopes.includes(v.scope as Scope); }
 function created(v: unknown): v is Created { return record(v) && ['name', 'password', 'url'].every(k => typeof v[k] === 'string') && scopes.includes(v.scope as Scope); }
 const isAgent = (s: Scope) => s !== 'dav';
-const PENDING = 'ky-pending-app-password';
+const PENDING = 'ky-pending-new-app-access';
 
 // grant says who gets a credential and what it can do. Every screen that issues or widens one
 // shows it, so no prompt ever asks for "access" without naming the agent and its level.

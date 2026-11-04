@@ -164,13 +164,13 @@ describe('AppPasswords', () => {
     render(<AppPasswords />);
     expect(await screen.findByText('secret-after-sso')).toBeTruthy();
     expect(posts).toEqual([{ name: 'Laptop' }, { name: 'Laptop' }]);
-    expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
+    expect(sessionStorage.getItem('ky-pending-new-app-access')).toBeNull();
   });
 
   it('sends a saved request once, before the list, and never replays it after a lost answer or a Cancel', async () => {
     const calls: string[] = [];
     // A listing failure on return does not lose the request: it is sent first.
-    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       calls.push(init?.method ?? 'GET');
       if (init?.method !== 'POST') throw new TypeError('Failed to fetch');
@@ -181,7 +181,7 @@ describe('AppPasswords', () => {
     expect(calls[0]).toBe('POST');
     cleanup();
     // The answer to the send is lost: reloading creates nothing more.
-    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
     let posts = 0;
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === 'POST') { posts++; throw new TypeError('Failed to fetch'); } return json([]); }));
     render(<AppPasswords />);
@@ -192,11 +192,11 @@ describe('AppPasswords', () => {
     expect(posts).toBe(1);
     cleanup();
     // Still no fresh step-up on return, and the user cancels: nothing waits for later.
-    sessionStorage.setItem('ky-pending-app-password', JSON.stringify({ name: 'Laptop' }));
+    sessionStorage.setItem('ky-pending-new-app-access', JSON.stringify({ name: 'Laptop' }));
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ error: "Confirm it's you to continue", code: 'step_up_required', method: 'sso' }, 403) : json([])));
     render(<AppPasswords />);
     await answer('Cancel');
     expect(await screen.findByText(/Nothing was created/)).toBeTruthy();
-    expect(sessionStorage.getItem('ky-pending-app-password')).toBeNull();
+    expect(sessionStorage.getItem('ky-pending-new-app-access')).toBeNull();
   });
 });
