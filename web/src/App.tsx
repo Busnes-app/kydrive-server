@@ -4,7 +4,7 @@ import type { SuiteApp } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
 import { SharedView } from './pages/drive/SharedView';
-import { SHARED_WITH_ME, change, editorURL, list, workspace } from './pages/drive/client';
+import { HttpError, SHARED_WITH_ME, change, editorURL, list, workspace } from './pages/drive/client';
 import { openPendingLink, takeLinkFromURL } from './pages/drive/links';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
@@ -115,7 +115,7 @@ export const App: React.FC = () => {
     if (!listFor || workspaces.length) return;
     let live = true;
     void (async () => {
-      await change('/api/drive/personal-workspace', 'POST', {});
+      await change('/api/drive/personal-workspace', 'POST', {}).catch(e => { if (!(e instanceof HttpError) || e.status !== 403) throw e; });
       const listed = await list(`/api/drive/workspaces${listFor === 'admin' ? '?admin=true' : ''}`, workspace);
       if (live) setWorkspaces(listed);
     })().catch(() => {});

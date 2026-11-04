@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parentsFirst, setTrashBatch, trashNotice } from './Drive';
+import { outermost, parentsFirst, setTrashBatch, trashNotice } from './Drive';
 
 describe('trashNotice', () => {
   it('names a workspace\'s own trash period', () => {
@@ -54,5 +54,15 @@ describe('setTrashBatch', () => {
     server();
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => init?.method === 'PUT' ? json({ error: 'name exists' }, 409) : json(String(input).includes('/files') ? [doc('f', '')] : [])));
     await expect(setTrashBatch('w1', [], [doc('f', '')], [], false)).rejects.toThrow('name exists');
+  });
+});
+
+describe('outermost', () => {
+  const dir = (id: string, parent: string) => ({ id, name: id, parent, trashed: true });
+  it('purges a chosen folder once, without the chosen items inside it, and keeps unrelated ones', () => {
+    const all = [dir('z', ''), dir('a', 'z'), dir('other', '')];
+    const chosen = [dir('z', ''), dir('a', 'z')];
+    expect(outermost(chosen, chosen, all).map(d => d.id)).toEqual(['z']);
+    expect(outermost([dir('f', 'a'), dir('g', 'other'), dir('h', '')], chosen, all).map(x => x.id)).toEqual(['g', 'h']);
   });
 });
