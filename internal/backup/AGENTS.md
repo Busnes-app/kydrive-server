@@ -23,22 +23,24 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   `ErrNoDatabaseSnapshot` for any other driver, so a capsule without a consistent database is
   never sealed. A snapshot over `capsule.MaxFileBytes` (64 MiB, `dbPartBytes`) is sealed as
   ordered members `data/ky_server.db.000-of-NNN` ... each within it; one that fits stays the
-  single `data/ky_server.db` member. The library limits are never raised. `Collect` logs a
+  single `data/ky_server.db` member. The bulk manifest is split the same way
+  (`data/drive-bulk.json.000-of-NNN`). The library limits are never raised. `Collect` logs a
   warning once its members pass 80% of `capsule.MaxExpandedBytes` (256 MiB); `SizeWarning`
   gives the status route the same warning for the live database file. It also carries the encryption key (`data/encryption.key`, required — without it
   the restored files and names are unreadable) and the pinned recovery public key
   (`data/recovery.pub`, only when paired).
-- `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` and removes them before
-  anything opens the database; with no parts it does nothing. It refuses a missing, extra or
+- `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` (and `drive-bulk.json`) and
+  removes them before anything opens them; with no parts it does nothing. It refuses a missing, extra or
   renumbered part and parts beside a different whole database (`ErrDatabaseParts`); a whole
   database that begins with exactly the parts left (all of them, or the leading run a removal
   stopped in, since parts are removed last first) is a join interrupted after publishing, so it
-  removes them and succeeds. Only `ky_server.db.NNN-of-NNN` names are parts. `Checks` and
-  `cmd/server` `resetRestored` (capsule `restore` and `restore-reset`) call it first.
+  removes them and succeeds. Only `ky_server.db.NNN-of-NNN` and `drive-bulk.json.NNN-of-NNN` names are parts. `Checks`,
+  `RestoreBulk` and `cmd/server` `resetRestored` (capsule `restore` and `restore-reset`) call
+  it first (`TestBulkManifestSplitsAcrossMembers`).
 - `Checks(dir, opened)` reads the opened capsule's manifest, normalizes JSON lists and
   fails malformed or incomplete recipes. Required files include all capsule members and
-  the database, settings and encryption key (a split database's parts count as the
-  database); SQLite integrity and required environment
+  the database, settings and encryption key (a split database's or manifest's parts count as
+  the whole file); SQLite integrity and required environment
   checks cannot be disabled. File checks accept only clean relative manifest members;
   SQLite opens read-only and missing/empty databases fail.
 - HTTP and CLI call `RunDrill`, which holds an OS advisory lock on `<data dir>/drill.lock`

@@ -79,6 +79,26 @@ func TestUploadSessionRoundTrip(t *testing.T) {
 	}
 }
 
+// A proxy that times out closes the connection and cancels the request; completion must still
+// publish, or every Retry re-seals the whole file and is cancelled again (pass 4 O-R1).
+func TestCompletionOutlivesACancelledRequest(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, staging := st.Drive(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "late.bin", Size: 10})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "0123456789"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID)
+	if err != nil || readFile(t, blobs, f) != "0123456789" {
+		t.Fatalf("completion on a cancelled request: %+v %v", f, err)
+	}
+	if _, err = d.Upload(context.Background(), "worker", u.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("completed session still open: %v", err)
+	}
+}
+
 func TestEmptyUpload(t *testing.T) {
 	st, w, blobs := fixture(t)
 	d, staging := st.Drive(), t.TempDir()

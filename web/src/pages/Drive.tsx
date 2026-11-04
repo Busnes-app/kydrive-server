@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
-import { HttpError, bytes, breadcrumb, change, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
+import { HttpError, bytes, breadcrumb, change, ownFilesRefused, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
@@ -38,6 +38,15 @@ export function parentsFirst(chosen: Folder[], trashed: Folder[]): Folder[] {
   const parent = new Map(trashed.map(d => [d.id, d.parent]));
   const depth = (d: Folder) => { let n = 0; for (let p = parent.get(d.id); p !== undefined && parent.has(p) && n < parent.size; p = parent.get(p)) n++; return n; };
   return chosen.map(d => ({ d, n: depth(d) })).sort((a, b) => a.n - b.n).map(x => x.d);
+}
+
+// outermost drops chosen items inside a chosen folder: purging the folder already takes them,
+// and a second purge of one would fail and stop the rest.
+export function outermost<T extends { parent: string }>(items: T[], chosenFolders: Folder[], all: Folder[]): T[] {
+  const chosen = new Set(chosenFolders.map(d => d.id));
+  const parent = new Map(all.map(d => [d.id, d.parent]));
+  const covered = (id: string | undefined) => { for (let n = 0; id && n <= parent.size; id = parent.get(id), n++) if (chosen.has(id)) return true; return false; };
+  return items.filter(x => !covered(x.parent));
 }
 
 // setTrashBatch trashes or restores chosen items. Restore puts folders back parents first: one
@@ -106,7 +115,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     const { selected, trash } = shown.current;
     const mine = ++generation.current;
     const stale = () => mine !== generation.current;
-    await change('/api/drive/personal-workspace', 'POST', {});
+    // A dedicated installer administrator has no My files (403) but still manages shared workspaces.
+    await change('/api/drive/personal-workspace', 'POST', {}).catch(e => { if (!ownFilesRefused(e)) throw e; });
     const listWorkspaces = await list(`/api/drive/workspaces${admin ? '?admin=true' : ''}`, workspace);
     if (stale()) return;
     onWorkspacesChange(listWorkspaces);
@@ -125,7 +135,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   useEffect(() => { setTrashDays(current?.trash_days ?? 0); setKeepVersions(current?.keep_versions ?? 0); }, [current?.id, current?.trash_days, current?.keep_versions]);
   // A search result in another workspace opens its folder once that workspace is selected.
   const openAfterSwitch = useRef('');
-  useEffect(() => { setParent(openAfterSwitch.current); openAfterSwitch.current = ''; setHistory(null); setView('files'); }, [selected]);
+  // Rows of the previous workspace must not linger under the new one: Rename and Move would send them there.
+  useEffect(() => { setFiles([]); setFolders([]); setGrants([]); setParent(openAfterSwitch.current); openAfterSwitch.current = ''; setHistory(null); setView('files'); }, [selected]);
   useEffect(() => setPicked(new Set()), [selected, parent, trash]);
   const canDrop = (dt: DataTransfer) => canEdit && !trash && view === 'files' && dt.types.includes('Files');
   function openHit(h: Hit) {
@@ -214,8 +225,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     const n = chosen.length;
     if (!await confirm({ title: `Delete ${n} ${n === 1 ? 'item' : 'items'} permanently?`, body: 'They are removed from the drive at once and cannot be restored here; only a backup can bring them back.', confirm: 'Delete permanently', danger: true })) return;
     runPurge(async () => {
-      for (const d of chosenFolders) await remove(`/api/drive/folders/${d.id}`);
-      for (const f of chosenFiles) await remove(`/api/drive/files/${f.id}`);
+      for (const d of outermost(chosenFolders, chosenFolders, folders)) await remove(`/api/drive/folders/${d.id}`);
+      for (const f of outermost(chosenFiles, chosenFolders, folders)) await remove(`/api/drive/files/${f.id}`);
       setPicked(new Set());
     });
   }

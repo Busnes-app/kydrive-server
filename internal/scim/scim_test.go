@@ -177,3 +177,35 @@ func TestSCIMReadsHideNonSCIMAccounts(t *testing.T) {
 		}
 	}
 }
+
+// An IdP may name attributes by their full core-schema URN (RFC 7644 §3.10); a deactivation sent
+// that way must deactivate, not answer 200 and change nothing (pass 4 O-R2).
+func TestSCIMPatchAcceptsSchemaURNPaths(t *testing.T) {
+	srv, mux, token := setupSCIMServer(t)
+	handler := srv.AuthMiddleware(mux)
+	do := func(method, path string, payload any) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(method, path, bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
+	}
+	const urn = "urn:ietf:params:scim:schemas:core:2.0:User:"
+	for name, op := range map[string]map[string]any{
+		"urn path": {"op": "replace", "path": urn + "active", "value": false},
+		"urn key":  {"op": "replace", "value": map[string]any{urn + "active": false}},
+	} {
+		w := do("POST", "/scim/v2/Users", map[string]any{"schemas": []string{scim.SchemaUser}, "userName": "urn_" + name[4:], "active": true})
+		var created struct{ ID string }
+		if w.Code != http.StatusCreated || json.Unmarshal(w.Body.Bytes(), &created) != nil {
+			t.Fatalf("%s: create %d %s", name, w.Code, w.Body.String())
+		}
+		w = do("PATCH", "/scim/v2/Users/"+created.ID, map[string]any{"schemas": []string{scim.SchemaPatchOp}, "Operations": []any{op}})
+		var patched struct{ Active bool }
+		if json.Unmarshal(w.Body.Bytes(), &patched) != nil || w.Code != http.StatusOK || patched.Active {
+			t.Errorf("%s: %d %s", name, w.Code, w.Body.String())
+		}
+	}
+}

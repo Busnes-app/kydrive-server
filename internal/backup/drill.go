@@ -32,7 +32,7 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 	if err != nil {
 		return recipeFailure("required_files: " + err.Error())
 	}
-	// A split database is checked as the one file its parts reassemble into.
+	// A split database (or bulk manifest) is checked as the one file its parts reassemble into.
 	if err := JoinDatabase(filepath.Join(dir, "data")); err != nil {
 		return []recoveryclient.Check{{Name: "Database parts", Message: err.Error()}}
 	}
@@ -124,8 +124,10 @@ func checks(ctx context.Context, dir string, opened capsule.Manifest) []recovery
 
 // joinedMember names a database part as the database JoinDatabase made of it.
 func joinedMember(name string) string {
-	if strings.HasPrefix(name, dbPath+".") {
-		return dbPath
+	for _, whole := range []string{dbPath, BulkManifestPath} {
+		if strings.HasPrefix(name, whole+".") {
+			return whole
+		}
 	}
 	return name
 }

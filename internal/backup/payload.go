@@ -36,8 +36,8 @@ const (
 	dbPath = "data/" + dbName
 )
 
-// dbPartBytes is the most of a snapshot one capsule member carries. A larger snapshot is
-// sealed as ordered parts (ky_server.db.000-of-NNN, ...) that JoinDatabase reassembles.
+// dbPartBytes is the most of a snapshot or bulk manifest one capsule member carries. A larger
+// one is sealed as ordered parts (ky_server.db.000-of-NNN, ...) that JoinDatabase reassembles.
 // The library limit is never raised; tests lower this instead of writing 64 MiB fixtures.
 var dbPartBytes = int(capsule.MaxFileBytes)
 
@@ -70,7 +70,7 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 	if err != nil {
 		return recoveryclient.Payload{}, err
 	}
-	files := dbMembers(dbBytes)
+	files := splitMembers(dbPath, dbBytes)
 	// The integrity check runs on the database the drill reassembles, never on a part.
 	sqlitePaths := []string{dbPath}
 
@@ -120,7 +120,7 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 		return recoveryclient.Payload{}, err
 	}
 	if len(bulk) > 0 {
-		files = append(files, recoveryclient.File{Path: BulkManifestPath, Data: bulk, Mode: 0600})
+		files = append(files, splitMembers(BulkManifestPath, bulk)...)
 	}
 	var total int64
 	for _, f := range files {
@@ -171,31 +171,48 @@ func snapshotSQLite(ctx context.Context, dsn, dataDir string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// dbMembers is the snapshot as one member when it fits, else as ordered parts each within
+// splitMembers is data as the one member path when it fits, else as ordered parts each within
 // capsule.MaxFileBytes.
-func dbMembers(db []byte) []recoveryclient.File {
-	if len(db) <= dbPartBytes {
-		return []recoveryclient.File{{Path: dbPath, Data: db, Mode: 0600}}
+func splitMembers(path string, data []byte) []recoveryclient.File {
+	if len(data) <= dbPartBytes {
+		return []recoveryclient.File{{Path: path, Data: data, Mode: 0600}}
 	}
-	n := (len(db) + dbPartBytes - 1) / dbPartBytes
+	n := len(data) / dbPartBytes
+	if len(data)%dbPartBytes != 0 {
+		n++
+	}
 	files := make([]recoveryclient.File, 0, n)
 	for i := range n {
-		part := db[i*dbPartBytes : min((i+1)*dbPartBytes, len(db))]
-		files = append(files, recoveryclient.File{Path: "data/" + dbPartName(i, n), Data: part, Mode: 0600})
+		part := data[i*dbPartBytes : min((i+1)*dbPartBytes, len(data))]
+		files = append(files, recoveryclient.File{Path: "data/" + partName(filepath.Base(path), i, n), Data: part, Mode: 0600})
 	}
 	return files
 }
 
-// dbPartPattern names a part; other ky_server.db.* files (an operator's .bak) are left alone.
-var dbPartPattern = regexp.MustCompile(`^ky_server\.db\.[0-9]{3}-of-[0-9]{3}$`)
+// splitNames are the data/ files a capsule may carry as parts; partPattern names a part, so
+// other ky_server.db.* files (an operator's .bak) are left alone.
+var (
+	splitNames  = []string{dbName, bulkManifestName}
+	partPattern = regexp.MustCompile(`^\.[0-9]{3}-of-[0-9]{3}$`)
+)
 
-func dbPartName(i, n int) string { return fmt.Sprintf("%s.%03d-of-%03d", dbName, i, n) }
+func partName(base string, i, n int) string { return fmt.Sprintf("%s.%03d-of-%03d", base, i, n) }
 
-// JoinDatabase reassembles a database sealed as parts into dataDir/ky_server.db and removes
-// the parts, before anything opens it. Without parts it does nothing, so a single-member
-// capsule or an already joined directory passes unchanged. It refuses a missing, extra or
-// renumbered part, and parts beside a whole database.
+// JoinDatabase reassembles a database, and a bulk manifest, sealed as parts into
+// dataDir/ky_server.db (dataDir/drive-bulk.json) and removes the parts, before anything opens
+// them. Without parts it does nothing, so a single-member capsule or an already joined
+// directory passes unchanged. It refuses a missing, extra or renumbered part, and parts beside
+// a whole file.
 func JoinDatabase(dataDir string) error {
+	for _, name := range splitNames {
+		if err := joinParts(dataDir, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func joinParts(dataDir, base string) error {
 	entries, err := os.ReadDir(dataDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -205,7 +222,7 @@ func JoinDatabase(dataDir string) error {
 	}
 	var parts []string
 	for _, e := range entries {
-		if dbPartPattern.MatchString(e.Name()) {
+		if rest, ok := strings.CutPrefix(e.Name(), base); ok && partPattern.MatchString(rest) {
 			parts = append(parts, e.Name())
 		}
 	}
@@ -219,11 +236,11 @@ func JoinDatabase(dataDir string) error {
 		return fmt.Errorf("%w: %s", ErrDatabaseParts, parts[0])
 	}
 	for i, name := range parts {
-		if name != dbPartName(i, n) {
-			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, dbPartName(i, n))
+		if name != partName(base, i, n) {
+			return fmt.Errorf("%w: found %s where %s belongs", ErrDatabaseParts, name, partName(base, i, n))
 		}
 	}
-	whole := filepath.Join(dataDir, dbName)
+	whole := filepath.Join(dataDir, base)
 	if _, err := os.Lstat(whole); !errors.Is(err, os.ErrNotExist) {
 		// A join interrupted after publishing leaves the parts behind, a leading run of them
 		// when it stopped while removing them (last first): finish it when the database begins
@@ -233,7 +250,7 @@ func JoinDatabase(dataDir string) error {
 			return err
 		}
 		if !same {
-			return fmt.Errorf("%w: %s and its parts are both present and differ", ErrDatabaseParts, dbName)
+			return fmt.Errorf("%w: %s and its parts are both present and differ", ErrDatabaseParts, base)
 		}
 		return removeParts(dataDir, parts)
 	}

@@ -194,7 +194,8 @@ func applyUserValues(user *store.User, values map[string]interface{}) {
 	}
 }
 func applyUserValue(user *store.User, path string, value interface{}) {
-	switch path {
+	// An attribute may be named by its full core-schema URN (RFC 7644 §3.10).
+	switch strings.TrimPrefix(path, strings.ToLower(SchemaUser)+":") {
 	case "active":
 		if active, ok := value.(bool); ok {
 			if active {

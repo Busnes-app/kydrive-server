@@ -17,6 +17,9 @@ export function version(v: unknown): v is Version { return record(v) && typeof v
 // HttpError keeps the status, and the server's code and step-up method when it sends them, so
 // callers can react to a conflict (409) or step_up_required without reading the message.
 export class HttpError extends Error { constructor(message: string, readonly status: number, readonly code = '', readonly method = '') { super(message); } }
+// ownFilesRefused is the server's refusal of My files to a dedicated installer administrator
+// (internal/api allowInstallerActor); any other failure still counts.
+export const ownFilesRefused = (e: unknown) => e instanceof HttpError && e.status === 403 && e.message.startsWith('Use your everyday identity');
 const text = (v: unknown, k: string) => record(v) && typeof v[k] === 'string' ? v[k] : '';
 export async function response(r: Response): Promise<unknown> { const v: unknown = await r.json().catch(() => null); if (!r.ok) throw new HttpError(text(v, 'error') || 'Drive request failed', r.status, text(v, 'code'), text(v, 'method')); return v; }
 export async function list<T>(url: string, guard: (v: unknown) => v is T): Promise<T[]> { const v = await response(await fetch(url)); if (!Array.isArray(v) || !v.every(guard)) throw new Error('Invalid server response'); return v; }

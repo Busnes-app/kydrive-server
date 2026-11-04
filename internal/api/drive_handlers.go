@@ -53,7 +53,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
 	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))
-	s.mux.HandleFunc("POST /api/drive/upload-sessions/{sid}/complete", s.requireAuthenticated(s.driveCompleteUpload))
+	// Completion ignores a dropped connection, so shutdown waits for it (WaitDetached) before closing the store.
+	s.mux.HandleFunc("POST /api/drive/upload-sessions/{sid}/complete", s.tracked(s.requireAuthenticated(s.driveCompleteUpload)))
 	s.mux.HandleFunc("DELETE /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveCancelUpload))
 	s.mux.HandleFunc("GET /api/drive/files/{id}", s.requireAuthenticated(s.driveFileInfo))
 	s.mux.HandleFunc("GET /api/drive/files/{id}/download", s.requireAuthenticated(s.driveDownload))

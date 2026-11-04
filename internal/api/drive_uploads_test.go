@@ -194,3 +194,40 @@ func TestCompletionOutlastsServerTimeouts(t *testing.T) {
 		t.Fatalf("completion: %d after %v (must outlast the 20ms timeouts to prove anything)", res.StatusCode, took)
 	}
 }
+
+// A completion runs on after its connection drops, so shutdown must wait for it before the store
+// closes (WaitDetached); the tracked wrapper on its route is what makes it visible (pass 4 O-R1).
+func TestDetachedTrackingCoversACompletionInFlight(t *testing.T) {
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "inflight", "user")
+	var mine struct{ ID string }
+	if out := send(t, srv, "POST", "/api/drive/personal-workspace", "{}", user, ""); json.Unmarshal(out.Body.Bytes(), &mine) != nil || mine.ID == "" {
+		t.Fatalf("personal workspace: %d %s", out.Code, out.Body.String())
+	}
+	const size, chunk = 48 << 20, 8 << 20
+	out := send(t, srv, "POST", "/api/drive/workspaces/"+mine.ID+"/upload-sessions", fmt.Sprintf(`{"name":"big.bin","size":%d}`, size), user, "")
+	var session struct{ ID string }
+	if out.Code != 201 || json.Unmarshal(out.Body.Bytes(), &session) != nil {
+		t.Fatalf("start %d %s", out.Code, out.Body.String())
+	}
+	body := strings.Repeat("x", chunk)
+	for start := 0; start < size; start += chunk {
+		if got := putChunk(t, srv, user, session.ID, fmt.Sprintf("bytes %d-%d/%d", start, start+chunk-1, size), body); got.Code != 204 {
+			t.Fatalf("chunk at %d: %d %s", start, got.Code, got.Body.String())
+		}
+	}
+	complete := "/api/drive/upload-sessions/" + session.ID + "/complete"
+	go send(t, srv, "POST", complete, "", user, "")
+	time.Sleep(20 * time.Millisecond) // let it take the claim
+	// A second completion answers 409 while the first holds the claim.
+	if got := send(t, srv, "POST", complete, "", user, ""); got.Code != http.StatusConflict {
+		t.Skipf("the completion was not observed in flight: %d", got.Code)
+	}
+	srv.WaitDetached()
+	if _, err := st.Drive().Upload(context.Background(), "usr_inflight", session.ID); err == nil {
+		t.Fatal("WaitDetached returned with a completion still running; shutdown would close the store under it")
+	}
+}
