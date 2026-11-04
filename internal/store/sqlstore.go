@@ -210,7 +210,26 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 	return tx.Commit()
 }
 
+// caseVariantTaken refuses giving account id a username another account holds in a different
+// case, unless id already holds it that way. Until existing case-only clashes are renamed the
+// unique index is absent (migration 8), so this keeps new ones out; nothing is renamed.
+func caseVariantTaken(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, rebind func(string) string, name, id string) error {
+	var taken bool
+	if err := q.QueryRowContext(ctx, rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username)=LOWER(?) AND id<>?) AND NOT EXISTS(SELECT 1 FROM users WHERE id=? AND LOWER(username)=LOWER(?))`), name, id, id, name).Scan(&taken); err != nil {
+		return err
+	}
+	if taken {
+		return ErrAlreadyExists
+	}
+	return nil
+}
+
 func (u *userStore) CreateUser(ctx context.Context, user *User) error {
+	if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = now
@@ -293,8 +312,10 @@ SELECT id, username, email, display_name, password_hash, role, status,
        recovery_codes_hash, must_change_password,
        totp_last_counter, created_at, updated_at, last_login_at
 FROM users WHERE LOWER(username) = LOWER(?)
+ORDER BY username = ? DESC, id LIMIT 1
 `)
-	return u.scanUser(u.store.db.QueryRowContext(ctx, q, username))
+	// Until case-only clashes are renamed, the exact spelling picks the account, never chance.
+	return u.scanUser(u.store.db.QueryRowContext(ctx, q, username, username))
 }
 
 func (u *userStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -320,6 +341,9 @@ FROM users WHERE sso_provider = ? AND sso_subject = ?
 }
 
 func (u *userStore) UpdateUser(ctx context.Context, user *User) error {
+	if err := caseVariantTaken(ctx, u.store.db, u.store.rebind, user.Username, user.ID); err != nil {
+		return err
+	}
 	user.UpdatedAt = time.Now().UTC()
 	var lastLogin sql.NullTime
 	if user.LastLoginAt != nil {
@@ -379,10 +403,18 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 			return nil, fmt.Errorf("unknown directory provider %q", d.Provider)
 		}
 		id = "usr_" + crypto.RandomHex(12)
+		if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+			return nil, err
+		}
 		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_ts, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
 			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.EventTime, now, now)
 	} else {
 		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
+		if d.Active {
+			if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+				return nil, err
+			}
+		}
 		if !d.Active {
 			set, args = "status = ?", []any{status}
 		}

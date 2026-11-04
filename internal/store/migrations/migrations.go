@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -249,7 +250,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS push_device_id;`,
 		Name:     "username_case_insensitive_unique",
 		SQLite:   `CREATE UNIQUE INDEX idx_users_username_lower ON users(LOWER(username));`,
 		Postgres: `CREATE UNIQUE INDEX idx_users_username_lower ON users(LOWER(username));`,
-		Check:    refuseCaseDuplicateUsernames,
+		Check:    deferIndexWhileCaseDuplicates,
 	},
 	{
 		// sso_sid ties a session to the identity provider's login. sso_logouts fences a sid,
@@ -302,33 +303,63 @@ CREATE TABLE IF NOT EXISTS sso_subject_logouts (
 const endUnboundSSOLogins = `DELETE FROM sessions WHERE sso_sid = '' AND user_id IN (SELECT id FROM users WHERE sso_provider <> 'local');
 DELETE FROM mfa_challenges WHERE user_id IN (SELECT id FROM users WHERE sso_provider <> 'local');`
 
-// refuseCaseDuplicateUsernames fails closed: which account keeps a name is an operator decision.
-func refuseCaseDuplicateUsernames(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, `SELECT username FROM users WHERE LOWER(username) IN (SELECT LOWER(username) FROM users GROUP BY LOWER(username) HAVING COUNT(*) > 1) ORDER BY LOWER(username), username`)
+// errSkipDDL from a Check records the migration without running its DDL.
+var errSkipDDL = errors.New("skip migration DDL")
+
+const usernameIndex = `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users(LOWER(username))`
+
+// caseDuplicateUsernames lists, quoted, the usernames that differ from another only by case.
+func caseDuplicateUsernames(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT username FROM users WHERE LOWER(username) IN (SELECT LOWER(username) FROM users GROUP BY LOWER(username) HAVING COUNT(*) > 1) ORDER BY LOWER(username), username`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 	var names []string
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return err
+			return nil, err
 		}
 		names = append(names, fmt.Sprintf("%q", name))
 	}
-	if err := rows.Err(); err != nil {
+	return names, rows.Err()
+}
+
+// deferIndexWhileCaseDuplicates never stops an upgrade: which account keeps a name is an
+// operator decision, so while names clash the index waits (ensureUsernameIndex) and the store
+// refuses new case variants; nothing is renamed.
+func deferIndexWhileCaseDuplicates(ctx context.Context, tx *sql.Tx) error {
+	names, err := caseDuplicateUsernames(ctx, tx)
+	if err == nil && len(names) > 0 {
+		err = errSkipDDL
+	}
+	return err
+}
+
+// ensureUsernameIndex creates the case-insensitive username index once no names clash, and
+// otherwise names the clashes at every start until an operator renames them.
+func ensureUsernameIndex(ctx context.Context, db *sql.DB) error {
+	names, err := caseDuplicateUsernames(ctx, db)
+	if err != nil {
 		return err
 	}
 	if len(names) > 0 {
-		return fmt.Errorf("usernames differ only by case: %s; rename all but one (rename-local-admin or the directory) before upgrading", strings.Join(names, ", "))
+		log.Printf("usernames differ only by case: %s; new case variants are refused, and the case-insensitive username index is created once all but one of each are renamed (rename-local-admin or the directory)", strings.Join(names, ", "))
+		return nil
 	}
-	return nil
+	_, err = db.ExecContext(ctx, usernameIndex)
+	return err
 }
 
 // Run executes all pending migrations for the specified database driver.
 func Run(ctx context.Context, db *sql.DB, driver string) error {
-	return run(ctx, db, driver, registry)
+	if err := run(ctx, db, driver, registry); err != nil {
+		return err
+	}
+	return ensureUsernameIndex(ctx, db)
 }
 
 func run(ctx context.Context, db *sql.DB, driver string, registry []Migration) error {
@@ -401,12 +432,16 @@ func apply(ctx context.Context, db *sql.DB, driver string, m Migration) (err err
 		return tx.Commit()
 	}
 	if m.Check != nil {
-		if err = m.Check(ctx, tx); err != nil {
+		if err = m.Check(ctx, tx); errors.Is(err, errSkipDDL) {
+			ddl, err = "", nil
+		} else if err != nil {
 			return fmt.Errorf("migration v%d (%s) refused: %w", m.Version, m.Name, err)
 		}
 	}
-	if _, err = tx.ExecContext(ctx, ddl); err != nil {
-		return fmt.Errorf("failed executing migration v%d (%s): %w", m.Version, m.Name, err)
+	if ddl != "" {
+		if _, err = tx.ExecContext(ctx, ddl); err != nil {
+			return fmt.Errorf("failed executing migration v%d (%s): %w", m.Version, m.Name, err)
+		}
 	}
 	if _, err = tx.ExecContext(ctx, record, m.Version, m.Name, time.Now().UTC()); err != nil {
 		return fmt.Errorf("failed to record migration v%d: %w", m.Version, err)

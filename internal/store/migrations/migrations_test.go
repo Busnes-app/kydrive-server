@@ -13,7 +13,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func TestCaseDuplicateUsernamesRefuseTheUniqueIndex(t *testing.T) {
+// Case-only duplicates never stop an upgrade: the index waits until they are renamed.
+func TestCaseDuplicateUsernamesDeferTheUniqueIndex(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
 	name := cfg.Driver
@@ -38,13 +39,12 @@ func TestCaseDuplicateUsernamesRefuseTheUniqueIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err = Run(ctx, db, cfg.Driver)
-	if err == nil || !strings.Contains(err.Error(), `"Alice", "alice"`) || strings.Contains(err.Error(), "bob") {
-		t.Fatalf("duplicate usernames not refused by name: %v", err)
+	if err = Run(ctx, db, cfg.Driver); err != nil {
+		t.Fatalf("upgrade stopped by case-only duplicates: %v", err)
 	}
 	var applied int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations WHERE version = 8").Scan(&applied); err != nil || applied != 0 {
-		t.Fatalf("refused migration recorded: %d %v", applied, err)
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations").Scan(&applied); err != nil || applied != len(registry) {
+		t.Fatalf("migrations applied: %d of %d, %v", applied, len(registry), err)
 	}
 	if _, err := db.ExecContext(ctx, "DELETE FROM users WHERE username = 'alice'"); err != nil {
 		t.Fatal(err)
