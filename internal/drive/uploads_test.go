@@ -283,6 +283,10 @@ func TestCancelWaitsForACompletionClaim(t *testing.T) {
 	if err := d.CancelUpload(ctx, staging, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("cancel during a completion: %v", err)
 	}
+	// The web client keeps its session on exactly this message (Uploads.tsx).
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) || !strings.Contains(err.Error(), "already completing") {
+		t.Fatalf("second completion during a claim: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
 		t.Fatalf("staged bytes gone: %v", err)
 	}
