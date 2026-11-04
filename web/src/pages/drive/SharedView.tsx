@@ -77,15 +77,19 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   }
 
   const cap = (r: string) => r[0].toUpperCase() + r.slice(1);
-  const editing = (rename: () => void, trash: () => Promise<unknown>): MenuEntry[] => canEdit ? ['separator',
+  // A share holder cannot see the owner's trash, so trashing here is confirmed and says who can undo it.
+  const trashing = async (name: string, trash: () => Promise<unknown>) => {
+    if (await confirm({ title: `Move ${name} to trash?`, body: 'It goes to the owner’s trash, which you cannot open. Only the owner can restore it.', confirm: 'Move to trash', danger: true })) void run(trash);
+  };
+  const editing = (name: string, rename: () => void, trash: () => Promise<unknown>): MenuEntry[] => canEdit ? ['separator',
     { label: 'Rename', icon: <PenLine size={16} />, onSelect: rename },
     'separator',
-    { label: 'Move to trash', icon: <Trash2 size={16} />, danger: true, onSelect: () => void run(trash) }] : [];
+    { label: 'Move to trash', icon: <Trash2 size={16} />, danger: true, onSelect: () => void trashing(name, trash) }] : [];
   const actions = (f: { id: string; name: string }, inside?: DriveFile): MenuEntry[] => [
     { label: 'Preview', icon: <Eye size={16} />, onSelect: () => setPreview(f) },
     ...(hasEditor(f.name) ? [{ label: 'Open editor', icon: <ExternalLink size={16} />, href: editorURL(f), newTab: openInNewTab }] : []),
     { label: 'Download', icon: <Download size={16} />, href: `/api/drive/files/${f.id}/download` },
-    ...(inside ? editing(() => setRenaming({ kind: 'file', file: inside }), () => change(`/api/drive/files/${inside.id}/trash`, 'PUT', { revision: inside.revision, trashed: true })) : []),
+    ...(inside ? editing(inside.name, () => setRenaming({ kind: 'file', file: inside }), () => change(`/api/drive/files/${inside.id}/trash`, 'PUT', { revision: inside.revision, trashed: true })) : []),
   ];
   const fileRow = (f: { id: string; name: string; revision?: number }, detail: string, inside?: DriveFile) => <tr key={f.id}>
     <td><span className="drive-name-cell"><FileIcon file={f} /><span className="drive-name-text">{opensInEditor(f.name) ? <a className="drive-file-name" href={editorURL(f)} {...target}>{f.name}</a> : <button className="drive-file-name btn-link" onClick={() => setPreview(f)}>{f.name}</button>}<span className="drive-row-meta">{detail}</span></span></span></td><td className="num">{detail}</td>
@@ -94,7 +98,7 @@ export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
   const folderRow = (id: string, name: string, detail: string, place: Omit<Place, 'id' | 'name'>, inside?: Folder) => <tr key={id}>
     <td><span className="drive-name-cell"><FolderIcon /><span className="drive-name-text"><button className="drive-file-name btn-link" onClick={() => open({ id, name, ...place })}>{name}</button><span className="drive-row-meta">{detail}</span></span></span></td><td className="num">{detail}</td>
     <td className="col-actions"><Menu label={`Actions for folder ${name}`} items={[{ label: 'Open', icon: <FolderOpen size={16} />, onSelect: () => open({ id, name, ...place }) }, { label: 'Download zip', icon: <Download size={16} />, href: `/api/drive/folders/${id}/zip` },
-      ...(inside ? editing(() => setRenaming({ kind: 'folder', folder: inside }), () => change(`/api/drive/folders/${inside.id}/trash`, 'PUT', { trashed: true })) : [])]} /></td>
+      ...(inside ? editing(inside.name, () => setRenaming({ kind: 'folder', folder: inside }), () => change(`/api/drive/folders/${inside.id}/trash`, 'PUT', { trashed: true })) : [])]} /></td>
   </tr>;
   const open = (p: Place) => { setError(''); setPath([...path, p]); };
   const rows = at ? shown.folders.length + shown.files.length : items.length;

@@ -65,6 +65,11 @@ describe('SharedView', () => {
     await waitFor(() => expect(calls).toContain('POST /api/drive/workspaces/w1/folders {"parent":"d1","name":"Drafts"}'));
     fireEvent.click(screen.getByRole('button', { name: 'Actions for q1.xlsx' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move to trash' }));
+    // The holder cannot open the owner's trash: confirm first, naming who can restore it.
+    const ask = await screen.findByRole('dialog');
+    expect(ask.textContent).toContain('Only the owner can restore it');
+    expect(calls.some(c => c.includes('/trash'))).toBe(false);
+    fireEvent.click(within(ask).getByRole('button', { name: 'Move to trash' }));
     await waitFor(() => expect(calls).toContain('PUT /api/drive/files/f1/trash {"revision":2,"trashed":true}'));
     fireEvent.click(screen.getByRole('button', { name: 'Actions for folder 2026' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
