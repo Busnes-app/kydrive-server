@@ -250,3 +250,6 @@ func ExpireUpload(ctx context.Context, s *Store, staging, id string, now int64) 
 func ClaimCompletion(ctx context.Context, s *Store, user, id string, interval time.Duration) (func(bool), error) {
 	return s.claimCompletion(ctx, user, id, interval)
 }
+
+// TokenHash is how device and session tokens are stored.
+func TokenHash(token string) string { return tokenHash(token) }

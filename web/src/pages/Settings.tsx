@@ -52,7 +52,7 @@ export const TrashRetention: React.FC = () => {
     <section className="panel" aria-labelledby="trash-settings-heading">
       <div className="panel-header"><div><Trash2 size={20} aria-hidden="true" /><h2 id="trash-settings-heading" className="panel-title" style={{ margin: 0 }}>Trash</h2></div></div>
       <p className="panel-desc">
-        Applies to every workspace, including each person&apos;s My files, unless the workspace sets its own trash retention. Items are permanently deleted from the drive; only backups can bring them back. 0 keeps trash until someone empties it.
+        Applies to every workspace, including each person&apos;s My files, unless the workspace sets its own trash retention. Items are permanently deleted from the drive; only backups can bring them back. Deleted workspaces are kept this long too, then purged with everything in them, so a lower value can purge one at once. 0 keeps trash until someone empties it, and deleted workspaces until they are restored.
       </p>
       {loadError ? <Alert>{loadError}</Alert> : days === null ? <p className="hint">Loading…</p> : (
         <form onSubmit={save} className="form-row">

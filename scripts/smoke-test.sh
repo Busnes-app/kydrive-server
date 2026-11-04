@@ -105,7 +105,8 @@ stop_server
 
 # The drill seals to a throwaway key and reopens it, so the pipeline runs even unpaired.
 # Whether the suite key is pinned is the status route's report, not the drill's.
-DRILL_OUT="$(KY_DATA_DIR="$WORK/data" KY_PORT="$PORT" KY_DB_DRIVER=sqlite "$BIN" backup-drill)"
+# A failed drill exits 1; show its report before stopping.
+DRILL_OUT="$(KY_DATA_DIR="$WORK/data" KY_PORT="$PORT" KY_DB_DRIVER=sqlite "$BIN" backup-drill)" || { printf '%s\n' "$DRILL_OUT"; echo "backup-drill failed" >&2; exit 1; }
 contains "backup-drill seals and reopens the payload" "$DRILL_OUT" "extracted into a 0700 sandbox"
 contains "backup-drill verifies the required files" "$DRILL_OUT" "required files verified"
 contains "backup-drill checks database integrity" "$DRILL_OUT" "integrity_check passed"

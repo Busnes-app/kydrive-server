@@ -37,7 +37,9 @@ and an access level:
 
 Optionally limit the agent to one folder: it then sees that folder as its whole drive and
 nothing outside it. An agent never has more access than you do, and none can delete anything
-for good: trashed items stay in KyDrive's trash, and a replaced file keeps its old version. The
+for good itself: trashed items go to KyDrive's trash, which keeps them for the administrator's
+trash period (90 days by default), and a replaced file keeps its old version unless the
+workspace's version retention removes it. The
 page shows the token once, with config for both agents that reads it from `KYDRIVE_TOKEN`, and
 the command to install the KyDrive skill (served at `/agent/skills/kydrive/SKILL.md`), which
 teaches the agent the tools and when to ask you first. You can change an agent's access there

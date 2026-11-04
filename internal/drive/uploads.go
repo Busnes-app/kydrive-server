@@ -97,9 +97,9 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 			return err
 		}
 		if u.File == "" {
-			// Refuse a taken name before the bytes are sent; Publish still decides.
+			// Refuse a name a live file or folder holds before the bytes are sent; Publish still decides.
 			var taken int
-			if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_files WHERE workspace=? AND parent=? AND name_hmac=? AND trashed=false`, u.Workspace, u.Parent, mac).Scan(&taken); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=?1 AND parent=?2 AND name_hmac=?3 AND trashed=false)`, u.Workspace, u.Parent, mac).Scan(&taken); err != nil {
 				return err
 			}
 			if taken > 0 {
@@ -322,21 +322,34 @@ func (s *Store) CancelUpload(ctx context.Context, staging, user, id string) erro
 	if _, err := s.Upload(ctx, user, id); err != nil {
 		return err
 	}
-	return s.dropUpload(ctx, staging, id, func(tx *sql.Tx) error { return event(ctx, tx, user, "upload.cancelled", id) })
+	return s.dropUpload(ctx, staging, id, func(tx *sql.Tx) error {
+		// A completion still holding its claim (or one that crashed less than a claim ago) owns
+		// the staged bytes: they may yet be published, or be completed by a retry.
+		var claimed int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_upload_sessions WHERE id=? AND completing>=?`, id, time.Now().Unix()-int64(completionClaim/time.Second)).Scan(&claimed); err != nil {
+			return err
+		}
+		if claimed > 0 {
+			return fmt.Errorf("%w: upload is completing", ErrConflict)
+		}
+		return event(ctx, tx, user, "upload.cancelled", id)
+	})
 }
 
-func (s *Store) dropUpload(ctx context.Context, staging, id string, audit func(*sql.Tx) error) error {
+// dropUpload removes a session and its staging; check, when set, runs first in the same
+// transaction and can refuse.
+func (s *Store) dropUpload(ctx context.Context, staging, id string, check func(*sql.Tx) error) error {
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if check != nil {
+			if err := check(tx); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_segments WHERE session=?`, id); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_sessions WHERE id=?`, id); err != nil {
-			return err
-		}
-		if audit != nil {
-			return audit(tx)
-		}
-		return nil
+		_, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_sessions WHERE id=?`, id)
+		return err
 	})
 	if err != nil {
 		return err

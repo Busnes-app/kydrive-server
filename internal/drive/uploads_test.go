@@ -221,6 +221,13 @@ func TestUploadNewVersion(t *testing.T) {
 	if _, err = d.StartUpload(ctx, "worker", drive.UploadSession{Workspace: w.ID, Name: "notes.txt", Size: 2}, maxUpload); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("taken name: %v", err)
 	}
+	// A folder's name is refused too, before any bytes are sent.
+	if _, err = d.AddFolder(ctx, "worker", w.ID, "", "Backup"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.StartUpload(ctx, "worker", drive.UploadSession{Workspace: w.ID, Name: "Backup", Size: 2}, maxUpload); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("name a folder holds: %v", err)
+	}
 	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, File: f.ID, Expected: 1, Size: 2})
 	if u.Name != "notes.txt" {
 		t.Fatalf("new version renamed the file: %+v", u)
@@ -258,6 +265,36 @@ func TestUploadOwnedByCreator(t *testing.T) {
 	}
 	if _, err := d.Upload(ctx, "worker", u.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("cancelled session still open: %v", err)
+	}
+}
+
+// A cancel never takes the staged bytes from a completion that holds its claim, nor from one
+// that crashed less than a claim ago: a retry may still complete them.
+func TestCancelWaitsForACompletionClaim(t *testing.T) {
+	st, w, blobs := fixture(t)
+	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
+	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 5})
+	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "abcde"); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Minute).Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CancelUpload(ctx, staging, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+		t.Fatalf("cancel during a completion: %v", err)
+	}
+	// The web client keeps its session on exactly this message (Uploads.tsx).
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) || !strings.Contains(err.Error(), "already completing") {
+		t.Fatalf("second completion during a claim: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
+		t.Fatalf("staged bytes gone: %v", err)
+	}
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Hour).Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CompleteUpload(ctx, staging, blobs, testKey, "worker", u.ID); err != nil {
+		t.Fatalf("retry after the claim lapsed: %v", err)
 	}
 }
 

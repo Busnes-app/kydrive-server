@@ -74,6 +74,21 @@ func WithLogin(ctx context.Context, l Login) context.Context {
 	return context.WithValue(ctx, loginKey{}, l)
 }
 
+// liveLogin refuses, inside tx, a request whose browser sign-in has ended since it was
+// authenticated: a logout or password reset that finds no grant to revoke must not be followed
+// by one. Requests without a browser sign-in (service, device) pass.
+func liveLogin(ctx context.Context, tx *sql.Tx) error {
+	login, _ := ctx.Value(loginKey{}).(Login)
+	if login.TokenHash == "" {
+		return nil
+	}
+	var live int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE token_hash=?`, login.TokenHash).Scan(&live); err != nil || live == 0 {
+		return cmp.Or(err, ErrDenied)
+	}
+	return nil
+}
+
 // EditorSession opens the file for user. A document a force-save left open at the current
 // revision and epoch is joined, so co-editors always share one key.
 func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSession, error) {
@@ -96,13 +111,9 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 1); err != nil {
 			return err
 		}
-		// A logout that ended the browser session first finds no grant to revoke, so refuse
-		// to create one; a later logout finds it by sid or login time.
-		if login.TokenHash != "" {
-			var live int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE token_hash=?`, login.TokenHash).Scan(&live); err != nil || live == 0 {
-				return cmp.Or(err, ErrDenied)
-			}
+		// A later logout finds the session by sid or login time.
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
 		}
 		var epoch int64
 		if err := tx.QueryRowContext(ctx, `SELECT editor_epoch FROM drive_files WHERE id=? AND workspace=? AND revision=? AND trashed=false`, id, f.Workspace, e.Revision).Scan(&epoch); err != nil {
@@ -181,6 +192,27 @@ func (s *Store) RevokeUserEditors(ctx context.Context, tx *sql.Tx, user string) 
 	return s.revokeEditors(ctx, tx, `user_id=?`, user)
 }
 
+// RevokeUserCredentials ends, in the caller's transaction, the credentials user issued that
+// outlive a password: WebDAV passwords, agent tokens and pending computer links are deleted,
+// linked computers revoked (no wipe) and service tokens revoked, which also ends the editors
+// opened through them. Nil (no drive store) is a no-op.
+func (s *Store) RevokeUserCredentials(ctx context.Context, tx *sql.Tx, user string) error {
+	if s == nil {
+		return nil
+	}
+	for _, q := range []string{
+		`DELETE FROM drive_app_passwords WHERE user_id=?`,
+		`DELETE FROM drive_device_codes WHERE user_id=?`,
+		`UPDATE drive_service_tokens SET revoked=true WHERE user_id=? AND revoked=false`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, user); err != nil {
+			return err
+		}
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE drive_devices SET revoked_at=?,wipe=0 WHERE user_id=? AND revoked_at=0`, time.Now().Unix(), user)
+	return err
+}
+
 // RevokeSSOEditors revokes, like RevokeUserEditors, the editor sessions opened through the
 // SSO login sid, whether or not its browser session still exists.
 func (s *Store) RevokeSSOEditors(ctx context.Context, tx *sql.Tx, sid string) error {
@@ -210,7 +242,7 @@ func (s *Store) revokeEditors(ctx context.Context, tx *sql.Tx, where string, arg
 func (s *Store) PendingRevocations(ctx context.Context) ([]EditorSession, error) {
 	// Query live memberships at the boundary. No stale role snapshots authorize edits.
 	at := time.Now()
-	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+itemRankSQL("drive_editor_sessions.user_id", "f.workspace", "f.parent", "f.id")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END) OR (service_token!='' AND NOT EXISTS(SELECT 1 FROM drive_service_tokens t WHERE t.id=drive_editor_sessions.service_token AND t.revoked=false AND t.expires>?)))`, at.Unix(), at.Add(-editorGrace).Unix(), at.Unix())
+	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND ((expires<=? AND (expires<=? OR NOT EXISTS(SELECT 1 FROM drive_editor_documents d WHERE d.file_id=drive_editor_sessions.file_id AND d.key=`+sessionKey+` AND d.closed=false))) OR NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=drive_editor_sessions.file_id AND f.trashed=false AND `+itemRankSQL("drive_editor_sessions.user_id", "f.workspace", "f.parent", "f.id")+` >= CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END) OR (service_token!='' AND NOT EXISTS(SELECT 1 FROM drive_service_tokens t JOIN drive_files tf ON tf.id=drive_editor_sessions.file_id AND tf.workspace=t.workspace WHERE t.id=drive_editor_sessions.service_token AND t.revoked=false AND t.expires>? AND (CASE t.role WHEN 'editor' THEN 2 ELSE 1 END)>=(CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END) AND `+rankSQL("t.user_id", "t.workspace")+`>=(CASE WHEN drive_editor_sessions.editable THEN 2 ELSE 1 END))))`, at.Unix(), at.Add(-editorGrace).Unix(), at.Unix())
 	if err != nil {
 		return nil, err
 	}

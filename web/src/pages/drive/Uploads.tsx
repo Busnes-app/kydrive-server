@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { secureFetch } from '../../api';
-import { HttpError, bytes, file, list } from './client';
+import { HttpError, bytes, file, folder, list } from './client';
 import type { DriveFile, Folder } from './client';
 import { UploadInterrupted, freeName, makeFolders, sendUpload, startUpload } from './upload';
 import type { Entry, Session, Target } from './upload';
@@ -37,11 +37,11 @@ export function useUploads(onIdle: () => void) {
   const enqueue = useCallback((u: Upload) => {
     pending.current++;
     queue.current = queue.current.then(async () => {
-      let session = u.session;
+      let session = u.session, acked = 0;
       try {
         session ??= await startUpload(u.workspace, u.parent, u.file, u.target);
         update(u.key, { session, error: '', conflict: false });
-        await sendUpload(session, u.file, done => update(u.key, { done }));
+        await sendUpload(session, u.file, done => { acked = done; update(u.key, { done }); });
         update(u.key, { finished: true, done: u.file.size, session: undefined });
       } catch (e) {
         if (e instanceof UploadInterrupted) {
@@ -49,6 +49,12 @@ export function useUploads(onIdle: () => void) {
         } else if (!session && e instanceof HttpError && e.status === 409) {
           // The name was taken (or the file changed) after the batch was checked: ask again.
           update(u.key, { conflict: true, error: '' });
+        } else if (session && (!(e instanceof HttpError) || [502, 503, 504].includes(e.status) || (e.status === 409 && e.message.includes('already completing')))) {
+          // Not refused: no answer, a proxy or restart in the way, or a completion still running
+          // (the server will not cancel that either). Any other 409, such as a file changed since
+          // the start, never clears and is freed below. The bytes stay staged, so Retry resumes
+          // from what the server acknowledged and completes without resending.
+          update(u.key, { error: e instanceof Error ? e.message : 'Upload failed', session: { ...session, received: acked } });
         } else {
           // A refused upload cannot be resumed; free its session now rather than at expiry.
           if (session) void secureFetch(`/api/drive/upload-sessions/${session.id}`, { method: 'DELETE' }).catch(() => {});
@@ -88,11 +94,14 @@ export function useUploads(onIdle: () => void) {
   const resolve = useCallback(async (u: Upload, choice: Choice) => {
     if (choice === 'cancel') { setItems(xs => xs.filter(x => x.key !== u.key)); return; }
     try {
-      const existing = await liveFiles(u.workspace);
+      const [existing, folders] = await Promise.all([liveFiles(u.workspace), list(`/api/drive/workspaces/${u.workspace}/folders?trash=false`, folder)]);
       const found = existing.find(f => f.parent === u.parent && f.name === u.target.name);
-      const taken = new Set([u.target.name, ...existing.filter(f => f.parent === u.parent).map(f => f.name)]);
-      // Keep both always picks a new name; Replace with nothing left to replace uploads it as new.
-      const target = choice === 'keep' ? { name: freeName(u.target.name, taken) } : found ? targetFor('replace', u.target.name, found, taken) : { name: u.target.name };
+      const siblings = [...existing, ...folders.filter(d => !d.trashed)].filter(x => x.parent === u.parent);
+      const taken = new Set([u.target.name, ...siblings.map(x => x.name)]);
+      // Keep both always picks a new name; Replace with nothing left to replace uploads it as new,
+      // and a name a folder holds cannot be replaced, so it takes a new name too.
+      const held = !found && siblings.some(x => x.name === u.target.name);
+      const target = choice === 'keep' || held ? { name: freeName(u.target.name, taken) } : found ? targetFor('replace', u.target.name, found, taken) : { name: u.target.name };
       const next = { ...u, target, conflict: false, error: '' };
       update(u.key, next);
       enqueue(next);
