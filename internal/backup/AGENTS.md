@@ -31,7 +31,7 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   (`data/recovery.pub`, only when paired).
 - `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` (and `drive-bulk.json`) and
   removes them before anything opens them; with no parts it does nothing. It refuses a missing, extra or
-  renumbered part and parts beside a different whole database (`ErrDatabaseParts`); a whole
+  renumbered part and parts beside a different whole database (`ErrDatabaseParts`). In a capsule `restore`, `recoveryclient.Restore` joins the same names first and refuses such a set with `recoveryclient.ErrSplitParts` before this runs; a whole
   database that begins with exactly the parts left (all of them, or the leading run a removal
   stopped in, since parts are removed last first) is a join interrupted after publishing, so it
   removes them and succeeds. Only `ky_server.db.NNN-of-NNN` and `drive-bulk.json.NNN-of-NNN` names are parts. `Checks`,

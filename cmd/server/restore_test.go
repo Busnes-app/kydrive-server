@@ -20,7 +20,6 @@ import (
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/ky-primitives/recoverykey"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
-	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -325,8 +324,9 @@ func TestRestoreRefusesASplitDatabaseMissingAPart(t *testing.T) {
 	path, shares := sealFixtureWith(t, "busnes_app", splitDB(func(i int) bool { return i != 1 }))
 	target := t.TempDir()
 	err := restore(path, target, "busnes_app", shares, io.Discard)
-	if !errors.Is(err, backup.ErrDatabaseParts) {
-		t.Fatalf("got %v, want ErrDatabaseParts", err)
+	// recoveryclient.Restore joins the parts before JoinDatabase sees them, so it refuses first.
+	if !errors.Is(err, recoveryclient.ErrSplitParts) {
+		t.Fatalf("got %v, want recoveryclient.ErrSplitParts", err)
 	}
 	if _, err := os.Stat(filepath.Join(target, "data", "ky_server.db")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("an incomplete split produced a database", err)

@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/netallow"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -55,6 +57,8 @@ type Server struct {
 	tickets    map[string]convertTicket // Document Server fetches for thumbnails
 	attempts   map[string]attemptWindow
 	powSpent   auth.PoWSpent
+	// exempt is the office-network allowlist: environment plus admin setting.
+	exempt atomic.Pointer[netallow.List]
 	// detached counts the requests running on a context deliberately separated from their
 	// connection. http.Server.Shutdown does not know about them, so runServer waits on this
 	// before the store closes.
@@ -174,6 +178,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
 	s.openSearch()
 	s.mcp = s.newMCPHandler()
+	s.loadExemptNetworks()
 	s.routes()
 	return s
 }
@@ -252,6 +257,15 @@ func (s *Server) requestIP(r *http.Request) string {
 	return auth.ClientIP(r, s.config.Security.TrustedProxies)
 }
 
+// perIPExempt reports whether the request comes from an allowlisted office network and so
+// skips per-IP limits. Only those: per-account windows, the CAPTCHA and every later check
+// still run. It matches the address requestIP resolved, so a forged X-Forwarded-For from an
+// untrusted peer cannot claim an allowlisted address. A match is counted.
+func (s *Server) perIPExempt(r *http.Request) bool {
+	addr, err := netip.ParseAddr(s.requestIP(r))
+	return err == nil && s.exempt.Load().Exempt(addr)
+}
+
 // accountKey is a per-account failure window for one client (an IPv6 address by its /64, which
 // one host holds whole), so guessing from elsewhere never locks the account's owner out.
 func (s *Server) accountKey(kind, username string, r *http.Request) string {
@@ -304,6 +318,8 @@ func (s *Server) routes() {
 	// Settings & Theme. The read endpoint tiers its own payload by role.
 	s.mux.HandleFunc("/api/settings", s.handleGetSettings)
 	s.mux.HandleFunc("/api/settings/theme", s.requireAdmin(s.handleSetTheme))
+	s.mux.HandleFunc("GET /api/settings/rate-limit-networks", s.requireAdmin(s.handleGetExemptNetworks))
+	s.mux.HandleFunc("PUT /api/settings/rate-limit-networks", s.requireAdmin(s.handleSetExemptNetworks))
 
 	// SCIM 2.0 routes
 	s.scim.RegisterRoutes(s.mux)

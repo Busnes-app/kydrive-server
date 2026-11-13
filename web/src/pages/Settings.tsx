@@ -4,6 +4,7 @@ import { Alert } from '../components/Alert';
 import { change, record, response } from './drive/client';
 import { GuestLinkSettings } from './GuestLinkSettings';
 import { DevicePolicySettings } from './Devices';
+import { OfficeNetworks } from './OfficeNetworks';
 
 const trashURL = '/api/drive/trash-retention';
 
@@ -78,7 +79,7 @@ interface SettingsProps {
   onOpenAppearance: () => void;
 }
 
-const sections = [['trash', 'Trash'], ['guest', 'Guest links'], ['computers', 'Computers'], ['system', 'System']] as const;
+const sections = [['trash', 'Trash'], ['guest', 'Guest links'], ['computers', 'Computers'], ['networks', 'Office networks'], ['system', 'System']] as const;
 
 export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }) => {
   const driver = typeof settings?.db_driver === 'string' ? settings.db_driver : 'sqlite';
@@ -88,7 +89,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }
       <header className="ky-page-head">
         <div>
           <h1 className="ky-page-title">Server settings</h1>
-          <p className="ky-page-lede">Drive-wide rules for trash, guest links and linked computers.</p>
+          <p className="ky-page-lede">Drive-wide rules for trash, guest links, linked computers and office networks.</p>
         </div>
       </header>
       <div className="tabs" role="tablist" aria-label="Settings sections">
@@ -98,6 +99,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }
         {tab === 'trash' && <TrashRetention />}
         {tab === 'guest' && <GuestLinkSettings />}
         {tab === 'computers' && <DevicePolicySettings />}
+        {tab === 'networks' && <OfficeNetworks />}
         {tab === 'system' && <section className="panel" aria-labelledby="system-heading">
           <div className="panel-header"><div><Database size={20} aria-hidden="true" /><h2 id="system-heading" className="panel-title" style={{ margin: 0 }}>System</h2></div></div>
           <dl className="settings-facts">

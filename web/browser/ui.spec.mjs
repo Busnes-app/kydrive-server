@@ -90,7 +90,19 @@ test('production CSP, worker, themes, keyboard and responsive shell', async ({ p
   await expect(nav.getByRole('button', { name: 'Server settings', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('[aria-current="page"]')).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Server settings', exact: true })).toBeVisible();
+  // Office networks: a too-broad range is refused by the server, a real one is stored canonically.
+  await page.getByRole('tab', { name: 'Office networks' }).click();
+  const networks = page.getByLabel('Networks that skip the per-address limit, one per line');
+  await networks.fill('10.0.0.0/8');
+  await page.getByRole('button', { name: 'Save networks' }).click();
+  await expect(page.getByRole('alert')).toContainText('too broad');
+  await networks.fill('203.0.113.9/24');
+  await page.getByRole('button', { name: 'Save networks' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+  await expect(networks).toHaveValue('203.0.113.0/24');
+  await page.screenshot({ path: testInfo.outputPath('office-networks.png'), fullPage: true });
   await fits(page);
+  await page.getByRole('tab', { name: 'Trash' }).click();
   await expect(page.getByRole('button', { name: 'Pair Device' })).toHaveCount(0);
   // New suite palettes must keep status text readable against both app surfaces.
   await appearance(page);

@@ -32,7 +32,9 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 	username, secret, ok := r.BasicAuth()
 	token, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	ipKey, userKey := "dav:"+s.requestIP(r), s.accountKey("dav-user", username, r)
-	if s.attemptsExceeded(ipKey, 20) {
+	// An office network skips the per-client window for app passwords only; the per-account
+	// window below still bounds them. Device tokens have no account window, so keep it.
+	if s.attemptsExceeded(ipKey, 20) && !(ok && !bearer && s.perIPExempt(r)) {
 		w.Header().Set("Retry-After", "60")
 		http.Error(w, "Too many failed sign-ins", http.StatusTooManyRequests)
 		return
@@ -61,7 +63,9 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 		id, err = s.store.Drive().AppPasswordUser(r.Context(), username, secret)
 		if errors.Is(err, drive.ErrDenied) {
 			// Only failures count: a mounted client makes hundreds of good requests a minute.
-			s.allowAttempt(ipKey, 20, time.Minute)
+			if !s.perIPExempt(r) {
+				s.allowAttempt(ipKey, 20, time.Minute)
+			}
 			s.allowAttempt(userKey, 10, 15*time.Minute)
 			challenge(w)
 			return

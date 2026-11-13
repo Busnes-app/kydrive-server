@@ -15,6 +15,7 @@ import (
 
 	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/ky-primitives/keyfile"
+	"github.com/Busnes-app/ky-primitives/netallow"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 )
 
@@ -71,6 +72,9 @@ type SecurityConfig struct {
 	// TrustedProxies is the parsed KY_TRUSTED_PROXIES allowlist. Only a request whose peer
 	// address falls inside it may speak for a client other than itself.
 	TrustedProxies []netip.Prefix `json:"-"`
+	// RateLimitExemptNetworks is KY_RATE_LIMIT_EXEMPT_NETWORKS in netallow's canonical form:
+	// office networks whose requests skip per-IP limits. The admin setting adds to it.
+	RateLimitExemptNetworks string `json:"-"`
 	// KeyInDataDir is set while <DataDir>/encryption.key exists, whether or not the key was
 	// read from it, or while <DataDir>/drill holds residue of an interrupted recovery drill
 	// (its opened capsule carries the key): a copy of the data directory then decrypts itself.
@@ -255,6 +259,10 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("KY_TRUSTED_PROXIES: %w", err)
 	}
+	exemptNetworks, err := netallow.Parse(getEnv("KY_RATE_LIMIT_EXEMPT_NETWORKS", ""))
+	if err != nil {
+		return nil, fmt.Errorf("KY_RATE_LIMIT_EXEMPT_NETWORKS: %w", err)
+	}
 
 	readTimeout, err := getEnvDuration("KY_READ_TIMEOUT", 5*time.Minute)
 	if err != nil || readTimeout < 15*time.Second || readTimeout > 15*time.Minute {
@@ -298,13 +306,14 @@ func load(existing bool) (*Config, error) {
 			ConnMaxLifetime: 15 * time.Minute,
 		},
 		Security: SecurityConfig{
-			SessionSecret:  sessionSecret,
-			EncryptionKey:  encryptionKey,
-			KeyInDataDir:   statErr == nil || len(drillResidue) > 0,
-			CookieSecure:   envBool("KY_COOKIE_SECURE", env == "production"),
-			CookieDomain:   getEnv("KY_COOKIE_DOMAIN", ""),
-			SessionTTL:     7 * 24 * time.Hour,
-			TrustedProxies: trustedProxies,
+			SessionSecret:           sessionSecret,
+			EncryptionKey:           encryptionKey,
+			KeyInDataDir:            statErr == nil || len(drillResidue) > 0,
+			CookieSecure:            envBool("KY_COOKIE_SECURE", env == "production"),
+			CookieDomain:            getEnv("KY_COOKIE_DOMAIN", ""),
+			SessionTTL:              7 * 24 * time.Hour,
+			TrustedProxies:          trustedProxies,
+			RateLimitExemptNetworks: exemptNetworks.String(),
 		},
 		SSO: SSOConfig{
 			Enabled:            envBool("KY_SSO_ENABLED", true),
