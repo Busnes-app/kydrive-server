@@ -12,6 +12,7 @@ test('KyPost switch in Settings > Files and the pairing in Server settings', asy
   const headers = await signIn(page);
   expect((await page.request.put('/api/drive/kypost', { headers, data: { enabled: false } })).ok()).toBe(true);
   await page.goto('/#/settings/files');
+  await page.reload();
   const box = page.getByLabel('Let KyPost save and share my files');
   await expect(box).not.toBeChecked();
   await box.check();
