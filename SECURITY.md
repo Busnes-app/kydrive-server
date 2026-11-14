@@ -16,6 +16,20 @@ and disclosure.
 - Access is per-identity and per-workspace. Personal workspaces are private to their account; group workspaces are scoped to the group.
 - Service API tokens are credentials for the calling application; scope them to what that application needs and never log them.
 - Deactivating an identity in KyIdentity must remove its access; group-owned content remains after a member leaves.
+- KyPost ([docs/KYPOST.md](docs/KYPOST.md)). Whoever holds the KyDrive–KyPost pair secret
+  (a compromised KyPost) can, for any active everyday account whose KyPost switch is on: add
+  new files (within quota, `KYDRIVE_MAX_FILE_SIZE` and 8 live tickets) to that person's
+  `Mail attachments` folder, put reader organisation links on files directly in it, and read
+  that person's free quota. It cannot read, list, download, move, trash, purge or replace any
+  file, share with people, make guest links, mint credentials or editor sessions, change the
+  switch, or reach shared workspaces or other folders; the peer context in
+  `internal/drive/access.go` refuses all of it, so a bug in a route cannot widen it. An
+  organisation link it makes opens only for signed-in KyDrive members. Turning the switch off
+  stops it for that person at once, unpairing in KyIdentity (or removing the environment
+  variables) stops it for everyone within the hourly refresh; rotate the pair secret in
+  KyIdentity after a compromise. Upload tickets are 15-minute single-file credentials carried in
+  a URL path: keep `/api/suite/upload/` out of reverse-proxy access logs. KyDrive itself logs no
+  request URLs.
 
 ## Two-factor sign-in
 

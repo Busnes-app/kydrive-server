@@ -27,6 +27,7 @@ type Link struct {
 
 // CreateLink returns the new link and its token, which is not stored.
 func (s *Store) CreateLink(ctx context.Context, user, kind, id, role string, expires int64) (Link, string, error) {
+	// A peer may make only the link access.go's peerLink admits.
 	if isDevice(ctx) {
 		return Link{}, "", ErrDenied
 	}
@@ -40,6 +41,7 @@ func (s *Store) CreateLink(ctx context.Context, user, kind, id, role string, exp
 	raw := make([]byte, 32)
 	rand.Read(raw)
 	token := base64.RawURLEncoding.EncodeToString(raw)
+	ctx = peerOp(ctx, peerLink)
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		workspace, folder, file, trashed, err := resource(ctx, tx, kind, id)
 		if err != nil {
@@ -86,7 +88,7 @@ func (s *Store) Links(ctx context.Context, user, kind, id string) ([]Link, error
 
 // RevokeLink ends an organisation or guest link and every access that came through it.
 func (s *Store) RevokeLink(ctx context.Context, user, id string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
@@ -115,7 +117,7 @@ func (s *Store) RevokeLink(ctx context.Context, user, id string) error {
 // OpenLink gives the user the link's access and returns its item. Every way a link can be
 // unusable (unknown, revoked, expired, trashed item, lapsed owner) is ErrNotFound alike.
 func (s *Store) OpenLink(ctx context.Context, user, token string) (SharedItem, error) {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return SharedItem{}, ErrDenied
 	}
 	var item SharedItem

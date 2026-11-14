@@ -21,7 +21,7 @@ func (s *Store) CreateServiceToken(ctx context.Context, user, workspace, name, r
 	if !ValidName(name) || Rank(role) < 1 || Rank(role) > 2 {
 		return "", ErrInvalid
 	}
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return "", ErrDenied
 	}
 	id := uuid.NewString()
@@ -54,7 +54,7 @@ func (s *Store) ServiceToken(ctx context.Context, token string) (string, Service
 	return user, a, nil
 }
 func (s *Store) RevokeServiceToken(ctx context.Context, user, id string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {

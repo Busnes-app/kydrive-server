@@ -2,6 +2,7 @@ import React from 'react';
 import { Appearance } from './Appearance';
 import { AppPasswords } from './AppPasswords';
 import { Devices } from './Devices';
+import { KyPostSwitch } from './KyPost';
 import { OwnPassword } from './OwnPassword';
 
 export const SETTINGS_SECTIONS = [
@@ -29,7 +30,7 @@ export const PersonalSettings: React.FC<PersonalSettingsProps> = ({ section, use
     account: `Signed in as ${named ? `${user.display_name} (${user.username})` : user.username}, ${role === 'Administrator' ? 'an administrator' : 'an everyday account'}.`,
     devices: 'App passwords for phones, apps and AI agents, and the computers linked to your account.',
     appearance: 'Pick a palette and how it handles light and dark. Match system switches with your device’s setting; Light or Dark keeps one. Your choice applies straight away and is saved in this browser only.',
-    files: 'How KyDrive opens your files.',
+    files: 'How KyDrive opens your files, and what KyPost may do with them.',
   }[open.id];
   return (
     <section className="page account-page">
@@ -45,6 +46,7 @@ export const PersonalSettings: React.FC<PersonalSettingsProps> = ({ section, use
         {open.id === 'appearance' && <Appearance />}
         {open.id === 'files' && <div className="account-preferences">
           <label className="app-preference"><input type="checkbox" checked={openInNewTab} onChange={e => onOpenInNewTabChange(e.target.checked)} />Open files in a new tab</label>
+          <KyPostSwitch />
         </div>}
       </section>
     </section>

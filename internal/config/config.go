@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -37,6 +38,10 @@ type DriveConfig struct {
 	MaxFileSize   int64 `json:"max_file_size"`
 	MaxZipSize    int64 `json:"max_zip_size"`
 	ContentSearch bool  `json:"content_search"`
+	// KyPostURL (KYDRIVE_KYPOST_URL, https://host) and KyPostSecret (KYDRIVE_KYPOST_SECRET_FILE,
+	// at least 32 bytes) pair KyPost from the environment; empty leaves pairing to KyIdentity.
+	KyPostURL    string `json:"kypost_url,omitempty"`
+	KyPostSecret []byte `json:"-"`
 }
 
 // ServerConfig defines HTTP and network settings.
@@ -361,6 +366,22 @@ func load(existing bool) (*Config, error) {
 		}
 		cfg.SCIM.BearerToken = token
 	}
+	if rawURL, file := getEnv("KYDRIVE_KYPOST_URL", ""), getEnv("KYDRIVE_KYPOST_SECRET_FILE", ""); rawURL != "" || file != "" {
+		if cfg.Drive.KyPostURL, err = KyPostURL(rawURL); err != nil {
+			return nil, fmt.Errorf("KYDRIVE_KYPOST_URL: %w", err)
+		}
+		if file == "" {
+			return nil, fmt.Errorf("KYDRIVE_KYPOST_URL needs KYDRIVE_KYPOST_SECRET_FILE")
+		}
+		secret, err := applysetup.Secret(file)
+		if err != nil {
+			return nil, fmt.Errorf("KYDRIVE_KYPOST_SECRET_FILE: %w", err)
+		}
+		if len(strings.TrimSpace(secret)) < 32 {
+			return nil, fmt.Errorf("KYDRIVE_KYPOST_SECRET_FILE: the secret must be at least 32 bytes")
+		}
+		cfg.Drive.KyPostSecret = []byte(strings.TrimSpace(secret))
+	}
 	if env == "production" && cfg.SCIM.Enabled && os.Getenv("KY_SCIM_TOKEN") == "" && os.Getenv("KY_SCIM_TOKEN_FILE") == "" {
 		return nil, fmt.Errorf("KY_SCIM_TOKEN is required for production provisioning")
 	}
@@ -481,4 +502,14 @@ func unmapPrefix(p netip.Prefix) netip.Prefix {
 		return p
 	}
 	return netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+}
+
+// KyPostURL checks a KyPost base URL, from the environment or from KyIdentity, and returns it
+// without a trailing slash: https, a host, nothing else.
+func KyPostURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", errors.New("must be https://host with no path or credentials")
+	}
+	return strings.TrimSuffix(raw, "/"), nil
 }

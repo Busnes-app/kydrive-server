@@ -92,3 +92,15 @@ const OfficeBudgetForTest = officeBudget
 func SetAppPasswordCheckForTest(s *Server, check func(ctx context.Context, username, secret string) (string, error)) {
 	s.appPasswordUser = check
 }
+
+// SetKyPostForTest pairs KyPost (source "environment" or "kyidentity"); an empty url unpairs.
+func SetKyPostForTest(s *Server, url string, secret []byte, source string) {
+	if url == "" {
+		s.kypost.set(nil, "no_peer")
+		return
+	}
+	s.kypost.set(&kypostPeer{URL: url, Secret: secret, Source: source}, "")
+}
+
+// ResolveKyPostForTest runs one KyIdentity lookup.
+func ResolveKyPostForTest(s *Server, ctx context.Context) bool { return s.resolveKyPost(ctx) }

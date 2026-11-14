@@ -64,7 +64,7 @@ func (s *Store) ApproveLink(ctx context.Context, user, name, platform, challenge
 	if !ValidName(name) || len(name) > 100 || !validPlatform(platform) || !validChallenge(challenge) || !loopbackRedirect(redirect) {
 		return "", ErrInvalid
 	}
-	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isDevice(ctx) {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
 		return "", ErrDenied
 	}
 	code := secret256()
@@ -178,6 +178,9 @@ func (s *Store) DeviceUser(ctx context.Context, token string) (string, error) {
 
 // Devices lists the user's live (unrevoked) devices.
 func (s *Store) Devices(ctx context.Context, user string) ([]Device, error) {
+	if isPeer(ctx) {
+		return nil, ErrDenied
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id,name,platform,created,last_used FROM drive_devices WHERE user_id=? AND revoked_at=0 ORDER BY created`, user)
 	if err != nil {
 		return nil, err
@@ -197,7 +200,7 @@ func (s *Store) Devices(ctx context.Context, user string) ([]Device, error) {
 // RevokeDevice stops one of the user's devices at once; the token keeps answering with wipe
 // for 30 days.
 func (s *Store) RevokeDevice(ctx context.Context, user, id string, wipe bool) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {

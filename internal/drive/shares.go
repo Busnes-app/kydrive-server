@@ -67,6 +67,12 @@ func resource(ctx context.Context, q queryer, kind, id string) (workspace, folde
 // may up to their rank on the item when the workspace's editors_share is on. Share holders who
 // are not workspace members never re-share, whatever their share's role.
 func mayShare(ctx context.Context, q queryer, user, workspace, folder, file, role string) error {
+	if isPeer(ctx) {
+		if role != "reader" || file == "" {
+			return ErrDenied
+		}
+		return peerAllows(ctx, q, user, workspace, folder, file, peerLink)
+	}
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
 		return ErrDenied
 	}
@@ -110,7 +116,7 @@ func principalName(ctx context.Context, q queryer, kind, id string) (string, err
 // Share grants role on a live folder or file to a person or a group, replacing any role that
 // principal already had there.
 func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, principalID, role string) (Share, error) {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return Share{}, ErrDenied
 	}
 	sh := Share{ID: uuid.NewString(), ResourceKind: kind, ResourceID: id, PrincipalKind: principalKind, PrincipalID: principalID, Role: role}
@@ -152,7 +158,7 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 
 // Unshare removes a share the user may manage.
 func (s *Store) Unshare(ctx context.Context, user, id string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
@@ -209,7 +215,7 @@ func (s *Store) Shares(ctx context.Context, user, kind, id string) ([]Share, err
 // workspace reader with an editor share edits from there. Each item appears once, at
 // its highest shared role.
 func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, error) {
-	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isPeer(ctx) {
 		return nil, ErrDenied
 	}
 	// g: every grant reaching the user, by share or by an opened live organisation link.
@@ -263,7 +269,7 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 // People finds active accounts by name or username for an active signed-in user to share with:
 // 2–100 characters, at most 20 results, never the caller, never an email address.
 func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
-	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isPeer(ctx) {
 		return nil, ErrDenied
 	}
 	q = strings.ToLower(strings.TrimSpace(q))
@@ -289,7 +295,7 @@ func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
 
 // SetEditorsShare lets a shared workspace's managers allow its editors to share, up to their role.
 func (s *Store) SetEditorsShare(ctx context.Context, user, workspace string, on bool) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {

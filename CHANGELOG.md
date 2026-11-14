@@ -4,6 +4,18 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **KyPost can save and share files (suite contract C).** When KyPost is paired (by
+  KyIdentity, or `KYDRIVE_KYPOST_URL` and `KYDRIVE_KYPOST_SECRET_FILE`), KyPost uploads mail
+  attachments into the person's own My files, folder `Mail attachments`, and shares them by
+  reader organisation link. New signed routes `POST /api/suite/kypost/upload-tickets`,
+  `/links` and `/status` (syncauth v1 under the pair secret) and the ticket upload `PUT
+  /api/suite/upload/<ticket>`, the only route that answers CORS for another origin (the paired
+  KyPost's, without credentials). Each person chooses under **Settings → Files → Let KyPost
+  save and share my files** (default on when KyIdentity paired the apps, off when the
+  environment did); **Server settings → System** shows the pairing. KyPost's access is a new
+  peer context in `access.go` that can add files to that folder and link them, nothing else.
+  Schema 21 adds `drive_peer_settings`, `drive_peer_folders` and `drive_peer_tickets`. See
+  `docs/KYPOST.md`.
 - **Office networks skip the per-address sign-in limit.** Staff behind one NAT address share
   the per-address windows (20 sign-ins a minute, 10 password changes a minute, 20 failed WebDAV
   app-password sign-ins a minute) and can trip them together. An administrator lists the

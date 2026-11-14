@@ -20,6 +20,8 @@ var (
 	ErrInvalid  = errors.New("invalid drive input")
 	// ErrTooLarge is a body over the upload limit; it is also ErrQuota.
 	ErrTooLarge = fmt.Errorf("%w: upload limit", ErrQuota)
+	// errNameTaken is a new file's name already held by a live file or folder.
+	errNameTaken = fmt.Errorf("%w: name or file exists", ErrConflict)
 )
 
 type Store struct {
@@ -160,6 +162,9 @@ type queryer interface {
 }
 
 func authorize(ctx context.Context, q queryer, user, workspace string, need int) error {
+	if isPeer(ctx) {
+		return ErrDenied
+	}
 	if a, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok && (a.Workspace != workspace || a.Rank < need) {
 		return ErrDenied
 	}
@@ -174,7 +179,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 	return nil
 }
 func admin(ctx context.Context, q queryer, user string) error {
-	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || isDevice(ctx) {
+	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || narrowed(ctx) {
 		return ErrDenied
 	}
 	var n int
@@ -207,6 +212,9 @@ func (s *Store) Authorize(ctx context.Context, user, workspace string, need int)
 }
 
 func (s *Store) Workspaces(ctx context.Context, user string, administration bool) ([]Workspace, error) {
+	if isPeer(ctx) {
+		return nil, ErrDenied
+	}
 	if administration {
 		if err := admin(ctx, s.db, user); err != nil {
 			return nil, err
@@ -238,7 +246,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 // EnsurePersonalWorkspace creates one private workspace per immutable account ID.
 // Ownership is retained when the directory account is removed; another account cannot inherit it.
 func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (string, error) {
-	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isPeer(ctx) {
 		return "", ErrDenied
 	}
 	var id string
@@ -265,7 +273,7 @@ func ensurePersonal(ctx context.Context, tx *sql.Tx, user string) (string, error
 		return id, err
 	}
 	id = uuid.NewString()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", int64(10<<30)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", personalQuota); err != nil {
 		return "", err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces(workspace,owner,owner_name) VALUES(?,?,?)`, id, user, name); err != nil {
@@ -305,7 +313,7 @@ func sharedWorkspace(ctx context.Context, q queryer, workspace string) error {
 }
 
 func (s *Store) AuthorizeSharedManager(ctx context.Context, user, workspace string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
@@ -339,7 +347,7 @@ func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, er
 	return out, rows.Err()
 }
 func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	if role != "" && Rank(role) == 0 {
@@ -408,22 +416,27 @@ func (s *Store) AddFolder(ctx context.Context, user, workspace, parent, name str
 		if err := authorizeItem(ctx, tx, user, workspace, parent, "", 2); err != nil {
 			return err
 		}
-		if err := parentOK(ctx, tx, workspace, parent); err != nil {
-			return err
-		}
-		stored, mac, err := s.names.seal("drive_folders", f.ID, name)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES(?,?,?,?,?)`, f.ID, workspace, parent, stored, mac); err != nil {
-			return restoreErr(err)
-		}
-		if err := change(ctx, tx, workspace, "folder", f.ID); err != nil {
-			return err
-		}
-		return event(ctx, tx, user, "folder.created", f.ID)
+		return s.addFolder(ctx, tx, user, f)
 	})
 	return f, err
+}
+
+// addFolder creates f once the caller has authorized it.
+func (s *Store) addFolder(ctx context.Context, tx *sql.Tx, user string, f Folder) error {
+	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
+		return err
+	}
+	stored, mac, err := s.names.seal("drive_folders", f.ID, f.Name)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES(?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, stored, mac); err != nil {
+		return restoreErr(err)
+	}
+	if err := change(ctx, tx, f.Workspace, "folder", f.ID); err != nil {
+		return err
+	}
+	return event(ctx, tx, user, "folder.created", f.ID)
 }
 func (s *Store) Folders(ctx context.Context, user, workspace string, trashed bool) ([]Folder, error) {
 	if err := authorize(ctx, s.db, user, workspace, 1); err != nil {
@@ -615,6 +628,9 @@ func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 }
 
 func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, v Version, expected int64) error {
+	if expected == 0 {
+		ctx = peerOp(ctx, peerAdd)
+	}
 	if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 2); err != nil {
 		return err
 	}
@@ -631,7 +647,7 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_files(id,workspace,parent,name,name_hmac,revision) VALUES(?,?,?,?,?,?)`, f.ID, f.Workspace, f.Parent, stored, mac, 1); err != nil {
 			if uniqueViolation(err) {
-				return fmt.Errorf("%w: name or file exists", ErrConflict)
+				return errNameTaken
 			}
 			return err
 		}

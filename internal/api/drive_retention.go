@@ -99,6 +99,9 @@ func (s *Server) RunRetention(ctx context.Context) {
 		} else if n > 0 {
 			log.Printf("upload expiry: removed %d sessions", n)
 		}
+		if err := s.store.Drive().ExpireTickets(ctx); err != nil && ctx.Err() == nil {
+			log.Printf("kypost ticket expiry: %v", err)
+		}
 		if err := s.store.Drive().PruneChanges(ctx, time.Now().Add(-changeRetention)); err != nil && ctx.Err() == nil {
 			log.Printf("change log prune: %v", err)
 		}

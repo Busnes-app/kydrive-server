@@ -39,6 +39,16 @@ A **guest link** shares one file or folder with people who have no account. It i
 
 Items shared with you outside your own workspaces, or at a higher role than your workspace access gives you, appear under **Shared with me**, where you can browse shared folders and open or download files. Inside a folder shared with you as editor or manager you can also upload files, create folders and documents, and rename or move to trash what is in it (Move to trash asks first: the item goes to the trash of the drive it was shared from, which you cannot open, so ask whoever shared it to restore it); the shared folder itself, and a file shared on its own, stay where and as the owner put them (you cannot rename, move, trash or permanently delete them, or delete their old versions), and you cannot share them further. They are not yet listed over WebDAV, and the search box, by name or by content, covers your workspaces only. Search never shows a file, a match or a snippet you cannot read at that moment; losing access ends it on the next search. Removing a share, or removing someone from a shared group, ends their open editor at once.
 
+## KyPost
+
+When KyPost is paired, each person decides under **Settings → Files** whether KyPost may save
+and share their files (on by default when KyIdentity paired the apps, off when the operator
+did). KyPost then saves mail attachments into a `Mail attachments` folder in that person's My
+files, as their own ordinary files, and can share one of them by a reader organisation link.
+It cannot open, list, download, move, delete or share anything else, cannot create guest
+links and never reaches shared workspaces; dedicated installer administrators and local
+accounts cannot be named by it. Details and the wire contract: [KYPOST.md](KYPOST.md).
+
 ## Leavers
 
 A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:
