@@ -17,6 +17,8 @@
 **/coverage.out
 **/node_modules
 /kydrive-server
+/server
+/.browser/
 .claude/
 .codex/
 .superpowers/
