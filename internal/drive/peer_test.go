@@ -282,7 +282,7 @@ func TestTicketSwitchOffMidUpload(t *testing.T) {
 	if _, _, err := e.d.CreateLink(e.peer, "worker", "file", e.mail.ID, "reader", 0); !errors.Is(err, drive.ErrPeerOff) {
 		t.Errorf("link while off: %v", err)
 	}
-	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, drive.Peer{Live: func() bool { return true }}), "stranger", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
+	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, drive.Peer{Live: func() bool { return true }, Pairing: "pairing-1"}), "stranger", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
 		t.Errorf("default off: %v", err)
 	}
 }
@@ -292,7 +292,7 @@ func TestTicketUnpairedMidUpload(t *testing.T) {
 	e := newPeerEnv(t)
 	tk := e.ticket(t, "worker", "late.txt", 3)()
 	live := true
-	p := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return live }})
+	p := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return live }, Pairing: "pairing-1"})
 	if _, _, err := e.d.TicketUpload(p, e.staging, e.blobs, testKey, tk, 0, 1, strings.NewReader("a")); err != nil {
 		t.Fatal(err)
 	}
@@ -306,5 +306,29 @@ func TestTicketUnpairedMidUpload(t *testing.T) {
 	}
 	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {
 		t.Errorf("%d sessions and tickets left", n)
+	}
+}
+
+// A ticket works only under the pairing that issued it: after a rotation, neither an unused
+// nor a partly uploaded one publishes, and both are removed with their bytes.
+func TestTicketBoundToItsPairing(t *testing.T) {
+	e := newPeerEnv(t)
+	unused := e.ticket(t, "worker", "unused.txt", 1)()
+	partial := e.ticket(t, "worker", "partial.txt", 2)
+	if _, _, err := e.put(partial(), 0, "a"); err != nil {
+		t.Fatal(err)
+	}
+	rotated := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return true }, Pairing: "pairing-2"})
+	if _, f, err := e.d.TicketUpload(rotated, e.staging, e.blobs, testKey, unused, 0, 1, strings.NewReader("x")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+		t.Errorf("unused ticket after rotation: %+v %v", f, err)
+	}
+	if _, f, err := e.d.TicketUpload(rotated, e.staging, e.blobs, testKey, partial(), 1, 1, strings.NewReader("b")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+		t.Errorf("partial ticket after rotation: %+v %v", f, err)
+	}
+	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {
+		t.Errorf("%d sessions and tickets left", n)
+	}
+	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return true }}), "worker", "a.txt", 1, 10); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("ticket without a pairing: %v", err)
 	}
 }

@@ -105,10 +105,11 @@ BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
 CREATE TRIGGER drive_folder_name_free_update BEFORE UPDATE ON drive_folders WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
 BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;`,
 	// KyPost (peer.go): each user's choice of the per-user switch, their Mail attachments
-	// folder and the upload tickets KyPost holds (token hashes only; names sealed).
+	// folder and the upload tickets KyPost holds (token hashes only; names sealed; pairing is
+	// the issuing pairing's keyed fingerprint).
 	`CREATE TABLE drive_peer_settings(user_id TEXT PRIMARY KEY,enabled INTEGER NOT NULL);
 CREATE TABLE drive_peer_folders(owner TEXT PRIMARY KEY,folder TEXT NOT NULL);
-CREATE TABLE drive_peer_tickets(id TEXT PRIMARY KEY,token_hash TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,expires INTEGER NOT NULL,session TEXT NOT NULL DEFAULT '');
+CREATE TABLE drive_peer_tickets(id TEXT PRIMARY KEY,token_hash TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,expires INTEGER NOT NULL,pairing TEXT NOT NULL,session TEXT NOT NULL DEFAULT '');
 CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 }
 

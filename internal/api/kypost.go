@@ -3,6 +3,9 @@ package api
 import (
 	"cmp"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -210,7 +213,9 @@ func (s *Server) kypostEnabled(ctx context.Context, user string, p *kypostPeer) 
 // peerContext is ctx acting for KyPost under p: writes are refused once p is no longer the
 // pairing (unpaired, or re-paired to another address or secret).
 func (s *Server) peerContext(ctx context.Context, p *kypostPeer) context.Context {
-	return drive.WithPeer(ctx, drive.Peer{SwitchDefault: p.Source == kypostSourceKyIdentity, Live: func() bool {
+	mac := hmac.New(sha256.New, p.Secret)
+	mac.Write([]byte("kydrive:kypost-pairing\x00" + p.Source + "\x00" + p.URL))
+	return drive.WithPeer(ctx, drive.Peer{SwitchDefault: p.Source == kypostSourceKyIdentity, Pairing: hex.EncodeToString(mac.Sum(nil)), Live: func() bool {
 		cur := s.kypost.peer.Load()
 		return cur != nil && cur.URL == p.URL && cur.Source == p.Source && string(cur.Secret) == string(p.Secret)
 	}})

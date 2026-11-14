@@ -99,9 +99,12 @@ const (
 // they never chose (on for a KyIdentity pairing, off for an environment one); Live reports
 // whether that pairing still stands. peerSwitch checks both in the transaction of the write
 // it allows, so an unpair or a switch turned off while bytes stream publishes nothing.
+// Pairing fingerprints the pairing (never its secret); a ticket keeps the one it was issued
+// under and works only while it is current.
 type Peer struct {
 	SwitchDefault bool
 	Live          func() bool
+	Pairing       string
 }
 
 // WithPeer marks ctx as KyPost acting, under p, for the user it names in each call.

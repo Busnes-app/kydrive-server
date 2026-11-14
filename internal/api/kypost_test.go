@@ -592,3 +592,24 @@ func (u *repairBody) Read(p []byte) (int, error) {
 	}
 	return u.r.Read(p)
 }
+
+// Tickets from a previous pairing do not publish after the secret rotates.
+func TestKyPostTicketsDieWithTheirPairing(t *testing.T) {
+	w := newKyPostWorld(t, "kyidentity")
+	unused := w.uploadURL("sub-alice", "unused.txt", 1)
+	partial := w.uploadURL("sub-alice", "partial.txt", 2)
+	if rec := w.put(partial, "", "bytes 0-0/2", "a"); rec.Code != 204 {
+		t.Fatalf("first chunk: %d", rec.Code)
+	}
+	api.SetKyPostForTest(w.srv, kypostOrigin, bytes.Repeat([]byte("r"), 32), "kyidentity")
+	code(t, w.put(unused, "", "", "x"), 404, "kypost_off")
+	code(t, w.put(partial, "", "bytes 1-1/2", "b"), 404, "kypost_off")
+	code(t, w.put(unused, "", "", "x"), 404, "not_found") // removed
+	home, err := w.st.Drive().EnsurePersonalWorkspace(context.Background(), "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files, err := w.st.Drive().Files(context.Background(), "alice", home, false); err != nil || len(files) != 0 {
+		t.Errorf("published under a rotated pairing: %v %v", files, err)
+	}
+}

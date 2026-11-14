@@ -29,6 +29,7 @@ var ErrTicketLimit = errors.New("too many live upload tickets")
 
 // Ticket is a live upload ticket. Session is the upload session its first byte opened.
 type Ticket struct {
+	Pairing string
 	ID      string
 	Owner   string
 	Name    string
@@ -73,8 +74,9 @@ func (s *Store) PeerFree(ctx context.Context, user string) (int64, error) {
 // IssueTicket gives KyPost (a peer context) a ticket for one file of exactly size bytes named
 // name, bound to user. The token is 256 random bits, returned once; only its hash is stored.
 func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSize int64) (string, Ticket, error) {
-	t := Ticket{ID: uuid.NewString(), Owner: user, Name: name, Size: size, Expires: time.Now().Add(TicketLife).Unix()}
-	if !isPeer(ctx) {
+	p, _ := ctx.Value(peerKey{}).(Peer)
+	t := Ticket{Pairing: p.Pairing, ID: uuid.NewString(), Owner: user, Name: name, Size: size, Expires: time.Now().Add(TicketLife).Unix()}
+	if !isPeer(ctx) || p.Pairing == "" {
 		return "", t, ErrDenied
 	}
 	// Every numbering must fit, as for guest uploads, or a long name fails only when taken.
@@ -109,7 +111,7 @@ func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSiz
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires) VALUES(?,?,?,?,?,?)`, t.ID, tokenHash(token), user, stored, size, t.Expires); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires,pairing) VALUES(?,?,?,?,?,?,?)`, t.ID, tokenHash(token), user, stored, size, t.Expires, t.Pairing); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "kypost.ticket_issued", t.ID)
@@ -121,8 +123,8 @@ func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSiz
 func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 	var t Ticket
 	var stored string
-	err := s.db.QueryRowContext(ctx, `SELECT id,owner,name,size,expires,session FROM drive_peer_tickets WHERE token_hash=? AND expires>?`, tokenHash(token), time.Now().Unix()).
-		Scan(&t.ID, &t.Owner, &stored, &t.Size, &t.Expires, &t.Session)
+	err := s.db.QueryRowContext(ctx, `SELECT id,owner,name,size,expires,session,pairing FROM drive_peer_tickets WHERE token_hash=? AND expires>?`, tokenHash(token), time.Now().Unix()).
+		Scan(&t.ID, &t.Owner, &stored, &t.Size, &t.Expires, &t.Session, &t.Pairing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}
@@ -143,10 +145,15 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 		return 0, nil, ErrDenied
 	}
 	defer func() {
-		if t.Session != "" && (errors.Is(err, ErrPeerOff) || errors.Is(err, ErrPeerGone)) {
+		if errors.Is(err, ErrPeerOff) || errors.Is(err, ErrPeerGone) {
 			s.dropTicket(context.WithoutCancel(ctx), staging, t)
 		}
 	}()
+	// A ticket works only under the pairing that issued it: a rotated or re-paired KyPost
+	// cannot use one the old pairing held.
+	if p, _ := ctx.Value(peerKey{}).(Peer); p.Pairing == "" || p.Pairing != t.Pairing {
+		return 0, nil, ErrPeerGone
+	}
 	if t.Session == "" {
 		if start != 0 {
 			return 0, nil, ErrConflict
@@ -187,11 +194,13 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 	return u.Received, &file, nil
 }
 
-// dropTicket discards a refused ticket's staged bytes and the ticket: switched off or
-// unpaired while the bytes arrived, nothing is published and nothing kept.
+// dropTicket discards a refused ticket's staged bytes, if any, and the ticket: switched off
+// or unpaired, nothing is published and nothing kept.
 func (s *Store) dropTicket(ctx context.Context, staging string, t Ticket) {
-	if err := s.dropUpload(ctx, staging, t.Session, nil); err != nil {
-		log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, err)
+	if err := s.db.QueryRowContext(ctx, `SELECT session FROM drive_peer_tickets WHERE id=?`, t.ID).Scan(&t.Session); err == nil && t.Session != "" {
+		if err := s.dropUpload(ctx, staging, t.Session, nil); err != nil {
+			log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, err)
+		}
 	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM drive_peer_tickets WHERE id=?`, t.ID); err != nil {
 		log.Printf("kypost ticket %s: not removed: %v", t.ID, err)

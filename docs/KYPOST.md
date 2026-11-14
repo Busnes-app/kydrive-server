@@ -35,7 +35,9 @@ choice wins. Off, every route below answers 409 `sharing_off` (status answers
 inside the transaction that publishes a file or creates a link, so an upload still streaming
 when it is turned off publishes nothing; its staged bytes and ticket are removed. The same
 check refuses a write once the pairing it came under has ended or changed address or secret
-(404 `kypost_off`).
+(404 `kypost_off`). Each ticket also records a keyed fingerprint of the pairing that issued
+it (HMAC under the pair secret of source and address, never the secret); after a rotation or
+re-pairing an old ticket answers 404 `kypost_off` and is removed with any staged bytes.
 
 ## Where files go
 

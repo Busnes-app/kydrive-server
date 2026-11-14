@@ -398,4 +398,4 @@ func TestPeerAllowedMethodsStayInTheFolder(t *testing.T) {
 }
 
 // livePeer is a KyIdentity pairing that stays paired.
-var livePeer = drive.Peer{SwitchDefault: true, Live: func() bool { return true }}
+var livePeer = drive.Peer{SwitchDefault: true, Live: func() bool { return true }, Pairing: "pairing-1"}
