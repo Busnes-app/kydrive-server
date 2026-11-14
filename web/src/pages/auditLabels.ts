@@ -8,6 +8,7 @@ const labels: Record<string, string> = {
   'admin.bulk_retention': 'Document retention changed',
   'admin.device_policy': 'Computer policy changed',
   'admin.guest_links': 'Guest link policy changed',
+  'admin.rate_limit_networks': 'Office networks changed',
   'admin.trash_retention': 'Trash retention changed',
   'app_password.created': 'App password created',
   'app_password.expired': 'App password expired',

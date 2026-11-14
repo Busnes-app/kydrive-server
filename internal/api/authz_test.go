@@ -139,6 +139,8 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 		{"PUT", "/api/backup/bulk-retention"},
 		{"GET", "/api/backup/status"},
 		{"POST", "/api/settings/theme"},
+		{"GET", "/api/settings/rate-limit-networks"},
+		{"PUT", "/api/settings/rate-limit-networks"},
 		{"GET", "/api/drive/trash-retention"},
 		{"PUT", "/api/drive/trash-retention"},
 		{"PUT", "/api/drive/workspaces/x/name"},

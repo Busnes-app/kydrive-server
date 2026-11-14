@@ -32,13 +32,32 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 	username, secret, ok := r.BasicAuth()
 	token, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	ipKey, userKey := "dav:"+s.requestIP(r), s.accountKey("dav-user", username, r)
+	// An office network's app-password requests draw on the shared office budget in place of
+	// the per-client window; the per-account window below still bounds them. Device tokens have
+	// no account window, so they keep the per-client one. The budget is drawn before an account
+	// key is made, so it also bounds how many keys one office can mint. A unit stays spent only
+	// when the request skipped the per-client window; otherwise it is handed back.
+	office := ok && !bearer && s.officeDraw(r, "dav")
+	skipped := false
 	if s.attemptsExceeded(ipKey, 20) {
-		w.Header().Set("Retry-After", "60")
-		http.Error(w, "Too many failed sign-ins", http.StatusTooManyRequests)
-		return
+		if !office {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "Too many failed sign-ins", http.StatusTooManyRequests)
+			return
+		}
+		skipped = true
+		s.countExempt(r)
 	}
-	// An exhausted account window, per client, answers like a wrong password.
-	if ok && s.attemptsExceeded(userKey, 10) {
+	unspent := func() {
+		if office && !skipped {
+			s.refundAttempt("dav:office")
+		}
+	}
+	// The account window, per client, is reserved before the lookup, so concurrent guesses
+	// cannot all pass a window none of them has filled yet. An exhausted one answers like a
+	// wrong password.
+	if ok && !bearer && !s.allowAttempt(userKey, 10, 15*time.Minute) {
+		unspent()
 		challenge(w)
 		return
 	}
@@ -58,14 +77,25 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		var err error
-		id, err = s.store.Drive().AppPasswordUser(r.Context(), username, secret)
+		check := s.store.Drive().AppPasswordUser
+		if s.appPasswordUser != nil {
+			check = s.appPasswordUser
+		}
+		id, err = check(r.Context(), username, secret)
 		if errors.Is(err, drive.ErrDenied) {
 			// Only failures count: a mounted client makes hundreds of good requests a minute.
-			s.allowAttempt(ipKey, 20, time.Minute)
-			s.allowAttempt(userKey, 10, 15*time.Minute)
+			// The account window already holds this one.
+			if !office {
+				s.allowAttempt(ipKey, 20, time.Minute)
+			} else if !skipped {
+				skipped = true
+				s.countExempt(r)
+			}
 			challenge(w)
 			return
 		}
+		s.refundAttempt(userKey)
+		unspent()
 		if err != nil {
 			log.Printf("webdav sign-in: %v", err)
 			http.Error(w, "Sign-in unavailable", http.StatusServiceUnavailable)
