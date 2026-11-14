@@ -138,6 +138,28 @@ var mutators = []mutatorCase{
 			return []string{row(e.w, "file", f.ID)}, err
 		}
 	}},
+	{"TicketUpload", func(t *testing.T, e *changeEnv) func() ([]string, error) {
+		staging := t.TempDir()
+		home, err := e.d.EnsurePersonalWorkspace(e.ctx, "worker")
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx), "worker", "mail.pdf", 3, 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tk, err := e.d.Ticket(e.ctx, token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return func() ([]string, error) {
+			_, f, err := e.d.TicketUpload(e.ctx, staging, e.blobs, testKey, tk, 0, 3, strings.NewReader("abc"))
+			if err != nil {
+				return nil, err
+			}
+			return []string{row(home, "folder", f.Parent), row(home, "file", f.ID)}, nil
+		}
+	}},
 	{"AddFolder", func(t *testing.T, e *changeEnv) func() ([]string, error) {
 		return func() ([]string, error) {
 			f, err := e.d.AddFolder(e.ctx, "worker", e.w, "", "Docs")
@@ -343,6 +365,12 @@ var noChange = map[string]string{
 	"Snapshot":                "read",
 	"Shares":                  "read",
 	"StartUpload":             "staging only",
+	"IssueTicket":             "a ticket only",
+	"Ticket":                  "read",
+	"ExpireTickets":           "tickets only",
+	"PeerSetting":             "read",
+	"SetPeerSetting":          "user setting",
+	"PeerFree":                "read",
 	"UnlinkDevice":            "device credential bookkeeping",
 	"Unshare":                 "shares only add access inside a readable workspace (Decision 1)",
 	"SweepOrphans":            "unreferenced blobs only",

@@ -49,7 +49,7 @@ type GuestListing struct {
 // CreateGuestLink returns a guest link and its token, which is not stored. maxLife is the
 // administrator's limit; the expiry is mandatory.
 func (s *Store) CreateGuestLink(ctx context.Context, user, kind, id string, expires int64, secret string, uploadOnly bool, maxLife time.Duration) (GuestLink, string, error) {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return GuestLink{}, "", ErrDenied
 	}
 	g := GuestLink{ID: uuid.NewString(), Expires: expires, Created: now(), CreatedBy: user, UploadOnly: uploadOnly, HasPassword: secret != ""}

@@ -43,7 +43,14 @@ type UploadSession struct {
 // File at revision Expected. Size must fit max and the workspace's free quota now; Publish
 // checks quota again at completion.
 func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, max int64) (UploadSession, error) {
-	u.ID, u.Received, u.Expires = uuid.NewString(), 0, time.Now().Add(uploadTTL).Unix()
+	return s.startUpload(ctx, user, u, max, time.Now().Add(uploadTTL))
+}
+
+func (s *Store) startUpload(ctx context.Context, user string, u UploadSession, max int64, expires time.Time) (UploadSession, error) {
+	u.ID, u.Received, u.Expires = uuid.NewString(), 0, expires.Unix()
+	if u.File == "" {
+		ctx = peerOp(ctx, peerAdd)
+	}
 	if u.Size < 0 || u.Expected < 0 || (u.File == "") != (u.Expected == 0) || (u.File == "" && !ValidName(u.Name)) {
 		return u, ErrInvalid
 	}
@@ -103,7 +110,7 @@ func (s *Store) StartUpload(ctx context.Context, user string, u UploadSession, m
 				return err
 			}
 			if taken > 0 {
-				return fmt.Errorf("%w: name or file exists", ErrConflict)
+				return errNameTaken
 			}
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_sessions(id,owner,workspace,parent,name,name_hmac,file,expected,size,expires,mtime) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
@@ -129,6 +136,9 @@ func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, err
 	}
 	if u.Name, err = s.names.open("drive_upload_sessions", id, stored); err != nil {
 		return u, err
+	}
+	if u.File == "" {
+		ctx = peerOp(ctx, peerAdd)
 	}
 	return u, authorizeItem(ctx, s.db, user, u.Workspace, u.Parent, u.File, 2)
 }
@@ -322,6 +332,9 @@ func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, k
 
 // CancelUpload discards the caller's session and its staged bytes.
 func (s *Store) CancelUpload(ctx context.Context, staging, user, id string) error {
+	if isPeer(ctx) {
+		return ErrDenied
+	}
 	if _, err := s.Upload(ctx, user, id); err != nil {
 		return err
 	}

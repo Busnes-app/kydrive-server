@@ -83,7 +83,7 @@ func (s *Store) CreateAgentToken(ctx context.Context, user, name, scope, workspa
 }
 
 func (s *Store) createCredential(ctx context.Context, user, name, scope, workspace, folder, secret string) (AppPassword, error) {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return AppPassword{}, ErrDenied
 	}
 	p := AppPassword{ID: uuid.NewString(), Name: name, Created: now(), Scope: scope, Workspace: workspace, Folder: folder}
@@ -148,6 +148,9 @@ func revokeAfter(p AppPassword) int64 {
 }
 
 func (s *Store) AppPasswords(ctx context.Context, user string) ([]AppPassword, error) {
+	if isPeer(ctx) {
+		return nil, ErrDenied
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id,name,created,last_used,scope,root_workspace,root_folder FROM drive_app_passwords WHERE user_id=? ORDER BY created`, user)
 	if err != nil {
 		return nil, err
@@ -166,7 +169,7 @@ func (s *Store) AppPasswords(ctx context.Context, user string) ([]AppPassword, e
 }
 
 func (s *Store) RevokeAppPassword(ctx context.Context, user, id string) error {
-	if isDevice(ctx) {
+	if narrowed(ctx) {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
@@ -184,7 +187,7 @@ func (s *Store) RevokeAppPassword(ctx context.Context, user, id string) error {
 // SetAgentScope moves the user's own agent token between read and write. A WebDAV password never
 // becomes an agent token, nor the reverse (ErrInvalid).
 func (s *Store) SetAgentScope(ctx context.Context, user, id, scope string) error {
-	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isDevice(ctx) {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
 		return ErrDenied
 	}
 	if !IsAgentScope(scope) {

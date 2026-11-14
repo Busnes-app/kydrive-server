@@ -28,7 +28,7 @@ var (
 		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
 		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
-		"Share", "Unshare",
+		"SetPeerSetting", "Share", "Unshare",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
@@ -38,6 +38,8 @@ var (
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
 		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
+		// KyPost's signed routes and ticket uploads.
+		"ExpireTickets", "IssueTicket", "PeerFree", "PeerSetting", "Ticket", "TicketUpload",
 	}
 )
 
@@ -167,7 +169,8 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 			}
 			return d.RestoreWorkspace(c, "admin", x.ID)
 		},
-		"SetRetention": func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
+		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", false) },
+		"SetRetention":   func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
 		// Handover needs a leaver; the device refusal comes first, so no success case.
 		"Handover": nil,
 	}
