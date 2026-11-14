@@ -58,8 +58,9 @@ func (s *syncBuffer) String() string {
 func newKyPostWorld(t *testing.T, source string) *kypostWorld {
 	t.Helper()
 	logs := &syncBuffer{}
+	prev := log.Writer()
 	log.SetOutput(logs)
-	t.Cleanup(func() { log.SetOutput(nil) })
+	t.Cleanup(func() { log.SetOutput(prev) })
 	srv, st, cfg := setupTestServer(t)
 	cfg.SSO.KySignOnIssuer = kypostIssuer
 	cfg.Server.AppURL = "https://drive.example"
@@ -429,7 +430,9 @@ func uploadSmall(t *testing.T, w *kypostWorld, user, workspace string) string {
 func TestKyPostSettingsAndAdminStatus(t *testing.T) {
 	w := newKyPostWorld(t, "environment")
 	carol := loginWithProvider(t, w.srv, w.st, "carol", "kysignon", "sub-carol")
-	get := func() string { return strings.TrimSpace(do(t, w.srv, http.MethodGet, "/api/drive/kypost", carol).Body.String()) }
+	get := func() string {
+		return strings.TrimSpace(do(t, w.srv, http.MethodGet, "/api/drive/kypost", carol).Body.String())
+	}
 	if got := get(); got != `{"enabled":false,"paired":true}` {
 		t.Errorf("environment default: %s", got)
 	}
