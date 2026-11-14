@@ -22,6 +22,7 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 
 - `KY_EXCALIDRAW_FONTS_DIR` (default empty, none served) is the directory holding Excalidraw's `Xiaolai/` CJK fonts; set but not a directory fails startup. The Docker image sets it to `/app/excalidraw-fonts`.
 
+- `KYDRIVE_KYPOST_URL` (`https://host`, no path, query or credentials; `KyPostURL` also checks KyIdentity's) and `KYDRIVE_KYPOST_SECRET_FILE` (read through `applysetup.Secret`, at least 32 bytes once trimmed) pair KyPost from the environment (`Drive.KyPostURL`, `Drive.KyPostSecret`, never serialised); either alone or a bad value fails startup naming the variable. `kypost_test.go`.
 - `KYDRIVE_CONTENT_SEARCH` (boolean, default on) runs the content search index worker and content matching (`Drive.ContentSearch`); off leaves file name search alone.
 - `KYDRIVE_MAX_FILE_SIZE` (resumable upload size) and `KYDRIVE_MAX_ZIP_SIZE` (folder zip plaintext total) default to `10GiB` and accept a whole number of `MiB`, `GiB` or `TiB` from 1 MiB to 1 TiB; anything else fails startup naming the variable.
 
