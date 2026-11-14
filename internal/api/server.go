@@ -59,6 +59,8 @@ type Server struct {
 	powSpent   auth.PoWSpent
 	// exempt is the office-network allowlist: environment plus admin setting.
 	exempt atomic.Pointer[netallow.List]
+	// appPasswordUser replaces the WebDAV app-password lookup when set. Tests only.
+	appPasswordUser func(ctx context.Context, username, secret string) (string, error)
 	// detached counts the requests running on a context deliberately separated from their
 	// connection. http.Server.Shutdown does not know about them, so runServer waits on this
 	// before the store closes.
@@ -257,13 +259,42 @@ func (s *Server) requestIP(r *http.Request) string {
 	return auth.ClientIP(r, s.config.Security.TrustedProxies)
 }
 
-// perIPExempt reports whether the request comes from an allowlisted office network and so
-// skips per-IP limits. Only those: per-account windows, the CAPTCHA and every later check
-// still run. It matches the address requestIP resolved, so a forged X-Forwarded-For from an
-// untrusted peer cannot claim an allowlisted address. A match is counted.
-func (s *Server) perIPExempt(r *http.Request) bool {
+// officeBudget is what all allowlisted office networks together may spend each minute on one
+// per-IP limit before their requests fall back to that limit, so one host inside an office
+// cannot make unbounded attempts. It also bounds the account keys an office can mint: the two
+// limits whose callers choose the account name (sign-in and WebDAV app passwords) at this rate
+// for a whole 15-minute account window come to 6 000 keys, well under attemptsCap, so office
+// traffic cannot fill the map and evict live account windows. TestOfficeBudgetFitsTheLimiter
+// pins that sum.
+const officeBudget = 200
+
+// officeDraw spends one unit of bucket's shared office budget if the request comes from an
+// allowlisted office network and the budget is not yet spent this minute. It matches the
+// address requestIP resolved, so a forged X-Forwarded-For from an untrusted peer cannot claim
+// an allowlisted address. It does not count the request as exempted: countExempt does that,
+// once the per-IP limit was actually skipped.
+func (s *Server) officeDraw(r *http.Request, bucket string) bool {
 	addr, err := netip.ParseAddr(s.requestIP(r))
-	return err == nil && s.exempt.Load().Exempt(addr)
+	return err == nil && s.exempt.Load().Contains(addr) && s.allowAttempt(bucket+":office", officeBudget, time.Minute)
+}
+
+// countExempt counts a request that skipped a per-IP limit, for the admin screen.
+func (s *Server) countExempt(r *http.Request) {
+	if addr, err := netip.ParseAddr(s.requestIP(r)); err == nil {
+		s.exempt.Load().Exempt(addr)
+	}
+}
+
+// allowPerIP is allowAttempt for a limit keyed only on the client address (key
+// bucket+":"+requestIP). A request from an allowlisted office network draws on the shared
+// office budget instead, and meets the ordinary per-IP window once that is spent. Only per-IP
+// limits come here: per-account windows, the CAPTCHA and every later check run regardless.
+func (s *Server) allowPerIP(r *http.Request, bucket string, limit int, window time.Duration) bool {
+	if s.officeDraw(r, bucket) {
+		s.countExempt(r)
+		return true
+	}
+	return s.allowAttempt(bucket+":"+s.requestIP(r), limit, window)
 }
 
 // accountKey is a per-account failure window for one client (an IPv6 address by its /64, which

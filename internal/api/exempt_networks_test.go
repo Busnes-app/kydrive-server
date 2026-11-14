@@ -7,10 +7,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
 	"github.com/Busnes-app/kydrive-server/internal/api"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -384,5 +388,163 @@ func TestUnreadableStoredExemptNetworksAreDropped(t *testing.T) {
 	}
 	if limited(t, srv, "198.18.7.50:41000") {
 		t.Fatal("the environment's network lost its exemption")
+	}
+}
+
+// davBasic sends one WebDAV PROPFIND with an app password from peer.
+func davBasic(srv *api.Server, peer, user, pass string) int {
+	r := httptest.NewRequest("PROPFIND", "/dav/", nil)
+	r.Header.Set("Depth", "0")
+	r.RemoteAddr = peer
+	r.SetBasicAuth(user, pass)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, r)
+	return w.Code
+}
+
+// The two limits whose callers pick the account name, sign-in and WebDAV, each let an office
+// mint at most officeBudget keys a minute; over a 15-minute account window that must stay
+// well under the limiter's capacity, or office traffic could evict live account windows.
+func TestOfficeBudgetFitsTheLimiter(t *testing.T) {
+	if minted := 2 * api.OfficeBudgetForTest * 15; minted > api.AttemptsCapForTest*2/3 {
+		t.Fatalf("office traffic can mint %d keys in 15 minutes, against a cap of %d", minted, api.AttemptsCapForTest)
+	}
+}
+
+// All listed networks share one sign-in budget; once it is spent, each office address meets
+// its own ordinary per-IP window again.
+func TestOfficeBudgetFallsBackToThePerIPLimit(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	admin := loginAs(t, srv, st, "alice", "admin")
+
+	n := api.OfficeBudgetForTest + 20
+	for i := 1; i <= n; i++ {
+		if code := signIn(t, srv, officePeer, "", i); code == http.StatusTooManyRequests {
+			t.Fatalf("office attempt %d throttled, want the budget of %d and then a window of 20", i, api.OfficeBudgetForTest)
+		}
+	}
+	if code := signIn(t, srv, officePeer, "", n+1); code != http.StatusTooManyRequests {
+		t.Fatalf("office attempt %d answered %d, want 429", n+1, code)
+	}
+	if code := signIn(t, srv, "203.0.113.77:41000", "", 1); code == http.StatusTooManyRequests {
+		t.Fatal("a second office address was throttled by the first one's window")
+	}
+	// Only the requests that skipped the per-IP window are counted as exempted.
+	w := exemptCall(t, srv, "GET", "/api/settings/rate-limit-networks", "", "192.0.2.1:1234", "", admin)
+	if _, _, exempted := networksStatus(t, w); exempted != float64(api.OfficeBudgetForTest) {
+		t.Fatalf("exempted = %v, want %d", exempted, api.OfficeBudgetForTest)
+	}
+}
+
+// WebDAV app-password failures from the office draw on their own shared budget and then meet
+// the per-client window; a second office address keeps its own window.
+func TestOfficeDAVBudgetFallsBackToThePerIPLimit(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	n := api.OfficeBudgetForTest + 20
+	for i := 1; i <= n; i++ {
+		if code := davBasic(srv, officePeer, fmt.Sprintf("stale%d", i), "wrong"); code != http.StatusUnauthorized {
+			t.Fatalf("office failure %d answered %d, want 401", i, code)
+		}
+	}
+	if code := davBasic(srv, officePeer, "stale0", "wrong"); code != http.StatusTooManyRequests {
+		t.Fatalf("office failure %d answered %d, want 429", n+1, code)
+	}
+	if code := davBasic(srv, "203.0.113.77:41000", "stale0", "wrong"); code != http.StatusUnauthorized {
+		t.Fatalf("a second office address answered %d, want its own window's 401", code)
+	}
+}
+
+// Office WebDAV failures under more distinct usernames than the limiter holds cannot evict a
+// live sign-in window: an account exhausted from the office stays shut there.
+func TestOfficeAccountChurnKeepsLiveLoginWindows(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	createLocalUser(t, st, "carol", "SuperSecretPass123!")
+	try := func(pass string) int {
+		return exemptCall(t, srv, "POST", "/api/auth/login", `{"username":"carol","password":"`+pass+`"}`, officePeer, "", nil).Code
+	}
+	for i := 0; i < 10; i++ {
+		try("WrongPass123!")
+	}
+	for i := 0; i <= api.AttemptsCapForTest; i++ {
+		davBasic(srv, officePeer, fmt.Sprintf("churn%d", i), "wrong")
+	}
+	if keys := len(api.AttemptKeysForTest(srv)); keys > api.OfficeBudgetForTest+100 {
+		t.Fatalf("office churn left %d limiter keys", keys)
+	}
+	if code := try("SuperSecretPass123!"); code != http.StatusUnauthorized {
+		t.Fatalf("carol's exhausted window answered %d after the churn, want 401", code)
+	}
+}
+
+// Concurrent wrong guesses at one account from the office reserve their place in the account
+// window before the lookup: no more than ten reach verification, however they interleave.
+func TestConcurrentOfficeDAVGuessesCannotOutrunTheAccountWindow(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	var checks atomic.Int64
+	api.SetAppPasswordCheckForTest(srv, func(context.Context, string, string) (string, error) {
+		checks.Add(1)
+		time.Sleep(20 * time.Millisecond) // widen the window a check-then-record limiter loses
+		return "", drive.ErrDenied
+	})
+	var wg sync.WaitGroup
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); davBasic(srv, officePeer, "hal", "wrong") }()
+	}
+	wg.Wait()
+	if n := checks.Load(); n > 10 {
+		t.Fatalf("%d concurrent guesses reached verification, want at most 10", n)
+	}
+}
+
+// countingUsers counts the account lookups that precede every sign-in password verification.
+type countingUsers struct {
+	store.UserStore
+	lookups *atomic.Int64
+}
+
+func (c countingUsers) GetUserByUsername(ctx context.Context, name string) (*store.User, error) {
+	c.lookups.Add(1)
+	return c.UserStore.GetUserByUsername(ctx, name)
+}
+
+type countingStore struct {
+	store.Store
+	lookups *atomic.Int64
+}
+
+func (c countingStore) Users() store.UserStore { return countingUsers{c.Store.Users(), c.lookups} }
+
+// The same for sign-in: concurrent office guesses at one account reach the lookup and the
+// password hash at most ten times.
+func TestConcurrentOfficeSignInsCannotOutrunTheAccountWindow(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	var lookups atomic.Int64
+	api.SetStoreForTest(srv, countingStore{st, &lookups})
+	var wg sync.WaitGroup
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			exemptCall(t, srv, "POST", "/api/auth/login", `{"username":"carol","password":"WrongPass123!"}`, officePeer, "", nil)
+		}()
+	}
+	wg.Wait()
+	if n := lookups.Load(); n > 10 {
+		t.Fatalf("%d concurrent guesses reached verification, want at most 10", n)
 	}
 }

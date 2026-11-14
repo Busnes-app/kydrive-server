@@ -17,6 +17,16 @@ Interface and behaviour changes, newest first.
   PUT `/api/settings/rate-limit-networks` (`{networks}`; reply `{networks, environment,
   exempted}`), audited as `admin.rate_limit_networks`. List only networks you control: never
   guest Wi-Fi, a VPN exit or the reverse proxy's address.
+- **One shared office budget per limit.** All listed networks together get 200 sign-ins,
+  200 password changes and 200 failed WebDAV app-password sign-ins a minute past the
+  per-address windows; beyond that their requests meet the ordinary per-address window
+  again. One host inside an office therefore cannot make unbounded attempts, nor create
+  enough per-account counters to push live ones (and their lockouts) out of the limiter.
+  The screen's count includes only requests that actually skipped a per-address window.
+- **WebDAV reserves its per-account window before checking an app password.** Concurrent
+  wrong guesses at one account could all pass the 10-per-15-minutes check before any was
+  counted; now each takes its place first and hands it back on success. Sign-in also hands
+  its reservation back when the account lookup fails with a server error.
 - **ky-primitives moves to the revision with `netallow`.** It also brings the library's own
   split-file join: capsule `restore` of a database with missing or renumbered parts is still
   refused and writes no database, but the error is now `recoveryclient.ErrSplitParts`

@@ -84,3 +84,11 @@ func SearchRootForTest(s *Server) string { return s.searchRoot() }
 
 // TextRootForTest is where document text is cached. Test-only.
 func TextRootForTest(s *Server) string { return s.textRoot() }
+
+// OfficeBudgetForTest is the shared office budget per per-IP limit.
+const OfficeBudgetForTest = officeBudget
+
+// SetAppPasswordCheckForTest replaces the WebDAV app-password lookup. Test-only.
+func SetAppPasswordCheckForTest(s *Server, check func(ctx context.Context, username, secret string) (string, error)) {
+	s.appPasswordUser = check
+}
