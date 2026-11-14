@@ -298,7 +298,7 @@ func (s *Server) kypostVerify(r *http.Request, event string, limit int, h func(*
 			return user.ID, hd.EventID, refuse(409, "sharing_off")
 		}
 	}
-	out := h(r.WithContext(drive.WithPeer(r.Context())), user, p, body)
+	out := h(r.WithContext(drive.WithPeer(r.Context(), p.Source == kypostSourceKyIdentity)), user, p, body)
 	return user.ID, hd.EventID, out
 }
 
@@ -335,6 +335,8 @@ func (s *Server) kypostTicket(r *http.Request, user *store.User, _ *kypostPeer, 
 	}
 	token, t, err := s.store.Drive().IssueTicket(r.Context(), user.ID, in.Name, *in.Size, s.config.Drive.MaxFileSize)
 	switch {
+	case errors.Is(err, drive.ErrPeerOff):
+		return refuse(409, "sharing_off")
 	case errors.Is(err, drive.ErrInvalid):
 		return refuse(400, "bad_body")
 	case errors.Is(err, drive.ErrTooLarge):
@@ -378,6 +380,8 @@ func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPee
 	}
 	_, token, err := s.store.Drive().CreateLink(r.Context(), user.ID, "file", in.FileID, "reader", expires)
 	switch {
+	case errors.Is(err, drive.ErrPeerOff):
+		return refuse(409, "sharing_off")
 	case errors.Is(err, drive.ErrDenied), errors.Is(err, drive.ErrInvalid), errors.Is(err, drive.ErrConflict), errors.Is(err, drive.ErrNotFound):
 		return refuse(404, "not_found")
 	case err != nil:
@@ -477,8 +481,10 @@ func (s *Server) handleTicketUpload(w http.ResponseWriter, r *http.Request, p *k
 		// The last bytes re-seal the whole file, which can outlast the write timeout.
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	}
-	received, f, err := d.TicketUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
+	received, f, err := d.TicketUpload(drive.WithPeer(r.Context(), p.Source == kypostSourceKyIdentity), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
 	switch {
+	case errors.Is(err, drive.ErrPeerOff):
+		s.ticketRefuse(w, http.StatusConflict, "sharing_off")
 	case errors.Is(err, drive.ErrConflict):
 		w.Header().Set("Upload-Offset", strconv.FormatInt(received, 10))
 		s.ticketRefuse(w, http.StatusConflict, "conflict")

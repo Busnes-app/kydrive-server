@@ -2,6 +2,7 @@ package drive
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -94,8 +95,27 @@ const (
 	peerLink = 2
 )
 
-// WithPeer marks ctx as KyPost acting for the user it names in each call.
-func WithPeer(ctx context.Context) context.Context { return context.WithValue(ctx, peerKey{}, true) }
+// WithPeer marks ctx as KyPost acting for the user it names in each call. switchDefault is
+// the user's switch when they never chose (on for a KyIdentity pairing, off for an
+// environment one); peerAllows reads the switch in the same transaction as the write it allows.
+func WithPeer(ctx context.Context, switchDefault bool) context.Context {
+	return context.WithValue(ctx, peerKey{}, switchDefault)
+}
+
+// ErrPeerOff is a peer write refused because the user's KyPost switch is off.
+var ErrPeerOff = errors.New("kypost switch off")
+
+func peerSwitch(ctx context.Context, q queryer, user string) error {
+	def, _ := ctx.Value(peerKey{}).(bool)
+	var on bool
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT enabled FROM drive_peer_settings WHERE user_id=?),?)`, user, def).Scan(&on); err != nil {
+		return err
+	}
+	if !on {
+		return ErrPeerOff
+	}
+	return nil
+}
 
 func isPeer(ctx context.Context) bool { return ctx.Value(peerKey{}) != nil }
 
@@ -113,6 +133,9 @@ func peerOp(ctx context.Context, op int) context.Context {
 func peerAllows(ctx context.Context, q queryer, user, workspace, folder, file string, op int) error {
 	if got, _ := ctx.Value(peerOpKey{}).(int); got != op {
 		return ErrDenied
+	}
+	if err := peerSwitch(ctx, q, user); err != nil {
+		return err
 	}
 	item := `NOT EXISTS(SELECT 1 FROM drive_files f WHERE f.id=q.f)`
 	if op == peerLink {

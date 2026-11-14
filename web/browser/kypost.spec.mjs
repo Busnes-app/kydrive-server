@@ -15,7 +15,8 @@ test('KyPost switch in Settings > Files and the pairing in Server settings', asy
   await page.reload();
   const box = page.getByLabel('Let KyPost save and share my files');
   await expect(box).not.toBeChecked();
-  await box.check();
+  await box.click();
+  await expect(box).toBeChecked();
   await expect.poll(async () => (await (await page.request.get('/api/drive/kypost')).json()).enabled).toBe(true);
   await page.reload();
   await expect(box).toBeChecked();

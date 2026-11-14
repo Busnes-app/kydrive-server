@@ -31,7 +31,9 @@ signed with `ky-primitives/syncauth` v1 under it.
 **Settings → Files → Let KyPost save and share my files**, shown while KyPost is paired. It
 is on by default when KyIdentity paired the apps and off when the environment did; a stored
 choice wins. Off, every route below answers 409 `sharing_off` (status answers
-`"enabled":false`), including uploads with tickets issued earlier.
+`"enabled":false`), including uploads with tickets issued earlier. The switch is read again
+inside the transaction that publishes a file or creates a link, so an upload still streaming
+when it is turned off publishes nothing; its staged bytes and ticket are removed.
 
 ## Where files go
 

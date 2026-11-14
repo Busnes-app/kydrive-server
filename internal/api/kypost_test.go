@@ -506,3 +506,36 @@ func TestKyPostResolveThroughKyIdentity(t *testing.T) {
 		t.Error("pair secret logged")
 	}
 }
+
+// flipBody turns the owner's switch off while the request body is being read.
+type flipBody struct {
+	w    *kypostWorld
+	r    *strings.Reader
+	done bool
+}
+
+func (f *flipBody) Read(p []byte) (int, error) {
+	if !f.done {
+		f.done = true
+		f.w.setSwitch("alice", false)
+	}
+	return f.r.Read(p)
+}
+
+func TestKyPostSwitchOffDuringUpload(t *testing.T) {
+	w := newKyPostWorld(t, "kyidentity")
+	path := w.uploadURL("sub-alice", "late.txt", 3)
+	req := httptest.NewRequest(http.MethodPut, path, &flipBody{w: w, r: strings.NewReader("abc")})
+	req.ContentLength = 3
+	rec := httptest.NewRecorder()
+	w.srv.ServeHTTP(rec, req)
+	code(t, rec, 409, "sharing_off")
+	home, err := w.st.Drive().EnsurePersonalWorkspace(context.Background(), "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files, err := w.st.Drive().Files(context.Background(), "alice", home, false); err != nil || len(files) != 0 {
+		t.Errorf("published after the switch went off: %v %v", files, err)
+	}
+	code(t, w.put(path, "", "", "abc"), 404, "not_found")
+}

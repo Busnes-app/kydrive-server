@@ -92,6 +92,9 @@ func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSiz
 		if err != nil {
 			return err
 		}
+		if err = peerSwitch(ctx, tx, user); err != nil {
+			return err
+		}
 		if err = fits(ctx, tx, ws, size); err != nil {
 			return err
 		}
@@ -130,13 +133,15 @@ func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 	return t, err
 }
 
-// TicketUpload stores length bytes of r at start of t's file through the ordinary upload
+// TicketUpload (a peer context) stores length bytes of r at start of t's file through the ordinary upload
 // session path, as t's owner in a peer context. The first bytes open the session in the
 // owner's peer folder (made or remade here), under the first free numbered name; the session
 // expires with the ticket. The last bytes publish the file and spend the ticket. f is nil
 // until then.
 func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
-	ctx = WithPeer(ctx)
+	if !isPeer(ctx) {
+		return 0, nil, ErrDenied
+	}
 	if t.Session == "" {
 		if start != 0 {
 			return 0, nil, ErrConflict
@@ -160,6 +165,13 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 		if err = s.renameUpload(ctx, t.Session, numbered(t.Name, n)); err == nil {
 			file, err = s.CompleteUpload(ctx, staging, blobs, key, t.Owner, t.Session)
 		}
+	}
+	if errors.Is(err, ErrPeerOff) {
+		// Switched off while the bytes arrived: nothing is published, nothing kept.
+		if derr := s.dropUpload(context.WithoutCancel(ctx), staging, t.Session, nil); derr != nil {
+			log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, derr)
+		}
+		s.db.ExecContext(context.WithoutCancel(ctx), `DELETE FROM drive_peer_tickets WHERE id=?`, t.ID)
 	}
 	if err != nil {
 		return u.Received, nil, err

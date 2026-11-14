@@ -35,7 +35,7 @@ func (e *peerEnv) count(t *testing.T, q string, args ...any) int {
 }
 
 func (e *peerEnv) put(tk drive.Ticket, start int64, body string) (int64, *drive.File, error) {
-	return e.d.TicketUpload(e.ctx, e.staging, e.blobs, testKey, tk, start, int64(len(body)), strings.NewReader(body))
+	return e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, tk, start, int64(len(body)), strings.NewReader(body))
 }
 
 func TestTicketIssueRefusals(t *testing.T) {
@@ -146,7 +146,7 @@ func TestTicketChunks(t *testing.T) {
 func TestTicketExactSize(t *testing.T) {
 	e := newPeerEnv(t)
 	fresh := e.ticket(t, "worker", "a.txt", 3)
-	if _, _, err := e.d.TicketUpload(e.ctx, e.staging, e.blobs, testKey, fresh(), 0, 3, strings.NewReader("ab")); err == nil {
+	if _, _, err := e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, fresh(), 0, 3, strings.NewReader("ab")); err == nil {
 		t.Error("short body accepted")
 	}
 	if _, f, err := e.put(fresh(), 0, "abc"); err != nil || f == nil {
@@ -238,5 +238,51 @@ func TestTicketEmptyFile(t *testing.T) {
 	_, f, err := e.put(e.ticket(t, "worker", "empty.txt", 0)(), 0, "")
 	if err != nil || f == nil || f.Size != 0 || f.Parent != e.attachments {
 		t.Fatalf("empty: %+v %v", f, err)
+	}
+}
+
+// flipReader turns the owner's switch off while its bytes are being read.
+type flipReader struct {
+	e    *peerEnv
+	t    *testing.T
+	r    *strings.Reader
+	done bool
+}
+
+func (f *flipReader) Read(p []byte) (int, error) {
+	if !f.done {
+		f.done = true
+		if err := f.e.d.SetPeerSetting(f.e.ctx, "worker", false); err != nil {
+			f.t.Fatal(err)
+		}
+	}
+	return f.r.Read(p)
+}
+
+// The switch is read in the publishing transaction: turned off while the bytes arrive, the
+// file is not published and the staged bytes and ticket are gone.
+func TestTicketSwitchOffMidUpload(t *testing.T) {
+	e := newPeerEnv(t)
+	tk := e.ticket(t, "worker", "late.txt", 3)()
+	before := e.count(t, `SELECT COUNT(*) FROM drive_files`)
+	_, f, err := e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, tk, 0, 3, &flipReader{e: e, t: t, r: strings.NewReader("abc")})
+	if !errors.Is(err, drive.ErrPeerOff) || f != nil {
+		t.Fatalf("published after the switch went off: %+v %v", f, err)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM drive_files`); n != before {
+		t.Errorf("%d files, want %d", n, before)
+	}
+	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {
+		t.Errorf("%d sessions and tickets left", n)
+	}
+	// Off also refuses new tickets and links, and an explicit default off refuses without a row.
+	if _, _, err := e.d.IssueTicket(e.peer, "worker", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
+		t.Errorf("ticket while off: %v", err)
+	}
+	if _, _, err := e.d.CreateLink(e.peer, "worker", "file", e.mail.ID, "reader", 0); !errors.Is(err, drive.ErrPeerOff) {
+		t.Errorf("link while off: %v", err)
+	}
+	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, false), "stranger", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
+		t.Errorf("default off: %v", err)
 	}
 }

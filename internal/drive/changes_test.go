@@ -144,7 +144,7 @@ var mutators = []mutatorCase{
 		if err != nil {
 			t.Fatal(err)
 		}
-		token, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx), "worker", "mail.pdf", 3, 1<<20)
+		token, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, true), "worker", "mail.pdf", 3, 1<<20)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ var mutators = []mutatorCase{
 			t.Fatal(err)
 		}
 		return func() ([]string, error) {
-			_, f, err := e.d.TicketUpload(e.ctx, staging, e.blobs, testKey, tk, 0, 3, strings.NewReader("abc"))
+			_, f, err := e.d.TicketUpload(drive.WithPeer(e.ctx, true), staging, e.blobs, testKey, tk, 0, 3, strings.NewReader("abc"))
 			if err != nil {
 				return nil, err
 			}
