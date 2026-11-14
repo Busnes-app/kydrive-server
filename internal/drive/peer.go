@@ -142,6 +142,11 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 	if !isPeer(ctx) {
 		return 0, nil, ErrDenied
 	}
+	defer func() {
+		if t.Session != "" && (errors.Is(err, ErrPeerOff) || errors.Is(err, ErrPeerGone)) {
+			s.dropTicket(context.WithoutCancel(ctx), staging, t)
+		}
+	}()
 	if t.Session == "" {
 		if start != 0 {
 			return 0, nil, ErrConflict
@@ -166,13 +171,6 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 			file, err = s.CompleteUpload(ctx, staging, blobs, key, t.Owner, t.Session)
 		}
 	}
-	if errors.Is(err, ErrPeerOff) {
-		// Switched off while the bytes arrived: nothing is published, nothing kept.
-		if derr := s.dropUpload(context.WithoutCancel(ctx), staging, t.Session, nil); derr != nil {
-			log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, derr)
-		}
-		s.db.ExecContext(context.WithoutCancel(ctx), `DELETE FROM drive_peer_tickets WHERE id=?`, t.ID)
-	}
 	if err != nil {
 		return u.Received, nil, err
 	}
@@ -187,6 +185,17 @@ func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []b
 		log.Printf("kypost ticket %s: published, not spent: %v", t.ID, err)
 	}
 	return u.Received, &file, nil
+}
+
+// dropTicket discards a refused ticket's staged bytes and the ticket: switched off or
+// unpaired while the bytes arrived, nothing is published and nothing kept.
+func (s *Store) dropTicket(ctx context.Context, staging string, t Ticket) {
+	if err := s.dropUpload(ctx, staging, t.Session, nil); err != nil {
+		log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM drive_peer_tickets WHERE id=?`, t.ID); err != nil {
+		log.Printf("kypost ticket %s: not removed: %v", t.ID, err)
+	}
 }
 
 // ticketSession opens t's upload session and binds it to t; a concurrent first request loses.

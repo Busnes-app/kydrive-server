@@ -74,7 +74,7 @@ func newPeerEnv(t *testing.T) *peerEnv {
 	t.Helper()
 	st, w, blobs := fixture(t)
 	e := &peerEnv{d: st.Drive(), shared: w.ID, staging: t.TempDir(), blobs: blobs, ctx: context.Background()}
-	e.peer = drive.WithPeer(e.ctx, true)
+	e.peer = drive.WithPeer(e.ctx, livePeer)
 	managers(t, e.d, w)
 	var err error
 	if e.home, err = e.d.EnsurePersonalWorkspace(e.ctx, "worker"); err != nil {
@@ -396,3 +396,6 @@ func TestPeerAllowedMethodsStayInTheFolder(t *testing.T) {
 		t.Fatalf("new file in Mail attachments: %v", err)
 	}
 }
+
+// livePeer is a KyIdentity pairing that stays paired.
+var livePeer = drive.Peer{SwitchDefault: true, Live: func() bool { return true }}

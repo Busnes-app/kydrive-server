@@ -282,7 +282,29 @@ func TestTicketSwitchOffMidUpload(t *testing.T) {
 	if _, _, err := e.d.CreateLink(e.peer, "worker", "file", e.mail.ID, "reader", 0); !errors.Is(err, drive.ErrPeerOff) {
 		t.Errorf("link while off: %v", err)
 	}
-	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, false), "stranger", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
+	if _, _, err := e.d.IssueTicket(drive.WithPeer(e.ctx, drive.Peer{Live: func() bool { return true }}), "stranger", "a.txt", 1, 10); !errors.Is(err, drive.ErrPeerOff) {
 		t.Errorf("default off: %v", err)
+	}
+}
+
+// A pairing that ends while the bytes arrive publishes nothing.
+func TestTicketUnpairedMidUpload(t *testing.T) {
+	e := newPeerEnv(t)
+	tk := e.ticket(t, "worker", "late.txt", 3)()
+	live := true
+	p := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return live }})
+	if _, _, err := e.d.TicketUpload(p, e.staging, e.blobs, testKey, tk, 0, 1, strings.NewReader("a")); err != nil {
+		t.Fatal(err)
+	}
+	live = false
+	tk = drive.Ticket{ID: tk.ID, Owner: tk.Owner, Name: tk.Name, Size: tk.Size, Expires: tk.Expires}
+	if err := drive.QueryRow(e.ctx, e.d, `SELECT session FROM drive_peer_tickets WHERE id=?`, tk.ID).Scan(&tk.Session); err != nil {
+		t.Fatal(err)
+	}
+	if _, f, err := e.d.TicketUpload(p, e.staging, e.blobs, testKey, tk, 1, 2, strings.NewReader("bc")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+		t.Fatalf("unpaired: %+v %v", f, err)
+	}
+	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {
+		t.Errorf("%d sessions and tickets left", n)
 	}
 }

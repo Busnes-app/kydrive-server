@@ -253,3 +253,8 @@ func ClaimCompletion(ctx context.Context, s *Store, user, id string, interval ti
 
 // TokenHash is how device and session tokens are stored.
 func TokenHash(token string) string { return tokenHash(token) }
+
+// QueryRow runs one query against the store's database.
+func QueryRow(ctx context.Context, s *Store, q string, args ...any) *sql.Row {
+	return s.db.QueryRowContext(ctx, q, args...)
+}

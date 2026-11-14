@@ -207,6 +207,15 @@ func (s *Server) kypostEnabled(ctx context.Context, user string, p *kypostPeer) 
 	return p.Source == kypostSourceKyIdentity, nil
 }
 
+// peerContext is ctx acting for KyPost under p: writes are refused once p is no longer the
+// pairing (unpaired, or re-paired to another address or secret).
+func (s *Server) peerContext(ctx context.Context, p *kypostPeer) context.Context {
+	return drive.WithPeer(ctx, drive.Peer{SwitchDefault: p.Source == kypostSourceKyIdentity, Live: func() bool {
+		cur := s.kypost.peer.Load()
+		return cur != nil && cur.URL == p.URL && cur.Source == p.Source && string(cur.Secret) == string(p.Secret)
+	}})
+}
+
 // kypostReply is a signed route's answer; code set means a refusal.
 type kypostReply struct {
 	status int
@@ -298,7 +307,7 @@ func (s *Server) kypostVerify(r *http.Request, event string, limit int, h func(*
 			return user.ID, hd.EventID, refuse(409, "sharing_off")
 		}
 	}
-	out := h(r.WithContext(drive.WithPeer(r.Context(), p.Source == kypostSourceKyIdentity)), user, p, body)
+	out := h(r.WithContext(s.peerContext(r.Context(), p)), user, p, body)
 	return user.ID, hd.EventID, out
 }
 
@@ -337,6 +346,8 @@ func (s *Server) kypostTicket(r *http.Request, user *store.User, _ *kypostPeer, 
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		return refuse(409, "sharing_off")
+	case errors.Is(err, drive.ErrPeerGone):
+		return refuse(404, "kypost_off")
 	case errors.Is(err, drive.ErrInvalid):
 		return refuse(400, "bad_body")
 	case errors.Is(err, drive.ErrTooLarge):
@@ -382,6 +393,8 @@ func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPee
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		return refuse(409, "sharing_off")
+	case errors.Is(err, drive.ErrPeerGone):
+		return refuse(404, "kypost_off")
 	case errors.Is(err, drive.ErrDenied), errors.Is(err, drive.ErrInvalid), errors.Is(err, drive.ErrConflict), errors.Is(err, drive.ErrNotFound):
 		return refuse(404, "not_found")
 	case err != nil:
@@ -481,10 +494,12 @@ func (s *Server) handleTicketUpload(w http.ResponseWriter, r *http.Request, p *k
 		// The last bytes re-seal the whole file, which can outlast the write timeout.
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	}
-	received, f, err := d.TicketUpload(drive.WithPeer(r.Context(), p.Source == kypostSourceKyIdentity), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
+	received, f, err := d.TicketUpload(s.peerContext(r.Context(), p), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		s.ticketRefuse(w, http.StatusConflict, "sharing_off")
+	case errors.Is(err, drive.ErrPeerGone):
+		s.ticketRefuse(w, http.StatusNotFound, "kypost_off")
 	case errors.Is(err, drive.ErrConflict):
 		w.Header().Set("Upload-Offset", strconv.FormatInt(received, 10))
 		s.ticketRefuse(w, http.StatusConflict, "conflict")

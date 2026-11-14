@@ -33,7 +33,9 @@ is on by default when KyIdentity paired the apps and off when the environment di
 choice wins. Off, every route below answers 409 `sharing_off` (status answers
 `"enabled":false`), including uploads with tickets issued earlier. The switch is read again
 inside the transaction that publishes a file or creates a link, so an upload still streaming
-when it is turned off publishes nothing; its staged bytes and ticket are removed.
+when it is turned off publishes nothing; its staged bytes and ticket are removed. The same
+check refuses a write once the pairing it came under has ended or changed address or secret
+(404 `kypost_off`).
 
 ## Where files go
 

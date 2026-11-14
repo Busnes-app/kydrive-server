@@ -95,20 +95,34 @@ const (
 	peerLink = 2
 )
 
-// WithPeer marks ctx as KyPost acting for the user it names in each call. switchDefault is
-// the user's switch when they never chose (on for a KyIdentity pairing, off for an
-// environment one); peerAllows reads the switch in the same transaction as the write it allows.
-func WithPeer(ctx context.Context, switchDefault bool) context.Context {
-	return context.WithValue(ctx, peerKey{}, switchDefault)
+// Peer is the pairing a peer context acts under. SwitchDefault is the user's switch when
+// they never chose (on for a KyIdentity pairing, off for an environment one); Live reports
+// whether that pairing still stands. peerSwitch checks both in the transaction of the write
+// it allows, so an unpair or a switch turned off while bytes stream publishes nothing.
+type Peer struct {
+	SwitchDefault bool
+	Live          func() bool
 }
 
-// ErrPeerOff is a peer write refused because the user's KyPost switch is off.
-var ErrPeerOff = errors.New("kypost switch off")
+// WithPeer marks ctx as KyPost acting, under p, for the user it names in each call.
+func WithPeer(ctx context.Context, p Peer) context.Context {
+	return context.WithValue(ctx, peerKey{}, p)
+}
+
+var (
+	// ErrPeerOff is a peer write refused because the user's KyPost switch is off.
+	ErrPeerOff = errors.New("kypost switch off")
+	// ErrPeerGone is a peer write refused because the pairing it came under has ended.
+	ErrPeerGone = errors.New("kypost no longer paired")
+)
 
 func peerSwitch(ctx context.Context, q queryer, user string) error {
-	def, _ := ctx.Value(peerKey{}).(bool)
+	p, _ := ctx.Value(peerKey{}).(Peer)
+	if p.Live == nil || !p.Live() {
+		return ErrPeerGone
+	}
 	var on bool
-	if err := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT enabled FROM drive_peer_settings WHERE user_id=?),?)`, user, def).Scan(&on); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT enabled FROM drive_peer_settings WHERE user_id=?),?)`, user, p.SwitchDefault).Scan(&on); err != nil {
 		return err
 	}
 	if !on {

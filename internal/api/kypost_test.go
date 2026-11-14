@@ -539,3 +539,56 @@ func TestKyPostSwitchOffDuringUpload(t *testing.T) {
 	}
 	code(t, w.put(path, "", "", "abc"), 404, "not_found")
 }
+
+// unpairBody unpairs KyPost while the request body is being read.
+type unpairBody struct {
+	srv  *api.Server
+	r    *strings.Reader
+	done bool
+}
+
+func (u *unpairBody) Read(p []byte) (int, error) {
+	if !u.done {
+		u.done = true
+		api.SetKyPostForTest(u.srv, "", nil, "")
+	}
+	return u.r.Read(p)
+}
+
+func TestKyPostUnpairDuringUpload(t *testing.T) {
+	for _, repair := range []bool{false, true} {
+		w := newKyPostWorld(t, "kyidentity")
+		path := w.uploadURL("sub-alice", "late.txt", 3)
+		req := httptest.NewRequest(http.MethodPut, path, &unpairBody{srv: w.srv, r: strings.NewReader("abc")})
+		req.ContentLength = 3
+		if repair {
+			// Re-paired under another secret before the bytes finish: the old pairing is gone too.
+			req = httptest.NewRequest(http.MethodPut, path, &repairBody{srv: w.srv, r: strings.NewReader("abc")})
+			req.ContentLength = 3
+		}
+		rec := httptest.NewRecorder()
+		w.srv.ServeHTTP(rec, req)
+		code(t, rec, 404, "kypost_off")
+		home, err := w.st.Drive().EnsurePersonalWorkspace(context.Background(), "alice")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if files, err := w.st.Drive().Files(context.Background(), "alice", home, false); err != nil || len(files) != 0 {
+			t.Errorf("published after unpairing (repair %v): %v %v", repair, files, err)
+		}
+	}
+}
+
+type repairBody struct {
+	srv  *api.Server
+	r    *strings.Reader
+	done bool
+}
+
+func (u *repairBody) Read(p []byte) (int, error) {
+	if !u.done {
+		u.done = true
+		api.SetKyPostForTest(u.srv, kypostOrigin, bytes.Repeat([]byte("n"), 32), "kyidentity")
+	}
+	return u.r.Read(p)
+}
