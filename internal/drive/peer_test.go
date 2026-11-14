@@ -231,3 +231,12 @@ func TestPeerSetting(t *testing.T) {
 		t.Fatalf("off: %v %v %v", on, set, err)
 	}
 }
+
+// An empty file is one request with no bytes.
+func TestTicketEmptyFile(t *testing.T) {
+	e := newPeerEnv(t)
+	_, f, err := e.put(e.ticket(t, "worker", "empty.txt", 0)(), 0, "")
+	if err != nil || f == nil || f.Size != 0 || f.Parent != e.attachments {
+		t.Fatalf("empty: %+v %v", f, err)
+	}
+}
