@@ -485,6 +485,38 @@ func TestOfficeAccountChurnKeepsLiveLoginWindows(t *testing.T) {
 	}
 }
 
+// A lookup that fails for a reason other than a wrong password (a cancelled request, a store
+// error) refunds its reservations and must leave no key behind: otherwise an office client
+// could cancel its way through more distinct names than the limiter holds and evict a live
+// sign-in window.
+func TestRefundedOfficeDAVLookupsLeaveNoKeys(t *testing.T) {
+	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
+	srv, st, _ := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	createLocalUser(t, st, "carol", "SuperSecretPass123!")
+	try := func(pass string) int {
+		return exemptCall(t, srv, "POST", "/api/auth/login", `{"username":"carol","password":"`+pass+`"}`, officePeer, "", nil).Code
+	}
+	for i := 0; i < 10; i++ {
+		try("WrongPass123!")
+	}
+	before := len(api.AttemptKeysForTest(srv))
+	api.SetAppPasswordCheckForTest(srv, func(context.Context, string, string) (string, error) {
+		return "", context.Canceled
+	})
+	for i := 0; i <= api.AttemptsCapForTest; i++ {
+		davBasic(srv, officePeer, fmt.Sprintf("gone%d", i), "wrong")
+	}
+	if after := len(api.AttemptKeysForTest(srv)); after != before {
+		t.Fatalf("refunded lookups left %d limiter keys, want none", after-before)
+	}
+	if code := try("SuperSecretPass123!"); code != http.StatusUnauthorized {
+		t.Fatalf("carol's exhausted window answered %d after the churn, want 401", code)
+	}
+}
+
 // Concurrent wrong guesses at one account from the office reserve their place in the account
 // window before the lookup: no more than ten reach verification, however they interleave.
 func TestConcurrentOfficeDAVGuessesCannotOutrunTheAccountWindow(t *testing.T) {

@@ -209,14 +209,21 @@ func (s *Server) attemptsExceeded(key string, limit int) bool {
 	return ok && time.Now().Before(w.reset) && w.count >= limit
 }
 
-// refundAttempt returns one attempt allowAttempt counted that the request did not spend.
+// refundAttempt returns one attempt allowAttempt counted that the request did not spend. A
+// window refunded to nothing is dropped, so refunded requests leave no key behind to crowd
+// live windows out of the map.
 func (s *Server) refundAttempt(key string) {
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
-	if w, ok := s.attempts[key]; ok && w.count > 0 {
-		w.count--
-		s.attempts[key] = w
+	w, ok := s.attempts[key]
+	if !ok {
+		return
 	}
+	if w.count--; w.count <= 0 {
+		delete(s.attempts, key)
+		return
+	}
+	s.attempts[key] = w
 }
 
 func (s *Server) resetAttempts(key string) {
