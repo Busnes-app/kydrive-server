@@ -71,6 +71,7 @@ type Server struct {
 	stopCollecting context.CancelFunc
 	search         *search.Index // content search; nil when off
 	suiteApps      suiteAppsCache
+	kypost         kypostLink // KyPost pairing (kypost.go)
 }
 
 // detachedCounter is a WaitGroup that tolerates a registration arriving while the wait is
@@ -181,6 +182,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	s.openSearch()
 	s.mcp = s.newMCPHandler()
 	s.loadExemptNetworks()
+	s.newKyPost()
 	s.routes()
 	return s
 }
@@ -326,6 +328,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/auth/change-password", s.handleChangePassword)
 	s.mux.HandleFunc("PUT /api/auth/preferences", s.requireAuthenticated(s.handleSetPreferences))
 	s.mux.HandleFunc("GET /api/suite/apps", s.requireAuthenticated(s.handleSuiteApps))
+	// KyPost's signed routes (kypost.go); the ticket upload is ServeHTTP's.
+	s.mux.HandleFunc("POST /api/suite/kypost/upload-tickets", s.kypostSigned(kypostEventTicket, 60, s.kypostTicket))
+	s.mux.HandleFunc("POST /api/suite/kypost/links", s.kypostSigned(kypostEventLink, 60, s.kypostLinkRoute))
+	s.mux.HandleFunc("POST /api/suite/kypost/status", s.kypostSigned(kypostEventStatus, 120, s.kypostStatusRoute))
+	s.mux.HandleFunc("GET /api/settings/kypost", s.requireAdmin(s.handleKyPostStatus))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
 	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
 	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.requireStepUp(s.handleCreateAppPassword)))
@@ -474,7 +481,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The only CORS grant KyDrive makes: the app's own origin, reflected, never "*".
+	// A ticket upload is the one route another origin may call: the paired KyPost's origin,
+	// reflected, without credentials. The ticket is the credential, so no referrer leaves it.
+	if strings.HasPrefix(r.URL.Path, ticketPath) {
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		p := s.kypost.peer.Load()
+		origin := r.Header.Get("Origin")
+		if origin != "" && (p == nil || !sameOrigin(origin, p.URL)) {
+			s.ticketRefuse(w, http.StatusForbidden, "bad_origin")
+			return
+		}
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Range")
+			w.Header().Set("Access-Control-Expose-Headers", "Upload-Offset")
+		}
+		s.handleTicketUpload(w, r, p)
+		return
+	}
+
+	// The only other CORS grant KyDrive makes: the app's own origin, reflected, never "*".
 	// TestCORSNeverGrantsAnotherOrigin pins that no other code sets these headers.
 	origin := r.Header.Get("Origin")
 	w.Header().Set("Vary", "Origin")

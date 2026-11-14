@@ -236,6 +236,7 @@ func runServer() {
 	if st.Drive() == nil {
 		log.Fatal("KyDrive requires SQLite")
 	}
+	srv.StartKyPost(ctx)
 	editorDone := make(chan struct{})
 	go func() { defer close(editorDone); srv.RunEditorRevocations(ctx) }()
 	retentionDone := make(chan struct{})
