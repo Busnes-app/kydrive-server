@@ -370,6 +370,7 @@ var noChange = map[string]string{
 	"ExpireTickets":           "tickets only",
 	"PeerSetting":             "read",
 	"SetPeerSetting":          "user setting",
+	"RecordPicks":             "a fetch grant only",
 	"PeerFree":                "read",
 	"UnlinkDevice":            "device credential bookkeeping",
 	"Unshare":                 "shares only add access inside a readable workspace (Decision 1)",

@@ -111,6 +111,9 @@ BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
 CREATE TABLE drive_peer_folders(owner TEXT PRIMARY KEY,folder TEXT NOT NULL);
 CREATE TABLE drive_peer_tickets(id TEXT PRIMARY KEY,token_hash TEXT NOT NULL UNIQUE,owner TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,expires INTEGER NOT NULL,pairing TEXT NOT NULL,session TEXT NOT NULL DEFAULT '');
 CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
+	// Files a user chose in the picker's copy mode (suite_pick.go): KyPost may fetch only these,
+	// until expires.
+	`CREATE TABLE drive_peer_picks(owner TEXT NOT NULL,file TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(owner,file));`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
