@@ -57,3 +57,13 @@ Admin Settings opens Appearance instead of showing a second theme select; on pho
 
 The ky-ui update notice ("<app> was updated. Reload to use the new version.", Reload and Dismiss) is started from `web/src/main.tsx`; the entry document is never reused from a cache. Not captured in this repository: the notice is the shared ky-ui component, captured end to end (a real server upgrade under an open tab, 1440×900, Busnes Light and Dark) in KyIdentity and KyPost (`docs/ui-stale-tab-2026-11-02/`), and checked by ky-ui's `browser/update.spec.js` under a strict CSP at 390 and 1280 px. `check-vendor.mjs` passes and the web tests and build pass with Node 26.12.1.
 
+## Search type chips — 2026-11-15
+
+The search panel opens with one row of type chips (Folders, Documents, Spreadsheets,
+Presentations, PDFs, Images, Videos, Audio, Archives); on phones the row scrolls sideways.
+Before/after captures (light/dark × 1440×900/390×844, five synthetic files and one folder,
+content search off) and their driver are in
+[docs/ui-search-type-2026-11-15](docs/ui-search-type-2026-11-15/): `before-results-*` and
+`after-results-*` for the query "report", `after-results-pdfs-*` with PDFs chosen and
+`after-all-pdfs-*` with PDFs chosen and an empty box. `web/browser/search-types.spec.mjs` drives
+the chips by keyboard, Back/Forward and reload in all four projects.

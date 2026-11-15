@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { nameMatches, Search } from './Search';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); history.replaceState(null, '', '/'); });
 
 const workspaces = [{ id: 'w1', name: 'Team', role: 'editor', kind: 'shared' as const, quota: 1, used: 0, trash_days: 0, keep_versions: 0, editors_share: false }];
 const results = [{ kind: 'file', id: 'f1', workspace: 'w1', parent: 'd1', name: 'Q1 budget.xlsx', path: 'Reports' }];
@@ -80,5 +80,72 @@ describe('Search', () => {
     fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'zz' } });
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('filters by type from a row of toggle chips, with or without a query, and keeps the type in the address', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => { urls.push(String(input)); return new Response(JSON.stringify({ results, truncated: false }), { status: 200 }); }));
+    const open = vi.fn();
+    render(<Search workspaces={workspaces} onOpen={open} />);
+    const box = screen.getByLabelText('Search files');
+    expect(screen.queryByRole('group', { name: 'File type' })).toBeNull();
+    fireEvent.focus(box);
+    const group = screen.getByRole('group', { name: 'File type' });
+    expect([...group.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Folders', 'Documents', 'Spreadsheets', 'Presentations', 'PDFs', 'Images', 'Videos', 'Audio', 'Archives']);
+    expect(screen.getByText(/Enter at least 2 characters, or choose a type/)).toBeTruthy();
+    const pdfs = screen.getByRole('button', { name: 'PDFs' });
+    expect(pdfs.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(pdfs);
+    expect(pdfs.getAttribute('aria-pressed')).toBe('true');
+    expect(location.search).toBe('?type=pdfs');
+    expect(await screen.findByText('Team / Reports')).toBeTruthy();
+    expect(urls).toEqual(['/api/drive/search?q=&type=pdfs']);
+    expect(screen.queryByText(/match whole words/)).toBeNull();
+    fireEvent.change(box, { target: { value: 'budget' } });
+    await vi.waitFor(() => expect(urls.at(-1)).toBe('/api/drive/search?q=budget&type=pdfs'));
+    // One type at a time; pressing the chosen one again clears it.
+    fireEvent.click(screen.getByRole('button', { name: 'Images' }));
+    expect(location.search).toBe('?type=images');
+    expect(screen.getAllByRole('button', { pressed: true }).map(b => b.textContent)).toEqual(['Images']);
+    fireEvent.click(screen.getByRole('button', { name: 'Images' }));
+    expect(location.search).toBe('');
+    await vi.waitFor(() => expect(urls.at(-1)).toBe('/api/drive/search?q=budget'));
+    // Back restores the previous type.
+    history.back();
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Images' }).getAttribute('aria-pressed')).toBe('true'));
+    await vi.waitFor(() => expect(urls.at(-1)).toBe('/api/drive/search?q=budget&type=images'));
+    // Opening a result clears the type, so Back comes back to this list.
+    fireEvent.click(await screen.findByRole('button', { name: /Q1 budget\.xlsx/ }));
+    expect(open).toHaveBeenCalled();
+    expect(location.search).toBe('');
+    expect(screen.queryByRole('group', { name: 'File type' })).toBeNull();
+  });
+
+  it('opens with the type in the address and ignores an unknown one', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => { urls.push(String(input)); return new Response(JSON.stringify({ results, truncated: false }), { status: 200 }); }));
+    history.replaceState(null, '', '/?type=folders#/drive');
+    const { unmount } = render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Folders' }).getAttribute('aria-pressed')).toBe('true');
+    await vi.waitFor(() => expect(urls).toEqual(['/api/drive/search?q=&type=folders']));
+    unmount();
+    history.replaceState(null, '', '/?type=executables');
+    render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    expect(screen.queryByRole('group', { name: 'File type' })).toBeNull();
+    fireEvent.focus(screen.getByLabelText('Search files'));
+    expect(screen.queryAllByRole('button', { pressed: true })).toEqual([]);
+    expect(urls).toHaveLength(1);
+  });
+
+  it('moves through the chips by keyboard and closes on Escape', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results, truncated: false }), { status: 200 })));
+    render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.focus(screen.getByLabelText('Search files'));
+    const docs = screen.getByRole('button', { name: 'Documents' });
+    expect(docs.tagName).toBe('BUTTON');
+    expect(docs.getAttribute('type')).toBe('button');
+    docs.focus();
+    fireEvent.keyDown(docs, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'File type' })).toBeNull();
   });
 });

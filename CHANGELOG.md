@@ -13,6 +13,12 @@ Interface and behaviour changes, newest first.
   phone's code never redeem as each other. The list is now **Devices** and shows phones too; the
   20-device limit counts both.
 
+- **Search by file type.** The search box shows a row of type chips (Folders, Documents,
+  Spreadsheets, Presentations, PDFs, Images, Videos, Audio, Archives); the choice is kept in the
+  address as `?type=`, so Back works, and a type alone lists everything of that type.
+  `GET /api/drive/search` and MCP `search_files` take an optional `type` (unknown: 400
+  `bad_type` / a tool error) and accept an empty query with a type. Types come from the name's
+  last extension; nothing new is stored. See `docs/CLIENTS-AND-EDITOR.md#search`.
 - **Guest links from KyPost (suite contract K).** `kypost.drive.link` takes
   `"audience":"guest"`: a view-and-download guest link on a `Mail attachments` file, only while
   the administrator's guest-link policy is on and the person turned on **Settings → Files →

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Folder, Search as SearchIcon } from 'lucide-react';
+import { Check, Folder, Search as SearchIcon } from 'lucide-react';
 import { record, response } from './client';
 import type { Workspace } from './client';
 import { iconFor } from './FileIcon';
@@ -46,43 +46,79 @@ export function nameMatches(name: string, query: string): [number, number][] {
   return [...name.matchAll(new RegExp(query.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'), 'giu'))].map(m => [m.index, m.index + m[0].length]);
 }
 
+// The server's search types (drive.typeExtensions), in the order the chips show them.
+export const TYPES = [['folders', 'Folders'], ['documents', 'Documents'], ['spreadsheets', 'Spreadsheets'], ['presentations', 'Presentations'],
+  ['pdfs', 'PDFs'], ['images', 'Images'], ['videos', 'Videos'], ['audio', 'Audio'], ['archives', 'Archives']] as const;
+
+// The chosen type lives in the address (?type=pdfs), so Back and Forward restore it. The query
+// never does: it would reach browser history and server logs.
+function urlType(): string {
+  const t = new URLSearchParams(location.search).get('type') ?? '';
+  return TYPES.some(([v]) => v === t) ? t : '';
+}
+function pushType(t: string) {
+  const u = new URL(location.href);
+  if (t) u.searchParams.set('type', t); else u.searchParams.delete('type');
+  if (u.href !== location.href) history.pushState(null, '', u);
+}
+
+// idle: nothing to search yet. A query needs 2 characters, except none at all with a type.
+function idle(q: string, type: string): boolean {
+  const n = [...q.trim()].length;
+  return n < 2 && !(n === 0 && type);
+}
+
 // Search finds files and folders by name, and files by the words in them, across every workspace
-// the user can read. Results open below the box and close on Escape or a click elsewhere.
+// the user can read, optionally of one type (a type alone lists all of it). Results open below
+// the box and close on Escape or a click elsewhere.
 export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen: (h: Hit) => void }) {
   const [q, setQ] = useState('');
+  const [type, setType] = useState(urlType);
   const [found, setFound] = useState<Found | null>(null);
   const [error, setError] = useState('');
-  const [hidden, setHidden] = useState(false);
+  const [open, setOpen] = useState(() => urlType() !== '');
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const back = () => { const t = urlType(); setType(t); if (t) setOpen(true); };
+    window.addEventListener('popstate', back);
+    return () => window.removeEventListener('popstate', back);
+  }, []);
+  useEffect(() => {
     const query = q.trim();
-    if ([...query].length < 2) { setFound(null); setError(''); return; }
+    if (idle(query, type)) { setFound(null); setError(''); return; }
     const abort = new AbortController();
     const timer = setTimeout(() => void (async () => {
       try {
-        const v = await response(await fetch(`/api/drive/search?q=${encodeURIComponent(query)}`, { signal: abort.signal }));
+        const v = await response(await fetch(`/api/drive/search?q=${encodeURIComponent(query)}${type ? `&type=${type}` : ''}`, { signal: abort.signal }));
         if (!record(v) || !Array.isArray(v.results) || !v.results.every(hit) || typeof v.truncated !== 'boolean') throw new Error('Invalid search response');
         const pending = record(v.contents) && typeof v.contents.pending === 'number' ? v.contents.pending : 0;
-        setFound({ query, results: v.results, truncated: v.truncated, pending }); setError(''); setHidden(false);
-      } catch (e) { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'Search failed'); }
+        setFound({ query, results: v.results, truncated: v.truncated, pending }); setError(''); setOpen(true);
+      } catch (e) { if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : 'Search failed'); setOpen(true); } }
     })(), 300);
     return () => { clearTimeout(timer); abort.abort(); };
-  }, [q]);
+  }, [q, type]);
   useEffect(() => {
-    if (!found && !error) return;
-    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setHidden(true); };
+    if (!open) return;
+    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('pointerdown', away);
     return () => document.removeEventListener('pointerdown', away);
-  }, [found, error]);
+  }, [open]);
+  const choose = (t: string) => { pushType(t); setType(t); };
   const names = new Map(workspaces.map(w => [w.id, w.name]));
-  const shown = !hidden && (found || error);
-  return <div className="drive-search" role="search" ref={box} onKeyDown={e => { if (e.key === 'Escape') setHidden(true); }}>
+  return <div className="drive-search" role="search" ref={box} onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}>
     <SearchIcon className="drive-search-icon" size={18} aria-hidden="true" />
-    <input type="search" aria-label="Search files" value={q} maxLength={100} placeholder="Search names and words in files" onFocus={() => setHidden(false)} onChange={e => setQ(e.target.value)} />
-    {shown && <div className="drive-search-results" aria-live="polite">
+    <input type="search" aria-label="Search files" value={q} maxLength={100} placeholder="Search names and words in files" onFocus={() => setOpen(true)} onChange={e => setQ(e.target.value)} />
+    {open && <div className="drive-search-results">
+      <div className="drive-search-types" role="group" aria-label="File type">
+        {TYPES.map(([v, label]) => <button key={v} type="button" aria-pressed={type === v} onClick={() => choose(type === v ? '' : v)}>
+          {type === v && <Check size={14} aria-hidden="true" />}{label}
+        </button>)}
+      </div>
+      <div aria-live="polite">
+      {idle(q, type) && <p className="drive-search-note">Enter at least 2 characters, or choose a type.</p>}
       {error ? <p role="alert">{error}</p> : found && (found.results.length === 0 ? <p>No matches</p> : <ul>{found.results.map(h => {
         const Icon = h.kind === 'folder' ? Folder : iconFor(h.name);
-        return <li key={`${h.kind}-${h.id}`}><button type="button" onClick={() => { setQ(''); onOpen(h); }}>
+        return <li key={`${h.kind}-${h.id}`}><button type="button" onClick={() => { setQ(''); setOpen(false); choose(''); onOpen(h); }}>
           <Icon size={18} aria-hidden="true" /><span>{h.match?.includes('name') ? marks(h.name, nameMatches(h.name, found.query)) : h.name}</span>
           <small>{[names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
           {h.snippet && <Marked s={h.snippet} />}
@@ -90,7 +126,8 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
       })}</ul>)}
       {found?.truncated && <p>Showing the first {found.results.length} matches; refine the search to see more.</p>}
       {found && found.pending > 0 && <p className="drive-search-note">Still indexing {found.pending} of your files, so their contents may not be found yet.</p>}
-      {found && <p className="drive-search-note">File contents match whole words.</p>}
+      {found?.query && <p className="drive-search-note">File contents match whole words.</p>}
+      </div>
     </div>}
   </div>;
 }

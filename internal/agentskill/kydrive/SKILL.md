@@ -51,6 +51,9 @@ days unused. The user creates a new one the same way.
 - Pass `in` as `names` or `contents` to search only one; both is the default. Partial words do
   not match file contents, and a file changed in the last few seconds may not be found by its
   content yet.
+- Pass `type` to keep one kind: `folders`, `documents`, `spreadsheets`, `presentations`, `pdfs`,
+  `images`, `videos`, `audio` or `archives`, read from the name's extension. With a type the query
+  may be empty, which lists every item of that type (up to the result limit).
 
 ## Reading
 
@@ -94,4 +97,5 @@ days unused. The user creates a new one the same way.
 | Workspaces and the top folder cannot be created, moved or trashed | Not allowed | Tell the user to do it in KyDrive |
 | The folder this agent is limited to is in the trash or gone | The token's folder was trashed or removed | Tell the user to restore the folder or create a new token |
 | in must be names, contents or both | Bad `in` for `search_files` | Leave it out or use one of those |
+| type must be folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives | Bad `type` for `search_files` | Leave it out or use one of those |
 | anything else | Server problem | Report it; do not retry more than once |
