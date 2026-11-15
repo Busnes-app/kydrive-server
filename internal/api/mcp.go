@@ -57,6 +57,7 @@ const (
 	msgNotFolder  = "Not a folder"
 	msgNotFile    = "Not a file"
 	msgSearchIn   = "in must be names, contents or both"
+	msgSearchRate = "too many content searches; wait a few minutes, or search names only (in: names)"
 	msgSearchType = "type must be folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives"
 )
 
@@ -508,6 +509,9 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	switch in.In {
 	case "", "both", "contents":
 		if cm != nil && strings.TrimSpace(in.Query) != "" {
+			if t.s.searchWait(t.user()) > 0 {
+				return nil, searchOut{}, toolErr(msgSearchRate)
+			}
 			m = cm
 		}
 	case "names":

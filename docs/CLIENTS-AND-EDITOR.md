@@ -81,6 +81,9 @@ phrase was not checked, and `contents.expanded_truncated` says a prefix had more
 A result reached only through a share carries
 `"shared":{"from":"<name>","role":"reader|editor|manager"}`. A service token searches its
 workspace only, never shares; MCP `search_files` searches the user's own workspaces only.
+Searches that look inside files are limited to 60 a minute and 600 an hour per user, web and
+MCP together; over the limit the API answers 429 `{"code":"rate_limited"}` with `Retry-After`.
+Name-only searches (`contents=0`, MCP `in: names`) are not limited.
 
 ## AI agents
 

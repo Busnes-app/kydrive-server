@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Content searches are rate-limited.** Searches that look inside files are limited to 60 a minute
+  and 600 an hour per user, web and MCP together. Over the limit `GET /api/drive/search` answers
+  429 `{"code":"rate_limited"}` with `Retry-After`, and MCP `search_files` returns an error.
+  Name-only searches are not limited.
 - **Prefix and phrase search.** In the search box, `GET /api/drive/search` and MCP
   `search_files`, `conf*` (3 or more letters) matches words starting with them, up to the 100
   found in most of the files the user can read, and `"site report"` matches the words together in that order, across

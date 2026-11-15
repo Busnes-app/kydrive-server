@@ -37,6 +37,24 @@ const (
 	kindText       = "text"
 )
 
+// Content searches one user may run, web and MCP together: plenty for typing, too few to time
+// prefix searches into telling what other users' files hold (docs/RECOVERY-AND-ENCRYPTION.md).
+const (
+	searchesPerMinute = 60
+	searchesPerHour   = 600
+)
+
+// searchWait counts one content search by user: 0 when allowed, else the seconds to wait.
+func (s *Server) searchWait(user string) int {
+	if !s.allowAttempt("search-minute:"+user, searchesPerMinute, time.Minute) {
+		return 60
+	}
+	if !s.allowAttempt("search-hour:"+user, searchesPerHour, time.Hour) {
+		return 3600
+	}
+	return 0
+}
+
 // textKinds are plain text files indexed as they are (UTF-8, no NUL).
 var textKinds = map[string]bool{"txt": true, "md": true, "markdown": true, "csv": true, "tsv": true, "log": true}
 

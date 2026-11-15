@@ -102,4 +102,5 @@ days unused. The user creates a new one the same way.
 | The folder this agent is limited to is in the trash or gone | The token's folder was trashed or removed | Tell the user to restore the folder or create a new token |
 | in must be names, contents or both | Bad `in` for `search_files` | Leave it out or use one of those |
 | type must be folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives | Bad `type` for `search_files` | Leave it out or use one of those |
+| too many content searches; wait a few minutes, or search names only (in: names) | Over 60 content searches a minute or 600 an hour for this user | Search names only, or wait; do not loop |
 | anything else | Server problem | Report it; do not retry more than once |

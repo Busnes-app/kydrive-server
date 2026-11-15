@@ -335,6 +335,11 @@ func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 	cm := s.matcher()
 	if cm != nil && r.URL.Query().Get("contents") != "0" && strings.TrimSpace(q) != "" {
 		m = cm
+		if wait := s.searchWait(user); wait > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(wait))
+			s.writeJSON(w, 429, map[string]string{"error": "Too many searches. Try again in a few minutes.", "code": "rate_limited"})
+			return
+		}
 	}
 	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, q, typ, 200, m, true)
 	if err != nil {
