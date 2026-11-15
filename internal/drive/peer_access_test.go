@@ -20,7 +20,7 @@ var (
 		"Ticket", "TicketUpload", "Upload",
 	}
 	peerRefused = []string{
-		"AddFolder", "ApproveLink", "AppPasswords", "Authorize", "AuthorizeItem", "AuthorizeSharedManager", "CancelUpload", "Changes", "Children",
+		"AddFolder", "ApproveLink", "ApprovePhone", "AppPasswords", "Authorize", "AuthorizeItem", "AuthorizeSharedManager", "CancelUpload", "Changes", "Children",
 		"CopyFile", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateServiceToken", "CreateWorkspace", "DeleteWorkspace",
 		"DeletedWorkspaces", "Devices", "EditorSession", "EnsurePersonalWorkspace", "Events", "File", "Files", "FolderChildren", "FolderPath",
 		"FolderTree", "Folders", "Grant", "Grants", "GuestLinks", "Handover", "Leavers", "Links", "Lookup", "MoveFile", "MoveFolder",
@@ -34,7 +34,7 @@ var (
 		"AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
-		"PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
+		"PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
 		"RevokeUserEditorsBefore", "SealLegacyBlobs", "ServiceToken", "SweepOrphans", "UnlinkDevice", "UpgradeBlobs",
 	}
 )
@@ -150,6 +150,7 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 			_, err := d.AddFolder(c, "worker", e.home, e.attachments, name("sub"))
 			return err
 		},
+		"ApprovePhone": func(c context.Context) error { _, err := d.ApprovePhone(c, "worker"); return err },
 		"ApproveLink": func(c context.Context) error {
 			_, err := d.ApproveLink(c, "worker", "Laptop", "linux", challengeOf(verifier), "http://127.0.0.1:8080/cb")
 			return err
