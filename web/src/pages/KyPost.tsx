@@ -26,7 +26,7 @@ export const KyPostSwitch: React.FC = () => {
   };
   return <>
     <label className="app-preference"><input type="checkbox" checked={state.enabled} onChange={e => void set(e.target.checked)} />Let KyPost save and share my files</label>
-    <p className="hint">KyPost can save mail attachments to a Mail attachments folder in My files, and share a file there with people in your organisation by link. It cannot open, list or delete anything else.</p>
+    <p className="hint">KyPost can save mail attachments to a Mail attachments folder in My files, and share a file there with people in your organisation by link. It can also attach a copy of a file you choose for it in KyDrive’s picker. It cannot open, list or delete anything else.</p>
     {error && <Alert>{error}</Alert>}
   </>;
 };
