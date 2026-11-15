@@ -27,7 +27,7 @@ var (
 		"OpenLink", "People", "PurgeFile", "PurgeFolder", "PurgeVersion", "Quota", "RenameWorkspace", "RestoreVersion", "RestoreWorkspace",
 		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "Search", "SearchContent", "SearchFolder", "SearchFolderContent",
 		"SetAgentScope", "SetEditorsShare", "SetFolderTrash", "SetFolderTrashSince", "SetPeerSetting", "SetRetention", "SetTrash", "Share",
-		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues",
+		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues", "RecordPicks",
 	}
 	// Credential checks, callbacks, the operator CLI and background workers take no user context.
 	peerUnreachable = []string{
@@ -323,6 +323,7 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 			return d.SetFolderTrashSince(c, "worker", x.ID, true, 1<<40)
 		},
 		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", true) },
+		"RecordPicks":    func(c context.Context) error { return d.RecordPicks(c, "worker", []string{e.mail.ID}) },
 		"SetRetention":   func(c context.Context) error { return d.SetRetention(c, "admin", e.shared, 30, 0) },
 		"SetTrash":       func(c context.Context) error { return d.SetTrash(c, "worker", fresh(c).ID, 1, true) },
 		"Share": func(c context.Context) error {

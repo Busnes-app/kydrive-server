@@ -382,16 +382,8 @@ func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPee
 	if json.Unmarshal(body, &in) != nil || in.FileID == "" {
 		return refuse(400, "bad_body")
 	}
-	days := 30
-	if in.Days != nil {
-		days = *in.Days
-	}
-	var expires int64
-	switch days {
-	case 0:
-	case 1, 7, 30:
-		expires = s.now().Add(time.Duration(days) * 24 * time.Hour).Unix()
-	default:
+	expires, ok := linkExpiry(s.now(), in.Days)
+	if !ok {
 		return refuse(400, "bad_body")
 	}
 	_, token, err := s.store.Drive().CreateLink(r.Context(), user.ID, "file", in.FileID, "reader", expires)
@@ -406,11 +398,7 @@ func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPee
 		log.Printf("kypost link: %v", err)
 		return refuse(503, "unavailable")
 	}
-	out := map[string]any{"url": s.config.Server.AppURL + "/l/#" + token, "expires": nil}
-	if expires != 0 {
-		out["expires"] = time.Unix(expires, 0).UTC().Format(time.RFC3339)
-	}
-	return kypostReply{status: 201, body: out}
+	return kypostReply{status: 201, body: map[string]any{"url": s.config.Server.AppURL + "/l/#" + token, "expires": rfc3339(expires)}}
 }
 
 func (s *Server) kypostStatusRoute(r *http.Request, user *store.User, p *kypostPeer, _ []byte) kypostReply {

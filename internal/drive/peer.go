@@ -284,8 +284,46 @@ func (s *Store) peerFolder(ctx context.Context, tx *sql.Tx, user string) (worksp
 	return workspace, folder, err
 }
 
-// ExpireTickets deletes expired tickets. Their sessions expire with them (ExpireUploads).
+// ExpireTickets deletes expired tickets and picks. Their sessions expire with them (ExpireUploads).
 func (s *Store) ExpireTickets(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM drive_peer_tickets WHERE expires<=?`, time.Now().Unix())
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM drive_peer_tickets WHERE expires<=?`, time.Now().Unix()); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM drive_peer_picks WHERE expires<=?`, time.Now().Unix())
 	return err
+}
+
+// PickLife is how long KyPost may fetch a file the user chose in the picker's copy mode.
+const PickLife = 24 * time.Hour
+
+// RecordPicks lets KyPost fetch files for PickLife: the user chose them in the picker's copy
+// mode, in their own session. Each must be a live file the user may share.
+func (s *Store) RecordPicks(ctx context.Context, user string, ids []string) error {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
+		return ErrDenied
+	}
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
+		for _, id := range ids {
+			workspace, folder, file, trashed, err := resource(ctx, tx, "file", id)
+			if err != nil {
+				return err
+			}
+			if err = mayShare(ctx, tx, user, workspace, folder, file, "reader"); err != nil {
+				return err
+			}
+			if trashed {
+				return ErrConflict
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_picks(owner,file,expires) VALUES(?,?,?) ON CONFLICT(owner,file) DO UPDATE SET expires=excluded.expires`, user, id, time.Now().Add(PickLife).Unix()); err != nil {
+				return err
+			}
+			if err = event(ctx, tx, user, "kypost.file_picked", id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

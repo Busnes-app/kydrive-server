@@ -70,6 +70,12 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    credentials reach only the restic child process.
 6. **KyDrive → its data directory.** Blobs and file and folder names are sealed
    under keys derived from the deployment key before they are written.
+7. **Other suite apps → KyDrive.** In the browser, the picker (`/pick`) serves only an origin that
+   is exactly the `https` origin of an app in the signed-in person's KyIdentity suite list, sends
+   nothing before the person's confirming click and posts only to that origin
+   (`internal/api/suite_pick.go`, [SUITE.md](SUITE.md)). Server to server, KyPost's signed routes
+   (syncauth v1 under the pair secret, replay guard) act through a peer context that holds no
+   rank and admits only the operations listed in `internal/drive/access.go` ([KYPOST.md](KYPOST.md)).
 
 ## Secure design principles applied
 

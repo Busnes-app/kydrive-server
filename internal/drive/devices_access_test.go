@@ -28,7 +28,7 @@ var (
 		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
 		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
-		"SetPeerSetting", "Share", "Unshare",
+		"SetPeerSetting", "Share", "Unshare", "RecordPicks",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
@@ -171,6 +171,7 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 		},
 		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", false) },
 		"SetRetention":   func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
+		"RecordPicks":    func(c context.Context) error { return d.RecordPicks(c, "worker", []string{f.ID}) },
 		// Handover needs a leaver; the device refusal comes first, so no success case.
 		"Handover": nil,
 	}

@@ -49,6 +49,13 @@ It cannot open, list, download, move, delete or share anything else, cannot crea
 links and never reaches shared workspaces; dedicated installer administrators and local
 accounts cannot be named by it. Details and the wire contract: [KYPOST.md](KYPOST.md).
 
+## Picker
+
+Another suite app can ask a person to choose files in KyDrive (`/pick`). Only the person's
+confirming click shares anything: an organisation link to each chosen file, or, for KyPost,
+the right to fetch a copy of it for 24 hours. Only files the person may share are offered, and
+only apps in their KyIdentity suite list can ask. Details: [SUITE.md](SUITE.md).
+
 ## Leavers
 
 A deactivated or deleted account's My files stay until an administrator hands them over. The Leavers panel lists each leaver's size and item count, never file names. Handover moves the whole tree, including trash and versions, into a new folder `Handover from <name> <date>` in a shared workspace or a colleague's My files, revokes open editor sessions and the leaver's service credentials, and is audited. The administrator gains no read access, unless they already hold a grant on the destination. To delete a leaver's files, hand them to a shared workspace and purge them there. The same operation as an audited operator command:

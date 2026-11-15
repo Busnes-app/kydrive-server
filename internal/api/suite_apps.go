@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 // suiteAppsTTL keeps KyIdentity load low; a revoked app may linger in the rail this long.
@@ -26,15 +27,18 @@ type suiteAppsCache struct {
 // handleSuiteApps lists the suite apps the signed-in directory user may open, for the app
 // rail. Local accounts, SSO not configured and any KyIdentity failure answer an empty list.
 func (s *Server) handleSuiteApps(w http.ResponseWriter, r *http.Request) {
-	user := s.driveUser(r)
+	w.Header().Set("Cache-Control", "no-store")
+	s.writeJSON(w, http.StatusOK, map[string]any{"apps": s.userSuiteApps(r, s.driveUser(r))})
+}
+
+// userSuiteApps is the user's suite app list; empty for local accounts and on any failure.
+func (s *Server) userSuiteApps(r *http.Request, user *store.User) []suitedir.App {
 	sso := s.config.SSO
-	apps := []suitedir.App{}
 	if (user.SSOProvider == "kysignon" || user.SSOProvider == "scim") && user.SSOSubject != "" &&
 		sso.Enabled && sso.KySignOnIssuer != "" && sso.KySignOnClientID != "" && sso.KySignOnSecret != "" {
-		apps = s.suiteAppsFor(r, user.ID, user.SSOSubject)
+		return s.suiteAppsFor(r, user.ID, user.SSOSubject)
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	s.writeJSON(w, http.StatusOK, map[string]any{"apps": apps})
+	return []suitedir.App{}
 }
 
 func (s *Server) suiteAppsFor(r *http.Request, userID, sub string) []suitedir.App {

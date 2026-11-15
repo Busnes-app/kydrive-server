@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **KyDrive picker for other suite apps (suite contract I).** `/pick?origin=&mode=link|copy`,
+  opened as a popup by a suite app, lets a signed-in everyday person choose up to 20 files they
+  may share and, only on the confirming click, sends them to the opener with
+  `postMessage` at exactly that origin. The origin must be the `https` origin of an app in the
+  person's KyIdentity suite list. Link mode makes reader organisation links (1, 7, 30 days or
+  never); copy mode, for the paired KyPost only and with the person's KyPost switch on,
+  records the files as picked for 24 hours. New session routes `GET`/`POST /api/drive/pick`;
+  schema 22 adds `drive_peer_picks`. See `docs/SUITE.md`.
 - **KyPost can save and share files (suite contract C).** When KyPost is paired (by
   KyIdentity, or `KYDRIVE_KYPOST_URL` and `KYDRIVE_KYPOST_SECRET_FILE`), KyPost uploads mail
   attachments into the person's own My files, folder `Mail attachments`, and shares them by

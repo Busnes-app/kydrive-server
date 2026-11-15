@@ -14,6 +14,7 @@ import { Settings } from './pages/Settings';
 import { AdminActivity, AdminLeavers, AdminWorkspaces } from './pages/Admin';
 import { PersonalSettings, SETTINGS_SECTIONS } from './pages/PersonalSettings';
 import { LinkDevice, hasLinkRequest, takeLinkRequestFromURL } from './pages/LinkDevice';
+import { Picker, hasPickRequest, takePickRequestFromURL } from './pages/Picker';
 import './styles/theme.css';
 import './ky-ui/tokens.css';
 import './ky-ui/navigation.css';
@@ -29,7 +30,7 @@ const SETTINGS_TABS = SETTINGS_SECTIONS.map(s => `settings/${s.id}`);
 const MOVED: Record<string, string> = { settings: 'settings/account', account: 'settings/account', appearance: 'settings/appearance' };
 
 // Each page is a hash URL (#/drive, #/settings/devices), so links and Back work. Only on `/`:
-// shared links (/l#…) and device linking (/link) own theirs.
+// shared links (/l#…), device linking (/link) and the picker (/pick) own theirs.
 function hashTab(): string | null {
   if (location.pathname !== '/') return null;
   const id = location.hash.replace(/^#\/?/, '');
@@ -51,6 +52,7 @@ export const App: React.FC = () => {
   const [apps, setApps] = useState<SuiteApp[]>([]);
   // Idempotent, so StrictMode's second call is harmless.
   const [linking, setLinking] = useState(() => { takeLinkRequestFromURL(); return hasLinkRequest(); });
+  const [picking, setPicking] = useState(() => { takePickRequestFromURL(); return hasPickRequest(); });
 
   useEffect(() => {
     const sync = () => setChosenTab(hashTab());
@@ -110,7 +112,7 @@ export const App: React.FC = () => {
 
   // The sidebar's workspaces come from the drive's own load. A page opened by its address
   // (Settings, an admin page) loads them here, so My files and the storage meter still show.
-  const listFor = user && !user.must_change_password && !linking && (chosenTab ?? 'drive') !== 'drive' ? user.role : null;
+  const listFor = user && !user.must_change_password && !linking && !picking && (chosenTab ?? 'drive') !== 'drive' ? user.role : null;
   useEffect(() => {
     if (!listFor || workspaces.length) return;
     let live = true;
@@ -199,6 +201,7 @@ export const App: React.FC = () => {
   }
 
   if (linking) return <LinkDevice onClose={() => setLinking(false)} />;
+  if (picking) return <Picker onClose={() => setPicking(false)} />;
 
   const admin = user.role === 'admin';
   const tabs = ['drive', ...(admin ? ADMIN_TABS : []), ...SETTINGS_TABS];
