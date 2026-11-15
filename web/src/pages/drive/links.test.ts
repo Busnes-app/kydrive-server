@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openPendingLink, takeLinkFromURL } from './links';
+import { openPendingLink, opensLinkInEditor, takeLinkFromURL } from './links';
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); history.replaceState(null, '', '/'); });
 
 describe('organisation links', () => {
+  it('sends only editor files to the editor', () => {
+    const item = (kind: 'file' | 'folder', name: string) => ({ kind, id: 'f1', workspace: 'w1', workspace_name: 'Ann', parent: '', name, role: 'reader' });
+    expect(opensLinkInEditor(item('file', 'notes.docx'))).toBe(true);
+    for (const name of ['report.pdf', 'site-survey.bin', 'photo.jpg']) expect(opensLinkInEditor(item('file', name))).toBe(false);
+    expect(opensLinkInEditor(item('folder', 'Plans'))).toBe(false);
+  });
+
   it('moves the token out of the address bar, then opens it once', async () => {
     history.replaceState(null, '', '/l/#secret-token');
     takeLinkFromURL();

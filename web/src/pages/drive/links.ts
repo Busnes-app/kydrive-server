@@ -1,4 +1,4 @@
-import { change, record, sharedItem } from './client';
+import { change, opensInEditor, record, sharedItem } from './client';
 import type { SharedItem } from './client';
 
 // An organisation link is /l/#<token>. The token stays in the fragment, which browsers never
@@ -11,6 +11,12 @@ export function takeLinkFromURL(): void {
     sessionStorage.setItem(pending, location.hash.slice(1));
     history.replaceState(null, '', '/');
   }
+}
+
+// A linked file goes to its editor only when clicking its name would (opensInEditor);
+// anything else (a PDF, a zip, an image) lands in Shared with me, where it opens in quick look.
+export function opensLinkInEditor(item: SharedItem): boolean {
+  return item.kind === 'file' && opensInEditor(item.name);
 }
 
 export async function openPendingLink(): Promise<SharedItem | null> {
