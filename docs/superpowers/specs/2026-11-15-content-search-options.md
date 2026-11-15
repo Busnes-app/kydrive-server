@@ -1,6 +1,6 @@
 # Content search: options for prefixes and phrases, shared items and PDFs
 
-Status: options study for the owner to choose from, 2026-11-15, against `master` at `dd9bba4` (after the file-type filter, PR #139).
+Status: decided. On 2026-11-15 the owner chose options 2A (shared items) and 1C (prefixes through a sealed vocabulary, phrases checked against the sealed text cache), and deferred 3B (PDFium: no new dependencies for now). Study written 2026-11-15 against `master` at `dd9bba4` (after the file-type filter, PR #139).
 No product code. Numbers marked **measured** come from throwaway prototypes run on Major
 (listed under [Method](#method)); everything else is an **estimate** or cited from a primary
 source. Anything a source did not confirm says **unconfirmed**.
