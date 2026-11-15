@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, Mail, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
 import { HttpError, bytes, breadcrumb, change, ownFilesRefused, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
 import { MoveDialog } from './drive/MoveDialog';
 import { ShareDialog } from './drive/ShareDialog';
+import { EmailLink, kypostOrigin } from './drive/EmailLink';
+import type { SuiteApp } from '../components/AppHeader';
 import { QuickLook } from './drive/QuickLook';
 import { FileIcon, FolderIcon, iconFor } from './drive/FileIcon';
 import { Search } from './drive/Search';
@@ -66,7 +68,7 @@ export async function setTrashBatch(workspace: string, folders: Folder[], files:
   for (const f of files) await put('files', f.id, { revision: f.revision });
 }
 
-export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab }: { admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
+export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab, apps = [] }: { apps?: SuiteApp[]; admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
   const fileTarget = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -90,6 +92,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [history, setHistory] = useState<{ file: DriveFile; versions: Version[] } | null>(null);
   const [dialog, setDialog] = useState<{ mode: Mode; item: Item } | null>(null);
   const [sharing, setSharing] = useState<{ kind: 'file' | 'folder'; id: string; name: string } | null>(null);
+  const [emailing, setEmailing] = useState<DriveFile | null>(null);
+  const mailOrigin = kypostOrigin(apps);
   const [preview, setPreview] = useState<DriveFile | null>(null);
   const [clash, setClash] = useState<{ names: string[]; answer: (c: Choice) => void } | null>(null);
   const [message, setMessage] = useState('');
@@ -190,6 +194,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     ...(hasEditor(f.name) ? [{ label: 'Open editor', icon: <ExternalLink size={16} />, href: editorURL(f), newTab: openInNewTab }] : []),
     { label: 'Download', icon: <Download size={16} />, href: `/api/drive/files/${f.id}/download` },
     ...(canShare ? [{ label: 'Share', icon: <Share2 size={16} />, onSelect: () => setSharing({ kind: 'file', id: f.id, name: f.name }) }] : []),
+    ...(canShare && mailOrigin ? [{ label: 'Email a link', icon: <Mail size={16} />, onSelect: () => setEmailing(f) }] : []),
     'separator',
     ...(canEdit ? [{ label: 'Rename', icon: <PenLine size={16} />, onSelect: () => setDialog({ mode: 'rename', item: { kind: 'file', file: f } }) },
       { label: 'Move', icon: <FolderInput size={16} />, onSelect: () => setDialog({ mode: 'move', item: { kind: 'file', file: f } }) }] : []),
@@ -395,6 +400,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
       {clash.names.length > 1 && <ul className="drive-conflict-list" aria-label="Files that already exist">{clash.names.map((n, i) => <li key={i}>{n}</li>)}</ul>}
     </Dialog>}
     {dialog && current && <MoveDialog {...dialog} workspaceID={current.id} workspaces={workspaces} onClose={() => setDialog(null)} onDone={() => { setDialog(null); void run(reload); }} />}
+    {emailing && <EmailLink file={emailing} origin={mailOrigin} onClose={() => setEmailing(null)} />}
     {sharing && <ShareDialog {...sharing} groups={canManage ? groups : []} maxRole={canPurge ? 'manager' : 'editor'} onClose={() => setSharing(null)} />}
     {preview && <QuickLook key={preview.id} file={preview} onClose={() => setPreview(null)} />}
     {history && <Versions file={history.file} versions={history.versions} busy={busy} canRestore={canEdit && !history.file.trashed} canDelete={canPurge}

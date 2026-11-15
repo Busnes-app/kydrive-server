@@ -5,7 +5,18 @@
 KyPost saves mail attachments into a person's My files and shares them by organisation link,
 so a large attachment travels as a link. KyDrive is the resource owner: it decides whether a
 person allows it and what KyPost may do. This is section C of the suite integration contract
-(wave 1, 2026-11-14) and section I2 (wave 2); this file is KyDrive's durable copy. Both sides change together.
+(wave 1, 2026-11-14) and sections I2 and J (wave 2); this file is KyDrive's durable copy. Both sides change together.
+
+## Email a link (KyDrive → KyPost)
+
+Section J of the wave 2 contract. A file's menu in KyDrive offers **Email a link** when the
+person may share the file and KyPost is in their suite app list from KyIdentity with an
+`https://` address. A dialog takes the expiry (1, 7 or 30 days, or never; default 30) and
+**Write email** makes an ordinary organisation reader link (`POST /api/drive/files/{id}/links`,
+listed and revocable with the file's others), then opens, in a new tab with no opener,
+`https://<kypost-origin>/compose?subject=<file name>&body=<name, link and expiry>` (subject at
+most 255 bytes, body at most 2000, cut at a character boundary; no `to`). Nothing is sent
+until the person sends it in KyPost. No pairing is needed: the browser carries the link.
 
 ## Pairing
 
