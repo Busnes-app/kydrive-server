@@ -21,9 +21,13 @@ and disclosure.
   new files (within quota, `KYDRIVE_MAX_FILE_SIZE` and 8 live tickets) to that person's
   `Mail attachments` folder, put reader organisation links on files directly in it, and read
   that person's free quota, and read the bytes of a file that person chose for KyPost in the
-  KyDrive picker's copy mode within the last 24 hours and may still read. It cannot read any
-  other file, nor list, download, move, trash, purge or replace any file, share with people, make guest links, mint credentials or editor sessions, change the
-  switch, or reach shared workspaces or other folders; the peer context in
+  KyDrive picker's copy mode within the last 24 hours and may still read. While the
+  administrator's guest-link policy is on and the person turned on their second switch (off by
+  default), it can also put view-only guest links, within the policy's `max_days`, on files in
+  `Mail attachments`: those open for anyone holding the URL. It cannot read any other file,
+  nor list, download, move, trash, purge or replace any file, share with people, make any other
+  guest link, mint credentials or editor sessions, change either switch, or reach shared
+  workspaces or other folders; the peer context in
   `internal/drive/access.go` refuses all of it, so a bug in a route cannot widen it. An
   organisation link it makes opens only for signed-in KyDrive members. Turning the switch off
   stops it for that person at once, unpairing in KyIdentity (or removing the environment

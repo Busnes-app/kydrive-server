@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Guest links from KyPost (suite contract K).** `kypost.drive.link` takes
+  `"audience":"guest"`: a view-and-download guest link on a `Mail attachments` file, only while
+  the administrator's guest-link policy is on and the person turned on **Settings → Files →
+  Let KyPost create guest links for people outside the organisation** (off by default, shown
+  only while the policy is on), for 1 to the policy's `max_days` days; otherwise 409
+  `guest_links_off` or 400 `bad_body`. Listed with the file's guest links and audited as made
+  through KyPost. `kypost.drive.status` adds `guest_links` and `guest_max_days`. Schema 23 adds
+  `drive_peer_guest`. See `docs/KYPOST.md`.
 - **Email a link (suite contract J).** A file's menu offers **Email a link** when the person
   may share it and KyPost is in their KyIdentity suite list. It makes an ordinary organisation
   reader link (1, 7, 30 days or never) and opens KyPost's `/compose` deep link in a new tab with
