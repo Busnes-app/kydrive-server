@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Email a link (suite contract J).** A file's menu offers **Email a link** when the person
+  may share it and KyPost is in their KyIdentity suite list. It makes an ordinary organisation
+  reader link (1, 7, 30 days or never) and opens KyPost's `/compose` deep link in a new tab with
+  the file name as subject and the link in the body; nothing is sent until the person sends it.
 - **KyPost can fetch a file picked for it (suite contract I2).** New signed route `POST
   /api/suite/kypost/fetch` (`kypost.drive.fetch`, `{sub,issuer,file_id,max_bytes}`) answers
   the raw bytes of a file the person chose in the picker's copy mode within the last 24 hours
