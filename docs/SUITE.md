@@ -37,6 +37,10 @@ origin, never `*`, and closes.
 - `copy`: no link. `files:[{name,size,file_id}]`. Each file is recorded as picked
   (`drive_peer_picks`) for 24 hours; KyPost's fetch route reads only picked files (KYPOST.md).
   `days` is refused.
+- Each file may also carry `mime`, the media type KyDrive serves the file as (from its name,
+  as WebDAV and MCP do), without parameters: sent only when it matches
+  `^[a-z0-9]+/[a-z0-9.+-]+$` and is at most 127 bytes, else omitted. The server sets it; the
+  page passes the response on unchanged. Receivers must treat it as optional and re-validate it.
 - All or nothing: a file the user cannot read or share, trashed, or named twice answers 404
   `not_found`, and links already made in that call are revoked.
 - Each picked file is audited (`suite.pick`, `file:<id>`, `app=<id> mode=<mode>` and the link
@@ -50,3 +54,5 @@ KyDrive sends no `Cross-Origin-Opener-Policy`, so the opener survives without an
 - Fetch (I2) reads only files the user picked in copy mode within the last 24 hours, not any
   file they may read, so the pair secret alone never reads a user's drive. The wire is
   unchanged.
+- KyDrive stores no media type, so `mime` (added 2026-11-15, additive) is the type it derives
+  from the file name, the one WebDAV `getcontenttype` and MCP report.

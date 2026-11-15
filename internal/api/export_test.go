@@ -104,3 +104,6 @@ func SetKyPostForTest(s *Server, url string, secret []byte, source string) {
 
 // ResolveKyPostForTest runs one KyIdentity lookup.
 func ResolveKyPostForTest(s *Server, ctx context.Context) bool { return s.resolveKyPost(ctx) }
+
+// PickTypeForTest is the mime a picked file named name carries, or "".
+func PickTypeForTest(name string) string { return pickType(name) }

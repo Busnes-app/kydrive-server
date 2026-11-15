@@ -30,7 +30,7 @@ function open(search: string, check: Response | (() => Response) = () => json({ 
     if (url === '/api/drive/workspaces') return json([ws, reader]);
     if (url.endsWith('/folders')) return json([]);
     if (url.endsWith('/files')) return json([file]);
-    if (url === '/api/drive/pick') return json({ files: [{ name: 'report.pdf', size: 2048, url: 'https://drive.example/l/#tok', expires: null }] });
+    if (url === '/api/drive/pick') return json({ files: [{ name: 'report.pdf', size: 2048, url: 'https://drive.example/l/#tok', expires: null, mime: 'application/pdf' }] });
     return json({}, 404);
   }));
 }
@@ -59,7 +59,7 @@ describe('Picker', () => {
     fireEvent.click(share);
     fireEvent.click(share);
     await waitFor(() => expect(opener.postMessage).toHaveBeenCalledTimes(1));
-    expect(opener.postMessage).toHaveBeenCalledWith({ type: 'kydrive.picked', files: [{ name: 'report.pdf', size: 2048, url: 'https://drive.example/l/#tok', expires: null }] }, 'https://post.example');
+    expect(opener.postMessage).toHaveBeenCalledWith({ type: 'kydrive.picked', files: [{ name: 'report.pdf', size: 2048, url: 'https://drive.example/l/#tok', expires: null, mime: 'application/pdf' }] }, 'https://post.example');
     expect(posts()).toEqual([{ url: '/api/drive/pick', method: 'POST', body: { origin: 'https://post.example', mode: 'link', files: ['f1'], days: 7 } }]);
     expect(window.close).toHaveBeenCalled();
     expect(hasPickRequest()).toBe(false);
