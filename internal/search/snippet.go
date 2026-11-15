@@ -17,9 +17,6 @@ const (
 	// first match.
 	snippetBytes = 240
 	snippetLead  = 60
-	// snippetHits is how many word and how many phrase occurrences a snippet keeps; the window
-	// is chosen among the text both kept passes cover.
-	snippetHits = 4096
 )
 
 // Snippet is a short plain-text excerpt. Highlights are [start, end) offsets in UTF-16 code
@@ -32,7 +29,7 @@ type Snippet struct {
 }
 
 type hit struct {
-	term       string
+	key        int // index into the distinct terms and phrases
 	start, end int
 }
 
@@ -57,74 +54,63 @@ func MakeSnippet(r io.Reader, terms []string, phrases [][]string) (*Snippet, err
 	return snippetOf(string(buf), terms, phrases), nil
 }
 
-// findHits returns the occurrences of terms and phrases in text, in text order, at most
-// snippetHits of each kind and only where both kinds were searched; want holds every term and
-// every phrase found.
-func findHits(text string, terms []string, phrases [][]string) ([]hit, map[string]bool) {
-	want := map[string]bool{}
-	for _, t := range terms {
-		want[t] = true
-	}
-	var hits []hit
-	covered := len(text) // hits starting at or before this are all kept
-	scan(text, func(term string, start, end int) bool {
-		if !want[term] {
-			return true
-		}
-		hits = append(hits, hit{term, start, end})
-		if len(hits) < snippetHits {
-			return true
-		}
-		covered = start
-		return false
-	})
-	words := len(hits)
-	// A phrase occurrence is one hit from its first term's start to its last term's end.
-	keys := make([]string, len(phrases))
-	for p, ph := range phrases {
-		keys[p] = " " + strings.Join(ph, " ")
-	}
-	phraseRuns(text, phrases, func(p, start, end int) bool {
-		want[keys[p]] = true
-		hits = append(hits, hit{keys[p], start, end})
-		if len(hits)-words < snippetHits {
-			return true
-		}
-		covered = min(covered, start)
-		return false
-	})
-	hits = slices.DeleteFunc(hits, func(h hit) bool { return h.start > covered })
-	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(a.start, b.start) })
-	return hits, want
-}
-
 func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
-	hits, want := findHits(text, terms, phrases)
-	if len(hits) == 0 {
+	// A term is a phrase of one; a phrase occurrence is one hit from its first term's start to
+	// its last term's end.
+	var keys [][]string
+	seen := map[string]bool{}
+	for _, k := range append(phraseList(terms), phrases...) {
+		if id := strings.Join(k, " "); !seen[id] {
+			seen[id] = true
+			keys = append(keys, k)
+		}
+	}
+	// A window starts at a hit and counts the distinct keys of the hits wholly inside its first
+	// span bytes. Hits arrive in order of end, so once one ends past that span the window is
+	// final, and it and older hits starting before it are needed by no window still open.
+	const span = snippetBytes - snippetLead
+	recent := make([]hit, 0, 64)
+	var best hit
+	bestN := 0
+	counted, round := make([]int, len(keys)), 0
+	score := func(w hit) {
+		round++
+		n := 0
+		for _, h := range recent {
+			if h.start >= w.start && h.end <= w.start+span && counted[h.key] != round {
+				counted[h.key] = round
+				n++
+			}
+		}
+		if n > bestN || n == bestN && w.start < best.start {
+			best, bestN = w, n
+		}
+	}
+	phraseRuns(text, keys, func(key, start, end int) bool {
+		if len(recent) == cap(recent) {
+			closed := func(w hit) bool { return w.start+span < end }
+			for _, w := range recent {
+				if closed(w) {
+					score(w)
+				}
+			}
+			recent = slices.DeleteFunc(recent, closed)
+			recent = slices.Grow(recent, len(recent)) // keep at most half full
+		}
+		recent = append(recent, hit{key, start, end})
+		return true
+	})
+	for _, w := range recent {
+		score(w)
+	}
+	if bestN == 0 {
 		return nil
 	}
-	// The window starting at the hit that sees the most distinct terms within snippetBytes.
-	best, bestN := 0, 0
-	for i := range hits {
-		seen := map[string]bool{}
-		for j := i; j < len(hits) && hits[j].end-hits[i].start <= snippetBytes-snippetLead; j++ {
-			seen[hits[j].term] = true
-		}
-		if len(seen) > bestN {
-			best, bestN = i, len(seen)
-		}
-		if bestN == len(want) {
-			break
-		}
-	}
-	start := backToBoundary(text, max(0, hits[best].start-snippetLead))
-	end := min(len(text), start+snippetBytes)
-	for end < len(text) && !utf8.RuneStart(text[end]) {
-		end--
-	}
+	start := backToBoundary(text, max(0, best.start-snippetLead))
+	end := backToBoundary(text, min(len(text), start+snippetBytes))
 	// Prefer to cut at a space on both sides, unless that loses the match.
 	if start > 0 {
-		for i := start; i < hits[best].start; i++ {
+		for i := start; i < best.start; i++ {
 			if text[i] == ' ' || text[i] == '\n' || text[i] == '\t' {
 				start = i + 1
 				break
@@ -132,19 +118,42 @@ func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
 		}
 	}
 	if end < len(text) {
-		for i := end - 1; i > hits[best].end; i-- {
+		for i := end - 1; i > best.end; i-- {
 			if text[i] == ' ' || text[i] == '\n' || text[i] == '\t' {
 				end = i
 				break
 			}
 		}
 	}
+	var hits []hit
+	phraseRuns(text, keys, func(key, s, e int) bool {
+		if s >= start && e <= end {
+			hits = append(hits, hit{key, s, e})
+		}
+		return e <= end
+	})
+	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(a.start, b.start) })
 	return render(text, start, end, hits)
 }
 
+func phraseList(terms []string) [][]string {
+	out := make([][]string, len(terms))
+	for i, t := range terms {
+		out[i] = []string{t}
+	}
+	return out
+}
+
+// backToBoundary returns the start of the character holding byte i, or i when it starts one;
+// an invalid byte is a character of its own, as ranging over text decodes it.
 func backToBoundary(text string, i int) int {
-	for i > 0 && !utf8.RuneStart(text[i]) {
-		i--
+	for j := i - 1; j >= 0 && j > i-utf8.UTFMax; j-- {
+		if utf8.RuneStart(text[j]) {
+			if _, n := utf8.DecodeRuneInString(text[j:]); j+n > i {
+				return j
+			}
+			break
+		}
 	}
 	return i
 }

@@ -29,8 +29,9 @@ func TestParseQuery(t *testing.T) {
 		{`"kernel module`, "w[kernel module] p[] f[]"},          // unclosed: words
 		{`one two three four five six "alpha beta gamma"`, "w[one two three four five six] p[] f[]"}, // a phrase that does not fit is dropped
 		{`"to be or not to be"`, "w[] p[] f[[to be or not to be]]"},
-		{`"the the cat"`, "w[] p[] f[[the the cat]]"}, // repeats kept in order
-		{`"conf*"`, "w[conf] p[] f[]"},                // no prefixes inside quotes
+		{`"the the cat"`, "w[] p[] f[[the the cat]]"},                     // repeats kept in order
+		{`"kernel module" "Kernel module"`, "w[] p[] f[[kernel module]]"}, // a repeated phrase is one
+		{`"conf*"`, "w[conf] p[] f[]"},                                    // no prefixes inside quotes
 		{"one two three four five six seven eight nine*", "w[one two three four five six seven eight] p[] f[]"},
 	} {
 		got := ParseQuery(c.q)
@@ -94,26 +95,46 @@ func TestSnippetPhrasesLinear(t *testing.T) {
 	}
 }
 
-// Dense matches across the whole scan, with the phrase repeated, keep a bounded number of hits
-// and still give a valid highlighted snippet.
-func TestSnippetHitsAreBounded(t *testing.T) {
+// Dense matches across the whole scan, with the phrase repeated, still give a valid highlighted
+// snippet, and a common word does not hide a rarer one after it.
+func TestSnippetDenseMatches(t *testing.T) {
 	q := ParseQuery(`"ab cd" "ab cd" "ab  cd" ab cd`)
 	if len(q.Phrases) != 1 {
 		t.Fatalf("duplicate phrases kept: %v", q.Phrases)
 	}
 	text := strings.Repeat("ab cd ", SnippetScan/6)
-	hits, _ := findHits(text, q.Words, q.Phrases)
-	if len(hits) > 2*snippetHits {
-		t.Fatalf("%d hits kept", len(hits))
-	}
-	for i, h := range hits[1:] {
-		if h.start < hits[i].start {
-			t.Fatal("hits out of order")
-		}
-	}
 	sn := snippetOf(text, q.Words, q.Phrases)
 	if sn == nil || len(sn.Highlights) == 0 || sn.CutStart {
 		t.Fatalf("snippet %+v", sn)
+	}
+	text = strings.Repeat("the cat sat. ", 5000) + "the budget is final."
+	q = ParseQuery("the budget")
+	if sn = snippetOf(text, q.Words, q.Phrases); !strings.HasSuffix(marked(sn), "[the] [budget]") {
+		t.Fatalf("%q", marked(sn))
+	}
+}
+
+// Dense matching text at the scan limit, with duplicated terms and phrases, keeps memory
+// bounded: the snippet keeps only the hits a window can still use, not every occurrence, so it
+// allocates little more than tokenizing the text does (before: 2.4 GiB, over 100 times more).
+func TestSnippetBoundsDenseHits(t *testing.T) {
+	text := strings.Repeat("alpha beta ", SnippetScan/len("alpha beta "))
+	phrases := slices.Repeat([][]string{{"alpha", "beta"}, {"beta", "alpha"}}, 16)
+	var s *Snippet
+	alloc := func(f func()) uint64 {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		f()
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	tokens := alloc(func() { scan(text, func(string, int, int) bool { return true }) })
+	got := alloc(func() { s = snippetOf(text, []string{"alpha", "beta", "alpha"}, phrases) })
+	if got > 2*tokens+1<<20 {
+		t.Errorf("allocated %d MiB; tokenizing allocates %d MiB", got>>20, tokens>>20)
+	}
+	if s == nil || s.CutStart || !strings.HasPrefix(marked(s), "[alpha beta alpha beta") {
+		t.Fatalf("%q", marked(s))
 	}
 }
 
