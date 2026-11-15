@@ -403,3 +403,74 @@ func TestDeviceAccount(t *testing.T) {
 		t.Fatalf("a revoked token: %d %s", got.Code, got.Body.String())
 	}
 }
+
+func TestPhoneQRLink(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "phoner", "user")
+	expect := func(got *httptest.ResponseRecorder, code int, what string) {
+		t.Helper()
+		if got.Code != code {
+			t.Fatalf("%s: %d, want %d: %s", what, got.Code, code, got.Body.String())
+		}
+	}
+	phoneCode := func() string {
+		t.Helper()
+		out := send(t, srv, "POST", "/api/devices/phone-code", `{}`, user, "")
+		var got struct {
+			Link      string
+			ExpiresIn int `json:"expires_in"`
+		}
+		expect(out, 200, "phone code")
+		if json.Unmarshal(out.Body.Bytes(), &got) != nil || got.ExpiresIn != 120 {
+			t.Fatalf("phone code body %s", out.Body.String())
+		}
+		u, err := url.Parse(got.Link)
+		if err != nil || u.Scheme != "kydrive" || u.Host != "link" || u.Query().Get("srv") != cfg.Server.AppURL || u.Query().Get("code") == "" {
+			t.Fatalf("link %q", got.Link)
+		}
+		return u.Query().Get("code")
+	}
+	redeemPhone := func(code, name, platform string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(url.Values{"grant": {"qr"}, "code": {code}, "name": {name}, "platform": {platform}}.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, r)
+		return w
+	}
+
+	// Showing a code needs a session; nothing is minted on a GET.
+	expect(send(t, srv, "POST", "/api/devices/phone-code", `{}`, nil, ""), 401, "no session")
+	if got := send(t, srv, "GET", "/api/devices/phone-code", "", user, ""); got.Code == 200 {
+		t.Fatalf("GET minted a code: %s", got.Body.String())
+	}
+
+	code := phoneCode()
+	expect(redeemPhone(code, "Pixel 9", "linux"), 400, "computer platform")
+	expect(redeem(srv, code, linkVerifier), 400, "phone code as a computer's")
+	expect(redeemPhone(code, "Pixel 9", "android"), 400, "burned by the computer attempt")
+
+	code = phoneCode()
+	out := redeemPhone(code, "Pixel 9", "android")
+	expect(out, 200, "redeem phone")
+	var got struct{ Token, User string }
+	if json.Unmarshal(out.Body.Bytes(), &got) != nil || !strings.HasPrefix(got.Token, "kyd_") || got.User != "phoner" {
+		t.Fatalf("token body %s", out.Body.String())
+	}
+	expect(redeemPhone(code, "Pixel 9", "android"), 400, "reused phone code")
+	expect(send(t, srv, "GET", "/api/drive/device", "", nil, got.Token), 200, "device account")
+	list := send(t, srv, "GET", "/api/devices", "", user, "")
+	expect(list, 200, "devices")
+	if !strings.Contains(list.Body.String(), `"platform":"android"`) || !strings.Contains(list.Body.String(), "Pixel 9") {
+		t.Fatalf("devices %s", list.Body.String())
+	}
+
+	// The phone's code travels in a form body, never the URL.
+	code = phoneCode()
+	inURL := httptest.NewRequest("POST", "/api/devices/token?"+url.Values{"grant": {"qr"}, "code": {code}, "name": {"Pixel"}, "platform": {"android"}}.Encode(), nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, inURL)
+	expect(rec, 400, "code in URL")
+}

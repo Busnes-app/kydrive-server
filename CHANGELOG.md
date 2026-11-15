@@ -4,6 +4,15 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Link a phone by QR code.** Settings → Phones & apps → Devices has **Link a phone**: after
+  step-up, `POST /api/devices/phone-code` returns `{link, expires_in}`, where `link` is
+  `kydrive://link?srv=<KY_APP_URL>&code=<code>`, a code that works once for 120 seconds. KyDrive
+  for Android scans it and redeems it with `POST /api/devices/token`
+  `grant=qr&code=&name=&platform=android|ios`, getting the same `kyd_` device credential as a
+  computer. The dialog names the phone that used the code, with Revoke. A computer's code and a
+  phone's code never redeem as each other. The list is now **Devices** and shows phones too; the
+  20-device limit counts both.
+
 - **Guest links from KyPost (suite contract K).** `kypost.drive.link` takes
   `"audience":"guest"`: a view-and-download guest link on a `Mail attachments` file, only while
   the administrator's guest-link policy is on and the person turned on **Settings → Files →
