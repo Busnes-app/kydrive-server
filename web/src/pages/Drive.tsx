@@ -111,6 +111,9 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const canManage = current?.kind === 'shared' && (admin || current.role === 'manager');
   const canShare = canPurge || (canEdit && current?.editors_share === true);
   const generation = useRef(0);
+  // Unmounted (say, an opened link switched to Shared with me): a reload in flight is stale and
+  // must not pick My files.
+  useEffect(() => () => { generation.current++; }, []);
   const shown = useRef({ selected, trash });
   shown.current = { selected, trash };
   const reload = useCallback(async () => {
