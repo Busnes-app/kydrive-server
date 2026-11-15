@@ -60,6 +60,7 @@ func TestStepUpGuardsSessionOutlivingCredentials(t *testing.T) {
 		{"/api/auth/app-passwords", `{"name":"Agent","scope":"mcp:write"}`},
 		{"/api/drive/workspaces/" + w.ID + "/tokens", `{"name":"Robot","role":"editor"}`},
 		{"/api/devices/approve", approveBody("http://127.0.0.1:53682/cb")},
+		{"/api/devices/phone-code", `{}`},
 		{"/api/drive/folders/" + folder.ID + "/guest-links", `{"days":7}`}, // Q3: a guest link outlives the session too
 	}
 	// A password sign-in is itself a fresh proof.

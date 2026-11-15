@@ -351,3 +351,68 @@ func TestUnlinkDevice(t *testing.T) {
 		}
 	}
 }
+
+func TestPhoneLink(t *testing.T) {
+	st, _, _ := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	phone := func() string {
+		t.Helper()
+		code, err := d.ApprovePhone(ctx, "worker")
+		if err != nil || len(code) < 43 {
+			t.Fatalf("approve phone: %q %v", code, err)
+		}
+		return code
+	}
+
+	code := phone()
+	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_device_codes WHERE code_hash=? OR code_hash LIKE ?`, code, "%"+code[:20]+"%"); err != nil || n != 0 {
+		t.Fatalf("code stored in clear: %d %v", n, err)
+	}
+	for _, c := range []struct{ name, platform string }{{"", "android"}, {" Pixel", "android"}, {strings.Repeat("x", 101), "android"}, {"Pixel", "linux"}, {"Pixel", ""}} {
+		if _, _, err := d.RedeemPhone(ctx, code, c.name, c.platform); !errors.Is(err, drive.ErrDenied) {
+			t.Errorf("%+v: %v", c, err)
+		}
+	}
+	token, user, err := d.RedeemPhone(ctx, code, "Pixel 9", "android")
+	if err != nil || user != "worker" || !strings.HasPrefix(token, "kyd_") || len(token) != 47 {
+		t.Fatalf("redeem %q %q %v", token, user, err)
+	}
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("reused phone code: %v", err)
+	}
+	if got, err := d.DeviceUser(ctx, token); err != nil || got != "worker" {
+		t.Fatalf("device user %q %v", got, err)
+	}
+	devices, err := d.Devices(ctx, "worker")
+	if err != nil || len(devices) != 1 || devices[0].Name != "Pixel 9" || devices[0].Platform != "android" {
+		t.Fatalf("devices %+v %v", devices, err)
+	}
+
+	// The two kinds of code never cross, and trying burns the code.
+	code = phone()
+	if _, _, err = d.RedeemLink(ctx, code, verifier); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("phone code redeemed as a computer: %v", err)
+	}
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("phone code reused after a computer attempt: %v", err)
+	}
+	link, err := d.ApproveLink(ctx, "worker", "Laptop", "linux", challengeOf(verifier), "http://127.0.0.1:8080/cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = d.RedeemPhone(ctx, link, "Pixel 9", "android"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("computer code redeemed as a phone: %v", err)
+	}
+
+	// Phone codes live 120 seconds.
+	code = phone()
+	if left, err := drive.QueryInt(ctx, d, `SELECT expires FROM drive_device_codes WHERE used=0`); err != nil || int64(left)-time.Now().Unix() < 115 || int64(left)-time.Now().Unix() > 120 {
+		t.Fatalf("phone code lifetime: %d %v", int64(left)-time.Now().Unix(), err)
+	}
+	if err = drive.ExecSQL(ctx, d, `UPDATE drive_device_codes SET expires=? WHERE used=0`, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("expired phone code: %v", err)
+	}
+}

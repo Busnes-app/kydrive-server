@@ -25,7 +25,7 @@ var (
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
 	deviceRefused = []string{
-		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
+		"ApproveLink", "ApprovePhone", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
 		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
 		"SetPeerSetting", "Share", "Unshare", "RecordPicks", "SetPeerGuestSetting",
@@ -36,7 +36,7 @@ var (
 		"AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeletedWorkspaces", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
-		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
+		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
 		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Ticket", "TicketUpload",
@@ -140,6 +140,7 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 			_, err := d.ApproveLink(c, "worker", "Laptop", "linux", challengeOf(verifier), "http://127.0.0.1:8080/cb")
 			return err
 		},
+		"ApprovePhone":    func(c context.Context) error { _, err := d.ApprovePhone(c, "worker"); return err },
 		"CreateWorkspace": func(c context.Context) error { _, err := d.CreateWorkspace(c, "admin", "Second", 10); return err },
 		"Quota":           func(c context.Context) error { return d.Quota(c, "admin", w.ID, 200) },
 		"RenameWorkspace": func(c context.Context) error { return d.RenameWorkspace(c, "admin", w.ID, "Renamed") },

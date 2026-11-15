@@ -18,13 +18,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// Device credentials are a desktop client's own bearer tokens. The user approves a link in
-// the browser; the client receives a one-time code on its loopback listener and redeems it
-// with its PKCE verifier. Codes and tokens are 256 random bits, stored as SHA-256 only.
+// Device credentials are a client's own bearer tokens. A computer links through the browser:
+// it receives a one-time code on its loopback listener and redeems it with its PKCE verifier.
+// A phone scans a one-time code the signed-in user shows as a QR code. Codes and tokens are
+// 256 random bits, stored as SHA-256 only.
 const (
 	DevicePrefix      = "kyd_"
 	devicesPerUser    = 20
 	deviceCodeLife    = 60 * time.Second
+	phoneCodeLife     = 120 * time.Second
 	deviceIdle        = 90 * 24 * time.Hour
 	deviceRevokedKeep = 30 * 24 * time.Hour
 	deviceTouch       = 5 * time.Minute
@@ -81,12 +83,51 @@ func (s *Store) ApproveLink(ctx context.Context, user, name, platform, challenge
 	return code, err
 }
 
-// RedeemLink spends code once, checks the verifier against its S256 challenge and returns a
-// new device token and its user. Any failure is ErrDenied and burns the code.
+// ApprovePhone returns a one-time code, valid 120 seconds, that the signed-in user shows as a
+// QR code for a phone to scan. A phone code carries no challenge: whoever holds it first links.
+func (s *Store) ApprovePhone(ctx context.Context, user string) (string, error) {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
+		return "", ErrDenied
+	}
+	code := secret256()
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
+		if err := deviceSlot(ctx, tx, user); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO drive_device_codes(code_hash,user_id,name,platform,challenge,expires) VALUES(?,?,'','','',?)`, tokenHash(code), user, time.Now().Add(phoneCodeLife).Unix())
+		return err
+	})
+	return code, err
+}
+
+// RedeemLink spends a computer's code once, checks the verifier against its S256 challenge and
+// returns a new device token and its user. Any failure is ErrDenied and burns the code.
 func (s *Store) RedeemLink(ctx context.Context, code, verifier string) (token, user string, err error) {
 	if code == "" || !validVerifier(verifier) {
 		return "", "", ErrDenied
 	}
+	sum := sha256.Sum256([]byte(verifier))
+	want := []byte(base64.RawURLEncoding.EncodeToString(sum[:]))
+	return s.redeem(ctx, code, "", "", func(challenge string) bool {
+		return challenge != "" && subtle.ConstantTimeCompare(want, []byte(challenge)) == 1
+	})
+}
+
+// RedeemPhone spends a phone code from ApprovePhone once and links the named phone. Any failure
+// is ErrDenied and burns the code.
+func (s *Store) RedeemPhone(ctx context.Context, code, name, platform string) (token, user string, err error) {
+	if code == "" || !ValidName(name) || len(name) > 100 || !validPhone(platform) {
+		return "", "", ErrDenied
+	}
+	return s.redeem(ctx, code, name, platform, func(challenge string) bool { return challenge == "" })
+}
+
+// redeem burns code, then mints a token if it is unexpired and proven. A computer's code holds
+// its name and platform; a phone's are empty and come from the redeeming request.
+func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform string, proven func(challenge string) bool) (token, user string, err error) {
 	denied := false
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		var name, platform, challenge string
@@ -103,10 +144,12 @@ func (s *Store) RedeemLink(ctx context.Context, code, verifier string) (token, u
 		} else if n, err := res.RowsAffected(); err != nil || n != 1 {
 			return errors.Join(err, ErrDenied)
 		}
-		sum := sha256.Sum256([]byte(verifier))
-		if time.Now().Unix() >= expires || subtle.ConstantTimeCompare([]byte(base64.RawURLEncoding.EncodeToString(sum[:])), []byte(challenge)) != 1 {
+		if time.Now().Unix() >= expires || !proven(challenge) {
 			denied = true // commit the burn
 			return nil
+		}
+		if platform == "" {
+			name, platform = phoneName, phonePlatform
 		}
 		if err := deviceSlot(ctx, tx, user); err != nil {
 			return err
@@ -137,7 +180,7 @@ func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
 		return err
 	}
 	if count >= devicesPerUser {
-		return fmt.Errorf("%w: at most %d computers", ErrQuota, devicesPerUser)
+		return fmt.Errorf("%w: at most %d linked devices", ErrQuota, devicesPerUser)
 	}
 	return nil
 }
@@ -247,6 +290,8 @@ func secret256() string {
 }
 
 func validPlatform(p string) bool { return p == "windows" || p == "macos" || p == "linux" }
+
+func validPhone(p string) bool { return p == "android" || p == "ios" }
 
 // validChallenge is an S256 PKCE challenge: base64url of 32 bytes, unpadded.
 func validChallenge(c string) bool {

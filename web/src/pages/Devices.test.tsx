@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Devices, DevicePolicySettings } from './Devices';
 
 
@@ -78,5 +78,42 @@ describe('DevicePolicySettings', () => {
     fireEvent.click(screen.getByLabelText(/Users cannot change this/));
     fireEvent.click(screen.getByRole('button', { name: 'Save computers' }));
     await waitFor(() => expect(puts).toEqual([{ wipe_default: false, wipe_locked: true }]));
+  });
+});
+
+describe('Link a phone', () => {
+  it('shows a one-time QR code and names the phone that used it', async () => {
+    const pixel = { id: 'p1', name: 'Pixel 9', platform: 'android', created: '2026-11-15T10:00:00Z', last_used: 0 };
+    let devices: unknown[] = [laptop];
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push(`${method} ${String(input)}`);
+      if (String(input) === '/api/drive/device-policy') return json({ wipe_default: true, wipe_locked: false });
+      if (String(input) === '/api/devices/phone-code') { devices = [laptop, pixel]; return json({ link: 'kydrive://link?srv=https%3A%2F%2Fdrive.example&code=abc', expires_in: 120 }); }
+      return json(devices);
+    }));
+    render(<Devices />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Link a phone' }));
+    const qr = await screen.findByAltText('QR code to link a phone') as HTMLImageElement;
+    expect(qr.src.startsWith('data:image/svg+xml')).toBe(true);
+    expect(calls.filter(c => c === 'POST /api/devices/phone-code')).toHaveLength(1);
+    expect(screen.getByRole('timer').textContent).toMatch(/Expires in 1[12][0-9] s/);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Pixel 9 \(Android\) is linked/), { timeout: 4000 });
+    fireEvent.click(within(screen.getByText(/is linked/).closest('dialog') as HTMLElement).getByRole('button', { name: 'Revoke' }));
+    expect(await screen.findByRole('button', { name: 'Revoke phone' })).toBeTruthy();
+    expect(screen.getByLabelText(/^Also remove KyDrive files from this phone/)).toBeTruthy();
+  });
+
+  it('shows no code when the server refuses one', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/drive/device-policy') return json({ wipe_default: true, wipe_locked: false });
+      if (String(input) === '/api/devices/phone-code') return json({ error: 'at most 20 linked devices' }, 429);
+      return json([]);
+    }));
+    render(<Devices />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Link a phone' }));
+    expect(await screen.findByText(/at most 20 linked devices/)).toBeTruthy();
+    expect(screen.queryByAltText('QR code to link a phone')).toBeNull();
   });
 });

@@ -15,8 +15,9 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
-// Linked computers. Approval and management need a cookie session (/api/devices is never a
-// Bearer path); the token exchange is public and proven by the PKCE verifier.
+// Linked devices. Approval and management need a cookie session (/api/devices is never a
+// Bearer path); the token exchange is public, proven by a computer's PKCE verifier or by
+// holding a phone's one-time QR code.
 const (
 	deviceWipeDefaultSetting = "drive_device_wipe_default"
 	deviceWipeLockedSetting  = "drive_device_wipe_locked"
@@ -24,6 +25,7 @@ const (
 
 func (s *Server) deviceRoutes() {
 	s.mux.HandleFunc("POST /api/devices/approve", s.requireAuthenticated(s.requireStepUp(s.handleApproveDevice)))
+	s.mux.HandleFunc("POST /api/devices/phone-code", s.requireAuthenticated(s.requireStepUp(s.handlePhoneCode)))
 	s.mux.HandleFunc("POST /api/devices/token", s.handleDeviceToken)
 	s.mux.HandleFunc("GET /api/devices", s.requireAuthenticated(s.handleDevices))
 	s.mux.HandleFunc("DELETE /api/devices/{id}", s.requireAuthenticated(s.handleRevokeDevice))
@@ -58,12 +60,33 @@ func (s *Server) handleApproveDevice(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]string{"redirect": in.Redirect + "?" + url.Values{"code": {code}, "state": {in.State}}.Encode()})
 }
 
+// handlePhoneCode answers the link a phone scans as a QR code: this server's address and a
+// one-time code, valid 120 seconds.
+func (s *Server) handlePhoneCode(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.credentialActor(w, r)
+	if !ok {
+		return
+	}
+	code, err := s.store.Drive().ApprovePhone(r.Context(), user)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, map[string]any{"link": "kydrive://link?" + url.Values{"srv": {s.config.Server.AppURL}, "code": {code}}.Encode(), "expires_in": 120})
+}
+
 func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	if !s.allowAttempt("device-token:"+s.requestIP(r), 20, time.Minute) {
 		s.writeError(w, http.StatusTooManyRequests, "Too many attempts")
 		return
 	}
-	token, id, err := s.store.Drive().RedeemLink(r.Context(), r.PostFormValue("code"), r.PostFormValue("verifier"))
+	var token, id string
+	var err error
+	if r.PostFormValue("grant") == "qr" {
+		token, id, err = s.store.Drive().RedeemPhone(r.Context(), r.PostFormValue("code"), r.PostFormValue("name"), r.PostFormValue("platform"))
+	} else {
+		token, id, err = s.store.Drive().RedeemLink(r.Context(), r.PostFormValue("code"), r.PostFormValue("verifier"))
+	}
 	if errors.Is(err, drive.ErrDenied) {
 		s.writeError(w, 400, "Invalid or expired code")
 		return
