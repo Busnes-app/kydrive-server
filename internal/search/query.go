@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -52,7 +53,7 @@ func ParseQuery(q string) Query {
 			switch {
 			case len(phrase) == 1 && !used[phrase[0]] && fits(phrase...):
 				out.Words = append(out.Words, phrase[0])
-			case len(phrase) > 1 && fits(phrase...):
+			case len(phrase) > 1 && !slices.ContainsFunc(out.Phrases, func(p []string) bool { return slices.Equal(p, phrase) }) && fits(phrase...):
 				out.Phrases = append(out.Phrases, phrase)
 			}
 			continue

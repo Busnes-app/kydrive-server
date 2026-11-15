@@ -17,6 +17,9 @@ const (
 	// first match.
 	snippetBytes = 240
 	snippetLead  = 60
+	// snippetHits is how many word and how many phrase occurrences a snippet keeps; the window
+	// is chosen among the text both kept passes cover.
+	snippetHits = 4096
 )
 
 // Snippet is a short plain-text excerpt. Highlights are [start, end) offsets in UTF-16 code
@@ -54,18 +57,28 @@ func MakeSnippet(r io.Reader, terms []string, phrases [][]string) (*Snippet, err
 	return snippetOf(string(buf), terms, phrases), nil
 }
 
-func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
+// findHits returns the occurrences of terms and phrases in text, in text order, at most
+// snippetHits of each kind and only where both kinds were searched; want holds every term and
+// every phrase found.
+func findHits(text string, terms []string, phrases [][]string) ([]hit, map[string]bool) {
 	want := map[string]bool{}
 	for _, t := range terms {
 		want[t] = true
 	}
 	var hits []hit
+	covered := len(text) // hits starting at or before this are all kept
 	scan(text, func(term string, start, end int) bool {
-		if want[term] {
-			hits = append(hits, hit{term, start, end})
+		if !want[term] {
+			return true
 		}
-		return true
+		hits = append(hits, hit{term, start, end})
+		if len(hits) < snippetHits {
+			return true
+		}
+		covered = start
+		return false
 	})
+	words := len(hits)
 	// A phrase occurrence is one hit from its first term's start to its last term's end.
 	keys := make([]string, len(phrases))
 	for p, ph := range phrases {
@@ -74,12 +87,22 @@ func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
 	phraseRuns(text, phrases, func(p, start, end int) bool {
 		want[keys[p]] = true
 		hits = append(hits, hit{keys[p], start, end})
-		return true
+		if len(hits)-words < snippetHits {
+			return true
+		}
+		covered = min(covered, start)
+		return false
 	})
+	hits = slices.DeleteFunc(hits, func(h hit) bool { return h.start > covered })
+	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(a.start, b.start) })
+	return hits, want
+}
+
+func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
+	hits, want := findHits(text, terms, phrases)
 	if len(hits) == 0 {
 		return nil
 	}
-	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(a.start, b.start) })
 	// The window starting at the hit that sees the most distinct terms within snippetBytes.
 	best, bestN := 0, 0
 	for i := range hits {

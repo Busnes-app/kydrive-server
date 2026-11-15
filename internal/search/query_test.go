@@ -94,6 +94,29 @@ func TestSnippetPhrasesLinear(t *testing.T) {
 	}
 }
 
+// Dense matches across the whole scan, with the phrase repeated, keep a bounded number of hits
+// and still give a valid highlighted snippet.
+func TestSnippetHitsAreBounded(t *testing.T) {
+	q := ParseQuery(`"ab cd" "ab cd" "ab  cd" ab cd`)
+	if len(q.Phrases) != 1 {
+		t.Fatalf("duplicate phrases kept: %v", q.Phrases)
+	}
+	text := strings.Repeat("ab cd ", SnippetScan/6)
+	hits, _ := findHits(text, q.Words, q.Phrases)
+	if len(hits) > 2*snippetHits {
+		t.Fatalf("%d hits kept", len(hits))
+	}
+	for i, h := range hits[1:] {
+		if h.start < hits[i].start {
+			t.Fatal("hits out of order")
+		}
+	}
+	sn := snippetOf(text, q.Words, q.Phrases)
+	if sn == nil || len(sn.Highlights) == 0 || sn.CutStart {
+		t.Fatalf("snippet %+v", sn)
+	}
+}
+
 func put(t *testing.T, x *Index, blob, text string) string {
 	t.Helper()
 	ref := x.Ref(blob, "text")
