@@ -96,9 +96,11 @@ func TestSnippetHighlightsInUTF16(t *testing.T) {
 func FuzzSnippet(f *testing.F) {
 	for _, s := range []string{"Résumé 😀 中文字 budget", "a\x00b\xffc budget", "ﬁ ß İ"} {
 		f.Add(s, "budget résumé 中文")
+		f.Add(s, `"résumé 😀 中文字" budg*`)
 	}
 	f.Fuzz(func(t *testing.T, text, q string) {
-		s, err := MakeSnippet(strings.NewReader(text), Terms(q), nil)
+		pq := ParseQuery(q)
+		s, err := MakeSnippet(strings.NewReader(text), pq.Words, pq.Phrases)
 		if err != nil {
 			t.Fatal(err)
 		}
