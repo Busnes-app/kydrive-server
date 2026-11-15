@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -65,7 +66,7 @@ func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit in
 	member := map[string]bool{}
 	for _, w := range spaces {
 		member[w.ID] = true
-		found, readable, err := s.searchSpace(ctx, user, w.ID, "", q, typ)
+		found, readable, err := s.searchSpace(ctx, user, w.ID, "", nameQuery(q), typ)
 		if err != nil {
 			return nil, false, err
 		}
@@ -73,7 +74,7 @@ func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit in
 		files = append(files, readable...)
 	}
 	if shared {
-		found, readable, err := s.searchShared(ctx, user, q, typ, member)
+		found, readable, err := s.searchShared(ctx, user, nameQuery(q), typ, member)
 		if err != nil {
 			return nil, false, err
 		}
@@ -264,7 +265,7 @@ func (s *Store) SearchFolderContent(ctx context.Context, user, workspace, folder
 	if err = authorizeItem(ctx, s.db, user, workspace, folder, "", 1); err != nil {
 		return nil, false, err
 	}
-	hits, files, err := s.searchSpace(ctx, user, workspace, folder, q, typ)
+	hits, files, err := s.searchSpace(ctx, user, workspace, folder, nameQuery(q), typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -273,6 +274,18 @@ func (s *Store) SearchFolderContent(ctx context.Context, user, workspace, folder
 	}
 	return sortHits(hits, limit)
 }
+
+// nameQuery is q as names match it, the content syntax (double quotes, a * ending a word)
+// removed. Syntax alone matches no name: "\x00", which no valid name holds.
+func nameQuery(q string) string {
+	n := strings.TrimSpace(strings.ReplaceAll(wordStar.ReplaceAllString(q, "$1"), `"`, ""))
+	if n == "" && q != "" {
+		return "\x00"
+	}
+	return n
+}
+
+var wordStar = regexp.MustCompile(`\*+(\s|$)`)
 
 func searchQuery(q, typ string) (string, error) {
 	q = strings.ToLower(strings.TrimSpace(q))

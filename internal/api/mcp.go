@@ -57,6 +57,7 @@ const (
 	msgNotFolder  = "Not a folder"
 	msgNotFile    = "Not a file"
 	msgSearchIn   = "in must be names, contents or both"
+	msgSearchRate = "too many content searches; wait a few minutes, or search names only (in: names)"
 	msgSearchType = "type must be folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives"
 )
 
@@ -212,7 +213,7 @@ func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_folder", Annotations: read,
 		Description: "List the files and folders in a folder. / is the top." + untrustedNote}, t.listFolder)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_files", Annotations: read,
-		Description: "Find files and folders whose name contains the query, case-insensitively, and files whose text contains every word of the query (whole words, ignoring case and accents; Office, OpenDocument, text files, and PDFs when Euro-Office is set up). Content matches carry a short snippet. Recently changed files may not be searchable by content for a few seconds. type keeps one file type, read from the name's extension, and with a type the query may be empty." + untrustedNote}, t.searchFiles)
+		Description: "Find files and folders whose name contains the query, case-insensitively, and files whose text contains every word of the query (whole words, ignoring case and accents; Office, OpenDocument, text files, and PDFs when Euro-Office is set up). A word ending in * with 3 or more letters before it matches words starting with them (conf*); words in double quotes must appear together in that order (\"kernel module\"), checked in the best 200 matches only. Content matches carry a short snippet. Recently changed files may not be searchable by content for a few seconds. type keeps one file type, read from the name's extension, and with a type the query may be empty." + untrustedNote}, t.searchFiles)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_file_info", Annotations: read,
 		Description: "Get a file's or folder's metadata: size, revision, modification time and type." + untrustedNote}, t.fileInfo)
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_file", Annotations: read,
@@ -475,15 +476,17 @@ func (t *mcpTools) listFolder(ctx context.Context, _ *mcp.CallToolRequest, in pa
 }
 
 type searchIn struct {
-	Query string `json:"query,omitempty" jsonschema:"2 to 100 characters matched against names and, as whole words, file contents; empty with a type lists every item of that type"`
+	Query string `json:"query,omitempty" jsonschema:"2 to 100 characters matched against names and, as whole words, file contents (conf* for a prefix of 3+ letters, \"two words\" for a phrase); empty with a type lists every item of that type"`
 	In    string `json:"in,omitempty" jsonschema:"names, contents or both (the default)"`
 	Type  string `json:"type,omitempty" jsonschema:"only this file type: folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives (by name extension); with a type the query may be empty"`
 }
 
 type searchOut struct {
-	Notice    string   `json:"notice,omitempty"`
-	Results   []mcpHit `json:"results"`
-	Truncated bool     `json:"truncated,omitempty"`
+	Notice       string   `json:"notice,omitempty"`
+	Results      []mcpHit `json:"results"`
+	Truncated    bool     `json:"truncated,omitempty"`
+	Unverified   int      `json:"unverified,omitempty" jsonschema:"files holding a phrase's words that were not checked for the exact phrase, so are left out"`
+	PrefixCapped bool     `json:"prefix_capped,omitempty" jsonschema:"a prefix matched more words than are searched; only the commonest were"`
 }
 
 // mcpHit is a search_files result: an entry, what matched, and for content matches a snippet.
@@ -506,6 +509,9 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	switch in.In {
 	case "", "both", "contents":
 		if cm != nil && strings.TrimSpace(in.Query) != "" {
+			if t.s.searchWait(t.user()) > 0 {
+				return nil, searchOut{}, toolErr(msgSearchRate)
+			}
 			m = cm
 		}
 	case "names":
@@ -536,9 +542,9 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 		return nil, searchOut{}, t.fail("search_files", err)
 	}
 	out := searchOut{Results: []mcpHit{}, Truncated: more}
-	var terms []string
+	var snip *contentMatcher
 	if m != nil {
-		terms = cm.terms
+		snip, out.Unverified, out.PrefixCapped = cm, cm.unverified, cm.capped
 	}
 	snippets := mcpSnippetCount
 	for _, h := range hits {
@@ -553,9 +559,9 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 			dir = joinPath(dir, h.Path)
 		}
 		r := mcpHit{entry: entry{Name: h.Name, Path: joinPath(dir, h.Name), Kind: h.Kind}, Match: h.Match}
-		if snippets > 0 && len(terms) > 0 && contentHit(h) {
+		if snippets > 0 && snip != nil && contentHit(h) {
 			snippets--
-			sn, ok := t.s.snippet(ctx, t.user(), h, terms)
+			sn, ok := t.s.snippet(ctx, t.user(), h, snip)
 			if !ok {
 				continue
 			}

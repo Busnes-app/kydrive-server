@@ -9,7 +9,7 @@ import { iconFor } from './FileIcon';
 export type Snippet = { text: string; highlights: [number, number][]; cut_start: boolean; cut_end: boolean };
 // shared is set on an item reached only through Shared with me; path then starts at the shared item.
 export type Hit = { kind: 'file' | 'folder'; id: string; workspace: string; parent: string; name: string; path: string; match?: string[]; snippet?: Snippet; shared?: { from: string; role: string } };
-type Found = { query: string; results: Hit[]; truncated: boolean; pending: number };
+type Found = { query: string; results: Hit[]; truncated: boolean; pending: number; unverified: number; capped: boolean };
 
 function snippet(v: unknown): v is Snippet {
   return record(v) && typeof v.text === 'string' && typeof v.cut_start === 'boolean' && typeof v.cut_end === 'boolean' && Array.isArray(v.highlights)
@@ -41,9 +41,11 @@ export function Marked({ s }: { s: Snippet }) {
   return <span className="drive-search-snippet">{s.cut_start && '…'}{marks(s.text, s.highlights)}{s.cut_end && '…'}</span>;
 }
 
-// nameMatches finds query in name case-insensitively, as the server's name match does. The
-// "iu" regular expression keeps offsets in name itself, which lower-casing first would not.
-export function nameMatches(name: string, query: string): [number, number][] {
+// nameMatches finds query in name case-insensitively, as the server's name match does, without
+// the content syntax (quotes, a * ending a word). The "iu" regular expression keeps offsets in
+// name itself, which lower-casing first would not.
+export function nameMatches(name: string, raw: string): [number, number][] {
+  const query = raw.replace(/\*+(?=\s|$)/g, '').replace(/"/g, '').trim();
   if (!query) return [];
   return [...name.matchAll(new RegExp(query.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&'), 'giu'))].map(m => [m.index, m.index + m[0].length]);
 }
@@ -93,8 +95,9 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
       try {
         const v = await response(await fetch(`/api/drive/search?q=${encodeURIComponent(query)}${type ? `&type=${type}` : ''}`, { signal: abort.signal }));
         if (!record(v) || !Array.isArray(v.results) || !v.results.every(hit) || typeof v.truncated !== 'boolean') throw new Error('Invalid search response');
-        const pending = record(v.contents) && typeof v.contents.pending === 'number' ? v.contents.pending : 0;
-        setFound({ query, results: v.results, truncated: v.truncated, pending }); setError(''); setOpen(true);
+        const c = record(v.contents) ? v.contents : {};
+        const count = (n: unknown) => typeof n === 'number' ? n : 0;
+        setFound({ query, results: v.results, truncated: v.truncated, pending: count(c.pending), unverified: count(c.unverified), capped: c.expanded_truncated === true }); setError(''); setOpen(true);
       } catch (e) { if (!abort.signal.aborted) { setError(e instanceof Error ? e.message : 'Search failed'); setOpen(true); } }
     })(), 300);
     return () => { clearTimeout(timer); abort.abort(); };
@@ -128,7 +131,9 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
       })}</ul>)}
       {found?.truncated && <p>Showing the first {found.results.length} matches; refine the search to see more.</p>}
       {found && found.pending > 0 && <p className="drive-search-note">Still indexing {found.pending} of your files, so their contents may not be found yet.</p>}
-      {found?.query && <p className="drive-search-note">File contents match whole words.</p>}
+      {found && found.unverified > 0 && <p className="drive-search-note">{found.unverified} more files have these words but were not checked for the exact phrase.</p>}
+      {found?.capped && <p className="drive-search-note">A word start matched many words; only the most common were searched.</p>}
+      {found?.query && <p className="drive-search-note">File contents match whole words. Add * to 3 or more letters to match the start of a word (conf*), or put words in quotes for an exact phrase ("site report").</p>}
       </div>
     </div>}
   </div>;

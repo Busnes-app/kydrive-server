@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,15 +99,17 @@ type searchResponse struct {
 	} `json:"results"`
 	Truncated bool `json:"truncated"`
 	Contents  struct {
-		Searched bool `json:"searched"`
-		Pending  int  `json:"pending"`
+		Searched   bool `json:"searched"`
+		Pending    int  `json:"pending"`
+		Unverified int  `json:"unverified"`
+		Capped     bool `json:"expanded_truncated"`
 	} `json:"contents"`
 	raw string
 }
 
 func (w *searchWorld) search(t *testing.T, who *http.Cookie, q string) searchResponse {
 	t.Helper()
-	rec := do(t, w.srv, "GET", "/api/drive/search?q="+strings.ReplaceAll(q, " ", "%20"), who)
+	rec := do(t, w.srv, "GET", "/api/drive/search?q="+url.QueryEscape(q), who)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("search %q: %d %s", q, rec.Code, rec.Body.String())
 	}
@@ -581,7 +584,7 @@ func TestContentSearchKeepsNoPlaintextAtRest(t *testing.T) {
 		w.put(t, "usr_alice", drive.File{Workspace: w.aliceMine, Name: "c.md"}, []byte("# "+text)),
 	}
 	w.index(t)
-	for _, q := range []string{"zebracanary7731", "zurichquokka", "秘密計画書", "4815162342"} {
+	for _, q := range []string{"zebracanary7731", "zurichquokka", "秘密計画書", "4815162342", "zebrac*", "zuric*", `"zebracanary7731 zurichquokka"`} {
 		if r := w.search(t, w.alice, q); len(r.Results) != 3 {
 			t.Fatalf("%q: %s", q, r.raw)
 		}

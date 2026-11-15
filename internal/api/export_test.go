@@ -73,6 +73,9 @@ const (
 	MCPDamagedForTest    = msgDamaged
 	MCPSearchInForTest   = msgSearchIn
 	MCPSearchTypeForTest = msgSearchType
+	MCPSearchRateForTest = msgSearchRate
+	// SearchesPerMinuteForTest is one user's content search budget per minute.
+	SearchesPerMinuteForTest = searchesPerMinute
 )
 
 // IndexSearchForTest brings the content search index up to date now: changes queued, the
