@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Devices, DevicePolicySettings } from './Devices';
 
 
@@ -100,7 +100,7 @@ describe('Link a phone', () => {
     expect(calls.filter(c => c === 'POST /api/devices/phone-code')).toHaveLength(1);
     expect(screen.getByRole('timer').textContent).toMatch(/Expires in 1[12][0-9] s/);
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Pixel 9 \(Android\) is linked/), { timeout: 4000 });
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    fireEvent.click(within(screen.getByText(/is linked/).closest('dialog') as HTMLElement).getByRole('button', { name: 'Revoke' }));
     expect(await screen.findByRole('button', { name: 'Revoke phone' })).toBeTruthy();
     expect(screen.getByLabelText(/^Also remove KyDrive files from this phone/)).toBeTruthy();
   });
