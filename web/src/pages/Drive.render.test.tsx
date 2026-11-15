@@ -15,6 +15,23 @@ function Harness({ admin, selected }: { admin: boolean; selected: string }) {
 }
 
 describe('Drive', () => {
+  it('does not pick My files after it has been left', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/drive/personal-workspace') { await gate; return json({}); }
+      if (url.startsWith('/api/drive/workspaces?') || url === '/api/drive/workspaces') return json([ws('p1', 'personal', 'manager')]);
+      return json([]);
+    }));
+    const pick = vi.fn();
+    const { unmount } = render(<Drive admin={false} workspaces={[]} onWorkspacesChange={() => {}} selected="" onSelectWorkspace={pick} openInNewTab={false} />);
+    unmount(); // App switched to Shared with me while the first load was in flight
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(pick).not.toHaveBeenCalled();
+  });
+
   // Pass 4 R2: a dedicated installer administrator has no My files (403) but manages shared access.
   function installerServer(personal: Response) {
     const calls: string[] = [];
