@@ -1,6 +1,6 @@
 # Content search: options for prefixes and phrases, shared items and PDFs
 
-Status: options study for the owner to choose from, 2026-11-15, against `master` at `864c365`.
+Status: options study for the owner to choose from, 2026-11-15, against `master` at `dd9bba4` (after the file-type filter, PR #139).
 No product code. Numbers marked **measured** come from throwaway prototypes run on Major
 (listed under [Method](#method)); everything else is an **estimate** or cited from a primary
 source. Anything a source did not confirm says **unconfirmed**.
