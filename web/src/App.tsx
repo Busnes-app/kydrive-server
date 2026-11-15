@@ -224,7 +224,7 @@ export const App: React.FC = () => {
       apps={apps}
     >
       {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
-      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive admin={admin} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
+      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive apps={apps} admin={admin} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
 
       {activeTab === 'workspaces' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={openWorkspace} />}
       {activeTab === 'activity' && <AdminActivity />}
