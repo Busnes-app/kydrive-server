@@ -101,6 +101,14 @@ func TestPickOrigins(t *testing.T) {
 		code(t, pick(t, w, dana, map[string]any{"origin": origin, "files": []string{f}}), 403, "bad_origin")
 	}
 	code(t, pickCheck(t, w, dana, kypostOrigin, "move"), 400, "bad_mode")
+	// The confirming POST is a session write: no CSRF token, no link.
+	req := httptest.NewRequest(http.MethodPost, "/api/drive/pick", strings.NewReader(`{"origin":"`+kypostOrigin+`","files":["`+f+`"]}`))
+	req.AddCookie(dana)
+	rec := httptest.NewRecorder()
+	w.srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), "/l/#") {
+		t.Errorf("pick without CSRF: %d %s", rec.Code, rec.Body.String())
+	}
 	// copy only for the paired KyPost.
 	code(t, pickCheck(t, w, dana, "https://cal.example", "copy"), 403, "copy_not_allowed")
 	code(t, pick(t, w, dana, map[string]any{"origin": "https://cal.example", "mode": "copy", "files": []string{f}}), 403, "copy_not_allowed")
