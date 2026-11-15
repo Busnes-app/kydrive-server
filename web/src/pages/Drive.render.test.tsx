@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { Drive } from './Drive';
 import type { Workspace } from './drive/client';
@@ -30,6 +30,28 @@ describe('Drive', () => {
     release();
     await new Promise((r) => setTimeout(r, 20));
     expect(pick).not.toHaveBeenCalled();
+  });
+
+  it('keeps an opened link in Shared with me when the first load lands in the same batch', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/drive/personal-workspace') return json({});
+      if (url.startsWith('/api/drive/workspaces?') || url === '/api/drive/workspaces') { await gate; return json([ws('p1', 'personal', 'manager')]); }
+      return json([]);
+    }));
+    let open = () => {};
+    function App() {
+      const [selected, setSelected] = useState('');
+      open = () => setSelected('shared-with-me');
+      return selected === 'shared-with-me' ? <p>Shared with me</p> : <Drive admin={false} workspaces={[]} onWorkspacesChange={() => {}} selected={selected} onSelectWorkspace={setSelected} openInNewTab={false} />;
+    }
+    render(<App />);
+    await new Promise((r) => setTimeout(r, 0)); // the first load is waiting for the workspace list
+    // The link's answer and the first load's answer are both handled before React renders.
+    await act(async () => { open(); release(); await new Promise((r) => setTimeout(r, 20)); });
+    expect(screen.getByText('Shared with me')).toBeTruthy();
   });
 
   // Pass 4 R2: a dedicated installer administrator has no My files (403) but manages shared access.

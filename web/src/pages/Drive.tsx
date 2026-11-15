@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Download, ExternalLink, Eye, FolderInput, Mail, FolderOpen, FolderPlus, FolderUp, History, PenLine, RefreshCw, RotateCcw, Share2, Trash2, Upload, X } from 'lucide-react';
 import { HttpError, bytes, breadcrumb, change, ownFilesRefused, editorURL, file, folder, hasEditor, opensInEditor, grant, group, list, record, remove, response, version, workspace } from './drive/client';
 import { WorkspaceAdmin } from './drive/WorkspaceAdmin';
@@ -68,7 +69,7 @@ export async function setTrashBatch(workspace: string, folders: Folder[], files:
   for (const f of files) await put('files', f.id, { revision: f.revision });
 }
 
-export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab, apps = [] }: { apps?: SuiteApp[]; admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: (id: string) => void; openInNewTab: boolean }) {
+export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab, apps = [] }: { apps?: SuiteApp[]; admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: Dispatch<SetStateAction<string>>; openInNewTab: boolean }) {
   const fileTarget = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -129,7 +130,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     onWorkspacesChange(listWorkspaces);
     if (!selected) {
       const personal = listWorkspaces.find(w => w.kind === 'personal') || listWorkspaces[0];
-      if (personal) onSelectWorkspace(personal.id);
+      // Only if still nothing is chosen: an opened link may have picked Shared with me in the same batch.
+      if (personal) onSelectWorkspace(cur => cur || personal.id);
       return;
     }
     const currentWS = listWorkspaces.find(w => w.id === selected);
