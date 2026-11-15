@@ -24,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -o kydrive-server ./cmd/server
 
 # Stage 3: Minimal Production Container
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 RUN apk --no-cache add ca-certificates tzdata restic
 ARG SOURCE_REVISION=unknown
 ARG SOURCE_URL=https://github.com/Busnes-app/kydrive-server
