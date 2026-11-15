@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -70,6 +71,26 @@ func TestSnippetHighlightsThePhrase(t *testing.T) {
 	s := snippetOf(text, q.Words, q.Phrases)
 	if s == nil || len(s.Highlights) != 1 || s.Text[s.Highlights[0][0]:s.Highlights[0][1]] != "Kernel module" {
 		t.Fatalf("%+v", s)
+	}
+}
+
+// Highlighting phrases in one unbroken CJK run does work linear in its length: doubling the
+// text roughly doubles the allocation, it does not quadruple it.
+func TestSnippetPhrasesLinear(t *testing.T) {
+	q := ParseQuery(`"中文中"`) // the bigrams 中文 文中, matching at every other rune
+	alloc := func(runes int) uint64 {
+		text := strings.Repeat("中文", runes/2)
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		if snippetOf(text, q.Words, q.Phrases) == nil {
+			t.Fatal("no snippet")
+		}
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	small, large := alloc(4000), alloc(8000)
+	if large > 3*small {
+		t.Fatalf("allocated %d bytes for 4000 runes, %d for 8000", small, large)
 	}
 }
 
@@ -142,6 +163,29 @@ func TestPrefixCap(t *testing.T) {
 	m, err := x.Match(ctx, ParseQuery("pre*"), all)
 	if err != nil || !m.Capped || len(m.Expanded) != MaxPrefixWords || !slices.Contains(m.Expanded, words[len(words)-1]) || len(m.Scores) != 2 {
 		t.Fatalf("capped %v, %d words, %d docs, %v", m.Capped, len(m.Expanded), len(m.Scores), err)
+	}
+}
+
+// However many words share a prefix, Match keeps the frequencies of MaxPrefixWords of them.
+func TestPrefixKeepsCappedFrequencies(t *testing.T) {
+	kept := 0
+	testFrequencies = func(string) { kept++ }
+	t.Cleanup(func() { testFrequencies = nil })
+	for _, n := range []int{2 * MaxPrefixWords, 8 * MaxPrefixWords} {
+		x := openIndex(t, t.TempDir(), 1)
+		var words []string
+		for i := range n {
+			words = append(words, fmt.Sprintf("many%04d", i))
+		}
+		refs := map[string]bool{put(t, x, "all", strings.Join(words, " ")): true}
+		kept = 0
+		m, err := x.Match(context.Background(), ParseQuery("many*"), refs)
+		if err != nil || !m.Capped || len(m.Expanded) != MaxPrefixWords {
+			t.Fatalf("%d words: capped %v, %d expanded, %v", n, m.Capped, len(m.Expanded), err)
+		}
+		if kept != MaxPrefixWords {
+			t.Fatalf("%d words: kept frequencies of %d", n, kept)
+		}
 	}
 }
 

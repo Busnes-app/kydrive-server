@@ -95,9 +95,9 @@ func HasPhrases(text string, phrases [][]string) bool {
 	return left == 0
 }
 
-// phraseRuns calls at for every occurrence of phrase p in text, with the byte offsets of its
-// first and last terms' starts; at returns false to stop.
-func phraseRuns(text string, phrases [][]string, at func(p, first, last int) bool) {
+// phraseRuns calls at for every occurrence of phrase p in text, with the byte range [start, end)
+// from its first term's start to its last term's end; at returns false to stop.
+func phraseRuns(text string, phrases [][]string, at func(p, start, end int) bool) {
 	longest := 0
 	for _, p := range phrases {
 		longest = max(longest, len(p))
@@ -111,7 +111,7 @@ func phraseRuns(text string, phrases [][]string, at func(p, first, last int) boo
 	}
 	ring := make([]token, longest) // the last tokens seen, newest at n-1 (mod longest)
 	n := 0
-	scan(text, func(term string, start, _ int) bool {
+	scan(text, func(term string, start, end int) bool {
 		ring[n%longest] = token{term, start}
 		n++
 		for i, p := range phrases {
@@ -125,7 +125,7 @@ func phraseRuns(text string, phrases [][]string, at func(p, first, last int) boo
 					break
 				}
 			}
-			if ok && !at(i, ring[(n-len(p))%longest].start, start) {
+			if ok && !at(i, ring[(n-len(p))%longest].start, end) {
 				return false
 			}
 		}

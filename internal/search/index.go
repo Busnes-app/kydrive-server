@@ -374,6 +374,9 @@ type Matched struct {
 	Capped   bool
 }
 
+// testFrequencies, when set by a test, sees every term whose frequencies Match keeps.
+var testFrequencies func(term string)
+
 // Match scores the documents among refs that hold every word, a word starting with each prefix
 // (its expansions count as one term) and every phrase term (BM25), with document counts,
 // frequencies and lengths taken from refs only, so what the caller cannot read never shapes the
@@ -419,25 +422,29 @@ func (x *Index) Match(ctx context.Context, q Query, refs map[string]bool) (Match
 	if len(cand) == 0 {
 		return out, nil
 	}
-	// tfs is term's frequency in each candidate document.
-	tfs := func(term string) (map[int64]float64, error) {
-		got := map[int64]float64{}
+	// postings calls each with every candidate document holding term and its frequency.
+	postings := func(term string, each func(d int64, tf float64)) error {
 		rows, err := x.db.QueryContext(ctx, `SELECT doc,tf FROM postings WHERE token=?`, x.token(term))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var d int64
 			var tf float64
 			if err = rows.Scan(&d, &tf); err != nil {
-				return nil, err
+				return err
 			}
 			if _, ok := cand[d]; ok {
-				got[d] = tf
+				each(d, tf)
 			}
 		}
-		return got, rows.Err()
+		return rows.Err()
+	}
+	keep := func(term string) {
+		if testFrequencies != nil {
+			testFrequencies(term)
+		}
 	}
 	// Each group is one term to BM25: a word, or a prefix's expansions (tf summed).
 	var groups []map[int64]float64
@@ -447,38 +454,41 @@ func (x *Index) Match(ctx context.Context, q Query, refs map[string]bool) (Match
 			continue
 		}
 		seen[w] = true
-		g, err := tfs(w)
-		if err != nil {
+		g := map[int64]float64{}
+		keep(w)
+		if err := postings(w, func(d int64, tf float64) { g[d] = tf }); err != nil {
 			return out, err
 		}
 		groups = append(groups, g)
 	}
 	for _, p := range q.Prefixes {
 		// Only words the candidates hold count, ranked and capped among them, so other
-		// users' words never decide which of the caller's match.
+		// users' words never decide which of the caller's match. Ranking needs counts only;
+		// frequencies are summed for the MaxPrefixWords chosen.
 		type held struct {
 			word string
-			tfs  map[int64]float64
+			docs int
 		}
 		var found []held
 		for _, w := range x.vocabNow().expand(p) {
-			g, err := tfs(w)
-			if err != nil {
+			docs := 0
+			if err := postings(w, func(int64, float64) { docs++ }); err != nil {
 				return out, err
 			}
-			if len(g) > 0 {
-				found = append(found, held{w, g})
+			if docs > 0 {
+				found = append(found, held{w, docs})
 			}
 		}
-		slices.SortStableFunc(found, func(a, b held) int { return cmp.Compare(len(b.tfs), len(a.tfs)) })
+		slices.SortStableFunc(found, func(a, b held) int { return cmp.Compare(b.docs, a.docs) })
 		if len(found) > MaxPrefixWords {
 			found, out.Capped = found[:MaxPrefixWords], true
 		}
 		g := map[int64]float64{}
 		for _, h := range found {
 			out.Expanded = append(out.Expanded, h.word)
-			for d, tf := range h.tfs {
-				g[d] += tf
+			keep(h.word)
+			if err := postings(h.word, func(d int64, tf float64) { g[d] += tf }); err != nil {
+				return out, err
 			}
 		}
 		groups = append(groups, g)

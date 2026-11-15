@@ -67,11 +67,13 @@ func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
 		return true
 	})
 	// A phrase occurrence is one hit from its first term's start to its last term's end.
-	phraseRuns(text, phrases, func(p, first, last int) bool {
-		end := last
-		scan(text[last:], func(_ string, _, e int) bool { end = last + e; return false })
-		want[" "+strings.Join(phrases[p], " ")] = true
-		hits = append(hits, hit{" " + strings.Join(phrases[p], " "), first, end})
+	keys := make([]string, len(phrases))
+	for p, ph := range phrases {
+		keys[p] = " " + strings.Join(ph, " ")
+	}
+	phraseRuns(text, phrases, func(p, start, end int) bool {
+		want[keys[p]] = true
+		hits = append(hits, hit{keys[p], start, end})
 		return true
 	})
 	if len(hits) == 0 {
