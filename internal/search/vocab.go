@@ -1,7 +1,6 @@
 package search
 
 import (
-	"cmp"
 	"encoding/binary"
 	"errors"
 	"os"
@@ -19,25 +18,23 @@ import (
 const VocabFile = "vocab"
 
 // vocabDay is how often the vocabulary is rebuilt from scratch, dropping words no document
-// holds any more and correcting document counts.
+// holds any more.
 const vocabDay = 24 * time.Hour
 
-// vocab is the set of distinct indexed words (MinPrefixRunes or more, not CJK) with about how
-// many documents hold each, for prefix expansion. It lives in memory and on disk only sealed.
-// Counts are approximate (a word stays until the daily rebuild); they only rank expansions, and
+// vocab is the set of distinct indexed words (MinPrefixRunes or more, not CJK), for prefix
+// expansion. It lives in memory and on disk only sealed. A word stays until the daily rebuild;
 // postings still decide every match.
 type vocab struct {
 	mu    sync.Mutex
-	words []string // sorted
-	docs  []uint32
-	added map[string]uint32 // not yet merged into words
+	words []string            // sorted
+	added map[string]struct{} // not yet merged into words
 	dirty bool
 	saved time.Time
 	stamp int64 // every document updated before this (Unix) is in it
 	built int64 // last full build (Unix), 0 for none
 }
 
-func newVocab() *vocab { return &vocab{added: map[string]uint32{}} }
+func newVocab() *vocab { return &vocab{added: map[string]struct{}{}} }
 
 // learn adds a document's terms.
 func (v *vocab) learn(counts map[string]int) {
@@ -45,7 +42,7 @@ func (v *vocab) learn(counts map[string]int) {
 	defer v.mu.Unlock()
 	for t := range counts {
 		if r, _ := utf8.DecodeRuneInString(t); !cjk(r) && utf8.RuneCountInString(t) >= MinPrefixRunes {
-			v.added[t]++
+			v.added[t] = struct{}{}
 			v.dirty = true
 		}
 	}
@@ -57,30 +54,27 @@ func (v *vocab) merge() {
 		return
 	}
 	fresh := make([]string, 0, len(v.added))
-	for t, n := range v.added {
-		if i, ok := slices.BinarySearch(v.words, t); ok {
-			v.docs[i] += n
-		} else {
+	for t := range v.added {
+		if _, ok := slices.BinarySearch(v.words, t); !ok {
 			fresh = append(fresh, t)
 		}
 	}
 	slices.Sort(fresh)
 	words := make([]string, 0, len(v.words)+len(fresh))
-	docs := make([]uint32, 0, cap(words))
 	i := 0
 	for _, t := range fresh {
 		for ; i < len(v.words) && v.words[i] < t; i++ {
-			words, docs = append(words, v.words[i]), append(docs, v.docs[i])
+			words = append(words, v.words[i])
 		}
-		words, docs = append(words, t), append(docs, v.added[t])
+		words = append(words, t)
 	}
-	v.words, v.docs = append(words, v.words[i:]...), append(docs, v.docs[i:]...)
+	v.words = append(words, v.words[i:]...)
 	clear(v.added)
 }
 
-// expand returns up to MaxPrefixWords words starting with prefix, those in most documents
-// first, and whether more matched.
-func (v *vocab) expand(prefix string) ([]string, bool) {
+// expand returns every word starting with prefix. They come from every user's files: the
+// caller keeps only those its own documents hold (Match), so nobody else's words shape a result.
+func (v *vocab) expand(prefix string) []string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.merge()
@@ -89,24 +83,12 @@ func (v *vocab) expand(prefix string) ([]string, bool) {
 	for hi < len(v.words) && strings.HasPrefix(v.words[hi], prefix) {
 		hi++
 	}
-	idx := make([]int, 0, hi-lo)
-	for i := lo; i < hi; i++ {
-		idx = append(idx, i)
-	}
-	if len(idx) > MaxPrefixWords {
-		slices.SortStableFunc(idx, func(a, b int) int { return cmp.Compare(v.docs[b], v.docs[a]) })
-		idx = idx[:MaxPrefixWords]
-	}
-	out := make([]string, len(idx))
-	for i, j := range idx {
-		out[i] = v.words[j]
-	}
-	return out, hi-lo > MaxPrefixWords
+	return slices.Clone(v.words[lo:hi])
 }
 
 // The sealed file is AES-256-GCM (crypto.EncryptAESGCMAAD) under the kydrive:search-vocab key,
 // bound to the index check (key and TokenizerVersion), of: uvarint stamp, built, word count,
-// then per word uvarint documents, uvarint length and the word.
+// then per word uvarint length and the word.
 func (v *vocab) encode() []byte {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -114,8 +96,7 @@ func (v *vocab) encode() []byte {
 	buf := binary.AppendUvarint(nil, uint64(v.stamp))
 	buf = binary.AppendUvarint(buf, uint64(v.built))
 	buf = binary.AppendUvarint(buf, uint64(len(v.words)))
-	for i, w := range v.words {
-		buf = binary.AppendUvarint(buf, uint64(v.docs[i]))
+	for _, w := range v.words {
 		buf = binary.AppendUvarint(buf, uint64(len(w)))
 		buf = append(buf, w...)
 	}
@@ -146,12 +127,8 @@ func decodeVocab(buf []byte) (*vocab, error) {
 	if head[2] > uint64(len(buf)) {
 		return nil, errVocab
 	}
-	v.words, v.docs = make([]string, 0, head[2]), make([]uint32, 0, head[2])
+	v.words = make([]string, 0, head[2])
 	for range head[2] {
-		n, err := next()
-		if err != nil {
-			return nil, err
-		}
 		l, err := next()
 		if err != nil || l > uint64(len(buf)) {
 			return nil, errVocab
@@ -161,7 +138,7 @@ func decodeVocab(buf []byte) (*vocab, error) {
 		if len(v.words) > 0 && w <= v.words[len(v.words)-1] {
 			return nil, errVocab
 		}
-		v.words, v.docs = append(v.words, w), append(v.docs, uint32(n))
+		v.words = append(v.words, w)
 	}
 	if len(buf) != 0 {
 		return nil, errVocab
@@ -284,8 +261,8 @@ func (b *VocabBuild) Done() error {
 		added := b.v.added
 		b.v.mu.Unlock()
 		old.mu.Lock()
-		for t, n := range added {
-			old.added[t] += n
+		for t := range added {
+			old.added[t] = struct{}{}
 		}
 		old.mu.Unlock()
 	}

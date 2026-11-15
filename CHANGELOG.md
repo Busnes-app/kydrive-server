@@ -6,7 +6,7 @@ Interface and behaviour changes, newest first.
 
 - **Prefix and phrase search.** In the search box, `GET /api/drive/search` and MCP
   `search_files`, `conf*` (3 or more letters) matches words starting with them, up to the 100
-  found in most documents, and `"site report"` matches the words together in that order, across
+  found in most of the files the user can read, and `"site report"` matches the words together in that order, across
   line and page breaks, checked in the best 200 matches within half a second. Responses add
   `contents.unverified` (files not checked for the phrase, left out) and
   `contents.expanded_truncated` (MCP: `unverified`, `prefix_capped`); snippets highlight the

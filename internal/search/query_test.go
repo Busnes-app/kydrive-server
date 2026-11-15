@@ -145,6 +145,38 @@ func TestPrefixCap(t *testing.T) {
 	}
 }
 
+// Words only other users' documents hold never decide what a prefix covers, whether it was
+// capped, or what it reports: planting MaxPrefixWords words of one's own reveals nothing.
+func TestPrefixIgnoresUnreadableWords(t *testing.T) {
+	ctx := context.Background()
+	var mine []string
+	for i := range MaxPrefixWords {
+		mine = append(mine, fmt.Sprintf("probe%03d", i))
+	}
+	search := func(others bool) Matched {
+		x := openIndex(t, t.TempDir(), 1)
+		refs := map[string]bool{put(t, x, "mine", strings.Join(mine, " ")): true}
+		if others {
+			for i := range 3 { // in more documents than any of mine
+				put(t, x, fmt.Sprintf("theirs%d", i), "probesecret probe000x")
+			}
+		}
+		m, err := x.Match(ctx, ParseQuery("probe*"), refs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(m.Expanded)
+		return m
+	}
+	alone, with := search(false), search(true)
+	if with.Capped || len(with.Expanded) != MaxPrefixWords || slices.Contains(with.Expanded, "probesecret") || len(with.Scores) != 1 {
+		t.Fatalf("capped %v, %d words, %d docs", with.Capped, len(with.Expanded), len(with.Scores))
+	}
+	if fmt.Sprint(alone) != fmt.Sprint(with) {
+		t.Fatalf("other users' words changed the result:\n%v\n%v", alone, with)
+	}
+}
+
 // The vocabulary is sealed on disk: no word, no length table in the clear, and a tampered,
 // foreign-key or other-tokenizer file opens empty (and is rebuilt by the worker).
 func TestVocabularyIsSealed(t *testing.T) {
@@ -234,8 +266,9 @@ func TestVocabularyBuild(t *testing.T) {
 	if err := b.Done(); err != nil {
 		t.Fatal(err)
 	}
-	if m, _ := x.Match(ctx, ParseQuery("conf*"), refs); fmt.Sprint(m.Expanded) != "[configure]" {
-		t.Fatalf("fresh: %v", m.Expanded)
+	// The rebuilt vocabulary lacks the document's word, and holds one no searched document has.
+	if m, _ := x.Match(ctx, ParseQuery("conf*"), refs); len(m.Expanded)+len(m.Scores) != 0 {
+		t.Fatalf("fresh: %v %v", m.Expanded, m.Scores)
 	}
 	if since, fresh := x.VocabDue(now.Add(time.Hour)); fresh || since < now.Unix() {
 		t.Fatalf("due %d %v", since, fresh)
@@ -250,7 +283,7 @@ func TestVocabularyBuild(t *testing.T) {
 	}
 	m, _ := x.Match(ctx, ParseQuery("conf*"), refs)
 	slices.Sort(m.Expanded)
-	if fmt.Sprint(m.Expanded) != "[conference configure]" || len(m.Scores) != 1 {
+	if fmt.Sprint(m.Expanded) != "[conference]" || len(m.Scores) != 1 {
 		t.Fatalf("catch-up: %v %v", m.Expanded, m.Scores)
 	}
 }

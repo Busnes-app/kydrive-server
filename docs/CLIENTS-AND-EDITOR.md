@@ -58,8 +58,9 @@ Content matches whole words, ignoring case and accents, and every word must be i
 Two forms go further:
 
 - **Prefix:** a word ending in `*` with at least 3 letters or digits before it (`conf*`) matches
-  every word starting with them. It tries at most the 100 words found in the most documents
-  drive-wide; when there were more, the panel says only the most common were searched. A
+  every word starting with them. It tries at most the 100 words found in the most files you can
+  read; when there were more, the panel says only the most common were searched. Words only in
+  files you cannot read never count. A
   shorter prefix (`co*`) is the whole word, and Chinese, Japanese and Korean text has no
   prefixes.
 - **Phrase:** words in double quotes (`"site report"`) must appear together, in that order,
@@ -76,7 +77,7 @@ File names match the query as typed, without the quotes and the `*` that ends a 
 Any other `type` is refused with 400 `{"error":"Unknown file type","code":"bad_type"}`. Results
 are capped at 200 (`truncated` says when more matched) and come only from items the caller can
 read: a type never widens a search. `contents.unverified` counts files left out because their
-phrase was not checked, and `contents.expanded_truncated` says a prefix had more than 100 words.
+phrase was not checked, and `contents.expanded_truncated` says a prefix had more than 100 words in the caller's readable files.
 A result reached only through a share carries
 `"shared":{"from":"<name>","role":"reader|editor|manager"}`. A service token searches its
 workspace only, never shares; MCP `search_files` searches the user's own workspaces only.

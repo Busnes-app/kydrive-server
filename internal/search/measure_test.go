@@ -121,7 +121,7 @@ func TestMeasureSearch(t *testing.T) {
 	runtime.ReadMemStats(&after)
 	t.Logf("open with vocabulary %.0f ms, heap +%.1f MB", float64(load.Microseconds())/1000, mb(int64(after.HeapAlloc)-int64(before.HeapAlloc)))
 
-	time3 := func(q string) (time.Duration, search.Matched) {
+	time3 := func(q string, refs map[string]bool) (time.Duration, search.Matched) {
 		var best time.Duration
 		var m search.Matched
 		for range 3 {
@@ -135,12 +135,24 @@ func TestMeasureSearch(t *testing.T) {
 		}
 		return best, m
 	}
-	for _, q := range []string{dict[0], dict[5000], dict[200000], "kernel", "con*", "conf*", "pre*", "kern*", "zyx*", "con* pre* sub* tri*", `"kernel module"`} {
-		d, m := time3(q)
-		t.Logf("%-22q %7.1f ms  %6d matches  %3d expanded  capped %v", q, float64(d.Microseconds())/1000, len(m.Scores), len(m.Expanded), m.Capped)
+	// A caller who reads 1% of the documents still pays for every word sharing the prefix.
+	few := map[string]bool{}
+	for ref := range refs {
+		if len(few) < max(n/100, 1) {
+			few[ref] = true
+		}
+	}
+	for _, scope := range []struct {
+		name string
+		refs map[string]bool
+	}{{"all", refs}, {"1%", few}} {
+		for _, q := range []string{dict[0], dict[5000], dict[200000], "kernel", "con*", "conf*", "pre*", "kern*", "zyx*", "con* pre* sub* tri*", `"kernel module"`} {
+			d, m := time3(q, scope.refs)
+			t.Logf("%-4s %-22q %7.1f ms  %6d matches  %3d expanded  capped %v", scope.name, q, float64(d.Microseconds())/1000, len(m.Scores), len(m.Expanded), m.Capped)
+		}
 	}
 	// Phrase check: the best 200 candidates, decrypting each one's sealed text as the API does.
-	_, m := time3(`"kernel module"`)
+	_, m := time3(`"kernel module"`, refs)
 	cand := make([]string, 0, len(m.Scores))
 	for ref := range m.Scores {
 		cand = append(cand, ref)

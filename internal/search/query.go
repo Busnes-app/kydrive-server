@@ -8,7 +8,8 @@ import (
 const (
 	// MinPrefixRunes is the shortest prefix `*` expands; a shorter one is a whole word.
 	MinPrefixRunes = 3
-	// MaxPrefixWords is how many vocabulary words one prefix expands to, most documents first.
+	// MaxPrefixWords is how many words one prefix expands to: words the searched documents hold,
+	// those in most of them first.
 	MaxPrefixWords = 100
 )
 

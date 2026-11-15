@@ -1,6 +1,7 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -364,7 +365,8 @@ const (
 )
 
 // Matched is what Match found: scores by ref, refs not yet settled, the words the prefixes
-// expanded to (for highlighting) and whether a prefix had more than MaxPrefixWords words.
+// expanded to among the given refs (for highlighting) and whether a prefix had more than
+// MaxPrefixWords such words.
 type Matched struct {
 	Scores   map[string]float64
 	Pending  int
@@ -414,63 +416,84 @@ func (x *Index) Match(ctx context.Context, q Query, refs map[string]bool) (Match
 	}
 	out.Pending = len(refs) - len(settledRefs)
 	out.Scores = map[string]float64{}
-	// Each group is one term to BM25: a word, or a prefix's expansions.
-	var groups [][]string
-	seen := map[string]bool{}
-	for _, w := range q.Words {
-		groups = append(groups, []string{w})
-		seen[w] = true
-	}
-	for _, p := range q.Phrases {
-		for _, w := range p {
-			if !seen[w] {
-				groups = append(groups, []string{w})
-				seen[w] = true
-			}
-		}
-	}
-	for _, p := range q.Prefixes {
-		words, capped := x.vocabNow().expand(p)
-		out.Expanded, out.Capped = append(out.Expanded, words...), out.Capped || capped
-		if len(words) == 0 {
-			return out, nil // no word starts with it
-		}
-		groups = append(groups, words)
-	}
-	if len(cand) == 0 || len(groups) == 0 {
+	if len(cand) == 0 {
 		return out, nil
 	}
-	n := float64(len(cand))
-	avg := max(total/n, 1)
-	score := map[int64]float64{}
-	for i, group := range groups {
-		tfs := map[int64]float64{}
-		for _, term := range group {
-			rows, err := x.db.QueryContext(ctx, `SELECT doc,tf FROM postings WHERE token=?`, x.token(term))
+	// tfs is term's frequency in each candidate document.
+	tfs := func(term string) (map[int64]float64, error) {
+		got := map[int64]float64{}
+		rows, err := x.db.QueryContext(ctx, `SELECT doc,tf FROM postings WHERE token=?`, x.token(term))
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d int64
+			var tf float64
+			if err = rows.Scan(&d, &tf); err != nil {
+				return nil, err
+			}
+			if _, ok := cand[d]; ok {
+				got[d] = tf
+			}
+		}
+		return got, rows.Err()
+	}
+	// Each group is one term to BM25: a word, or a prefix's expansions (tf summed).
+	var groups []map[int64]float64
+	seen := map[string]bool{}
+	for _, w := range append(slices.Clone(q.Words), slices.Concat(q.Phrases...)...) {
+		if seen[w] {
+			continue
+		}
+		seen[w] = true
+		g, err := tfs(w)
+		if err != nil {
+			return out, err
+		}
+		groups = append(groups, g)
+	}
+	for _, p := range q.Prefixes {
+		// Only words the candidates hold count, ranked and capped among them, so other
+		// users' words never decide which of the caller's match.
+		type held struct {
+			word string
+			tfs  map[int64]float64
+		}
+		var found []held
+		for _, w := range x.vocabNow().expand(p) {
+			g, err := tfs(w)
 			if err != nil {
 				return out, err
 			}
-			for rows.Next() {
-				var d int64
-				var tf float64
-				if err = rows.Scan(&d, &tf); err != nil {
-					rows.Close()
-					return out, err
-				}
-				if _, ok := cand[d]; ok && (i == 0 || score[d] > 0) {
-					tfs[d] += tf
-				}
-			}
-			rows.Close()
-			if err = rows.Err(); err != nil {
-				return out, err
+			if len(g) > 0 {
+				found = append(found, held{w, g})
 			}
 		}
-		df := float64(len(tfs))
+		slices.SortStableFunc(found, func(a, b held) int { return cmp.Compare(len(b.tfs), len(a.tfs)) })
+		if len(found) > MaxPrefixWords {
+			found, out.Capped = found[:MaxPrefixWords], true
+		}
+		g := map[int64]float64{}
+		for _, h := range found {
+			out.Expanded = append(out.Expanded, h.word)
+			for d, tf := range h.tfs {
+				g[d] += tf
+			}
+		}
+		groups = append(groups, g)
+	}
+	n := float64(len(cand))
+	avg := max(total/n, 1)
+	var score map[int64]float64
+	for i, g := range groups {
+		df := float64(len(g))
 		idf := math.Log(1 + (n-df+0.5)/(df+0.5))
 		next := map[int64]float64{}
-		for d, tf := range tfs {
-			next[d] = score[d] + idf*tf*(k1+1)/(tf+k1*(1-b+b*cand[d].length/avg))
+		for d, tf := range g {
+			if _, ok := score[d]; i == 0 || ok {
+				next[d] = score[d] + idf*tf*(k1+1)/(tf+k1*(1-b+b*cand[d].length/avg))
+			}
 		}
 		if score = next; len(score) == 0 {
 			return out, nil
