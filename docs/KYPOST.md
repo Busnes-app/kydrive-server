@@ -5,7 +5,7 @@
 KyPost saves mail attachments into a person's My files and shares them by organisation link,
 so a large attachment travels as a link. KyDrive is the resource owner: it decides whether a
 person allows it and what KyPost may do. This is section C of the suite integration contract
-(wave 1, 2026-11-14) and sections I2 and J (wave 2); this file is KyDrive's durable copy. Both sides change together.
+(wave 1, 2026-11-14) and sections I2, J and K (wave 2); this file is KyDrive's durable copy. Both sides change together.
 
 ## Email a link (KyDrive → KyPost)
 
@@ -49,6 +49,15 @@ check refuses a write once the pairing it came under has ended or changed addres
 (404 `kypost_off`). Each ticket also records a keyed fingerprint of the pairing that issued
 it (HMAC under the pair secret of source and address, never the secret); after a rotation or
 re-pairing an old ticket answers 404 `kypost_off` and is removed with any staged bytes.
+
+### Guest links through KyPost
+
+**Settings → Files → Let KyPost create guest links for people outside the organisation** is a
+second switch, off by default, shown only while KyPost is paired and the administrator's
+guest-link policy (Server settings → Guest links) is on; it cannot be turned on while the
+policy is off (409 `guest_links_off`) and is disabled while the first switch is off. It is
+stored only when the person turns it on (`drive_peer_guest`) and audited
+`kypost.guest_switch`.
 
 ## Where files go
 
@@ -145,13 +154,28 @@ Creates an organisation link (signed-in members only), role reader, through KyDr
 link code. `days` is 1, 7, 30 or 0 for no expiry; absent means 30; anything else 400
 `bad_body`. 201 `{"url":"https://drive.example/l/#<token>","expires":"<RFC 3339>"}`, with
 `"expires":null` for no expiry. 404 `not_found` unless `file_id` is a live file directly in
-the person's own Mail attachments folder. No guest link is ever made here.
+the person's own Mail attachments folder.
+
+`"audience":"guest"` (contract K; absent or `"organisation"` is the organisation link above)
+makes a KyDrive guest link instead, with the same rights as one made in KyDrive's Share
+dialog: view and download that one file, no upload, no password. It needs the
+administrator's guest-link policy on and the person's guest switch on (read again inside the
+transaction that makes the link; else 409 `guest_links_off`) and `days` 1 to the policy's `max_days` (absent
+means 30; 0 or anything else 400 `bad_body`); the file rule is the same (404 `not_found`). 201
+`{"url":"https://drive.example/g/#<token>","expires":"<RFC 3339>"}`. The link is listed with
+the file's guest links, so the person can revoke it in the Share dialog; it is audited
+`guest_link.created` (`file:<id>`, `link=<id> peer=kypost`) and the drive event says
+`peer=kypost`. Turning the policy or either switch off refuses new ones; links already made
+keep working until they expire or are revoked, and none works while the policy is off.
+An unknown `audience` is 400 `bad_body`.
 
 ### Status
 
-`{"sub":"…","issuer":"…"}` → 200 `{"enabled":true,"free_bytes":123,"max_file_bytes":123}`.
+`{"sub":"…","issuer":"…"}` → 200
+`{"enabled":true,"free_bytes":123,"max_file_bytes":123,"guest_links":false,"guest_max_days":0}`.
 `free_bytes` is My files' free quota (0 while the switch is off); `max_file_bytes` is
-`KYDRIVE_MAX_FILE_SIZE`.
+`KYDRIVE_MAX_FILE_SIZE`; `guest_links` is whether a guest link would be made now (policy,
+both switches) and `guest_max_days` the policy's `max_days` then, else 0.
 
 ### Fetch
 
@@ -170,9 +194,10 @@ also audited `kypost.file_fetched` (`file:<id>`). Picks expire with the hourly t
 
 The routes act through a peer context (`internal/drive/access.go`). It holds no rank:
 reading, listing, downloading, searching, moving, trashing, purging, sharing with people,
-guest links, credentials, editor sessions, settings and every shared workspace are refused
+guest links (but through the guest switch, below), credentials, editor sessions, settings and every shared workspace are refused
 (but for a picked file, below), and `peer_access_test.go` proves each refusal. It may only add new files directly in the
-person's Mail attachments folder, put a reader organisation link on a file there, and read a
+person's Mail attachments folder, put a reader organisation link (or, with the guest switch,
+a guest link) on a file there, and read a
 file the person picked for it in the last 24 hours (`peerRead`).
 
 ## Deviations from the contract text

@@ -114,6 +114,8 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// Files a user chose in the picker's copy mode (suite_pick.go): KyPost may fetch only these,
 	// until expires.
 	`CREATE TABLE drive_peer_picks(owner TEXT NOT NULL,file TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(owner,file));`,
+	// Users who let KyPost make guest links (peer.go); no row is off.
+	`CREATE TABLE drive_peer_guest(user_id TEXT PRIMARY KEY);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

@@ -46,8 +46,11 @@ and share their files (on by default when KyIdentity paired the apps, off when t
 did). KyPost then saves mail attachments into a `Mail attachments` folder in that person's My
 files, as their own ordinary files, and can share one of them by a reader organisation link.
 It can also read a copy of a file the person chose for it in the picker, for 24 hours. It
-cannot open, list, download, move, delete or share anything else, cannot create guest
-links and never reaches shared workspaces; dedicated installer administrators and local
+cannot open, list, download, move, delete or share anything else and never reaches shared
+workspaces. Guest links for people outside the organisation it can make only while the
+administrator allows guest links and the person has also turned on **Let KyPost create guest
+links for people outside the organisation** (off by default), and only view links to files in
+`Mail attachments`, listed in the file's Share dialog for revoking; dedicated installer administrators and local
 accounts cannot be named by it. Details and the wire contract: [KYPOST.md](KYPOST.md).
 
 ## Picker

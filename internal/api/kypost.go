@@ -25,7 +25,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
-// KyPost pairing and its signed routes (docs/KYPOST.md, contract sections C and I2). KyDrive
+// KyPost pairing and its signed routes (docs/KYPOST.md, contract sections C, I2 and K). KyDrive
 // only receives: KyPost asks for upload tickets, links, status and picked files' bytes, and
 // uploads with a ticket.
 
@@ -385,11 +385,15 @@ func (s *Server) kypostTicket(r *http.Request, user *store.User, _ *kypostPeer, 
 
 func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPeer, body []byte) kypostReply {
 	var in struct {
-		FileID string `json:"file_id"`
-		Days   *int   `json:"days"`
+		FileID   string `json:"file_id"`
+		Days     *int   `json:"days"`
+		Audience string `json:"audience"`
 	}
-	if json.Unmarshal(body, &in) != nil || in.FileID == "" {
+	if json.Unmarshal(body, &in) != nil || in.FileID == "" || (in.Audience != "" && in.Audience != "organisation" && in.Audience != "guest") {
 		return refuse(400, "bad_body")
+	}
+	if in.Audience == "guest" {
+		return s.kypostGuestLink(r, user, in.FileID, in.Days)
 	}
 	expires, ok := linkExpiry(s.now(), in.Days)
 	if !ok {
@@ -410,17 +414,71 @@ func (s *Server) kypostLinkRoute(r *http.Request, user *store.User, _ *kypostPee
 	return kypostReply{status: 201, body: map[string]any{"url": s.config.Server.AppURL + "/l/#" + token, "expires": rfc3339(expires)}}
 }
 
+// kypostGuestLink is contract K: a view-and-download guest link made through KyPost, only
+// while the administrator's guest-link policy and the user's guest switch are both on, lasting
+// 1 to max_days days (absent means 30, as for organisation links).
+func (s *Server) kypostGuestLink(r *http.Request, user *store.User, file string, days *int) kypostReply {
+	allowed, maxDays, err := s.kypostGuestAllowed(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("kypost guest link: %v", err)
+		return refuse(503, "unavailable")
+	}
+	if !allowed {
+		return refuse(409, "guest_links_off")
+	}
+	n := 30
+	if days != nil {
+		n = *days
+	}
+	if n < 1 || n > maxDays {
+		return refuse(400, "bad_body")
+	}
+	expires := s.now().Add(time.Duration(n) * 24 * time.Hour).Unix()
+	g, token, err := s.store.Drive().PeerGuestLink(r.Context(), user.ID, file, expires, time.Duration(maxDays)*24*time.Hour)
+	switch {
+	case errors.Is(err, drive.ErrPeerOff):
+		return refuse(409, "sharing_off")
+	case errors.Is(err, drive.ErrPeerGuestOff):
+		return refuse(409, "guest_links_off")
+	case errors.Is(err, drive.ErrPeerGone):
+		return refuse(404, "kypost_off")
+	case errors.Is(err, drive.ErrDenied), errors.Is(err, drive.ErrInvalid), errors.Is(err, drive.ErrConflict), errors.Is(err, drive.ErrNotFound):
+		return refuse(404, "not_found")
+	case err != nil:
+		log.Printf("kypost guest link: %v", err)
+		return refuse(503, "unavailable")
+	}
+	s.audit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: "guest_link.created", Resource: "file:" + file, Details: "link=" + g.ID + " peer=kypost", IPAddress: s.requestIP(r)})
+	return kypostReply{status: 201, body: map[string]any{"url": s.config.Server.AppURL + "/g/#" + token, "expires": rfc3339(expires)}}
+}
+
+// kypostGuestAllowed is the guest-link policy and the user's guest switch, with the policy's limit.
+func (s *Server) kypostGuestAllowed(ctx context.Context, user string) (bool, int, error) {
+	on, maxDays, err := s.guestPolicy(ctx)
+	if err != nil || !on {
+		return false, maxDays, err
+	}
+	mine, err := s.store.Drive().PeerGuestSetting(ctx, user)
+	return mine, maxDays, err
+}
+
 func (s *Server) kypostStatusRoute(r *http.Request, user *store.User, p *kypostPeer, _ []byte) kypostReply {
 	on, err := s.kypostEnabled(r.Context(), user.ID, p)
 	var free int64
+	guest, guestDays := false, 0
 	if err == nil && on {
 		free, err = s.store.Drive().PeerFree(r.Context(), user.ID)
+	}
+	if err == nil && on {
+		if guest, guestDays, err = s.kypostGuestAllowed(r.Context(), user.ID); !guest {
+			guestDays = 0
+		}
 	}
 	if err != nil {
 		log.Printf("kypost status: %v", err)
 		return refuse(503, "unavailable")
 	}
-	return kypostReply{status: 200, body: map[string]any{"enabled": on, "free_bytes": free, "max_file_bytes": s.config.Drive.MaxFileSize}}
+	return kypostReply{status: 200, body: map[string]any{"enabled": on, "free_bytes": free, "max_file_bytes": s.config.Drive.MaxFileSize, "guest_links": guest, "guest_max_days": guestDays}}
 }
 
 // kypostFetchRoute answers a picked file's bytes (contract I2): one the user chose in the
@@ -589,32 +647,53 @@ func (s *Server) handleKyPostStatus(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, v)
 }
 
-// handleKyPostSetting reads or sets the signed-in user's switch. paired false hides it.
+// handleKyPostSetting reads or sets the signed-in user's switches. paired false hides them;
+// guest_policy false hides the guest switch, which cannot be turned on while the policy is off.
 func (s *Server) handleKyPostSetting(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r)
+	policy, _, err := s.guestPolicy(r.Context())
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
 	if r.Method == http.MethodPut {
 		var in struct {
-			Enabled *bool `json:"enabled"`
+			Enabled    *bool `json:"enabled"`
+			GuestLinks *bool `json:"guest_links"`
 		}
-		if decodeDrive(r, &in) != nil || in.Enabled == nil {
+		if decodeDrive(r, &in) != nil || (in.Enabled == nil) == (in.GuestLinks == nil) {
 			s.driveError(w, drive.ErrInvalid)
 			return
 		}
-		if err := s.store.Drive().SetPeerSetting(r.Context(), user.ID, *in.Enabled); err != nil {
-			s.driveError(w, err)
-			return
+		action, on := "kypost.switch", in.Enabled
+		if in.GuestLinks != nil {
+			action, on = "kypost.guest_switch", in.GuestLinks
+			if *on && !policy {
+				s.writeJSON(w, http.StatusConflict, map[string]string{"error": "Guest links are turned off", "code": "guest_links_off"})
+				return
+			}
+			err = s.store.Drive().SetPeerGuestSetting(r.Context(), user.ID, *on)
+		} else {
+			err = s.store.Drive().SetPeerSetting(r.Context(), user.ID, *on)
 		}
-		s.audit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: "kypost.switch", Resource: "user:" + user.ID, Details: "enabled=" + map[bool]string{true: "true", false: "false"}[*in.Enabled], IPAddress: s.requestIP(r)})
-	}
-	p := s.kypost.peer.Load()
-	out := map[string]bool{"paired": p != nil, "enabled": false}
-	if p != nil {
-		on, err := s.kypostEnabled(r.Context(), user.ID, p)
 		if err != nil {
 			s.driveError(w, err)
 			return
 		}
-		out["enabled"] = on
+		s.audit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: action, Resource: "user:" + user.ID, Details: "enabled=" + strconv.FormatBool(*on), IPAddress: s.requestIP(r)})
+	}
+	p := s.kypost.peer.Load()
+	out := map[string]bool{"paired": p != nil, "enabled": false, "guest_policy": policy, "guest_links": false}
+	if p != nil {
+		on, err := s.kypostEnabled(r.Context(), user.ID, p)
+		if err == nil {
+			out["enabled"] = on
+			out["guest_links"], err = s.store.Drive().PeerGuestSetting(r.Context(), user.ID)
+		}
+		if err != nil {
+			s.driveError(w, err)
+			return
+		}
 	}
 	s.writeJSON(w, http.StatusOK, out)
 }
