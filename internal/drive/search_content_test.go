@@ -61,7 +61,7 @@ func TestSearchContentOffersOnlyReadableFiles(t *testing.T) {
 	search := func(ctx context.Context, user string) []string {
 		t.Helper()
 		m.offered = nil
-		hits, _, err := d.SearchContent(ctx, user, "zebracanary", 200, m)
+		hits, _, err := d.SearchContent(ctx, user, "zebracanary", "", 200, m)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -156,7 +156,7 @@ func TestSearchContentOrderAndFolderScope(t *testing.T) {
 	high := pub(sub.ID, "y.txt", "c")
 	other := pub("", "budget.txt", "d")
 	m := &blobMatcher{blobs: map[string]float64{named.Blob: 1, low.Blob: 1, high.Blob: 5}}
-	hits, _, err := d.SearchContent(ctx, "worker", "budget", 200, m)
+	hits, _, err := d.SearchContent(ctx, "worker", "budget", "", 200, m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,12 +168,12 @@ func TestSearchContentOrderAndFolderScope(t *testing.T) {
 	if fmt.Sprint(got) != fmt.Sprint(want) || other.ID == "" {
 		t.Fatalf("got %v want %v", got, want)
 	}
-	hits, _, err = d.SearchFolderContent(ctx, "worker", w.ID, sub.ID, "budget", 200, m)
+	hits, _, err = d.SearchFolderContent(ctx, "worker", w.ID, sub.ID, "budget", "", 200, m)
 	if err != nil || len(hits) != 1 || hits[0].ID != high.ID || hits[0].Path != "" || m.saw(low.ID) {
 		t.Fatalf("folder scope: %v %v offered %v", hits, err, m.offered)
 	}
 	// Without a matcher, the search is by name as before.
-	if hits, _, _ = d.SearchContent(ctx, "worker", "budget", 200, nil); len(hits) != 2 {
+	if hits, _, _ = d.SearchContent(ctx, "worker", "budget", "", 200, nil); len(hits) != 2 {
 		t.Fatalf("names only: %v", hitNames(hits))
 	}
 }

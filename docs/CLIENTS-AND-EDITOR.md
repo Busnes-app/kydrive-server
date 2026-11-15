@@ -33,6 +33,24 @@ The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive
 - For the app: the token exchange (`POST /api/devices/token`) also returns the account's immutable `user_id`, and `GET /api/drive/device` with the computer's credential answers `{user_id, user}`, so the app can tell which account a stored credential belongs to. `PUT /api/drive/folders/{id}/trash` takes the change-feed `head` the app last saw and answers 409, trashing nothing, when the folder or anything still in it was changed, added or moved in since; without `head` it trashes as before.
 - A computer's credential syncs files only: it cannot share, create links, open the editor, change grants or create other credentials. It stops when the account is deactivated and after 90 days unused.
 
+## Search
+
+The search box above the drive finds files and folders by name and, unless content search is off,
+files by whole words in them, across every workspace the user can read. A row of chips under the
+box narrows the results to one type: Folders, Documents, Spreadsheets, Presentations, PDFs,
+Images, Videos, Audio or Archives. A type is read from the last extension of the name, ignoring
+case (`internal/drive/types.go` holds the table), so a misnamed file is listed by its name; no
+type is stored. A type alone, with an empty box, lists every item of that type. The chosen type
+is in the address (`?type=pdfs`), so Back, Forward and a reload keep it; the words searched for
+never are.
+
+`GET /api/drive/search?q=<words>&type=<type>` is the same search for scripts and service tokens.
+`q` is 2 to 100 characters, or empty when `type` is given; `type` is one of `folders`,
+`documents`, `spreadsheets`, `presentations`, `pdfs`, `images`, `videos`, `audio` and `archives`.
+Any other `type` is refused with 400 `{"error":"Unknown file type","code":"bad_type"}`. Results
+are capped at 200 (`truncated` says when more matched) and come only from items the caller can
+read: a type never widens a search.
+
 ## AI agents
 
 AI agents reach a user's files over MCP (Streamable HTTP, stateless) at `<KY_APP_URL>/mcp`, with
@@ -41,7 +59,8 @@ once with copy-ready OpenClaw and Hermes Agent config that reads it from `KYDRIV
 KyDrive skill is served publicly at `/agent/skills/kydrive/SKILL.md`.
 
 - **Access levels.** *Read only* (default) offers `list_folder`, `search_files` (names, and whole
-  words in file contents with a short snippet, unless content search is off), `get_file_info` and `read_file`. *Read and write* adds `write_file`,
+  words in file contents with a short snippet, unless content search is off; optionally only one
+  `type`, as in [Search](#search)), `get_file_info` and `read_file`. *Read and write* adds `write_file`,
   `create_folder`, `move_item` and `move_to_trash`. The level can be changed later on the same
   page. Every operation is still authorized as the user, so a token never exceeds their role.
 - **Folder limit.** A token may be limited to one folder or workspace, chosen by path when it is

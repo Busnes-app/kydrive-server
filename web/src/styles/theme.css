@@ -297,7 +297,13 @@ dialog.dialog::backdrop, dialog.drive-preview-dialog::backdrop { background: rgb
 .drive-search-results li > button:hover { filter: none; background: var(--panel-hover); }
 .drive-search-results li svg { grid-row: span 2; color: var(--ink); margin-top: .1rem; }
 .drive-search-results li small { color: var(--ink); font-size: .8rem; font-weight: 400; overflow-wrap: anywhere; }
-.drive-search-results > p { padding: .5rem .6rem; color: var(--ink); font-size: .85rem; }
+.drive-search-results p { padding: .5rem .6rem; color: var(--ink); font-size: .85rem; }
+/* Type chips: one row that scrolls sideways on narrow screens, with room for the focus ring. */
+.drive-search-types { display: flex; gap: .35rem; overflow-x: auto; padding: 4px 4px .5rem; margin-bottom: .25rem; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.drive-search-types button { flex: none; display: inline-flex; align-items: center; gap: .3rem; min-height: 36px; padding: 0 .8rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--panel); color: var(--ink-strong); font-size: var(--ky-type-meta); font-weight: 500; white-space: nowrap; }
+.drive-search-types button:hover { filter: none; background: var(--panel-hover); }
+.drive-search-types button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--button-text); font-weight: 600; }
+@media (forced-colors: active) { .drive-search-types button[aria-pressed='true'] { outline: 2px solid Highlight; outline-offset: -3px; } }
 
 .drive-files-panel { padding: 0; overflow: visible; }
 .drive-drop-active { outline: 2px dashed var(--accent); outline-offset: -6px; }
@@ -497,7 +503,7 @@ a.drive-file-name:hover, .drive-file-name.btn-link:hover { color: var(--ink-stro
 .drive-search-results li svg { grid-row: span 3; }
 .drive-search-snippet { grid-column: 2; display: block; color: var(--ink); font-size: .85rem; font-weight: 400; line-height: 1.45; overflow-wrap: anywhere; }
 .drive-search-snippet mark { background: var(--accent-soft, var(--ky-accent-soft)); color: var(--ink-strong); font-weight: 600; border-radius: 3px; padding: 0 2px; }
-.drive-search-results > p.drive-search-note { font-size: .8rem; padding-top: .25rem; }
+.drive-search-results p.drive-search-note { font-size: .8rem; padding-top: .25rem; }
 
 /* ---------- Appearance: palette pairs (KyCalendar reference) ---------- */
 .ky-appearance .ky-appearance-grid.appearance-pairs { grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }

@@ -72,6 +72,7 @@ const (
 	MCPNoPDFForTest      = msgNoPDF
 	MCPDamagedForTest    = msgDamaged
 	MCPSearchInForTest   = msgSearchIn
+	MCPSearchTypeForTest = msgSearchType
 )
 
 // IndexSearchForTest brings the content search index up to date now: changes queued, the
