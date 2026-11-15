@@ -151,8 +151,14 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   useEffect(() => setPicked(new Set()), [selected, parent, trash]);
   const canDrop = (dt: DataTransfer) => canEdit && !trash && view === 'files' && dt.types.includes('Files');
   function openHit(h: Hit) {
-    // A shared item is outside the user's workspaces: preview a file, open a folder in Shared with me.
-    if (h.shared) { if (h.kind === 'file') setPreview(h); else onOpenShared?.({ id: h.id, name: h.name, workspace: h.workspace, role: h.shared.role }); return; }
+    // A shared item is outside the user's workspaces: open its folder in Shared with me, or
+    // preview a file shared on its own (no path).
+    if (h.shared) {
+      if (h.kind === 'folder') onOpenShared?.({ id: h.id, name: h.name, workspace: h.workspace, role: h.shared.role });
+      else if (h.path) onOpenShared?.({ id: h.parent, name: h.path.split('/').pop() ?? '', workspace: h.workspace, role: h.shared.role });
+      else setPreview(h);
+      return;
+    }
     const target = h.kind === 'folder' ? h.id : h.parent;
     setTrash(false);
     if (h.workspace === selected) { setParent(target); return; }
