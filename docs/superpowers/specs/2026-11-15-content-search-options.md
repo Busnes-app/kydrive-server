@@ -16,7 +16,7 @@ user's own workspaces. The index stores keyed hashes (HMAC) of words, never the 
 | 2. Items shared with the user | **A. Widen the per-request candidate list** to what Shared with me shows | None | None | S, about 150 lines | No |
 | 1. Prefixes (`conf*`) | **C. Expand against a sealed vocabulary** of whole words, then look up their hashes | None (one sealed file, its size only) | About 6 MB per 15 000 documents, sealed | M, about 250 lines with phrases | No |
 | 1. Phrases (`"kernel module"`) | **C. Check the top candidates against the sealed text cache** | None | None | (in the line above) | No |
-| 3. PDFs without Euro-Office | **B. PDFium compiled to WebAssembly, in process** (`go-pdfium`), with hard memory, time and file-system caps | None (text goes to the existing sealed text cache) | None | M, about 150 lines | Yes: go-pdfium (MIT), PDFium (BSD-3 / Apache-2.0), wazero (Apache-2.0) |
+| 3. PDFs without Euro-Office | **B. PDFium compiled to WebAssembly, in process** (`go-pdfium`), with a wasm memory cap (process peak measured at about 330 MB plus 2 to 3 times the cap), a deadline and no file access | None (text goes to the existing sealed text cache) | None | M, about 150 lines | Yes: go-pdfium (MIT), PDFium (BSD-3 / Apache-2.0), wazero (Apache-2.0) |
 
 **Recommended order:** shared items first (smallest, no new risk), then prefix and phrase
 through the sealed vocabulary and text cache, then PDFium. Options that store prefix, pair or
@@ -319,7 +319,7 @@ whole-word search needs words split correctly.
 | Candidate | Licence | Word recall vs pdftotext (12 parsed files) | Byte-flipped files extracted (all 165; a fixed 55 of them) | Decompression bomb (300 M characters) | Deep nesting (2 M levels) | Footprint |
 |---|---|---|---|---|---|---|
 | A. `ledongthuc/pdf` (pure Go) | BSD-3-Clause | median 78%, as low as 22% (words run together) | 54 of 165, 17 panics (recovered); 20 of 55 | 1.7 GB RSS, 48 s, no cap possible | Panic at depth 1000 (recovered) | 3.5 MB binary, about 8 MB RSS |
-| B. `go-pdfium` WebAssembly (PDFium in wazero) | MIT; PDFium BSD-3/Apache-2.0; wazero Apache-2.0 | median 99% (69% to 100%) | 52 of 55, no crash or hang, at most 414 MB RSS | Stopped by the memory cap (wasm `unreachable`); host RSS peaked at 1.86 GB with a 512 MiB cap | Extracted | 15.4 MB binary, about 330 MB RSS, 3.4 to 6 s start |
+| B. `go-pdfium` WebAssembly (PDFium in wazero) | MIT; PDFium BSD-3/Apache-2.0; wazero Apache-2.0 | median 99% (69% to 100%) | 52 of 55, no crash or hang, at most 414 MB RSS | Stopped by the memory cap (wasm `unreachable`). Process peak grows with the cap: 564 MB at 128 MiB, 998 MB at 256 MiB, 1.86 GB at 512 MiB | Extracted | 15.4 MB binary, about 330 MB RSS, 3.4 to 6 s start |
 | C. Poppler `pdftotext` (helper process) | GPL-2.0 or GPL-3.0 | reference | 161 of 165; 54 of 55 | 20 MB RSS, but 57 s: needs a time cap | Extracted, 175 MB RSS | Shared C libraries in the image |
 | Today: Euro-Office `txt` conversion | AGPL-3.0 (separate service) | Not measured here; the MCP spec records it as lossier than `pdftotext` (dropped CJK text and a table column) | not measured | not measured | not measured | The whole editor service |
 
@@ -344,7 +344,8 @@ per process, so it ran on a fixed third of the byte-flipped files only.
 - **Reveals:** nothing new: text goes to the sealed text cache as today.
 - **Malicious PDFs:**
   - Go cannot cap the memory or CPU of one call; `debug.SetMemoryLimit` is soft. The bomb took
-    1.7 GB in our test, which on a 4 GB host would push the whole server to the OOM killer.
+    1.7 GB in our test, and a larger bomb takes more, without limit. On a 4 GB host that pushes
+    the whole server to the OOM killer.
   - Panics are recoverable only on the calling goroutine.
   - Unbounded recursion (GO-2026-5781 in the parent library) is fatal.
   - It would need a sub-process anyway, which removes its only advantage.
@@ -373,10 +374,16 @@ per process, so it ran on a fixed third of the byte-flipped files only.
   - Each new process spent 3.4 to 6 s compiling the module. A long-lived pool pays that once
     (wazero can also cache compiled code, unmeasured).
   - Extraction ran at about 10 ms per page, slower than `pdftotext` (about 1 ms).
-  - Under the bomb, the wasm side hit its 512 MiB cap and aborted cleanly, but the process
-    peaked at 1.86 GB. The likely cause is buffer growth on the host side (unconfirmed). So
-    the cap must be set at about a quarter of the memory the operator can spare, or the
-    server's own cgroup limit relied on.
+  - Under the bomb, the wasm side hit its cap and aborted cleanly every time, but the process
+    peaked well above the cap: 564 MB with a 128 MiB cap, 998 MB with 256 MiB and 1.86 GB
+    with 512 MiB. That is about 330 MB of runtime plus 2 to 3 times the cap, probably from
+    the host-side copies made as wasm memory grows (cause unconfirmed).
+  - The cap therefore bounds the process, but not 1:1. A 128 MiB cap still extracted the
+    268-page manual (414 MB peak), so 128 MiB is the proposed setting: a worst case of about
+    600 MB on a 4 GB host. The pure-Go library, by contrast, has no bound: its peak grows with
+    the bomb.
+  - A bound to stake the server on still needs a check in the implementation's tests: a
+    hostile-file test that asserts the peak RSS, plus the container's own memory limit.
 - **Reveals:** nothing new.
 - **Costs:**
   - About 12 MB more binary (measured: 15.4 MB against 3.5 MB for the same tiny program with
@@ -391,8 +398,11 @@ per process, so it ran on a fixed third of the byte-flipped files only.
     entries in three years [f10]. Inside wasm a memory-safety bug becomes a contained fault,
     not code execution in KyDrive, but wazero itself becomes trusted code.
   - go-pdfium trails upstream PDFium by a few builds.
-- **Verdict:** recommended. It is the only option with good recall and hard caps in one
-  process, it adds no C, and it fits the read-only, no-capabilities container.
+- **Verdict:** recommended. It is the only option with good recall and a memory bound in one
+  process, though the bound is about 330 MB plus 2 to 3 times the configured cap, not the cap
+  itself. It adds no C and fits the read-only, no-capabilities container. If the owner wants
+  a bound equal to the setting, use option C, where `RLIMIT_AS` caps the helper process
+  itself.
 
 ### C. Sandboxed helper process (Poppler `pdftotext`)
 
@@ -467,7 +477,8 @@ and `docs/ACCEPTANCE.md` (the "whole words only … not in items only shared wit
     or 100 random bytes changed.
   - The bomb was one Flate stream of 300 M characters of `(A) Tj`, 3 MB compressed. The
     nesting file held 2 million `[` in a page dictionary.
-  - go-pdfium ran with a 512 MiB wasm memory cap, a 30 s deadline and an empty `FSConfig`.
+  - go-pdfium ran with a 512 MiB wasm memory cap, a 30 s deadline and an empty `FSConfig`. The
+    bomb and two normal PDFs were rerun at 128 MiB and 256 MiB caps.
   - PDFium ran on every third byte-flipped file (55); the other two ran on the same 55 and on all 165.
 
 ## Sources
