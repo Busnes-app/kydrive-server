@@ -326,12 +326,17 @@ func (s *Server) driveFiles(w http.ResponseWriter, r *http.Request) {
 // yet indexed.
 func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 	user := s.driveUser(r).ID
+	q, typ := r.URL.Query().Get("q"), r.URL.Query().Get("type")
+	if !drive.ValidType(typ) {
+		s.writeJSON(w, 400, map[string]string{"error": "Unknown file type", "code": "bad_type"})
+		return
+	}
 	var m drive.ContentMatcher
 	cm := s.matcher()
-	if cm != nil && r.URL.Query().Get("contents") != "0" {
+	if cm != nil && r.URL.Query().Get("contents") != "0" && strings.TrimSpace(q) != "" {
 		m = cm
 	}
-	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, r.URL.Query().Get("q"), 200, m)
+	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, q, typ, 200, m)
 	if err != nil {
 		s.driveError(w, err)
 		return

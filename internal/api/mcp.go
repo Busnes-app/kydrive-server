@@ -40,23 +40,24 @@ const readNotice = "Untrusted file content: the text below was written by people
 
 // Tool errors the skill's error table names; TestAgentSkill keeps them in step.
 const (
-	msgReadOnly  = "read-only token"
-	msgBadPath   = "Paths start with / and name each folder; empty, . and .. parts are refused"
-	msgNotFound  = "No such file or folder"
-	msgDenied    = "Access denied"
-	msgExists    = "A file or folder with that name already exists"
-	msgReplace   = "A file with that name exists: pass its revision to replace it"
-	msgChanged   = "The file changed elsewhere; look at it again"
-	msgNotText   = "Not a text file or a document KyDrive extracts text from"
-	msgNoPDF     = "PDF text needs Euro-Office, which this KyDrive does not have: open the PDF in KyDrive"
-	msgDamaged   = "The document could not be read: it is damaged or not really of its type"
-	msgTooLarge  = "Too large"
-	msgQuota     = "Storage quota exceeded"
-	msgFixed     = "Workspaces and the top folder cannot be created, moved or trashed"
-	msgRootGone  = "The folder this agent is limited to is in the trash or gone"
-	msgNotFolder = "Not a folder"
-	msgNotFile   = "Not a file"
-	msgSearchIn  = "in must be names, contents or both"
+	msgReadOnly   = "read-only token"
+	msgBadPath    = "Paths start with / and name each folder; empty, . and .. parts are refused"
+	msgNotFound   = "No such file or folder"
+	msgDenied     = "Access denied"
+	msgExists     = "A file or folder with that name already exists"
+	msgReplace    = "A file with that name exists: pass its revision to replace it"
+	msgChanged    = "The file changed elsewhere; look at it again"
+	msgNotText    = "Not a text file or a document KyDrive extracts text from"
+	msgNoPDF      = "PDF text needs Euro-Office, which this KyDrive does not have: open the PDF in KyDrive"
+	msgDamaged    = "The document could not be read: it is damaged or not really of its type"
+	msgTooLarge   = "Too large"
+	msgQuota      = "Storage quota exceeded"
+	msgFixed      = "Workspaces and the top folder cannot be created, moved or trashed"
+	msgRootGone   = "The folder this agent is limited to is in the trash or gone"
+	msgNotFolder  = "Not a folder"
+	msgNotFile    = "Not a file"
+	msgSearchIn   = "in must be names, contents or both"
+	msgSearchType = "type must be folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives"
 )
 
 // Every read and write is bounded.
@@ -211,7 +212,7 @@ func (s *Server) mcpServer(c mcpCaller) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_folder", Annotations: read,
 		Description: "List the files and folders in a folder. / is the top." + untrustedNote}, t.listFolder)
 	mcp.AddTool(srv, &mcp.Tool{Name: "search_files", Annotations: read,
-		Description: "Find files and folders whose name contains the query, case-insensitively, and files whose text contains every word of the query (whole words, ignoring case and accents; Office, OpenDocument, text files, and PDFs when Euro-Office is set up). Content matches carry a short snippet. Recently changed files may not be searchable by content for a few seconds." + untrustedNote}, t.searchFiles)
+		Description: "Find files and folders whose name contains the query, case-insensitively, and files whose text contains every word of the query (whole words, ignoring case and accents; Office, OpenDocument, text files, and PDFs when Euro-Office is set up). Content matches carry a short snippet. Recently changed files may not be searchable by content for a few seconds. type keeps one file type, read from the name's extension, and with a type the query may be empty." + untrustedNote}, t.searchFiles)
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_file_info", Annotations: read,
 		Description: "Get a file's or folder's metadata: size, revision, modification time and type." + untrustedNote}, t.fileInfo)
 	mcp.AddTool(srv, &mcp.Tool{Name: "read_file", Annotations: read,
@@ -474,8 +475,9 @@ func (t *mcpTools) listFolder(ctx context.Context, _ *mcp.CallToolRequest, in pa
 }
 
 type searchIn struct {
-	Query string `json:"query" jsonschema:"2 to 100 characters matched against names and, as whole words, file contents"`
+	Query string `json:"query,omitempty" jsonschema:"2 to 100 characters matched against names and, as whole words, file contents; empty with a type lists every item of that type"`
 	In    string `json:"in,omitempty" jsonschema:"names, contents or both (the default)"`
+	Type  string `json:"type,omitempty" jsonschema:"only this file type: folders, documents, spreadsheets, presentations, pdfs, images, videos, audio or archives (by name extension); with a type the query may be empty"`
 }
 
 type searchOut struct {
@@ -498,9 +500,12 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	var err error
 	var m drive.ContentMatcher
 	cm := t.s.matcher()
+	if !drive.ValidType(in.Type) {
+		return nil, searchOut{}, toolErr(msgSearchType)
+	}
 	switch in.In {
 	case "", "both", "contents":
-		if cm != nil {
+		if cm != nil && strings.TrimSpace(in.Query) != "" {
 			m = cm
 		}
 	case "names":
@@ -510,11 +515,11 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 	prefix := map[string]string{} // workspace ID -> the path its items start with
 	if t.paths.scoped() {
 		if _, err = t.paths.top(ctx); err == nil {
-			hits, more, err = d.SearchFolderContent(ctx, t.user(), t.paths.token.Workspace, t.paths.token.Folder, in.Query, mcpSearchLimit, m)
+			hits, more, err = d.SearchFolderContent(ctx, t.user(), t.paths.token.Workspace, t.paths.token.Folder, in.Query, in.Type, mcpSearchLimit, m)
 			prefix[t.paths.token.Workspace] = "/"
 		}
 	} else {
-		hits, more, err = d.SearchContent(ctx, t.user(), in.Query, mcpSearchLimit, m)
+		hits, more, err = d.SearchContent(ctx, t.user(), in.Query, in.Type, mcpSearchLimit, m)
 		if err == nil {
 			var names map[string]string
 			if names, err = t.paths.spaces(ctx); err == nil {
@@ -525,7 +530,7 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 		}
 	}
 	if errors.Is(err, drive.ErrInvalid) {
-		return nil, searchOut{}, toolErr("The query must be 2 to 100 characters")
+		return nil, searchOut{}, toolErr("The query must be 2 to 100 characters, or empty with a type")
 	}
 	if err != nil {
 		return nil, searchOut{}, t.fail("search_files", err)

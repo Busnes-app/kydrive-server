@@ -33,13 +33,14 @@ type ContentMatcher interface {
 // Names are sealed, so they are decrypted and matched here; SQL never sees them. It returns at
 // most limit hits and whether more matched.
 func (s *Store) Search(ctx context.Context, user, q string, limit int) ([]Hit, bool, error) {
-	return s.SearchContent(ctx, user, q, limit, nil)
+	return s.SearchContent(ctx, user, q, "", limit, nil)
 }
 
 // SearchContent is Search that also asks m (nil: names only) which readable files' contents
-// match. Name matches come first in Search's order, then content-only matches by score.
-func (s *Store) SearchContent(ctx context.Context, user, q string, limit int, m ContentMatcher) ([]Hit, bool, error) {
-	q, err := searchQuery(q)
+// match. Name matches come first in Search's order, then content-only matches by score. A
+// type (ValidType) keeps only hits of that type and allows an empty q, which matches every name.
+func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit int, m ContentMatcher) ([]Hit, bool, error) {
+	q, err := searchQuery(q, typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -50,7 +51,7 @@ func (s *Store) SearchContent(ctx context.Context, user, q string, limit int, m 
 	hits := []Hit{}
 	var files []candidate
 	for _, w := range spaces {
-		found, readable, err := s.searchSpace(ctx, user, w.ID, "", q)
+		found, readable, err := s.searchSpace(ctx, user, w.ID, "", q, typ)
 		if err != nil {
 			return nil, false, err
 		}
@@ -71,7 +72,7 @@ type candidate struct {
 
 // matchContent marks name hits whose content matched and adds content-only hits.
 func matchContent(ctx context.Context, q string, m ContentMatcher, hits []Hit, files []candidate) ([]Hit, error) {
-	if m == nil || len(files) == 0 {
+	if m == nil || q == "" || len(files) == 0 {
 		return hits, nil
 	}
 	list := make([]File, len(files))
@@ -108,20 +109,20 @@ func matchContent(ctx context.Context, q string, m ContentMatcher, hits []Hit, f
 // SearchFolder is Search within the live subtree of folder in workspace ("" = the whole
 // workspace), the folder itself excluded; each Path is relative to folder.
 func (s *Store) SearchFolder(ctx context.Context, user, workspace, folder, q string, limit int) ([]Hit, bool, error) {
-	return s.SearchFolderContent(ctx, user, workspace, folder, q, limit, nil)
+	return s.SearchFolderContent(ctx, user, workspace, folder, q, "", limit, nil)
 }
 
 // SearchFolderContent is SearchFolder that also asks m (nil: names only) which files in the
 // subtree match by content, as SearchContent does.
-func (s *Store) SearchFolderContent(ctx context.Context, user, workspace, folder, q string, limit int, m ContentMatcher) ([]Hit, bool, error) {
-	q, err := searchQuery(q)
+func (s *Store) SearchFolderContent(ctx context.Context, user, workspace, folder, q, typ string, limit int, m ContentMatcher) ([]Hit, bool, error) {
+	q, err := searchQuery(q, typ)
 	if err != nil {
 		return nil, false, err
 	}
 	if err = authorizeItem(ctx, s.db, user, workspace, folder, "", 1); err != nil {
 		return nil, false, err
 	}
-	hits, files, err := s.searchSpace(ctx, user, workspace, folder, q)
+	hits, files, err := s.searchSpace(ctx, user, workspace, folder, q, typ)
 	if err != nil {
 		return nil, false, err
 	}
@@ -131,18 +132,19 @@ func (s *Store) SearchFolderContent(ctx context.Context, user, workspace, folder
 	return sortHits(hits, limit)
 }
 
-func searchQuery(q string) (string, error) {
+func searchQuery(q, typ string) (string, error) {
 	q = strings.ToLower(strings.TrimSpace(q))
-	if n := utf8.RuneCountInString(q); n < 2 || n > 100 {
+	n := utf8.RuneCountInString(q)
+	if !ValidType(typ) || n > 100 || n < 2 && !(n == 0 && typ != "") {
 		return "", ErrInvalid
 	}
 	return q, nil
 }
 
-// searchSpace matches q against names in workspace beneath root ("" = everywhere) and returns
-// every live file there for content matching; a workspace the user lost access to since
-// listing it has neither.
-func (s *Store) searchSpace(ctx context.Context, user, workspace, root, q string) ([]Hit, []candidate, error) {
+// searchSpace matches q against names of type typ ("" = any) in workspace beneath root ("" =
+// everywhere) and returns every live file of that type there for content matching; a workspace
+// the user lost access to since listing it has neither.
+func (s *Store) searchSpace(ctx context.Context, user, workspace, root, q, typ string) ([]Hit, []candidate, error) {
 	folders, err := s.Folders(ctx, user, workspace, false)
 	if errors.Is(err, ErrDenied) {
 		return nil, nil, nil // access ended since Workspaces
@@ -196,13 +198,16 @@ func (s *Store) searchSpace(ctx context.Context, user, workspace, root, q string
 	var hits []Hit
 	var readable []candidate
 	for _, f := range folders {
-		if strings.Contains(strings.ToLower(f.Name), q) {
+		if (typ == "" || typ == "folders") && strings.Contains(strings.ToLower(f.Name), q) {
 			if p, ok := path(f.Parent); ok {
 				hits = append(hits, Hit{Kind: "folder", ID: f.ID, Workspace: workspace, Parent: f.Parent, Name: f.Name, Path: p, Match: []string{"name"}})
 			}
 		}
 	}
 	for _, f := range files {
+		if typ != "" && FileType(f.Name) != typ {
+			continue
+		}
 		p, ok := path(f.Parent)
 		if !ok {
 			continue
