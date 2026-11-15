@@ -225,3 +225,73 @@ func TestPickPageHeaders(t *testing.T) {
 		t.Errorf("/pick: %d %v", rec.Code, h)
 	}
 }
+
+func (w *pickWorld) fetch(sub, file string, max any) *httptest.ResponseRecorder {
+	body := map[string]any{"sub": sub, "issuer": w.issuer, "file_id": file}
+	if max != nil {
+		body["max_bytes"] = max
+	}
+	return w.signed("/api/suite/kypost/fetch", "kypost.drive.fetch", "", body, kypostSecret)
+}
+
+// Fetch (contract I2) answers only files the user picked in copy mode and may still read.
+func TestKyPostFetch(t *testing.T) {
+	w := newPickWorld(t)
+	dana := loginWithProvider(t, w.srv, w.st, "dana", "kysignon", "sub-dana")
+	eve := loginWithProvider(t, w.srv, w.st, "eve", "kysignon", "sub-eve")
+	f, unpicked := homeFile(t, w, "usr_dana"), homeFile(t, w, "usr_dana")
+	evesFile := homeFile(t, w, "usr_eve")
+	for _, c := range []struct {
+		who  *http.Cookie
+		file string
+	}{{dana, f}, {eve, evesFile}} {
+		if rec := pick(t, w, c.who, map[string]any{"origin": kypostOrigin, "mode": "copy", "files": []string{c.file}}); rec.Code != 200 {
+			t.Fatalf("pick: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := w.fetch("sub-dana", f, 1)
+	if rec.Code != 200 || rec.Body.String() != "x" || rec.Header().Get("Content-Type") != "application/octet-stream" ||
+		!strings.HasPrefix(rec.Header().Get("Content-Disposition"), "attachment; filename=f") || rec.Header().Get("Content-Length") != "1" {
+		t.Fatalf("fetch: %d %v %q", rec.Code, rec.Header(), rec.Body.String())
+	}
+	code(t, w.fetch("sub-dana", f, 0), 413, "too_large")
+	code(t, w.fetch("sub-dana", f, nil), 400, "bad_body")
+	code(t, w.fetch("sub-dana", f, -1), 400, "bad_body")
+	code(t, w.fetch("sub-dana", f, "1"), 400, "bad_body")
+	code(t, w.fetch("sub-dana", unpicked, 10), 404, "not_found")
+	code(t, w.fetch("sub-dana", evesFile, 10), 404, "not_found") // eve picked it, not dana
+	code(t, w.fetch("sub-dana", "no-such-file", 10), 404, "not_found")
+
+	// Trashed after the pick: gone.
+	trashed := homeFile(t, w, "usr_dana")
+	if rec := pick(t, w, dana, map[string]any{"origin": kypostOrigin, "mode": "copy", "files": []string{trashed}}); rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	if rec := send(t, w.srv, http.MethodPut, "/api/drive/files/"+trashed+"/trash", `{"revision":1,"trashed":true}`, dana, ""); rec.Code != 200 {
+		t.Fatal(rec.Body.String())
+	}
+	code(t, w.fetch("sub-dana", trashed, 10), 404, "not_found")
+
+	// The switch off refuses.
+	w.setSwitch("usr_dana", false)
+	code(t, w.fetch("sub-dana", f, 10), 409, "sharing_off")
+	w.setSwitch("usr_dana", true)
+
+	// Audited by IDs; no name reaches the log.
+	events, _, err := w.st.Audit().ListAuditRecords(context.Background(), 0, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fetched, refused bool
+	for _, e := range events {
+		fetched = fetched || (e.Action == "kypost.file_fetched" && e.Resource == "file:"+f)
+		refused = refused || (e.Action == "kypost.fetch" && e.Details == "refused=not_found")
+	}
+	if !fetched || !refused {
+		t.Errorf("audit: fetched %v refused %v", fetched, refused)
+	}
+	if strings.Contains(w.logs.String(), ".txt") {
+		t.Error("a file name reached the log")
+	}
+}

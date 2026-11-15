@@ -372,6 +372,7 @@ var noChange = map[string]string{
 	"SetPeerSetting":          "user setting",
 	"RecordPicks":             "a fetch grant only",
 	"PeerFree":                "read",
+	"PeerFetch":               "read",
 	"UnlinkDevice":            "device credential bookkeeping",
 	"Unshare":                 "shares only add access inside a readable workspace (Decision 1)",
 	"SweepOrphans":            "unreferenced blobs only",

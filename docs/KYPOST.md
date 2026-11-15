@@ -5,7 +5,7 @@
 KyPost saves mail attachments into a person's My files and shares them by organisation link,
 so a large attachment travels as a link. KyDrive is the resource owner: it decides whether a
 person allows it and what KyPost may do. This is section C of the suite integration contract
-(wave 1, 2026-11-14); this file is KyDrive's durable copy. Both sides change together.
+(wave 1, 2026-11-14) and section I2 (wave 2); this file is KyDrive's durable copy. Both sides change together.
 
 ## Pairing
 
@@ -57,6 +57,7 @@ encrypted at rest, versioned, in the change feed and quota, audited as theirs
 | `kypost.drive.ticket` | `POST /api/suite/kypost/upload-tickets` |
 | `kypost.drive.link` | `POST /api/suite/kypost/links` |
 | `kypost.drive.status` | `POST /api/suite/kypost/status` |
+| `kypost.drive.fetch` | `POST /api/suite/kypost/fetch` |
 
 Every request is checked in this order; refusals are `{"error","code"}`:
 
@@ -68,12 +69,12 @@ Every request is checked in this order; refusals are `{"error","code"}`:
 | 200 | (`{"outcome":"duplicate"}`) | A verified replay of an event ID already accepted: not acted on again. |
 | 400 | `bad_body` | Not JSON, or no `sub`/`issuer`. |
 | 404 | `no_user` | `issuer` is not KyDrive's KyIdentity, or no active account is linked to `sub` (sign-in or SCIM), or it is a dedicated installer administrator. |
-| 429 | `rate_limited` | Per user: tickets and links 60 a minute, status 120. |
+| 429 | `rate_limited` | Per user: tickets, links and fetches 60 a minute, status 120. |
 | 409 | `sharing_off` | The person's switch is off (not for status). |
 
 An event refused with 429 or a 5xx is forgotten by the replay guard, so KyPost's retry under
 the same event ID is processed. Each verified request is audited with IDs only
-(`kypost.ticket`, `kypost.link`, `kypost.status`; resource `event:<id>`, details `outcome=ok`
+(`kypost.ticket`, `kypost.link`, `kypost.status`, `kypost.fetch`; resource `event:<id>`, details `outcome=ok`
 or `refused=<code>`). Unsigned refusals are not audited, so nobody can fill the audit log.
 
 ### Upload ticket
@@ -141,15 +142,32 @@ the person's own Mail attachments folder. No guest link is ever made here.
 `free_bytes` is My files' free quota (0 while the switch is off); `max_file_bytes` is
 `KYDRIVE_MAX_FILE_SIZE`.
 
+### Fetch
+
+```json
+{"sub":"…","issuer":"…","file_id":"…","max_bytes":26214400}
+```
+
+200 with the file's bytes, `Content-Type: application/octet-stream`, `Content-Length` and
+`Content-Disposition: attachment; filename=…`. Only a file the person chose in the picker's
+copy mode ([SUITE.md](SUITE.md)) within the last 24 hours, still live and still readable by
+them; anything else 404 `not_found`. `max_bytes` (KyPost's attachment limit) is required, a
+whole number of at least 0, else 400 `bad_body`; a larger file 413 `too_large`. Each answer is
+also audited `kypost.file_fetched` (`file:<id>`). Picks expire with the hourly ticket sweep.
+
 ## What KyPost can do with the pair secret
 
 The routes act through a peer context (`internal/drive/access.go`). It holds no rank:
 reading, listing, downloading, searching, moving, trashing, purging, sharing with people,
-guest links, credentials, editor sessions, settings and every shared workspace are refused,
-and `peer_access_test.go` proves each refusal. It may only add new files directly in the
-person's Mail attachments folder and put a reader organisation link on a file there.
+guest links, credentials, editor sessions, settings and every shared workspace are refused
+(but for a picked file, below), and `peer_access_test.go` proves each refusal. It may only add new files directly in the
+person's Mail attachments folder, put a reader organisation link on a file there, and read a
+file the person picked for it in the last 24 hours (`peerRead`).
 
 ## Deviations from the contract text
+
+- Fetch reads only files the person picked in copy mode within 24 hours, not any file they
+  may read: the pair secret alone never reads a person's drive. The wire is unchanged.
 
 - No `KYDRIVE_KYPOST_ALLOW_PRIVATE`: KyDrive makes no request to KyPost, so there is nothing
   for it to allow. KyIdentity's KyPost URL must still be `https://host`.

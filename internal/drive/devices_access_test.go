@@ -39,7 +39,7 @@ var (
 		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
-		"ExpireTickets", "IssueTicket", "PeerFree", "PeerSetting", "Ticket", "TicketUpload",
+		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerSetting", "Ticket", "TicketUpload",
 	}
 )
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,14 +25,16 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
-// KyPost pairing and its signed routes (docs/KYPOST.md, contract section C). KyDrive only
-// receives: KyPost asks for upload tickets, links and status, and uploads with a ticket.
+// KyPost pairing and its signed routes (docs/KYPOST.md, contract sections C and I2). KyDrive
+// only receives: KyPost asks for upload tickets, links, status and picked files' bytes, and
+// uploads with a ticket.
 
 // Event types, one per route.
 const (
 	kypostEventTicket = "kypost.drive.ticket"
 	kypostEventLink   = "kypost.drive.link"
 	kypostEventStatus = "kypost.drive.status"
+	kypostEventFetch  = "kypost.drive.fetch"
 	kypostMaxBody     = 64 << 10
 	ticketPath        = "/api/suite/upload/"
 )
@@ -226,6 +229,8 @@ type kypostReply struct {
 	status int
 	code   string
 	body   any
+	// serve, when set, writes the answer instead of body (fetch's bytes).
+	serve func(http.ResponseWriter)
 }
 
 func refuse(status int, code string) kypostReply { return kypostReply{status: status, code: code} }
@@ -260,6 +265,10 @@ func (s *Server) kypostSigned(event string, limit int, h func(r *http.Request, u
 		// Only verified events are audited: an unsigned caller must not fill the log.
 		if id != "" && out.code != "duplicate" {
 			s.audit(r.Context(), rec)
+		}
+		if out.serve != nil {
+			out.serve(w)
+			return
 		}
 		s.writeJSON(w, out.status, out.body)
 	}
@@ -412,6 +421,49 @@ func (s *Server) kypostStatusRoute(r *http.Request, user *store.User, p *kypostP
 		return refuse(503, "unavailable")
 	}
 	return kypostReply{status: 200, body: map[string]any{"enabled": on, "free_bytes": free, "max_file_bytes": s.config.Drive.MaxFileSize}}
+}
+
+// kypostFetchRoute answers a picked file's bytes (contract I2): one the user chose in the
+// picker's copy mode within drive.PickLife and may still read, of at most max_bytes.
+func (s *Server) kypostFetchRoute(r *http.Request, user *store.User, _ *kypostPeer, body []byte) kypostReply {
+	var in struct {
+		FileID   string `json:"file_id"`
+		MaxBytes *int64 `json:"max_bytes"`
+	}
+	if json.Unmarshal(body, &in) != nil || in.FileID == "" || in.MaxBytes == nil || *in.MaxBytes < 0 {
+		return refuse(400, "bad_body")
+	}
+	f, err := s.store.Drive().PeerFetch(r.Context(), user.ID, in.FileID)
+	switch {
+	case errors.Is(err, drive.ErrPeerOff):
+		return refuse(409, "sharing_off")
+	case errors.Is(err, drive.ErrPeerGone):
+		return refuse(404, "kypost_off")
+	case errors.Is(err, drive.ErrDenied), errors.Is(err, drive.ErrNotFound):
+		return refuse(404, "not_found")
+	case err != nil:
+		log.Printf("kypost fetch: %v", err)
+		return refuse(503, "unavailable")
+	case f.Size > *in.MaxBytes:
+		return refuse(413, "too_large")
+	}
+	file, err := s.openBlob(f)
+	if err != nil {
+		log.Printf("kypost fetch: blob %s: %v", f.Blob, err)
+		return refuse(503, "unavailable")
+	}
+	s.audit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: "kypost.file_fetched", Resource: "file:" + f.ID, Details: "peer=kypost", IPAddress: s.requestIP(r)})
+	return kypostReply{status: 200, serve: func(w http.ResponseWriter) {
+		defer file.Close()
+		h := w.Header()
+		h.Set("Content-Type", "application/octet-stream")
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.Name}))
+		h.Set("Content-Length", strconv.FormatInt(f.Size, 10))
+		w.WriteHeader(200)
+		if _, err := io.Copy(s.steady(w), file); err != nil {
+			log.Printf("kypost fetch %s: %v", f.ID, err)
+		}
+	}}
 }
 
 // ticketRefuse answers a ticket upload refusal; nothing about the ticket reaches a log.

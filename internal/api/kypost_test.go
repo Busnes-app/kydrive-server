@@ -162,8 +162,9 @@ func TestKyPostSignedRefusals(t *testing.T) {
 		"/api/suite/kypost/upload-tickets": "kypost.drive.ticket",
 		"/api/suite/kypost/links":          "kypost.drive.link",
 		"/api/suite/kypost/status":         "kypost.drive.status",
+		"/api/suite/kypost/fetch":          "kypost.drive.fetch",
 	}
-	alice := map[string]any{"sub": "sub-alice", "issuer": kypostIssuer, "name": "a.txt", "size": 1, "file_id": "x"}
+	alice := map[string]any{"sub": "sub-alice", "issuer": kypostIssuer, "name": "a.txt", "size": 1, "file_id": "x", "max_bytes": 10}
 	for path, event := range routes {
 		t.Run(path, func(t *testing.T) {
 			code(t, w.signed(path, event, "", alice, bytes.Repeat([]byte("x"), 32)), 401, "bad_signature")

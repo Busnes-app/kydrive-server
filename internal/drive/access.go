@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 )
 
 // The only definition of drive access. A rank is 0 none, 1 reader, 2 editor, 3 manager.
@@ -49,6 +50,9 @@ func itemRankSQL(user, workspace, folder, file string) string {
 // the file ID or ""). A service token keeps its workspace scope and rank and gets no shares.
 func authorizeItem(ctx context.Context, q queryer, user, workspace, folder, file string, need int) error {
 	if isPeer(ctx) {
+		if need == 1 {
+			return peerReads(ctx, q, user, workspace, folder, file)
+		}
 		if need != 2 {
 			return ErrDenied
 		}
@@ -80,11 +84,13 @@ func (s *Store) AuthorizeItem(ctx context.Context, user, workspace, folder, file
 
 // A peer context is a paired suite app (KyPost) acting for one user over a signed route or an
 // upload ticket. It holds no rank: authorize, admin and every read, listing, share, move,
-// trash and purge refuse it. It may do two things, each marked on ctx by the one code path
+// trash and purge refuse it. It may do three things, each marked on ctx by the one code path
 // that does it, so no other method that reaches the same check can borrow it:
 //   - peerAdd (StartUpload, Upload and publishTX for a new file): add a new file directly in
 //     the user's peer folder (drive_peer_folders, "Mail attachments") in their own live My files;
-//   - peerLink (CreateLink): a reader organisation link on a live file directly in that folder.
+//   - peerLink (CreateLink): a reader organisation link on a live file directly in that folder;
+//   - peerRead (PeerFetch): read a file the user picked for KyPost (drive_peer_picks, not
+//     expired) and may still read.
 //
 // The folder itself is made by peerFolder, never through AddFolder.
 type peerKey struct{}
@@ -93,6 +99,7 @@ type peerOpKey struct{}
 const (
 	peerAdd  = 1
 	peerLink = 2
+	peerRead = 3
 )
 
 // Peer is the pairing a peer context acts under. SwitchDefault is the user's switch when
@@ -170,6 +177,28 @@ func peerAllows(ctx context.Context, q queryer, user, workspace, folder, file st
 		return err
 	}
 	if ok != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+
+// peerReads is peerRead: the switch, a live pick of file by user and the user's own read rank.
+func peerReads(ctx context.Context, q queryer, user, workspace, folder, file string) error {
+	if got, _ := ctx.Value(peerOpKey{}).(int); got != peerRead || file == "" {
+		return ErrDenied
+	}
+	if err := peerSwitch(ctx, q, user); err != nil {
+		return err
+	}
+	var picked int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_peer_picks WHERE owner=? AND file=? AND expires>?`, user, file, time.Now().Unix()).Scan(&picked); err != nil {
+		return err
+	}
+	rank, err := itemRank(ctx, q, user, workspace, folder, file)
+	if err != nil {
+		return err
+	}
+	if picked != 1 || rank < 1 {
 		return ErrDenied
 	}
 	return nil

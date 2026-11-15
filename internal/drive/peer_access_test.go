@@ -16,7 +16,7 @@ import (
 // exported Store method is in exactly one list.
 var (
 	peerAllowed = []string{
-		"AppendUpload", "CompleteUpload", "CreateLink", "IssueTicket", "PeerFree", "PeerSetting", "Publish", "StartUpload",
+		"AppendUpload", "CompleteUpload", "CreateLink", "IssueTicket", "PeerFetch", "PeerFree", "PeerSetting", "Publish", "StartUpload",
 		"Ticket", "TicketUpload", "Upload",
 	}
 	peerRefused = []string{
