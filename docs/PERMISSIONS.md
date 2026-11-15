@@ -45,7 +45,8 @@ When KyPost is paired, each person decides under **Settings → Files** whether 
 and share their files (on by default when KyIdentity paired the apps, off when the operator
 did). KyPost then saves mail attachments into a `Mail attachments` folder in that person's My
 files, as their own ordinary files, and can share one of them by a reader organisation link.
-It cannot open, list, download, move, delete or share anything else, cannot create guest
+It can also read a copy of a file the person chose for it in the picker, for 24 hours. It
+cannot open, list, download, move, delete or share anything else, cannot create guest
 links and never reaches shared workspaces; dedicated installer administrators and local
 accounts cannot be named by it. Details and the wire contract: [KYPOST.md](KYPOST.md).
 

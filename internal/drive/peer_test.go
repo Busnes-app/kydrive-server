@@ -332,3 +332,57 @@ func TestTicketBoundToItsPairing(t *testing.T) {
 		t.Errorf("ticket without a pairing: %v", err)
 	}
 }
+
+// KyPost reads only what the user picked, while the pick lasts, the file is live and the switch is on.
+func TestPeerFetch(t *testing.T) {
+	e := newPeerEnv(t)
+	d := e.d
+	if _, err := d.PeerFetch(e.peer, "worker", e.root.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("unpicked: %v", err)
+	}
+	if err := d.RecordPicks(e.peer, "worker", []string{e.root.ID}); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("KyPost recorded its own pick: %v", err)
+	}
+	if err := d.RecordPicks(e.ctx, "worker", []string{e.root.ID, e.team.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []drive.File{e.root, e.team} {
+		if got, err := d.PeerFetch(e.peer, "worker", f.ID); err != nil || got.ID != f.ID {
+			t.Fatalf("picked %s: %v", f.Name, err)
+		}
+	}
+	if _, err := d.PeerFetch(e.ctx, "worker", e.root.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("outside a peer context: %v", err)
+	}
+	if _, err := d.PeerFetch(e.peer, "admin", e.root.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("another user's pick: %v", err)
+	}
+	// The pick grants nothing else: an ordinary read in a peer context is still refused.
+	if _, err := d.File(e.peer, "worker", e.root.ID, 1); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("File in a peer context: %v", err)
+	}
+	if err := d.SetTrash(e.ctx, "worker", e.team.ID, e.team.Revision, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PeerFetch(e.peer, "worker", e.team.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("trashed: %v", err)
+	}
+	if err := d.SetPeerSetting(e.ctx, "worker", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PeerFetch(e.peer, "worker", e.root.ID); !errors.Is(err, drive.ErrPeerOff) {
+		t.Errorf("switch off: %v", err)
+	}
+	if err := d.SetPeerSetting(e.ctx, "worker", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecSQL(e.ctx, d, `UPDATE drive_peer_picks SET expires=1`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PeerFetch(e.peer, "worker", e.root.ID); !errors.Is(err, drive.ErrDenied) {
+		t.Errorf("expired pick: %v", err)
+	}
+	if err := d.ExpireTickets(e.ctx); err != nil || e.count(t, `SELECT COUNT(*) FROM drive_peer_picks`) != 0 {
+		t.Errorf("expired picks kept: %v", err)
+	}
+}

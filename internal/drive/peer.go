@@ -327,3 +327,15 @@ func (s *Store) RecordPicks(ctx context.Context, user string, ids []string) erro
 		return nil
 	})
 }
+
+// PeerFetch (a peer context) is a file KyPost may read for user: picked, live and still readable.
+func (s *Store) PeerFetch(ctx context.Context, user, id string) (File, error) {
+	if !isPeer(ctx) {
+		return File{}, ErrDenied
+	}
+	f, err := s.File(peerOp(ctx, peerRead), user, id, 1)
+	if err == nil && f.Trashed {
+		err = ErrDenied
+	}
+	return f, err
+}
