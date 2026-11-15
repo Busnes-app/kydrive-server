@@ -16,6 +16,8 @@ const server = spawn(fileURLToPath(new URL('../../.browser/server', import.meta.
     KY_HOST: '127.0.0.1', KY_PORT: '5391', KY_DB_DRIVER: 'sqlite',
     KY_DATA_DIR: join(dir, 'data'), KY_BACKUP_DIR: join(dir, 'backups'),
     KY_ADMIN_PASSWORD: 'BrowserInitial123!', KY_CAPTCHA_PROVIDER: 'none',
+    // A disposable SCIM token, so a spec can make a directory group (search-shared.spec.mjs).
+    KY_SCIM_TOKEN: 'browser-test-scim-token-0123456789abcdef0123456789',
     KYDRIVE_KYPOST_URL: 'https://post.example', KYDRIVE_KYPOST_SECRET_FILE: join(dir, 'kypost.secret'),
     KY_EXCALIDRAW_FONTS_DIR: fileURLToPath(new URL('../dist-fonts', import.meta.url)),
   },

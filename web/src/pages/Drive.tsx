@@ -12,6 +12,7 @@ import { FileIcon, FolderIcon, iconFor } from './drive/FileIcon';
 import { Search } from './drive/Search';
 import { Versions } from './drive/Versions';
 import type { Hit } from './drive/Search';
+import type { Place } from './drive/SharedView';
 import { UploadList, useUploads } from './drive/Uploads';
 import type { Choice } from './drive/Uploads';
 import { fromDataTransfer, fromFolderInput } from './drive/upload';
@@ -69,7 +70,7 @@ export async function setTrashBatch(workspace: string, folders: Folder[], files:
   for (const f of files) await put('files', f.id, { revision: f.revision });
 }
 
-export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab, apps = [] }: { apps?: SuiteApp[]; admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: Dispatch<SetStateAction<string>>; openInNewTab: boolean }) {
+export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelectWorkspace, openInNewTab, apps = [], onOpenShared }: { apps?: SuiteApp[]; admin: boolean; workspaces: Workspace[]; onWorkspacesChange: (workspaces: Workspace[]) => void; selected: string; onSelectWorkspace: Dispatch<SetStateAction<string>>; openInNewTab: boolean; onOpenShared?: (p: Place) => void }) {
   const fileTarget = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [newDocument, setNewDocument] = useState<{ kind: DocumentKind; name: string } | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -95,7 +96,7 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const [sharing, setSharing] = useState<{ kind: 'file' | 'folder'; id: string; name: string } | null>(null);
   const [emailing, setEmailing] = useState<DriveFile | null>(null);
   const mailOrigin = kypostOrigin(apps);
-  const [preview, setPreview] = useState<DriveFile | null>(null);
+  const [preview, setPreview] = useState<{ id: string; name: string } | null>(null);
   const [clash, setClash] = useState<{ names: string[]; answer: (c: Choice) => void } | null>(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -150,6 +151,8 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   useEffect(() => setPicked(new Set()), [selected, parent, trash]);
   const canDrop = (dt: DataTransfer) => canEdit && !trash && view === 'files' && dt.types.includes('Files');
   function openHit(h: Hit) {
+    // A shared item is outside the user's workspaces: preview a file, open a folder in Shared with me.
+    if (h.shared) { if (h.kind === 'file') setPreview(h); else onOpenShared?.({ id: h.id, name: h.name, workspace: h.workspace, role: h.shared.role }); return; }
     const target = h.kind === 'folder' ? h.id : h.parent;
     setTrash(false);
     if (h.workspace === selected) { setParent(target); return; }

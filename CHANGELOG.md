@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Search finds what is shared with you.** The search box and `GET /api/drive/search` also
+  search the live items in Shared with me, by name and by content: a shared file, or a shared
+  folder and everything live inside it. Such a result carries
+  `"shared":{"from":"<name>","role":"<role>"}`, its `path` starts at the shared item, and in the
+  web app a shared file opens its preview and a shared folder opens in Shared with me. Access is
+  checked on every search and again for each shared result before it is returned, so a revoked
+  share drops out at once. MCP `search_files` and service tokens are unchanged: own workspaces
+  only. No index change. See `docs/CLIENTS-AND-EDITOR.md#search`.
 - **Link a phone by QR code.** Settings → Phones & apps → Devices has **Link a phone**: after
   step-up, `POST /api/devices/phone-code` returns `{link, expires_in}`, where `link` is
   `kydrive://link?srv=<KY_APP_URL>&code=<code>`, a code that works once for 120 seconds. KyDrive

@@ -41,7 +41,7 @@ func (m *blobMatcher) saw(id string) bool {
 
 // The mandatory cross-user test at the drive level: content matching is offered only the files
 // the caller can read in their workspaces, so a file in someone else's My files never matches,
-// even when a readable copy shares its blob; shares stay out of search (workspace scope only).
+// even when a readable copy shares its blob. Without shared (MCP), shares stay out of search.
 func TestSearchContentOffersOnlyReadableFiles(t *testing.T) {
 	st, w, root := fixture(t)
 	d, ctx := st.Drive(), context.Background()
@@ -61,7 +61,7 @@ func TestSearchContentOffersOnlyReadableFiles(t *testing.T) {
 	search := func(ctx context.Context, user string) []string {
 		t.Helper()
 		m.offered = nil
-		hits, _, err := d.SearchContent(ctx, user, "zebracanary", "", 200, m)
+		hits, _, err := d.SearchContent(ctx, user, "zebracanary", "", 200, m, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestSearchContentOffersOnlyReadableFiles(t *testing.T) {
 		t.Fatalf("owner: %v", hits)
 	}
 
-	// Shared with the worker, the diary is readable to them but not searched (workspace scope).
+	// Shared with the worker, the diary is readable to them but not searched without shared.
 	if _, err = d.Share(ctx, "stranger", "file", diary.ID, "user", "worker", "reader"); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestSearchContentOrderAndFolderScope(t *testing.T) {
 	high := pub(sub.ID, "y.txt", "c")
 	other := pub("", "budget.txt", "d")
 	m := &blobMatcher{blobs: map[string]float64{named.Blob: 1, low.Blob: 1, high.Blob: 5}}
-	hits, _, err := d.SearchContent(ctx, "worker", "budget", "", 200, m)
+	hits, _, err := d.SearchContent(ctx, "worker", "budget", "", 200, m, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestSearchContentOrderAndFolderScope(t *testing.T) {
 		t.Fatalf("folder scope: %v %v offered %v", hits, err, m.offered)
 	}
 	// Without a matcher, the search is by name as before.
-	if hits, _, _ = d.SearchContent(ctx, "worker", "budget", "", 200, nil); len(hits) != 2 {
+	if hits, _, _ = d.SearchContent(ctx, "worker", "budget", "", 200, nil, false); len(hits) != 2 {
 		t.Fatalf("names only: %v", hitNames(hits))
 	}
 }

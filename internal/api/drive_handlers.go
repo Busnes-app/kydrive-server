@@ -336,7 +336,7 @@ func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 	if cm != nil && r.URL.Query().Get("contents") != "0" && strings.TrimSpace(q) != "" {
 		m = cm
 	}
-	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, q, typ, 200, m)
+	hits, truncated, err := s.store.Drive().SearchContent(r.Context(), user, q, typ, 200, m, true)
 	if err != nil {
 		s.driveError(w, err)
 		return

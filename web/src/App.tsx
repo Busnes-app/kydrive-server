@@ -4,6 +4,7 @@ import type { SuiteApp } from './components/AppHeader';
 import { Drive } from './pages/Drive';
 import type { Workspace } from './pages/Drive';
 import { SharedView } from './pages/drive/SharedView';
+import type { Place } from './pages/drive/SharedView';
 import { SHARED_WITH_ME, change, ownFilesRefused, editorURL, list, workspace } from './pages/drive/client';
 import { openPendingLink, opensLinkInEditor, takeLinkFromURL } from './pages/drive/links';
 import { Login } from './pages/Login';
@@ -45,6 +46,9 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState('');
+  // A shared folder a search result opens; dropped when the user goes anywhere else.
+  const [sharedStart, setSharedStart] = useState<Place | null>(null);
+  useEffect(() => { if (selectedWorkspace !== SHARED_WITH_ME) setSharedStart(null); }, [selectedWorkspace]);
   const [chosenTab, setChosenTab] = useState<string | null>(hashTab);
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null);
   const [openInNewTab, setOpenInNewTab] = useState(true);
@@ -224,7 +228,7 @@ export const App: React.FC = () => {
       apps={apps}
     >
       {notice && <div className="app-notice"><Alert>{notice}</Alert></div>}
-      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} /> : <Drive apps={apps} admin={admin} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} />)}
+      {activeTab === 'drive' && (selectedWorkspace === SHARED_WITH_ME ? <SharedView openInNewTab={openInNewTab} start={sharedStart} /> : <Drive apps={apps} admin={admin} workspaces={workspaces} onWorkspacesChange={setWorkspaces} selected={selectedWorkspace} onSelectWorkspace={setSelectedWorkspace} openInNewTab={openInNewTab} onOpenShared={p => { setSharedStart(p); setSelectedWorkspace(SHARED_WITH_ME); }} />)}
 
       {activeTab === 'workspaces' && <AdminWorkspaces workspaces={workspaces} onWorkspacesChange={setWorkspaces} onOpen={openWorkspace} />}
       {activeTab === 'activity' && <AdminActivity />}

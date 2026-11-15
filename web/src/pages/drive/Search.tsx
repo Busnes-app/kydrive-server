@@ -7,7 +7,8 @@ import { iconFor } from './FileIcon';
 
 // Snippet highlights are [start, end) offsets in UTF-16 code units, which is what String.slice uses.
 export type Snippet = { text: string; highlights: [number, number][]; cut_start: boolean; cut_end: boolean };
-export type Hit = { kind: 'file' | 'folder'; id: string; workspace: string; parent: string; name: string; path: string; match?: string[]; snippet?: Snippet };
+// shared is set on an item reached only through Shared with me; path then starts at the shared item.
+export type Hit = { kind: 'file' | 'folder'; id: string; workspace: string; parent: string; name: string; path: string; match?: string[]; snippet?: Snippet; shared?: { from: string; role: string } };
 type Found = { query: string; results: Hit[]; truncated: boolean; pending: number };
 
 function snippet(v: unknown): v is Snippet {
@@ -17,7 +18,8 @@ function snippet(v: unknown): v is Snippet {
 function hit(v: unknown): v is Hit {
   return record(v) && (v.kind === 'file' || v.kind === 'folder') && ['id', 'workspace', 'parent', 'name', 'path'].every(k => typeof v[k] === 'string')
     && (v.match === undefined || (Array.isArray(v.match) && v.match.every(m => typeof m === 'string')))
-    && (v.snippet === undefined || snippet(v.snippet));
+    && (v.snippet === undefined || snippet(v.snippet))
+    && (v.shared === undefined || (record(v.shared) && typeof v.shared.from === 'string' && typeof v.shared.role === 'string'));
 }
 
 // marks renders text with <mark> around its highlights; out-of-order or out-of-range
@@ -69,7 +71,7 @@ function idle(q: string, type: string): boolean {
 }
 
 // Search finds files and folders by name, and files by the words in them, across every workspace
-// the user can read, optionally of one type (a type alone lists all of it). Results open below
+// the user can read and what is shared with them, optionally of one type (a type alone lists all of it). Results open below
 // the box and close on Escape or a click elsewhere.
 export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen: (h: Hit) => void }) {
   const [q, setQ] = useState('');
@@ -120,7 +122,7 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
         const Icon = h.kind === 'folder' ? Folder : iconFor(h.name);
         return <li key={`${h.kind}-${h.id}`}><button type="button" onClick={() => { setQ(''); setOpen(false); choose(''); onOpen(h); }}>
           <Icon size={18} aria-hidden="true" /><span>{h.match?.includes('name') ? marks(h.name, nameMatches(h.name, found.query)) : h.name}</span>
-          <small>{[names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
+          <small>{[h.shared?.from ?? names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
           {h.snippet && <Marked s={h.snippet} />}
         </button></li>;
       })}</ul>)}

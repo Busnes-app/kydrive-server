@@ -296,7 +296,7 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 		"RevokeServiceToken": func(c context.Context) error { return d.RevokeServiceToken(c, "worker", svc) },
 		"Search":             func(c context.Context) error { _, _, err := d.Search(c, "worker", "mail", 10); return err },
 		"SearchContent": func(c context.Context) error {
-			_, _, err := d.SearchContent(c, "worker", "mail", "", 10, nil)
+			_, _, err := d.SearchContent(c, "worker", "mail", "", 10, nil, true)
 			return err
 		},
 		"SearchFolder": func(c context.Context) error {

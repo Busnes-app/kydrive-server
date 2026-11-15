@@ -38,7 +38,15 @@ The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive
 ## Search
 
 The search box above the drive finds files and folders by name and, unless content search is off,
-files by whole words in them, across every workspace the user can read. A row of chips under the
+files by whole words in them, across every workspace the user can read and the live items in
+their Shared with me list: a shared file, or a shared folder and everything live inside it. A
+shared result shows who it is shared from (the workspace's name, or the person's for their My
+files) and a path that starts at the shared item, never above it; a shared file opens its
+preview and a shared folder opens in Shared with me. Access is checked on every search, and
+again for each shared result just before it is returned, so a revoked share, a removal from the
+group it was shared with, a revoked or expired organisation link, a trashed item, a move out of
+the shared folder or a deactivated owner takes it out of the next search. An organisation link
+counts once the user has opened it. Administration grants nothing. A row of chips under the
 box narrows the results to one type: Folders, Documents, Spreadsheets, Presentations, PDFs,
 Images, Videos, Audio or Archives. A type is read from the last extension of the name, ignoring
 case (`internal/drive/types.go` holds the table), so a misnamed file is listed by its name; no
@@ -51,7 +59,9 @@ never are.
 `documents`, `spreadsheets`, `presentations`, `pdfs`, `images`, `videos`, `audio` and `archives`.
 Any other `type` is refused with 400 `{"error":"Unknown file type","code":"bad_type"}`. Results
 are capped at 200 (`truncated` says when more matched) and come only from items the caller can
-read: a type never widens a search.
+read: a type never widens a search. A result reached only through a share carries
+`"shared":{"from":"<name>","role":"reader|editor|manager"}`. A service token searches its
+workspace only, never shares; MCP `search_files` searches the user's own workspaces only.
 
 ## AI agents
 

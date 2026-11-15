@@ -77,7 +77,7 @@ func TestSearchType(t *testing.T) {
 	}
 	search := func(user, q, typ string) string {
 		t.Helper()
-		hits, _, err := d.SearchContent(ctx, user, q, typ, 200, nil)
+		hits, _, err := d.SearchContent(ctx, user, q, typ, 200, nil, false)
 		if err != nil {
 			t.Fatalf("%s %q %q: %v", user, q, typ, err)
 		}
@@ -124,11 +124,11 @@ func TestSearchType(t *testing.T) {
 		t.Fatalf("folder search in an unreadable workspace: %v", err)
 	}
 	// Limit applies to a type-only search.
-	if hits, more, err := d.SearchContent(ctx, "worker", "", "documents", 0, nil); err != nil || len(hits) != 0 || !more {
+	if hits, more, err := d.SearchContent(ctx, "worker", "", "documents", 0, nil, false); err != nil || len(hits) != 0 || !more {
 		t.Fatalf("limit: %v %v %v", hits, more, err)
 	}
 	for _, c := range []struct{ q, typ string }{{"", ""}, {"r", "pdfs"}, {"report", "pdf"}, {"", "Folders"}} {
-		if _, _, err := d.SearchContent(ctx, "worker", c.q, c.typ, 200, nil); !errors.Is(err, drive.ErrInvalid) {
+		if _, _, err := d.SearchContent(ctx, "worker", c.q, c.typ, 200, nil, false); !errors.Is(err, drive.ErrInvalid) {
 			t.Errorf("%q %q: %v", c.q, c.typ, err)
 		}
 	}
