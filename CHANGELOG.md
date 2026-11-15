@@ -4,6 +4,16 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Prefix and phrase search.** In the search box, `GET /api/drive/search` and MCP
+  `search_files`, `conf*` (3 or more letters) matches words starting with them, up to the 100
+  found in most documents, and `"site report"` matches the words together in that order, across
+  line and page breaks, checked in the best 200 matches within half a second. Responses add
+  `contents.unverified` (files not checked for the phrase, left out) and
+  `contents.expanded_truncated` (MCP: `unverified`, `prefix_capped`); snippets highlight the
+  phrase. Names match without the quotes and the `*`. A sealed vocabulary
+  (`<KY_DATA_DIR>/search/vocab`) serves the prefixes; after the upgrade it is built in the
+  background from the sealed text cache, with no reindex, and whole words work meanwhile. See
+  `docs/CLIENTS-AND-EDITOR.md#search`.
 - **Search finds what is shared with you.** The search box and `GET /api/drive/search` also
   search the live items in Shared with me, by name and by content: a shared file, or a shared
   folder and everything live inside it. Such a result carries

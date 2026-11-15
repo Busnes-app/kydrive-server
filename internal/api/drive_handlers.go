@@ -341,13 +341,13 @@ func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	contents := map[string]any{"searched": m != nil, "pending": 0}
-	var terms []string
+	contents := map[string]any{"searched": m != nil, "pending": 0, "unverified": 0, "expanded_truncated": false}
+	var snip *contentMatcher
 	if m != nil {
-		terms = cm.terms
-		contents["pending"] = cm.pending
+		snip = cm
+		contents["pending"], contents["unverified"], contents["expanded_truncated"] = cm.pending, cm.unverified, cm.capped
 	}
-	s.writeJSON(w, 200, map[string]any{"results": s.withSnippets(r.Context(), user, hits, terms, snippetCount), "truncated": truncated, "contents": contents})
+	s.writeJSON(w, 200, map[string]any{"results": s.withSnippets(r.Context(), user, hits, snip, snippetCount), "truncated": truncated, "contents": contents})
 }
 func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
 

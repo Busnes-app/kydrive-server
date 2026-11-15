@@ -46,6 +46,10 @@ days unused. The user creates a new one the same way.
 - `search_files` finds files and folders whose name contains the query, and files whose text
   contains every word of it: whole words, ignoring case and accents (Word, Excel, PowerPoint,
   OpenDocument, text files, and PDFs when KyDrive has Euro-Office). `match` says which matched.
+  `conf*` (3 or more letters, then `*`) matches words starting with them, at most the 100
+  commonest (`prefix_capped` says when there were more); `"site report"` in double quotes needs
+  the words together in that order, checked in the best 200 matches only (`unverified` counts
+  files left out).
 - Content matches carry a short `snippet`; like `read_file`, a `notice` marks it untrusted. Read
   the file before relying on it.
 - Pass `in` as `names` or `contents` to search only one; both is the default. Partial words do

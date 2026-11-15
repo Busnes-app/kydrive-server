@@ -38,7 +38,7 @@ The KyDrive desktop app ([kydrive-desktop](https://github.com/Busnes-app/kydrive
 ## Search
 
 The search box above the drive finds files and folders by name and, unless content search is off,
-files by whole words in them, across every workspace the user can read and the live items in
+files by the words in them, across every workspace the user can read and the live items in
 their Shared with me list: a shared file, or a shared folder and everything live inside it. A
 shared result shows who it is shared from (the workspace's name, or the person's for their My
 files) and a path that starts at the shared item, never above it; a shared file opens its
@@ -54,12 +54,30 @@ type is stored. A type alone, with an empty box, lists every item of that type. 
 is in the address (`?type=pdfs`), so Back, Forward and a reload keep it; the words searched for
 never are.
 
+Content matches whole words, ignoring case and accents, and every word must be in the file.
+Two forms go further:
+
+- **Prefix:** a word ending in `*` with at least 3 letters or digits before it (`conf*`) matches
+  every word starting with them. It tries at most the 100 words found in the most documents
+  drive-wide; when there were more, the panel says only the most common were searched. A
+  shorter prefix (`co*`) is the whole word, and Chinese, Japanese and Korean text has no
+  prefixes.
+- **Phrase:** words in double quotes (`"site report"`) must appear together, in that order,
+  ignoring punctuation, line and page breaks and one-letter words between them. The best 200
+  matches are checked against their text within half a second; the panel says how many more
+  files have the words but were not checked, and those are left out. The snippet highlights
+  the phrase.
+
+File names match the query as typed, without the quotes and the `*` that ends a word.
+
 `GET /api/drive/search?q=<words>&type=<type>` is the same search for scripts and service tokens.
 `q` is 2 to 100 characters, or empty when `type` is given; `type` is one of `folders`,
 `documents`, `spreadsheets`, `presentations`, `pdfs`, `images`, `videos`, `audio` and `archives`.
 Any other `type` is refused with 400 `{"error":"Unknown file type","code":"bad_type"}`. Results
 are capped at 200 (`truncated` says when more matched) and come only from items the caller can
-read: a type never widens a search. A result reached only through a share carries
+read: a type never widens a search. `contents.unverified` counts files left out because their
+phrase was not checked, and `contents.expanded_truncated` says a prefix had more than 100 words.
+A result reached only through a share carries
 `"shared":{"from":"<name>","role":"reader|editor|manager"}`. A service token searches its
 workspace only, never shares; MCP `search_files` searches the user's own workspaces only.
 

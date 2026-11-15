@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
@@ -43,6 +44,11 @@ CREATE TABLE IF NOT EXISTS queue(file TEXT PRIMARY KEY, first INTEGER NOT NULL, 
 type Index struct {
 	db       *sql.DB
 	tok, ref []byte
+	dir      string
+	// vkey and vaad seal the vocabulary (vocab.go); vmu guards which vocabulary is current.
+	vkey, vaad []byte
+	vmu        sync.Mutex
+	vocab      *vocab
 }
 
 // Open opens or creates the index under dir. An index built under another deployment key or
@@ -63,6 +69,10 @@ func Open(ctx context.Context, dir string, key []byte) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
+	vkey, err := crypto.DeriveKey(key, "kydrive:search-vocab")
+	if err != nil {
+		return nil, err
+	}
 	want := hex.EncodeToString(check) + ":" + strconv.Itoa(TokenizerVersion)
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -77,7 +87,9 @@ func Open(ctx context.Context, dir string, key []byte) (*Index, error) {
 		db.SetMaxIdleConns(1)
 		got, err := prepare(ctx, db, want)
 		if err == nil && got == want {
-			return &Index{db: db, tok: tok, ref: ref}, nil
+			x := &Index{db: db, tok: tok, ref: ref, dir: dir, vkey: vkey, vaad: []byte("kydrive:search-vocab:" + want)}
+			x.vocab = x.loadVocab()
+			return x, nil
 		}
 		db.Close()
 		if err != nil {
@@ -108,8 +120,8 @@ func prepare(ctx context.Context, db *sql.DB, want string) (string, error) {
 	return got, err
 }
 
-// Close closes the index database.
-func (x *Index) Close() error { return x.db.Close() }
+// Close seals the vocabulary and closes the index database.
+func (x *Index) Close() error { return errors.Join(x.SaveVocab(true), x.db.Close()) }
 
 // Ref identifies the text of blob extracted as kind. Equal content shares one ref.
 func (x *Index) Ref(blob, kind string) string {
@@ -276,7 +288,11 @@ func (x *Index) Put(ctx context.Context, ref string, counts map[string]int, leng
 	if _, err = tx.ExecContext(ctx, `DELETE FROM queue WHERE file=?`, file); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	x.vocabNow().learn(counts)
+	return nil
 }
 
 // Fail records a failed extraction of ref (code is a short reason, never content) and drops
@@ -347,10 +363,21 @@ const (
 	b  = 0.75
 )
 
-// Match scores the documents among refs that hold every term (BM25), with document counts,
-// frequencies and lengths taken from refs only, so what the caller cannot read never shapes
-// the result. pending counts refs not yet settled.
-func (x *Index) Match(ctx context.Context, terms []string, refs map[string]bool) (scores map[string]float64, pending int, err error) {
+// Matched is what Match found: scores by ref, refs not yet settled, the words the prefixes
+// expanded to (for highlighting) and whether a prefix had more than MaxPrefixWords words.
+type Matched struct {
+	Scores   map[string]float64
+	Pending  int
+	Expanded []string
+	Capped   bool
+}
+
+// Match scores the documents among refs that hold every word, a word starting with each prefix
+// (its expansions count as one term) and every phrase term (BM25), with document counts,
+// frequencies and lengths taken from refs only, so what the caller cannot read never shapes the
+// result. Phrase order is not checked here (HasPhrases).
+func (x *Index) Match(ctx context.Context, q Query, refs map[string]bool) (Matched, error) {
+	var out Matched
 	type doc struct {
 		ref    string
 		length float64
@@ -359,7 +386,7 @@ func (x *Index) Match(ctx context.Context, terms []string, refs map[string]bool)
 	settledRefs := map[string]bool{}
 	rows, err := x.db.QueryContext(ctx, `SELECT id,ref,state,attempts,len FROM docs`)
 	if err != nil {
-		return nil, 0, err
+		return out, err
 	}
 	total := 0.0
 	for rows.Next() {
@@ -368,7 +395,7 @@ func (x *Index) Match(ctx context.Context, terms []string, refs map[string]bool)
 		var state, attempts, length int
 		if err = rows.Scan(&id, &ref, &state, &attempts, &length); err != nil {
 			rows.Close()
-			return nil, 0, err
+			return out, err
 		}
 		if !refs[string(ref)] {
 			continue
@@ -383,36 +410,61 @@ func (x *Index) Match(ctx context.Context, terms []string, refs map[string]bool)
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
-		return nil, 0, err
+		return out, err
 	}
-	pending = len(refs) - len(settledRefs)
-	scores = map[string]float64{}
-	if len(cand) == 0 || len(terms) == 0 {
-		return scores, pending, nil
+	out.Pending = len(refs) - len(settledRefs)
+	out.Scores = map[string]float64{}
+	// Each group is one term to BM25: a word, or a prefix's expansions.
+	var groups [][]string
+	seen := map[string]bool{}
+	for _, w := range q.Words {
+		groups = append(groups, []string{w})
+		seen[w] = true
+	}
+	for _, p := range q.Phrases {
+		for _, w := range p {
+			if !seen[w] {
+				groups = append(groups, []string{w})
+				seen[w] = true
+			}
+		}
+	}
+	for _, p := range q.Prefixes {
+		words, capped := x.vocabNow().expand(p)
+		out.Expanded, out.Capped = append(out.Expanded, words...), out.Capped || capped
+		if len(words) == 0 {
+			return out, nil // no word starts with it
+		}
+		groups = append(groups, words)
+	}
+	if len(cand) == 0 || len(groups) == 0 {
+		return out, nil
 	}
 	n := float64(len(cand))
 	avg := max(total/n, 1)
 	score := map[int64]float64{}
-	for i, term := range terms {
+	for i, group := range groups {
 		tfs := map[int64]float64{}
-		rows, err := x.db.QueryContext(ctx, `SELECT doc,tf FROM postings WHERE token=?`, x.token(term))
-		if err != nil {
-			return nil, 0, err
-		}
-		for rows.Next() {
-			var d int64
-			var tf float64
-			if err = rows.Scan(&d, &tf); err != nil {
-				rows.Close()
-				return nil, 0, err
+		for _, term := range group {
+			rows, err := x.db.QueryContext(ctx, `SELECT doc,tf FROM postings WHERE token=?`, x.token(term))
+			if err != nil {
+				return out, err
 			}
-			if _, ok := cand[d]; ok && (i == 0 || score[d] > 0) {
-				tfs[d] = tf
+			for rows.Next() {
+				var d int64
+				var tf float64
+				if err = rows.Scan(&d, &tf); err != nil {
+					rows.Close()
+					return out, err
+				}
+				if _, ok := cand[d]; ok && (i == 0 || score[d] > 0) {
+					tfs[d] += tf
+				}
 			}
-		}
-		rows.Close()
-		if err = rows.Err(); err != nil {
-			return nil, 0, err
+			rows.Close()
+			if err = rows.Err(); err != nil {
+				return out, err
+			}
 		}
 		df := float64(len(tfs))
 		idf := math.Log(1 + (n-df+0.5)/(df+0.5))
@@ -421,11 +473,11 @@ func (x *Index) Match(ctx context.Context, terms []string, refs map[string]bool)
 			next[d] = score[d] + idf*tf*(k1+1)/(tf+k1*(1-b+b*cand[d].length/avg))
 		}
 		if score = next; len(score) == 0 {
-			return scores, pending, nil
+			return out, nil
 		}
 	}
 	for d, s := range score {
-		scores[cand[d].ref] = s
+		out.Scores[cand[d].ref] = s
 	}
-	return scores, pending, nil
+	return out, nil
 }

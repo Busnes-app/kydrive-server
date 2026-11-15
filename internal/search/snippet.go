@@ -1,7 +1,10 @@
 package search
 
 import (
+	"cmp"
 	"io"
+	"slices"
+	"strings"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -31,8 +34,9 @@ type hit struct {
 }
 
 // MakeSnippet reads at most SnippetScan bytes of text from r and returns the window with the most
-// distinct terms, the first such, or nil when none of terms occurs there.
-func MakeSnippet(r io.Reader, terms []string) (*Snippet, error) {
+// distinct terms, the first such, or nil when none of terms occurs there. A phrase's terms count
+// only where the whole phrase occurs, and the whole occurrence is highlighted.
+func MakeSnippet(r io.Reader, terms []string, phrases [][]string) (*Snippet, error) {
 	buf, err := io.ReadAll(io.LimitReader(r, SnippetScan))
 	if err != nil {
 		return nil, err
@@ -47,10 +51,10 @@ func MakeSnippet(r io.Reader, terms []string) (*Snippet, error) {
 			buf = buf[:i]
 		}
 	}
-	return snippetOf(string(buf), terms), nil
+	return snippetOf(string(buf), terms, phrases), nil
 }
 
-func snippetOf(text string, terms []string) *Snippet {
+func snippetOf(text string, terms []string, phrases [][]string) *Snippet {
 	want := map[string]bool{}
 	for _, t := range terms {
 		want[t] = true
@@ -62,9 +66,18 @@ func snippetOf(text string, terms []string) *Snippet {
 		}
 		return true
 	})
+	// A phrase occurrence is one hit from its first term's start to its last term's end.
+	phraseRuns(text, phrases, func(p, first, last int) bool {
+		end := last
+		scan(text[last:], func(_ string, _, e int) bool { end = last + e; return false })
+		want[" "+strings.Join(phrases[p], " ")] = true
+		hits = append(hits, hit{" " + strings.Join(phrases[p], " "), first, end})
+		return true
+	})
 	if len(hits) == 0 {
 		return nil
 	}
+	slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(a.start, b.start) })
 	// The window starting at the hit that sees the most distinct terms within snippetBytes.
 	best, bestN := 0, 0
 	for i := range hits {

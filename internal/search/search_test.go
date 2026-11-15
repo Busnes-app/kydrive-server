@@ -65,7 +65,7 @@ func marked(s *Snippet) string {
 }
 
 func TestSnippetHighlightsInUTF16(t *testing.T) {
-	s, err := MakeSnippet(strings.NewReader("Intro 😀 line.\n\nThe Résumé\tof Zoë: résumé done."), Terms("resume zoe"))
+	s, err := MakeSnippet(strings.NewReader("Intro 😀 line.\n\nThe Résumé\tof Zoë: résumé done."), Terms("resume zoe"), nil)
 	if err != nil || s == nil {
 		t.Fatal(s, err)
 	}
@@ -73,21 +73,21 @@ func TestSnippetHighlightsInUTF16(t *testing.T) {
 		t.Fatalf("%q %+v", got, s)
 	}
 	// CJK bigrams merge into one highlight.
-	s, _ = MakeSnippet(strings.NewReader("報告の中文字です"), Terms("中文字"))
+	s, _ = MakeSnippet(strings.NewReader("報告の中文字です"), Terms("中文字"), nil)
 	if got := marked(s); got != "報告の[中文字]です" {
 		t.Fatalf("%q", got)
 	}
-	if s, _ = MakeSnippet(strings.NewReader("nothing here"), Terms("budget")); s != nil {
+	if s, _ = MakeSnippet(strings.NewReader("nothing here"), Terms("budget"), nil); s != nil {
 		t.Fatalf("%+v", s)
 	}
 	// A long text gets a window around the best match and says it was cut.
 	long := strings.Repeat("filler words ", 200) + "alpha " + strings.Repeat("more ", 10) + "alpha beta " + strings.Repeat("tail ", 200)
-	s, _ = MakeSnippet(strings.NewReader(long), Terms("alpha beta"))
+	s, _ = MakeSnippet(strings.NewReader(long), Terms("alpha beta"), nil)
 	if !s.CutStart || !s.CutEnd || !strings.Contains(marked(s), "[alpha] [beta]") || len(s.Text) > snippetBytes {
 		t.Fatalf("%q %+v", marked(s), s)
 	}
 	// Markup is text.
-	s, _ = MakeSnippet(strings.NewReader("<b onclick=x>budget</b>"), Terms("budget"))
+	s, _ = MakeSnippet(strings.NewReader("<b onclick=x>budget</b>"), Terms("budget"), nil)
 	if s.Text != "<b onclick=x>budget</b>" {
 		t.Fatalf("%q", s.Text)
 	}
@@ -98,7 +98,7 @@ func FuzzSnippet(f *testing.F) {
 		f.Add(s, "budget résumé 中文")
 	}
 	f.Fuzz(func(t *testing.T, text, q string) {
-		s, err := MakeSnippet(strings.NewReader(text), Terms(q))
+		s, err := MakeSnippet(strings.NewReader(text), Terms(q), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,24 +147,28 @@ func TestIndexMatchesWithinTheGivenDocumentsOnly(t *testing.T) {
 	b := put("b", "budget only")
 	c := put("c", "plan budget secret")
 	all := map[string]bool{a: true, b: true, c: true}
-	scores, pending, err := x.Match(ctx, Terms("budget plan"), all)
+	m, err := x.Match(ctx, ParseQuery("budget plan"), all)
+	scores, pending := m.Scores, m.Pending
 	if err != nil || len(scores) != 2 || scores[b] != 0 || pending != 0 {
 		t.Fatalf("%v %d %v", scores, pending, err)
 	}
 	// Only the given refs count, so a document outside them neither matches nor shapes scores.
 	mine := map[string]bool{a: true, b: true}
-	scores, _, _ = x.Match(ctx, Terms("secret"), mine)
+	m, _ = x.Match(ctx, ParseQuery("secret"), mine)
+	scores = m.Scores
 	if len(scores) != 0 {
 		t.Fatalf("%v", scores)
 	}
-	without, _, _ := x.Match(ctx, Terms("budget plan"), mine)
-	scores, _, _ = x.Match(ctx, Terms("budget plan"), map[string]bool{a: true, b: true, x.Ref("other", "text"): true})
+	m, _ = x.Match(ctx, ParseQuery("budget plan"), mine)
+	without := m.Scores
+	m, _ = x.Match(ctx, ParseQuery("budget plan"), map[string]bool{a: true, b: true, x.Ref("other", "text"): true})
+	scores = m.Scores
 	if without[a] != scores[a] {
 		t.Fatalf("an unindexed ref changed the score: %v %v", without, scores)
 	}
 	// Pending counts unsettled refs; a failure settles after MaxAttempts.
 	d := x.Ref("d", "pdf")
-	if _, pending, _ = x.Match(ctx, nil, map[string]bool{a: true, d: true}); pending != 1 {
+	if m, _ = x.Match(ctx, Query{}, map[string]bool{a: true, d: true}); m.Pending != 1 {
 		t.Fatalf("pending %d", pending)
 	}
 	for range MaxAttempts {
@@ -173,7 +177,7 @@ func TestIndexMatchesWithinTheGivenDocumentsOnly(t *testing.T) {
 		}
 	}
 	state, attempts, _, _ := x.Status(ctx, d)
-	if _, pending, _ = x.Match(ctx, nil, map[string]bool{a: true, d: true}); pending != 0 || state != StateFailed || attempts != MaxAttempts || Retry(state, attempts, now.Unix(), now.Add(time.Hour)) {
+	if m, _ = x.Match(ctx, Query{}, map[string]bool{a: true, d: true}); m.Pending != 0 || state != StateFailed || attempts != MaxAttempts || Retry(state, attempts, now.Unix(), now.Add(time.Hour)) {
 		t.Fatalf("pending %d state %d attempts %d", pending, state, attempts)
 	}
 	if !Retry(StateFailed, 1, now.Unix(), now.Add(2*time.Minute)) || Retry(StateFailed, 1, now.Unix(), now) || !Retry(0, 0, 0, now) || Retry(StateDone, 0, 0, now) {

@@ -90,6 +90,20 @@ describe('Search', () => {
     expect([...container.querySelectorAll('mark')].map(m => m.textContent)).toEqual(['Budget', 'budget']);
     expect(nameMatches('a.b (c)', '.b (')).toEqual([[1, 5]]);
     expect(nameMatches('Ärger', 'är')).toEqual([[0, 2]]);
+    // The content syntax is not part of a name match.
+    expect(nameMatches('Conference call.log', 'conf*')).toEqual([[0, 4]]);
+    expect(nameMatches('Site report.docx', '"site report"')).toEqual([[0, 11]]);
+    expect(nameMatches('a*b.txt', 'a*b')).toEqual([[0, 3]]);
+    expect(nameMatches('x.txt', '**')).toEqual([]);
+  });
+
+  it('explains the syntax and says when a phrase or prefix search was cut short', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [], truncated: false, contents: { searched: true, pending: 0, unverified: 7, expanded_truncated: true } }), { status: 200 })));
+    render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: '"site report" co*' } });
+    expect(await screen.findByText(/7 more files have these words but were not checked for the exact phrase/)).toBeTruthy();
+    expect(screen.getByText(/only the most common were searched/)).toBeTruthy();
+    expect(screen.getByText(/Add \* to 3 or more letters/)).toBeTruthy();
   });
 
   it('refuses a malformed snippet', async () => {

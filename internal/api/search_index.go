@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -31,6 +33,7 @@ const (
 	indexReconcile = time.Hour        // full comparison with the drive, and garbage collection
 	snippetCount   = 20               // HTTP hits that get a snippet
 	snippetBudget  = 500 * time.Millisecond
+	phraseChecks   = 200 // best phrase candidates checked against their text, within snippetBudget
 	kindText       = "text"
 )
 
@@ -162,6 +165,9 @@ func (s *Server) RunSearchIndex(ctx context.Context) {
 		if err := s.drainSearch(ctx, false, true); err != nil && ctx.Err() == nil {
 			log.Printf("search index: %v", err)
 		}
+		if err := s.search.SaveVocab(false); err != nil {
+			log.Printf("search vocabulary: %v", err)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -191,11 +197,14 @@ func (s *Server) tailSearch(ctx context.Context, now time.Time) error {
 // reconcileSearch compares the index with every current file: it queues what is unindexed,
 // retryable or missing its text cache, and deletes documents no current file holds (purged
 // files, old versions, sealed legacy blobs). It is what rebuilds the index after a restore.
+// It also brings the prefix vocabulary up to date from the sealed text cache (vocabSearch).
 func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
 	docs, err := s.search.Docs(ctx)
 	if err != nil {
 		return err
 	}
+	since, fresh := s.search.VocabDue(now)
+	words := map[string]string{} // ref -> blob, documents whose words the vocabulary may lack
 	keep := map[string]bool{}
 	var todo []string
 	for after := ""; ; {
@@ -214,6 +223,9 @@ func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
 				if search.Retry(d.State, d.Attempts, d.Updated, now) || (d.State == search.StateDone && !s.textCached(f.Blob)) {
 					todo = append(todo, f.ID)
 				}
+				if d.State == search.StateDone && (fresh || d.Updated >= since) {
+					words[ref] = f.Blob
+				}
 			}
 		}
 		after = files[len(files)-1].ID
@@ -223,7 +235,33 @@ func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
 	} else if n > 0 {
 		log.Printf("search index: removed %d documents", n)
 	}
-	return s.search.Enqueue(ctx, todo, now, 0, -1)
+	if err := s.search.Enqueue(ctx, todo, now, 0, -1); err != nil {
+		return err
+	}
+	return s.vocabSearch(ctx, words, fresh, now)
+}
+
+// vocabSearch adds the words of the documents in blobs, read from the sealed text cache, to
+// the prefix vocabulary, replacing it when fresh: that builds it after an upgrade, after a
+// crash lost its latest words, and daily, so no reindex is ever needed. It runs on the worker,
+// throttled like indexing; search keeps working meanwhile on the vocabulary as it was.
+func (s *Server) vocabSearch(ctx context.Context, blobs map[string]string, fresh bool, now time.Time) error {
+	if len(blobs) == 0 && !fresh {
+		return nil
+	}
+	b := s.search.BuildVocab(fresh, now)
+	for _, blob := range blobs {
+		start := time.Now()
+		if cached, err := drive.ReadThumb(s.textRoot(), s.config.Security.EncryptionKey, blob); err == nil && len(cached) > 0 {
+			b.Add(string(cached[1:]))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Since(start) / 2):
+		}
+	}
+	return b.Done()
 }
 
 // drainSearch indexes queued files until none is due (with force, until the queue is empty).
@@ -281,6 +319,7 @@ func (s *Server) indexFile(ctx context.Context, id string, now time.Time) error 
 		return s.search.Fail(ctx, ref, failCode(err), id, now)
 	}
 	if done {
+		s.search.Learn(text)
 		return s.search.Dequeue(ctx, id) // the text cache is back; the postings were kept
 	}
 	counts, length := search.Count(text)
@@ -299,15 +338,22 @@ func (s *Server) indexIdle(ctx context.Context) error {
 	if err := s.reconcileSearch(ctx, time.Now()); err != nil {
 		return err
 	}
-	return s.drainSearch(ctx, true, false)
+	if err := s.drainSearch(ctx, true, false); err != nil {
+		return err
+	}
+	return s.search.SaveVocab(true)
 }
 
-// contentMatcher matches file contents for drive.SearchContent and remembers the terms and
-// how many of the caller's files are not yet indexed.
+// contentMatcher matches file contents for drive.SearchContent (search.ParseQuery syntax) and
+// remembers what to highlight, how many of the caller's files are not yet indexed, how many
+// phrase candidates went unchecked and whether a prefix was capped.
 type contentMatcher struct {
-	s       *Server
-	terms   []string
-	pending int
+	s          *Server
+	terms      []string // highlighted alone: words and the words prefixes expanded to
+	phrases    [][]string
+	pending    int
+	unverified int
+	capped     bool
 }
 
 // matcher returns a content matcher, or nil when content search is off.
@@ -319,21 +365,28 @@ func (s *Server) matcher() *contentMatcher {
 }
 
 func (m *contentMatcher) Match(ctx context.Context, q string, files []drive.File) (map[string]float64, error) {
-	m.terms = search.Terms(q)
+	query := search.ParseQuery(q)
 	refs := map[string]bool{}
 	byRef := map[string][]string{}
+	blobs := map[string]string{}
 	for _, f := range files {
 		if kind := m.s.indexKind(f.Name); kind != "" {
 			ref := m.s.search.Ref(f.Blob, kind)
 			refs[ref] = true
 			byRef[ref] = append(byRef[ref], f.ID)
+			blobs[ref] = f.Blob
 		}
 	}
-	scores, pending, err := m.s.search.Match(ctx, m.terms, refs)
+	got, err := m.s.search.Match(ctx, query, refs)
 	if err != nil {
 		return nil, err
 	}
-	m.pending = pending
+	m.terms = append(slices.Clone(query.Words), got.Expanded...)
+	m.phrases, m.pending, m.capped = query.Phrases, got.Pending, got.Capped
+	scores := got.Scores
+	if len(query.Phrases) > 0 {
+		scores = m.verify(scores, blobs, byRef)
+	}
 	out := map[string]float64{}
 	for ref, score := range scores {
 		for _, id := range byRef[ref] {
@@ -343,10 +396,40 @@ func (m *contentMatcher) Match(ctx context.Context, q string, files []drive.File
 	return out, nil
 }
 
+// verify keeps the scored refs whose cached text holds every phrase in order, checking the best
+// phraseChecks within snippetBudget; files not checked (or without a text cache) are counted in
+// unverified and dropped, never guessed.
+func (m *contentMatcher) verify(scores map[string]float64, blobs map[string]string, byRef map[string][]string) map[string]float64 {
+	refs := make([]string, 0, len(scores))
+	for ref := range scores {
+		refs = append(refs, ref)
+	}
+	slices.SortFunc(refs, func(a, b string) int { return cmp.Or(cmp.Compare(scores[b], scores[a]), strings.Compare(a, b)) })
+	deadline := time.Now().Add(snippetBudget)
+	out := map[string]float64{}
+	for i, ref := range refs {
+		if i >= phraseChecks || time.Now().After(deadline) {
+			for _, r := range refs[i:] {
+				m.unverified += len(byRef[r])
+			}
+			break
+		}
+		cached, err := drive.ReadThumb(m.s.textRoot(), m.s.config.Security.EncryptionKey, blobs[ref])
+		if err != nil || len(cached) == 0 {
+			m.unverified += len(byRef[ref])
+			continue
+		}
+		if search.HasPhrases(string(cached[1:]), m.phrases) {
+			out[ref] = scores[ref]
+		}
+	}
+	return out
+}
+
 // snippet makes the snippet for a content hit after checking, now, that user can read the
 // file; ok is false when they cannot, and the hit must be dropped. A missing text cache is
 // queued for extraction and gives no snippet.
-func (s *Server) snippet(ctx context.Context, user string, h drive.Hit, terms []string) (*search.Snippet, bool) {
+func (s *Server) snippet(ctx context.Context, user string, h drive.Hit, m *contentMatcher) (*search.Snippet, bool) {
 	f, err := s.store.Drive().File(ctx, user, h.ID, 1)
 	if err != nil || f.Trashed {
 		return nil, false
@@ -365,7 +448,7 @@ func (s *Server) snippet(ctx context.Context, user string, h drive.Hit, terms []
 	if _, err := r.Seek(1, io.SeekStart); err != nil { // the cache's truncation flag
 		return nil, true
 	}
-	sn, err := search.MakeSnippet(r, terms)
+	sn, err := search.MakeSnippet(r, m.terms, m.phrases)
 	if err != nil {
 		return nil, true
 	}
@@ -380,14 +463,14 @@ type searchHit struct {
 
 // withSnippets adds snippets to the first n content hits, dropping any the user can no longer
 // read, within snippetBudget.
-func (s *Server) withSnippets(ctx context.Context, user string, hits []drive.Hit, terms []string, n int) []searchHit {
+func (s *Server) withSnippets(ctx context.Context, user string, hits []drive.Hit, m *contentMatcher, n int) []searchHit {
 	out := make([]searchHit, 0, len(hits))
 	deadline := time.Now().Add(snippetBudget)
 	for _, h := range hits {
 		sh := searchHit{Hit: h}
-		if n > 0 && len(terms) > 0 && contentHit(h) && time.Now().Before(deadline) {
+		if n > 0 && m != nil && contentHit(h) && time.Now().Before(deadline) {
 			n--
-			sn, ok := s.snippet(ctx, user, h, terms)
+			sn, ok := s.snippet(ctx, user, h, m)
 			if !ok {
 				continue
 			}
