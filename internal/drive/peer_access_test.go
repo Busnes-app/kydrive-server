@@ -16,7 +16,7 @@ import (
 // exported Store method is in exactly one list.
 var (
 	peerAllowed = []string{
-		"AppendUpload", "CompleteUpload", "CreateLink", "IssueTicket", "PeerFetch", "PeerFree", "PeerSetting", "Publish", "StartUpload",
+		"AppendUpload", "CompleteUpload", "CreateLink", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Publish", "StartUpload",
 		"Ticket", "TicketUpload", "Upload",
 	}
 	peerRefused = []string{
@@ -27,7 +27,7 @@ var (
 		"OpenLink", "People", "PurgeFile", "PurgeFolder", "PurgeVersion", "Quota", "RenameWorkspace", "RestoreVersion", "RestoreWorkspace",
 		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "Search", "SearchContent", "SearchFolder", "SearchFolderContent",
 		"SetAgentScope", "SetEditorsShare", "SetFolderTrash", "SetFolderTrashSince", "SetPeerSetting", "SetRetention", "SetTrash", "Share",
-		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues", "RecordPicks",
+		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues", "RecordPicks", "SetPeerGuestSetting",
 	}
 	// Credential checks, callbacks, the operator CLI and background workers take no user context.
 	peerUnreachable = []string{
@@ -322,10 +322,11 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 			}
 			return d.SetFolderTrashSince(c, "worker", x.ID, true, 1<<40)
 		},
-		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", true) },
-		"RecordPicks":    func(c context.Context) error { return d.RecordPicks(c, "worker", []string{e.mail.ID}) },
-		"SetRetention":   func(c context.Context) error { return d.SetRetention(c, "admin", e.shared, 30, 0) },
-		"SetTrash":       func(c context.Context) error { return d.SetTrash(c, "worker", fresh(c).ID, 1, true) },
+		"SetPeerSetting":      func(c context.Context) error { return d.SetPeerSetting(c, "worker", true) },
+		"RecordPicks":         func(c context.Context) error { return d.RecordPicks(c, "worker", []string{e.mail.ID}) },
+		"SetPeerGuestSetting": func(c context.Context) error { return d.SetPeerGuestSetting(c, "worker", true) },
+		"SetRetention":        func(c context.Context) error { return d.SetRetention(c, "admin", e.shared, 30, 0) },
+		"SetTrash":            func(c context.Context) error { return d.SetTrash(c, "worker", fresh(c).ID, 1, true) },
 		"Share": func(c context.Context) error {
 			_, err := d.Share(c, "worker", "file", e.mail.ID, "group", "team", "reader")
 			return err
@@ -385,6 +386,14 @@ func TestPeerAllowedMethodsStayInTheFolder(t *testing.T) {
 	_, _, refusals["CreateLink on a shared workspace file"] = d.CreateLink(p, "worker", "file", e.team.ID, "reader", 0)
 	_, _, refusals["CreateLink as another user"] = d.CreateLink(p, "stranger", "file", e.mail.ID, "reader", 0)
 	_, _, refusals["IssueTicket without a peer context"] = d.IssueTicket(e.ctx, "worker", "a.txt", 1, 10)
+	if err := d.SetPeerGuestSetting(e.ctx, "worker", true); err != nil {
+		t.Fatal(err)
+	}
+	week, life := time.Now().Add(7*24*time.Hour).Unix(), 30*24*time.Hour
+	_, _, refusals["PeerGuestLink without a peer context"] = d.PeerGuestLink(e.ctx, "worker", e.mail.ID, week, life)
+	_, _, refusals["PeerGuestLink on a file at the root"] = d.PeerGuestLink(p, "worker", e.root.ID, week, life)
+	_, _, refusals["PeerGuestLink on a shared workspace file"] = d.PeerGuestLink(p, "worker", e.team.ID, week, life)
+	_, _, refusals["PeerGuestLink as another user"] = d.PeerGuestLink(p, "stranger", e.mail.ID, week, life)
 	for what, err := range refusals {
 		if !errors.Is(err, drive.ErrDenied) {
 			t.Errorf("%s: %v", what, err)
@@ -392,6 +401,15 @@ func TestPeerAllowedMethodsStayInTheFolder(t *testing.T) {
 	}
 	if _, _, err := d.CreateLink(p, "worker", "file", e.mail.ID, "reader", 0); err != nil {
 		t.Fatalf("reader link in Mail attachments: %v", err)
+	}
+	if _, _, err := d.PeerGuestLink(p, "worker", e.mail.ID, week, life); err != nil {
+		t.Fatalf("guest link in Mail attachments: %v", err)
+	}
+	if err := d.SetPeerGuestSetting(e.ctx, "worker", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := d.PeerGuestLink(p, "worker", e.mail.ID, week, life); !errors.Is(err, drive.ErrPeerGuestOff) {
+		t.Errorf("guest switch off: %v", err)
 	}
 	if _, err := d.Publish(p, "worker", drive.File{Workspace: e.home, Parent: e.attachments, Name: "direct.txt"}, v(), 0); err != nil {
 		t.Fatalf("new file in Mail attachments: %v", err)

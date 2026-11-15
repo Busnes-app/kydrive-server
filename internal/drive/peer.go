@@ -61,6 +61,47 @@ func (s *Store) SetPeerSetting(ctx context.Context, user string, enabled bool) e
 	})
 }
 
+// ErrPeerGuestOff is a KyPost guest link refused because the user's guest switch is off.
+var ErrPeerGuestOff = errors.New("kypost guest links off")
+
+// PeerGuestSetting is "Let KyPost create guest links for people outside the organisation":
+// off unless the user turned it on.
+func (s *Store) PeerGuestSetting(ctx context.Context, user string) (bool, error) {
+	err := peerGuest(ctx, s.db, user)
+	if errors.Is(err, ErrPeerGuestOff) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func peerGuest(ctx context.Context, q queryer, user string) error {
+	var on int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_peer_guest WHERE user_id=?`, user).Scan(&on); err != nil {
+		return err
+	}
+	if on == 0 {
+		return ErrPeerGuestOff
+	}
+	return nil
+}
+
+// SetPeerGuestSetting stores the user's own choice. Only the user's sign-in reaches it.
+func (s *Store) SetPeerGuestSetting(ctx context.Context, user string, enabled bool) error {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
+		return ErrDenied
+	}
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		q := `DELETE FROM drive_peer_guest WHERE user_id=?`
+		if enabled {
+			q = `INSERT INTO drive_peer_guest(user_id) VALUES(?) ON CONFLICT DO NOTHING`
+		}
+		if _, err := tx.ExecContext(ctx, q, user); err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "kypost.guest_switch_changed", fmt.Sprintf("enabled=%t", enabled))
+	})
+}
+
 // PeerFree is the free quota of the user's My files, or a new one's quota when there is none.
 func (s *Store) PeerFree(ctx context.Context, user string) (int64, error) {
 	var free int64

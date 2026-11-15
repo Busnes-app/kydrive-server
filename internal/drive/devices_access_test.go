@@ -28,7 +28,7 @@ var (
 		"ApproveLink", "AuthorizeSharedManager", "CreateAgentToken", "CreateAppPassword", "CreateGuestLink", "CreateLink",
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
 		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
-		"SetPeerSetting", "Share", "Unshare", "RecordPicks",
+		"SetPeerSetting", "Share", "Unshare", "RecordPicks", "SetPeerGuestSetting",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
@@ -39,7 +39,7 @@ var (
 		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
 		"ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
-		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerSetting", "Ticket", "TicketUpload",
+		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Ticket", "TicketUpload",
 	}
 )
 
@@ -169,9 +169,10 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 			}
 			return d.RestoreWorkspace(c, "admin", x.ID)
 		},
-		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", false) },
-		"SetRetention":   func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
-		"RecordPicks":    func(c context.Context) error { return d.RecordPicks(c, "worker", []string{f.ID}) },
+		"SetPeerSetting":      func(c context.Context) error { return d.SetPeerSetting(c, "worker", false) },
+		"SetRetention":        func(c context.Context) error { return d.SetRetention(c, "admin", w.ID, 30, 0) },
+		"RecordPicks":         func(c context.Context) error { return d.RecordPicks(c, "worker", []string{f.ID}) },
+		"SetPeerGuestSetting": func(c context.Context) error { return d.SetPeerGuestSetting(c, "worker", true) },
 		// Handover needs a leaver; the device refusal comes first, so no success case.
 		"Handover": nil,
 	}

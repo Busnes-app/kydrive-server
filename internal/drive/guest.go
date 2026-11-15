@@ -52,6 +52,19 @@ func (s *Store) CreateGuestLink(ctx context.Context, user, kind, id string, expi
 	if narrowed(ctx) {
 		return GuestLink{}, "", ErrDenied
 	}
+	return s.createGuestLink(ctx, user, kind, id, expires, secret, uploadOnly, maxLife)
+}
+
+// PeerGuestLink (a peer context) is KyPost's guest link: view and download, no password, on a
+// file peerLink admits, while the user's guest switch is on (else ErrPeerGuestOff).
+func (s *Store) PeerGuestLink(ctx context.Context, user, id string, expires int64, maxLife time.Duration) (GuestLink, string, error) {
+	if !isPeer(ctx) {
+		return GuestLink{}, "", ErrDenied
+	}
+	return s.createGuestLink(peerOp(ctx, peerLink), user, "file", id, expires, "", false, maxLife)
+}
+
+func (s *Store) createGuestLink(ctx context.Context, user, kind, id string, expires int64, secret string, uploadOnly bool, maxLife time.Duration) (GuestLink, string, error) {
 	g := GuestLink{ID: uuid.NewString(), Expires: expires, Created: now(), CreatedBy: user, UploadOnly: uploadOnly, HasPassword: secret != ""}
 	if expires <= time.Now().Unix() || expires > time.Now().Add(maxLife).Unix() || (uploadOnly && kind != "folder") || (secret != "" && (len(secret) < 8 || len(secret) > 1024)) {
 		return g, "", ErrInvalid
@@ -80,10 +93,17 @@ func (s *Store) CreateGuestLink(ctx context.Context, user, kind, id string, expi
 		if trashed {
 			return ErrConflict
 		}
+		detail := g.ID
+		if isPeer(ctx) {
+			if err = peerGuest(ctx, tx, user); err != nil {
+				return err
+			}
+			detail += " peer=kypost"
+		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_links(id,workspace,resource_kind,resource_id,role,scope,token_hash,expires,password_hash,upload_only,created_by,created) VALUES(?,?,?,?,'reader','guest',?,?,?,?,?,?)`, g.ID, workspace, kind, id, tokenHash(token), expires, hash, uploadOnly, user, g.Created); err != nil {
 			return err
 		}
-		return event(ctx, tx, user, "guest_link.created", g.ID)
+		return event(ctx, tx, user, "guest_link.created", detail)
 	})
 	return g, token, err
 }

@@ -434,7 +434,7 @@ func TestKyPostSettingsAndAdminStatus(t *testing.T) {
 	get := func() string {
 		return strings.TrimSpace(do(t, w.srv, http.MethodGet, "/api/drive/kypost", carol).Body.String())
 	}
-	if got := get(); got != `{"enabled":false,"paired":true}` {
+	if got := get(); got != `{"enabled":false,"guest_links":false,"guest_policy":false,"paired":true}` {
 		t.Errorf("environment default: %s", got)
 	}
 	req := httptest.NewRequest(http.MethodPut, "/api/drive/kypost", strings.NewReader(`{"enabled":true}`))
@@ -443,7 +443,7 @@ func TestKyPostSettingsAndAdminStatus(t *testing.T) {
 	api.SignCSRFForTest(w.srv, req)
 	rec := httptest.NewRecorder()
 	w.srv.ServeHTTP(rec, req)
-	if rec.Code != 200 || get() != `{"enabled":true,"paired":true}` {
+	if rec.Code != 200 || get() != `{"enabled":true,"guest_links":false,"guest_policy":false,"paired":true}` {
 		t.Errorf("set: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := do(t, w.srv, http.MethodGet, "/api/settings/kypost", carol); rec.Code != 403 {
@@ -456,7 +456,7 @@ func TestKyPostSettingsAndAdminStatus(t *testing.T) {
 		t.Errorf("admin status: %d %s", rec.Code, rec.Body.String())
 	}
 	api.SetKyPostForTest(w.srv, "", nil, "")
-	if got := get(); got != `{"enabled":false,"paired":false}` {
+	if got := get(); got != `{"enabled":false,"guest_links":false,"guest_policy":false,"paired":false}` {
 		t.Errorf("unpaired: %s", got)
 	}
 }
