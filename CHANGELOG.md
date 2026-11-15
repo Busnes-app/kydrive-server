@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **KyPost can fetch a file picked for it (suite contract I2).** New signed route `POST
+  /api/suite/kypost/fetch` (`kypost.drive.fetch`, `{sub,issuer,file_id,max_bytes}`) answers
+  the raw bytes of a file the person chose in the picker's copy mode within the last 24 hours
+  and may still read; anything else is 404 `not_found`, larger than `max_bytes` 413
+  `too_large`. This is narrower than the contract's "any file the user may read" so the pair
+  secret alone never reads a person's drive. See `docs/KYPOST.md`.
 - **KyDrive picker for other suite apps (suite contract I).** `/pick?origin=&mode=link|copy`,
   opened as a popup by a suite app, lets a signed-in everyday person choose up to 20 files they
   may share and, only on the confirming click, sends them to the opener with
