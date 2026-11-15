@@ -15,7 +15,7 @@ import { Menu } from '../../components/Menu';
 import type { MenuEntry } from '../../components/Menu';
 import type { DriveFile, Folder, SharedItem } from './client';
 
-type Place = { id: string; name: string; workspace: string; role: string };
+export type Place = { id: string; name: string; workspace: string; role: string };
 
 async function children(id: string): Promise<{ folders: Folder[]; files: DriveFile[] }> {
   const v = await response(await fetch(`/api/drive/folders/${id}/children`));
@@ -27,10 +27,11 @@ async function children(id: string): Promise<{ folders: Folder[]; files: DriveFi
 // into shared folders. The path starts at the shared item: nothing above it is visible. Inside a
 // folder shared as editor or manager it offers what that role allows there: upload, new folder,
 // new document, rename and move to trash. Resharing stays off for share holders.
-export function SharedView({ openInNewTab }: { openInNewTab: boolean }) {
+// start opens it at a shared folder (a search result) instead of the list.
+export function SharedView({ openInNewTab, start }: { openInNewTab: boolean; start?: Place | null }) {
   const target = openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {};
   const [items, setItems] = useState<SharedItem[]>([]);
-  const [path, setPath] = useState<Place[]>([]);
+  const [path, setPath] = useState<Place[]>(start ? [start] : []);
   // contents names the folder it was loaded for: rows of another folder are never shown or acted on.
   const [contents, setContents] = useState<{ of: string; folders: Folder[]; files: DriveFile[] }>({ of: '', folders: [], files: [] });
   const [error, setError] = useState('');

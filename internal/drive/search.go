@@ -19,7 +19,17 @@ type Hit struct {
 	Name      string   `json:"name"`
 	Path      string   `json:"path"`
 	Match     []string `json:"match"`
-	score     float64
+	// Shared is set on an item reached only through Shared with me; Path then starts at the
+	// shared item, never above it.
+	Shared *SharedFrom `json:"shared,omitempty"`
+	score  float64
+}
+
+// SharedFrom names where a shared hit comes from, as Shared with me shows it: the workspace's
+// name, or a personal workspace owner's display name, and the user's highest role there.
+type SharedFrom struct {
+	From string `json:"from"`
+	Role string `json:"role"`
 }
 
 // ContentMatcher scores the files among files whose content matches q, keyed by file ID. files
@@ -33,13 +43,15 @@ type ContentMatcher interface {
 // Names are sealed, so they are decrypted and matched here; SQL never sees them. It returns at
 // most limit hits and whether more matched.
 func (s *Store) Search(ctx context.Context, user, q string, limit int) ([]Hit, bool, error) {
-	return s.SearchContent(ctx, user, q, "", limit, nil)
+	return s.SearchContent(ctx, user, q, "", limit, nil, false)
 }
 
 // SearchContent is Search that also asks m (nil: names only) which readable files' contents
 // match. Name matches come first in Search's order, then content-only matches by score. A
 // type (ValidType) keeps only hits of that type and allows an empty q, which matches every name.
-func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit int, m ContentMatcher) ([]Hit, bool, error) {
+// shared also searches the items in the user's Shared with me list outside those workspaces
+// (searchShared); every such hit returned is re-checked for read access first.
+func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit int, m ContentMatcher, shared bool) ([]Hit, bool, error) {
 	q, err := searchQuery(q, typ)
 	if err != nil {
 		return nil, false, err
@@ -50,8 +62,18 @@ func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit in
 	}
 	hits := []Hit{}
 	var files []candidate
+	member := map[string]bool{}
 	for _, w := range spaces {
+		member[w.ID] = true
 		found, readable, err := s.searchSpace(ctx, user, w.ID, "", q, typ)
+		if err != nil {
+			return nil, false, err
+		}
+		hits = append(hits, found...)
+		files = append(files, readable...)
+	}
+	if shared {
+		found, readable, err := s.searchShared(ctx, user, q, typ, member)
 		if err != nil {
 			return nil, false, err
 		}
@@ -61,7 +83,127 @@ func (s *Store) SearchContent(ctx context.Context, user, q, typ string, limit in
 	if hits, err = matchContent(ctx, q, m, hits, files); err != nil {
 		return nil, false, err
 	}
-	return sortHits(hits, limit)
+	hits, more, err := sortHits(hits, limit)
+	if err != nil || !shared {
+		return hits, more, err
+	}
+	// The share may have ended while matching: answer only what is still readable.
+	kept := hits[:0]
+	for _, h := range hits {
+		if h.Shared != nil {
+			if ok, err := s.stillShared(ctx, user, h); err != nil {
+				return nil, false, err
+			} else if !ok {
+				continue
+			}
+		}
+		kept = append(kept, h)
+	}
+	return kept, more, nil
+}
+
+// searchShared is searchSpace over the live items in user's Shared with me list whose
+// workspace is not in member (those were searched whole): a shared file, or a shared folder
+// with its live subtree. Paths start at the shared item. Only a signed-in user's own context
+// gets them: service, device and KyPost contexts search no shares.
+func (s *Store) searchShared(ctx context.Context, user, q, typ string, member map[string]bool) ([]Hit, []candidate, error) {
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
+		return nil, nil, nil
+	}
+	items, err := s.SharedWithMe(ctx, user)
+	if err != nil {
+		return nil, nil, err
+	}
+	var hits []Hit
+	var readable []candidate
+	seen := map[string]bool{} // a share nested in another shared folder is searched once
+	add := func(h Hit, f *File) {
+		if seen[h.ID] {
+			return
+		}
+		seen[h.ID] = true
+		if f != nil {
+			readable = append(readable, candidate{*f, h})
+		}
+		if strings.Contains(strings.ToLower(h.Name), q) {
+			h.Match = []string{"name"}
+			hits = append(hits, h)
+		}
+	}
+	for _, i := range items {
+		if member[i.Workspace] {
+			continue
+		}
+		from := &SharedFrom{From: i.WorkspaceName, Role: i.Role}
+		top := Hit{Kind: i.Kind, ID: i.ID, Workspace: i.Workspace, Parent: i.Parent, Name: i.Name, Shared: from}
+		if i.Kind == "file" {
+			files, err := s.queryFiles(ctx, s.db, `f.id=? AND f.trashed=false`, i.ID)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, f := range files {
+				if typ == "" || FileType(f.Name) == typ {
+					add(top, &f)
+				}
+			}
+			continue
+		}
+		if typ == "" || typ == "folders" {
+			add(top, nil)
+		}
+		tree := `(WITH RECURSIVE tree(id) AS (SELECT ? UNION SELECT d.id FROM drive_folders d JOIN tree t ON d.parent=t.id WHERE d.trashed=false) SELECT id FROM tree)`
+		folders, err := s.queryFolders(ctx, s.db, `workspace=? AND trashed=false AND id IN `+tree, i.Workspace, i.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		files, err := s.queryFiles(ctx, s.db, `f.workspace=? AND f.trashed=false AND f.parent IN `+tree, i.Workspace, i.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+		found, cands := matchNames(folders, files, i.Workspace, i.ID, q, typ)
+		for _, c := range cands {
+			c.hit.Path, c.hit.Shared = below(i.Name, c.hit.Path), from
+			add(c.hit, &c.file)
+		}
+		for _, h := range found {
+			if h.Kind == "folder" {
+				h.Path, h.Shared = below(i.Name, h.Path), from
+				add(h, nil)
+			}
+		}
+	}
+	return hits, readable, nil
+}
+
+// below is path p beneath the shared folder named top.
+func below(top, p string) string {
+	if p == "" {
+		return top
+	}
+	return top + "/" + p
+}
+
+// stillShared re-checks a shared hit: live, and readable by user now.
+func (s *Store) stillShared(ctx context.Context, user string, h Hit) (bool, error) {
+	var err error
+	if h.Kind == "file" {
+		var f File
+		if f, err = s.File(ctx, user, h.ID, 1); err == nil && f.Trashed {
+			return false, nil
+		}
+	} else {
+		var live int
+		if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND workspace=? AND trashed=false`, h.ID, h.Workspace).Scan(&live); err == nil && live == 0 {
+			return false, nil
+		}
+		if err == nil {
+			err = authorizeItem(ctx, s.db, user, h.Workspace, h.ID, "", 1)
+		}
+	}
+	if errors.Is(err, ErrDenied) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // candidate is a readable live file in the searched scope and the hit it would be.
@@ -159,6 +301,13 @@ func (s *Store) searchSpace(ctx context.Context, user, workspace, root, q, typ s
 	if err != nil {
 		return nil, nil, err
 	}
+	hits, readable := matchNames(folders, files, workspace, root, q, typ)
+	return hits, readable, nil
+}
+
+// matchNames matches q against the names of type typ among folders and files of workspace
+// beneath root ("" = everywhere) and returns every file of that type there as a candidate.
+func matchNames(folders []Folder, files []File, workspace, root, q, typ string) ([]Hit, []candidate) {
 	var walk func(string) (string, bool)
 	byID := make(map[string]Folder, len(folders))
 	for _, f := range folders {
@@ -219,7 +368,7 @@ func (s *Store) searchSpace(ctx context.Context, user, workspace, root, q, typ s
 			hits = append(hits, h)
 		}
 	}
-	return hits, readable, nil
+	return hits, readable
 }
 
 func sortHits(hits []Hit, limit int) ([]Hit, bool, error) {

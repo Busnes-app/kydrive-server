@@ -41,6 +41,24 @@ describe('Search', () => {
     expect(screen.getByText('Team / Reports')).toBeTruthy();
   });
 
+  it('names where a shared result comes from instead of a workspace', async () => {
+    const shared = { kind: 'file', id: 'f2', workspace: 'w9', parent: 'd9', name: 'Plan.docx', path: 'Projects/Q1', shared: { from: 'Ann Lee', role: 'reader' } };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [shared], truncated: false }), { status: 200 })));
+    const open = vi.fn();
+    render(<Search workspaces={workspaces} onOpen={open} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'plan' } });
+    expect(await screen.findByText('Ann Lee / Projects/Q1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Plan\.docx/ }));
+    expect(open).toHaveBeenCalledWith(shared);
+  });
+
+  it('refuses a malformed shared field', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ ...results[0], shared: { from: 1 } }], truncated: false }), { status: 200 })));
+    render(<Search workspaces={workspaces} onOpen={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'budget' } });
+    expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+
   it('says when nothing matched', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [], truncated: false }), { status: 200 })));
     render(<Search workspaces={workspaces} onOpen={() => {}} />);

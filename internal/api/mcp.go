@@ -519,7 +519,7 @@ func (t *mcpTools) searchFiles(ctx context.Context, _ *mcp.CallToolRequest, in s
 			prefix[t.paths.token.Workspace] = "/"
 		}
 	} else {
-		hits, more, err = d.SearchContent(ctx, t.user(), in.Query, in.Type, mcpSearchLimit, m)
+		hits, more, err = d.SearchContent(ctx, t.user(), in.Query, in.Type, mcpSearchLimit, m, false) // own workspaces only: MCP shows no Shared with me
 		if err == nil {
 			var names map[string]string
 			if names, err = t.paths.spaces(ctx); err == nil {
