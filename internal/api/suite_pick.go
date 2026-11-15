@@ -3,8 +3,11 @@ package api
 import (
 	"errors"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
+	"regexp"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -18,6 +21,18 @@ import (
 // (allowInstallerActor) and POST needs the CSRF token.
 
 const pickMaxFiles = 20
+
+var pickMime = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9.+-]+$`)
+
+// pickType is the media type KyDrive serves f.Name as (WebDAV, MCP), without parameters, or ""
+// when unknown or not plain enough for a receiver to put on a header or iCalendar line.
+func pickType(name string) string {
+	t, _, err := mime.ParseMediaType(mime.TypeByExtension(path.Ext(name)))
+	if err != nil || len(t) > 127 || !pickMime.MatchString(t) {
+		return ""
+	}
+	return t
+}
 
 func (s *Server) pickRoutes() {
 	s.mux.HandleFunc("GET /api/drive/pick", s.requireAuthenticated(s.drivePickCheck))
@@ -123,7 +138,11 @@ func (s *Server) drivePick(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		seen[id] = true
-		out = append(out, map[string]any{"name": f.Name, "size": f.Size, "file_id": id})
+		item := map[string]any{"name": f.Name, "size": f.Size, "file_id": id}
+		if t := pickType(f.Name); t != "" {
+			item["mime"] = t
+		}
+		out = append(out, item)
 	}
 	var made []string
 	var err error

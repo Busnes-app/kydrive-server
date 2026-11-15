@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -49,13 +50,18 @@ func pick(t *testing.T, w *pickWorld, c *http.Cookie, body map[string]any) *http
 
 func homeFile(t *testing.T, w *pickWorld, user string) string {
 	t.Helper()
+	return homeFileNamed(t, w, user, fmt.Sprintf("f%d.txt", w.seq+1))
+}
+
+func homeFileNamed(t *testing.T, w *pickWorld, user, name string) string {
+	t.Helper()
 	home, err := w.st.Drive().EnsurePersonalWorkspace(context.Background(), user)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w.seq++
 	ctx, d := context.Background(), w.st.Drive()
-	u, err := d.StartUpload(ctx, user, drive.UploadSession{Workspace: home, Name: fmt.Sprintf("f%d.txt", w.seq), Size: 1}, 10)
+	u, err := d.StartUpload(ctx, user, drive.UploadSession{Workspace: home, Name: name, Size: 1}, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +183,49 @@ func TestPickLinks(t *testing.T) {
 	}
 	if strings.Contains(w.logs.String(), "/l/#") {
 		t.Error("a link token reached the log")
+	}
+}
+
+// mime is the type KyDrive serves the name as, bare, and only when it is plain enough for an
+// iCalendar FMTTYPE or a header; anything else is omitted, never sent.
+func TestPickType(t *testing.T) {
+	mime.AddExtensionType(".kyupper", "Application/X-Ky")
+	mime.AddExtensionType(".kyunder", "application/x_ky")
+	mime.AddExtensionType(".kylong", "application/"+strings.Repeat("x", 120))
+	for name, want := range map[string]string{
+		"report.pdf":    "application/pdf",
+		"PHOTO.PNG":     "image/png",
+		"page.html":     "text/html", // the charset parameter is dropped
+		"a.kyupper":     "application/x-ky",
+		"a.kyunder":     "",
+		"a.kylong":      "",
+		"noext":         "",
+		"a.unknownext":  "",
+		"a.pdf\r\nX: y": "",
+		`a.pdf";x`:      "",
+	} {
+		if got := api.PickTypeForTest(name); got != want {
+			t.Errorf("pickType(%q) = %q, want %q", name, got, want)
+		}
+	}
+
+	w := newPickWorld(t)
+	dana := loginWithProvider(t, w.srv, w.st, "dana", "kysignon", "sub-dana")
+	pdf, bare := homeFileNamed(t, w, "usr_dana", "report.pdf"), homeFileNamed(t, w, "usr_dana", "notes")
+	for _, body := range []map[string]any{
+		{"origin": "https://cal.example", "files": []string{pdf, bare}},
+		{"origin": kypostOrigin, "mode": "copy", "files": []string{pdf, bare}},
+	} {
+		var out struct {
+			Files []map[string]any `json:"files"`
+		}
+		rec := pick(t, w, dana, body)
+		if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &out) != nil || len(out.Files) != 2 {
+			t.Fatalf("pick: %d %s", rec.Code, rec.Body.String())
+		}
+		if _, has := out.Files[1]["mime"]; out.Files[0]["mime"] != "application/pdf" || has {
+			t.Errorf("%v: %v", body["mode"], out.Files)
+		}
 	}
 }
 
