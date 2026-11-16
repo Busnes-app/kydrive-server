@@ -56,7 +56,9 @@ type Server struct {
 	ticketsMu  sync.Mutex
 	tickets    map[string]convertTicket // Document Server fetches for thumbnails
 	attempts   map[string]attemptWindow
-	powSpent   auth.PoWSpent
+	// deviceNonces holds each signing device's replay guard (devicesig.go), by device ID.
+	deviceNonces sync.Map
+	powSpent     auth.PoWSpent
 	// exempt is the office-network allowlist: environment plus admin setting.
 	exempt atomic.Pointer[netallow.List]
 	// appPasswordUser replaces the WebDAV app-password lookup when set. Tests only.

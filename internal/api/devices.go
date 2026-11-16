@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -81,11 +83,17 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var token, id string
-	var err error
+	// publicKey is the device's P-256 signing key (SPKI DER, std base64). With it, every request
+	// the token makes must be signed (devicesig.go).
+	key, err := base64.StdEncoding.DecodeString(r.PostFormValue("publicKey"))
+	if err != nil {
+		s.writeError(w, 400, "Invalid device key")
+		return
+	}
 	if r.PostFormValue("grant") == "qr" {
-		token, id, err = s.store.Drive().RedeemPhone(r.Context(), r.PostFormValue("code"), r.PostFormValue("name"), r.PostFormValue("platform"))
+		token, id, err = s.store.Drive().RedeemPhone(r.Context(), r.PostFormValue("code"), r.PostFormValue("name"), r.PostFormValue("platform"), key)
 	} else {
-		token, id, err = s.store.Drive().RedeemLink(r.Context(), r.PostFormValue("code"), r.PostFormValue("verifier"))
+		token, id, err = s.store.Drive().RedeemLink(r.Context(), r.PostFormValue("code"), r.PostFormValue("verifier"), key)
 	}
 	if errors.Is(err, drive.ErrDenied) {
 		s.writeError(w, 400, "Invalid or expired code")
@@ -228,9 +236,18 @@ func (s *Server) driveSetDevicePolicy(w http.ResponseWriter, r *http.Request) {
 // deviceUser authenticates a device token. A revoked one is told whether to wipe; every
 // other failure is a plain 401. Dedicated installer administrators never hold one.
 func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string) (*store.User, bool) {
-	id, err := s.store.Drive().DeviceUser(r.Context(), token)
+	id, err := s.store.Drive().DeviceUser(r.Context(), token, func(device string, key *ecdsa.PublicKey) error {
+		return s.verifyDeviceRequest(r, device, key)
+	})
 	var revoked drive.ErrDeviceRevoked
+	var tooLarge *http.MaxBytesError
 	switch {
+	case errors.Is(err, errDeviceSignature), errors.Is(err, errDeviceBody):
+		s.writeError(w, 401, "Invalid device credential")
+		return nil, false
+	case errors.As(err, &tooLarge):
+		s.writeError(w, http.StatusRequestEntityTooLarge, "Request body too large")
+		return nil, false
 	case errors.As(err, &revoked):
 		s.writeJSON(w, 401, map[string]any{"error": "device_revoked", "wipe": revoked.Wipe})
 		return nil, false

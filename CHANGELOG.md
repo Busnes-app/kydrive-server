@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Signed device requests.** `POST /api/devices/token` takes an optional `publicKey` (P-256
+  SPKI DER, std base64). A device that enrolled one must sign every request with
+  `KyDrive-Date`, `KyDrive-Nonce`, `KyDrive-Content-SHA256` and `KyDrive-Signature`
+  (`kydrive-request-v1`, `internal/api/devicesig.go`, golden vector
+  `internal/api/testdata/device-signing-v1.json`); its `kyd_` token alone then gets 401, and a
+  replayed or altered request is refused. Devices linked without a key keep working until the
+  clients sign. Schema 26 adds `drive_devices.pubkey`.
 - **Open mail attachments read-only (KyPost).** KyPost can send one received Office or PDF
   attachment as a viewing copy: `kypost.drive.view` (`POST /api/suite/kypost/view-tickets`)
   reserves it and a one-time `PUT /api/suite/view/<ticket>` stores it; the person opens it at

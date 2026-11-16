@@ -125,6 +125,9 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// Suite groups (suitegroups.go): one shared workspace and one local group per KyIdentity
 	// suite group, keyed on its ID. Rows are never deleted.
 	`CREATE TABLE drive_suite_groups(kyid TEXT PRIMARY KEY,workspace TEXT NOT NULL UNIQUE REFERENCES drive_workspaces(id),grp TEXT NOT NULL UNIQUE REFERENCES groups(id));`,
+	// Device signing keys (devices.go): the P-256 SPKI DER, std base64, a device enrolled when it
+	// linked. Empty for a device linked before signing.
+	`ALTER TABLE drive_devices ADD COLUMN pubkey TEXT NOT NULL DEFAULT '';`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
