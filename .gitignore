@@ -41,3 +41,6 @@ web/*.tsbuildinfo
 /web/dist/*
 !/web/dist/.gitkeep
 /web/dist-fonts/
+
+# Generated mdBook manual
+/docs/book/

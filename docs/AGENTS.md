@@ -22,3 +22,11 @@ Own restore instructions, local acceptance evidence and captured product UI asse
 ## Child DOX Index
 
 - `ui-drive-eight/` — staged synthetic Council captures, independent raw reviews, score provenance and visual progression records; see `ui-drive-eight/AGENTS.md`.
+
+## mdBook manual
+
+- `book.toml` and `src/` own the user manual; `src/SUMMARY.md` lists every chapter.
+- Describe implemented behavior and preserve release/readiness limits. Root README and referenced runbooks remain authoritative for exact commands and policy.
+- Keep setup, user tasks, troubleshooting, security references and contribution guidance current when product behavior changes.
+- `book/` is generated and ignored. `.github/workflows/docs.yml` builds/checks the book and uploads an artifact; public-site publication is separate.
+- Verify with `mdbook build docs` and `python3 docs/check-links.py` from the repository root. The checker validates generated local links/anchors, not external URLs.

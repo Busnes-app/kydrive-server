@@ -72,3 +72,12 @@ Euro-Office can also run on Docker with the optional [production editor Compose 
 - [Assurance case](docs/ASSURANCE-CASE.md) — Threat model, trust boundaries, and why the security requirements are met.
 - [Key strength and TLS profile](docs/STRONG-CRYPTO.md) — Key-size rules, the optional `GODEBUG=fips140=on` overlay, the HTTPS edge and what stays out of scope.
 - [Contributing](CONTRIBUTING.md) — How to report bugs, propose changes, the test policy and the coding standard.
+
+## User manual
+
+Read the [online manual](https://busnes.app/manuals/kydrive-server/) or browse its
+[Markdown sources](docs/src/introduction.md).
+
+Build and check it with `mdbook build docs` and `python3 docs/check-links.py`,
+then open `docs/book/index.html`. The documentation workflow also provides a
+downloadable `documentation-book` artifact.
