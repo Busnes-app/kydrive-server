@@ -206,10 +206,28 @@ approve() { # approve <redirect>: the JSON answer
   curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -X POST \
     -d '{"redirect":"'"$1"'","challenge":"'"$CHALLENGE"'","state":"smoke","name":"Smoke laptop","platform":"linux"}' "$BASE/api/devices/approve"
 }
-redeem() { # redeem <code>: body, then the status code
-  curl -s -w ' %{http_code}' --data-urlencode "code=$1" --data-urlencode "verifier=$VERIFIER" "$BASE/api/devices/token"
+# The computer's signing key, enrolled when it links (internal/api/devicesig.go). Requests sign
+# KY_APP_URL's origin; unset, the server's default is http://localhost:<port>.
+ORIGIN="http://localhost:${PORT}"
+openssl ecparam -name prime256v1 -genkey -noout -out "$WORK/device.pem"
+DEVICE_KEY="$(openssl pkey -in "$WORK/device.pem" -pubout -outform DER | openssl base64 -A)"
+redeem() { # redeem <code> [publicKey]: body, then the status code
+  curl -s -w ' %{http_code}' --data-urlencode "code=$1" --data-urlencode "verifier=$VERIFIER" \
+    ${2:+--data-urlencode "publicKey=$2"} "$BASE/api/devices/token"
 }
 bearer() { curl -s -w ' %{http_code}' -H "Authorization: Bearer $TOKEN" "$@"; }
+sha256hex() { openssl dgst -sha256 -r | cut -d' ' -f1; }
+signed() { # signed <method> <path> [depth]: a bodiless request signed with the device key
+  local date nonce headers body sig
+  date="$(($(date +%s%N) / 1000000))"
+  nonce="$(head -c 16 /dev/urandom | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+  headers="$(printf '%s' "${3:+depth:$3
+}" | sha256hex)"
+  body="$(printf '' | sha256hex)"
+  sig="$(printf '%s' "kydrive-request-v1|$ORIGIN|$1|$2|$date|$nonce|$headers|$body" | openssl dgst -sha256 -sign "$WORK/device.pem" | openssl base64 -A)"
+  curl -s -w ' %{http_code}' -X "$1" -H "Authorization: Bearer $TOKEN" -H "KyDrive-Date: $date" -H "KyDrive-Nonce: $nonce" \
+    -H "KyDrive-Content-SHA256: $body" -H "KyDrive-Signature: $sig" ${3:+-H "Depth: $3"} "$BASE$2"
+}
 check "device approval requires CSRF" \
   "$(status -b "$WORK/cookies" -H 'Content-Type: application/json' -d '{}' -X POST "$BASE/api/devices/approve")" "403"
 check "device approval is not a GET" "$(status -b "$WORK/cookies" "$BASE/api/devices/approve")" "404"
@@ -217,12 +235,14 @@ contains "localhost redirect refused" "$(approve "http://localhost:53682/cb")" '
 APPROVED="$(approve "http://127.0.0.1:53682/cb")"
 contains "approval redirects to the loopback address" "$APPROVED" '"redirect":"http://127.0.0.1:53682/cb?code='
 CODE="$(printf %s "$APPROVED" | sed -n 's/.*code=\([A-Za-z0-9_-]*\).*/\1/p')"
-TOKEN_OUT="$(redeem "$CODE")"
-contains "code and verifier redeem a device token" "$TOKEN_OUT" '"token":"kyd_'
+contains "a link without a signing key is refused" "$(redeem "$CODE")" ' 400'
+TOKEN_OUT="$(redeem "$CODE" "$DEVICE_KEY")"
+contains "code, verifier and key redeem a device token" "$TOKEN_OUT" '"token":"kyd_'
 TOKEN="$(printf %s "$TOKEN_OUT" | sed -n 's/.*"token":"\(kyd_[A-Za-z0-9_-]*\)".*/\1/p')"
-contains "reused code refused" "$(redeem "$CODE")" ' 400'
-contains "device token reads /api/drive/workspaces" "$(bearer "$BASE/api/drive/workspaces")" ' 200'
-contains "device token lists /dav/" "$(bearer -X PROPFIND -H 'Depth: 1' "$BASE/dav/")" ' 207'
+contains "reused code refused" "$(redeem "$CODE" "$DEVICE_KEY")" ' 400'
+contains "signed device request reads /api/drive/workspaces" "$(signed GET /api/drive/workspaces)" ' 200'
+contains "signed device request lists /dav/" "$(signed PROPFIND /dav/ 1)" ' 207'
+contains "device token alone is refused" "$(bearer "$BASE/api/drive/workspaces")" ' 401'
 check "device token is no admin credential" "$(status -H "Authorization: Bearer $TOKEN" "$BASE/api/drive/status")" "401"
 check "admin locks the wipe policy" \
   "$(status -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -X PUT \
@@ -230,8 +250,8 @@ check "admin locks the wipe policy" \
 DEVICE_ID="$(curl -s -b "$WORK/cookies" "$BASE/api/devices" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
 contains "a locked policy overrides wipe=false" \
   "$(curl -s -b "$WORK/cookies" -H "X-CSRF-Token: $CSRF" -X DELETE "$BASE/api/devices/$DEVICE_ID?wipe=false")" '"wipe":true'
-contains "revoked token is told to wipe on the API" "$(bearer "$BASE/api/drive/workspaces")" '{"error":"device_revoked","wipe":true}'
-contains "revoked token is told to wipe on /dav/" "$(bearer -X PROPFIND -H 'Depth: 0' "$BASE/dav/")" '{"error":"device_revoked","wipe":true}'
+contains "revoked token is told to wipe on the API" "$(signed GET /api/drive/workspaces)" '{"error":"device_revoked","wipe":true}'
+contains "revoked token is told to wipe on /dav/" "$(signed PROPFIND /dav/ 0)" '{"error":"device_revoked","wipe":true}'
 
 echo "==> AI agents (MCP)"
 mcp() { # mcp <json-rpc body> [curl args]: body, then the status code

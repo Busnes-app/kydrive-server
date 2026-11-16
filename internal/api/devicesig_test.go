@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,6 +69,33 @@ func (d *signer) request(method, target string, body []byte, headers ...string) 
 	}
 	d.sign(r, body)
 	return r
+}
+
+// deviceSigners holds every device the tests link, by token, so send and davRequest sign for it.
+var deviceSigners sync.Map
+
+// redeemDevice redeems a link code with a fresh key, as every client does, and registers it.
+func redeemDevice(srv *api.Server, form url.Values) *httptest.ResponseRecorder {
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	der, _ := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	form.Set("publicKey", base64.StdEncoding.EncodeToString(der))
+	r := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := serve(srv, r)
+	var got struct{ Token string }
+	if w.Code == 200 && json.Unmarshal(w.Body.Bytes(), &got) == nil {
+		deviceSigners.Store(got.Token, &signer{key: key, token: got.Token, origin: api.DeviceOriginForTest(srv), now: time.Now})
+	}
+	return w
+}
+
+// signIfDevice signs r when its bearer token is a device the tests linked.
+func signIfDevice(r *http.Request, body []byte) {
+	if token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		if d, ok := deviceSigners.Load(token); ok {
+			d.(*signer).sign(r, body)
+		}
+	}
 }
 
 func serve(srv *api.Server, r *http.Request) *httptest.ResponseRecorder {
@@ -223,5 +251,44 @@ func TestDeviceKeyMustBeP256(t *testing.T) {
 		if got := serve(srv, r); got.Code != 400 {
 			t.Fatalf("key %q: %d %s", key[:8], got.Code, got.Body.String())
 		}
+	}
+}
+
+func TestKeylessDevicesMustLinkAgain(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	user := loginAs(t, srv, st, "oldphone", "user")
+	out := send(t, srv, "POST", "/api/devices/phone-code", `{}`, user, "")
+	var qr struct{ Link string }
+	if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &qr) != nil {
+		t.Fatalf("phone code %d %s", out.Code, out.Body.String())
+	}
+	u, _ := url.Parse(qr.Link)
+	// An old app redeems without a key: refused, and the code is not spent.
+	form := url.Values{"grant": {"qr"}, "code": {u.Query().Get("code")}, "name": {"Pixel 9"}, "platform": {"android"}}
+	r := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(form.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if got := serve(srv, r); got.Code != 400 {
+		t.Fatalf("keyless link: %d %s", got.Code, got.Body.String())
+	}
+	linked := redeemDevice(srv, form)
+	var got struct{ Token string }
+	if linked.Code != 200 || json.Unmarshal(linked.Body.Bytes(), &got) != nil {
+		t.Fatalf("code spent by a keyless attempt: %d %s", linked.Code, linked.Body.String())
+	}
+	token := got.Token
+	// A device linked before signing has no key: it is told to link again.
+	rawDB(t, cfg, `UPDATE drive_devices SET pubkey=''`)
+	r = httptest.NewRequest("GET", "/api/drive/workspaces", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	if out := serve(srv, r); out.Code != 401 || strings.TrimSpace(out.Body.String()) != `{"error":"device_key_required"}` {
+		t.Fatalf("keyless device: %d %s", out.Code, out.Body.String())
+	}
+	// Revoked, it still learns to wipe.
+	rawDB(t, cfg, `UPDATE drive_devices SET revoked_at=?, wipe=1`, time.Now().Unix())
+	if out := serve(srv, r); out.Code != 401 || strings.TrimSpace(out.Body.String()) != `{"error":"device_revoked","wipe":true}` {
+		t.Fatalf("revoked keyless device: %d %s", out.Code, out.Body.String())
 	}
 }

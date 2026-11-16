@@ -142,10 +142,8 @@ func ParseDeviceKey(der []byte) (*ecdsa.PublicKey, error) {
 // its name and platform; a phone's are empty and come from the redeeming request.
 // key is the device's SPKI DER signing key, or empty for an unsigned device.
 func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform string, key []byte, proven func(challenge string) bool) (token, user string, err error) {
-	if len(key) > 0 {
-		if _, err := ParseDeviceKey(key); err != nil {
-			return "", "", err
-		}
+	if _, err := ParseDeviceKey(key); err != nil {
+		return "", "", err
 	}
 	denied := false
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
@@ -233,8 +231,12 @@ func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id str
 			return "", err
 		}
 	}
-	if err := verify(id, key); err != nil {
-		return "", err
+	// A keyed device proves its key before anything is revealed. A device linked before signing
+	// has only its token: it is still told it was revoked, so it wipes, and refused after that.
+	if key != nil {
+		if err := verify(id, key); err != nil {
+			return "", err
+		}
 	}
 	t := time.Now()
 	if revokedAt != 0 {
@@ -245,6 +247,11 @@ func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id str
 	}
 	if status != "active" || t.Sub(time.Unix(lastUsed, 0)) >= deviceIdle {
 		return "", ErrDenied
+	}
+	if key == nil {
+		if err := verify(id, nil); err != nil {
+			return "", err
+		}
 	}
 	if t.Sub(time.Unix(lastUsed, 0)) >= deviceTouch {
 		if _, err = s.db.ExecContext(ctx, `UPDATE drive_devices SET last_used=? WHERE id=?`, t.Unix(), id); err != nil {
