@@ -92,7 +92,7 @@ func (s *Store) IssueViewTicket(ctx context.Context, user, name string, size, ma
 			return err
 		}
 		var live int
-		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_view_copies WHERE user_id=? AND expires>? AND (blob!='' OR ticket_expires>?)`, user, at.Unix(), at.Unix()).Scan(&live); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_view_copies WHERE user_id=? AND revoked=0 AND expires>? AND (blob!='' OR ticket_expires>?)`, user, at.Unix(), at.Unix()).Scan(&live); err != nil {
 			return err
 		}
 		if live >= viewCopiesPerUser {
@@ -246,15 +246,35 @@ func (s *Store) MarkViewDropped(ctx context.Context, id string, ok bool) error {
 	return err
 }
 
-// CloseViewCopy deletes user's own copy id and returns its blob for removal ("" when none).
-func (s *Store) CloseViewCopy(ctx context.Context, user, id string) (string, error) {
+// CloseViewCopy ends user's own copy id and returns its blob for removal ("" when none). An
+// opened copy may still be showing in another tab, so its row stays, revoked, until its
+// Euro-Office drop is delivered (PendingViewDrops); one never opened is deleted.
+func (s *Store) CloseViewCopy(ctx context.Context, user, id string) (blob string, err error) {
 	if !signedIn(ctx) {
 		return "", ErrDenied
 	}
-	return s.dropView(ctx, `id=? AND user_id=?`, "view.closed", id, user)
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		var opened int64
+		err := tx.QueryRowContext(ctx, `SELECT blob,login_at FROM drive_view_copies WHERE id=? AND user_id=?`, id, user).Scan(&blob, &opened)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		q := `DELETE FROM drive_view_copies WHERE id=?`
+		if opened > 0 {
+			q = `UPDATE drive_view_copies SET revoked=1,blob='' WHERE id=?`
+		}
+		if _, err = tx.ExecContext(ctx, q, id); err != nil {
+			return err
+		}
+		return event(ctx, tx, user, "view.closed", "view:"+id)
+	})
+	return blob, err
 }
 
-// ViewClosed deletes copy id when Euro-Office reports its document closed.
+// ViewClosed deletes copy id when Euro-Office reports its document closed: nobody is left to drop.
 func (s *Store) ViewClosed(ctx context.Context, id string) (string, error) {
 	return s.dropView(ctx, `id=?`, "view.closed", id)
 }

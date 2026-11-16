@@ -282,3 +282,50 @@ func TestViewCopyEndsWithItsSignIn(t *testing.T) {
 		t.Fatalf("dropped copy not swept: %v", blobs)
 	}
 }
+
+// Closing an opened copy keeps it, revoked and without bytes, until Euro-Office drops it, so a
+// second tab still showing it is disconnected; a later logout cannot lose that drop.
+func TestClosedViewCopyKeepsItsDrop(t *testing.T) {
+	st, _, root := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	peer := drive.WithPeer(ctx, livePeer)
+	c := storeView(t, d, peer, "worker", root)
+	unopened := storeView(t, d, peer, "worker", root)
+	before, _ := d.PeerFree(ctx, "worker")
+	if _, err := d.ViewCopy(drive.WithLogin(ctx, drive.Login{SSOSID: "sid-1", At: time.Now()}), "worker", c.ID); err != nil {
+		t.Fatal(err)
+	}
+	blob, err := d.CloseViewCopy(ctx, "worker", c.ID)
+	if err != nil || blob == "" {
+		t.Fatalf("close %q %v", blob, err)
+	}
+	if free, _ := d.PeerFree(ctx, "worker"); free != before+int64(len(docx)) {
+		t.Fatalf("closed copy still counted: %d", free)
+	}
+	if err = st.Sessions().EndSSOSession(ctx, "sid-1", time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if blobs, _ := d.ExpireViewCopies(ctx); len(blobs) != 0 {
+		t.Fatalf("swept before its drop: %v", blobs)
+	}
+	drops, err := d.PendingViewDrops(ctx)
+	if err != nil || len(drops) != 1 || drops[0].ID != c.ID {
+		t.Fatalf("drops %+v %v", drops, err)
+	}
+	if _, err = d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
+		t.Fatalf("closed copy served: %v", err)
+	}
+	if err = d.MarkViewDropped(ctx, c.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if drops, _ = d.PendingViewDrops(ctx); len(drops) != 0 {
+		t.Fatalf("drop still pending: %+v", drops)
+	}
+	// Never opened: nothing to drop, deleted at once.
+	if blob, err = d.CloseViewCopy(ctx, "worker", unopened.ID); err != nil || blob == "" {
+		t.Fatalf("close unopened %q %v", blob, err)
+	}
+	if drops, _ = d.PendingViewDrops(ctx); len(drops) != 0 {
+		t.Fatalf("unopened copy queued a drop: %+v", drops)
+	}
+}

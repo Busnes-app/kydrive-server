@@ -210,7 +210,8 @@ func TestKyPostViewCopy(t *testing.T) {
 	if got := get(); got != 404 {
 		t.Fatalf("download after logout %d", got)
 	}
-	if drops, err := w.st.Drive().PendingViewDrops(context.Background()); err != nil || len(drops) != 1 || drops[0].ID != id {
+	// Both: the copy closed earlier while opened, and the one this logout revoked.
+	if drops, err := w.st.Drive().PendingViewDrops(context.Background()); err != nil || len(drops) != 2 || (drops[0].ID != id && drops[1].ID != id) {
 		t.Fatalf("drop not queued: %+v %v", drops, err)
 	}
 	if strings.Contains(w.logs.String(), "Q3 plan") || strings.Contains(w.logs.String(), "sheet.csv") {

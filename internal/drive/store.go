@@ -675,8 +675,8 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 // ?1 is the workspace, so callers bind it once.
 const usedBytes = `SELECT COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?1),0)+` + viewBytes + `?1)`
 
-// viewBytes, closed with a workspace and ")", sums its viewing copies.
-const viewBytes = `(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE workspace=`
+// viewBytes, closed with a workspace and ")", sums its unrevoked viewing copies.
+const viewBytes = `(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE revoked=0 AND workspace=`
 
 // fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
 func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
