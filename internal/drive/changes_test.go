@@ -277,6 +277,16 @@ func leaver(t *testing.T, e *changeEnv) (string, []string) {
 // noChange lists every exported Store method that writes no change row, and why. A new method
 // fails TestEveryMutatorWritesAChange until it is classified here or added to mutators.
 var noChange = map[string]string{
+	"IssueViewTicket":         "viewing copies are not items",
+	"StoreViewCopy":           "viewing copies are not items",
+	"ViewTicket":              "read",
+	"ViewCopy":                "read",
+	"ViewDownload":            "read",
+	"CloseViewCopy":           "viewing copies are not items",
+	"ViewClosed":              "viewing copies are not items",
+	"ExpireViewCopies":        "viewing copies are not items",
+	"PendingViewDrops":        "read",
+	"MarkViewDropped":         "viewing copies are not items",
 	"AppendUpload":            "stages bytes; the item appears on CompleteUpload",
 	"ApplyRetention":          "purges trashed items and old versions only (Decision 4)",
 	"AgentTokenUser":          "credential bookkeeping",

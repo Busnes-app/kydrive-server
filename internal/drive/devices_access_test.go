@@ -29,6 +29,7 @@ var (
 		"CreateServiceToken", "CreateWorkspace", "DeleteWorkspace", "EditorSession", "Grant", "Handover", "OpenLink", "Quota",
 		"RenameWorkspace", "RestoreWorkspace", "RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "SetAgentScope", "SetEditorsShare", "SetRetention",
 		"SetPeerSetting", "Share", "Unshare", "RecordPicks", "SetPeerGuestSetting",
+		"ViewCopy", "CloseViewCopy",
 	}
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, admin-only listings and background workers.
@@ -40,6 +41,7 @@ var (
 		"ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
 		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Ticket", "TicketUpload",
+		"IssueViewTicket", "StoreViewCopy", "ViewTicket", "ExpireViewCopies", "ViewClosed", "ViewDownload", "PendingViewDrops", "MarkViewDropped",
 	}
 )
 
@@ -102,6 +104,14 @@ func TestDeviceCannotCreateAccess(t *testing.T) {
 	spare := ""
 	calls := map[string]func(context.Context) error{
 		"EditorSession": func(c context.Context) error { _, err := d.EditorSession(c, "worker", f.ID); return err },
+		"ViewCopy": func(c context.Context) error {
+			_, err := d.ViewCopy(c, "stranger", storeView(t, d, drive.WithPeer(ctx, livePeer), "stranger", root).ID)
+			return err
+		},
+		"CloseViewCopy": func(c context.Context) error {
+			_, err := d.CloseViewCopy(c, "stranger", storeView(t, d, drive.WithPeer(ctx, livePeer), "stranger", root).ID)
+			return err
+		},
 		"Share": func(c context.Context) error {
 			_, err := d.Share(c, "worker", "file", f.ID, "group", "team", "reader")
 			return err

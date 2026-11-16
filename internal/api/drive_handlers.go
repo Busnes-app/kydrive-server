@@ -26,6 +26,11 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/directory", s.requireAuthenticated(s.driveWorkspaceDirectory))
 	s.mux.HandleFunc("GET /editor.html", s.requireAuthenticated(s.editorPage))
 	s.mux.HandleFunc("GET /editor-bootstrap.js", s.editorScript)
+	s.mux.HandleFunc("GET /view.html", s.requireAuthenticated(s.viewPage))
+	s.mux.HandleFunc("GET /view-bootstrap.js", s.viewScript)
+	s.mux.HandleFunc("POST /api/drive/view-copies/{id}/editor", s.requireAuthenticated(s.viewEditor))
+	s.mux.HandleFunc("POST /api/drive/view-copies/{id}/close", s.requireAuthenticated(s.viewClose))
+	s.mux.HandleFunc("GET /api/editor/view/{id}", s.viewDownload)
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/tokens", s.requireAuthenticated(s.requireStepUp(s.driveCreateToken)))
 	s.mux.HandleFunc("DELETE /api/drive/tokens/{id}", s.requireAuthenticated(s.driveRevokeToken))
 	s.mux.HandleFunc("POST /api/drive/personal-workspace", s.requireAuthenticated(s.drivePersonalWorkspace))
@@ -642,6 +647,10 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 	cb, err := s.editor.Callback(token)
 	if err != nil {
 		s.writeError(w, 401, "Invalid editor signature")
+		return
+	}
+	if strings.HasPrefix(cb.Key, drive.ViewKeyPrefix) {
+		s.viewCallback(w, r, cb.Key, cb.Status)
 		return
 	}
 	if cb.Status == 4 {

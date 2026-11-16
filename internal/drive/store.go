@@ -220,7 +220,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -671,8 +671,12 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 }
 
 // usedBytes is a workspace's quota usage: the plaintext size of every version row, the same
-// rows a purge deletes. Indexed by drive_files_workspace.
-const usedBytes = `SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?`
+// rows a purge deletes, plus viewing copies (viewcopies.go). Indexed by drive_files_workspace.
+// ?1 is the workspace, so callers bind it once.
+const usedBytes = `SELECT COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?1),0)+` + viewBytes + `?1)`
+
+// viewBytes, closed with a workspace and ")", sums its unrevoked viewing copies.
+const viewBytes = `(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE revoked=0 AND workspace=`
 
 // fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
 func fits(ctx context.Context, q queryer, workspace string, extra int64) error {

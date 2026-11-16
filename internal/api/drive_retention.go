@@ -102,6 +102,17 @@ func (s *Server) RunRetention(ctx context.Context) {
 		if err := s.store.Drive().ExpireTickets(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("kypost ticket expiry: %v", err)
 		}
+		blobs, err = s.store.Drive().ExpireViewCopies(ctx)
+		if err != nil && ctx.Err() == nil {
+			log.Printf("viewing copy expiry: %v", err)
+		}
+		if err = drive.RemoveBlobs(s.viewRoot(), blobs); err != nil {
+			log.Printf("viewing copy cleanup: %v", err)
+		}
+		// Every copy is gone at ViewLife: anything older is a crash's leftover.
+		if _, err := s.store.Drive().SweepOrphans(ctx, s.viewRoot(), drive.ViewLife+time.Hour); err != nil && ctx.Err() == nil {
+			log.Printf("viewing copy sweep: %v", err)
+		}
 		if err := s.store.Drive().PruneChanges(ctx, time.Now().Add(-changeRetention)); err != nil && ctx.Err() == nil {
 			log.Printf("change log prune: %v", err)
 		}

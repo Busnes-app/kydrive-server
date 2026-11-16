@@ -237,6 +237,10 @@ func (s *Store) revokeEditors(ctx context.Context, tx *sql.Tx, where string, arg
 	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id FROM drive_editor_sessions WHERE revoked=false AND `+where+`)`, args...); err != nil {
 		return err
 	}
+	// Viewing copies carry the same login columns: they end with the sign-in that opened them.
+	if _, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET revoked=1 WHERE revoked=0 AND `+where, args...); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND `+where, args...)
 	return err
 }

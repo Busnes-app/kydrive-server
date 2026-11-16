@@ -163,6 +163,7 @@ func TestKyPostSignedRefusals(t *testing.T) {
 		"/api/suite/kypost/links":          "kypost.drive.link",
 		"/api/suite/kypost/status":         "kypost.drive.status",
 		"/api/suite/kypost/fetch":          "kypost.drive.fetch",
+		"/api/suite/kypost/view-tickets":   "kypost.drive.view",
 	}
 	alice := map[string]any{"sub": "sub-alice", "issuer": kypostIssuer, "name": "a.txt", "size": 1, "file_id": "x", "max_bytes": 10}
 	for path, event := range routes {

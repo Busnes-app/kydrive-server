@@ -478,7 +478,7 @@ func (s *Server) kypostStatusRoute(r *http.Request, user *store.User, p *kypostP
 		log.Printf("kypost status: %v", err)
 		return refuse(503, "unavailable")
 	}
-	return kypostReply{status: 200, body: map[string]any{"enabled": on, "free_bytes": free, "max_file_bytes": s.config.Drive.MaxFileSize, "guest_links": guest, "guest_max_days": guestDays}}
+	return kypostReply{status: 200, body: map[string]any{"enabled": on, "free_bytes": free, "max_file_bytes": s.config.Drive.MaxFileSize, "viewer": s.editor != nil, "guest_links": guest, "guest_max_days": guestDays}}
 }
 
 // kypostFetchRoute answers a picked file's bytes (contract I2): one the user chose in the
