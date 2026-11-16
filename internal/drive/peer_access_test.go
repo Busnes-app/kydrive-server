@@ -35,7 +35,7 @@ var (
 		"AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
-		"PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
+		"PurgeDeletedWorkspaces", "ReconcileSuiteGroups", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
 		"RevokeUserEditorsBefore", "SealLegacyBlobs", "ServiceToken", "SweepOrphans", "UnlinkDevice", "UpgradeBlobs",
 		"ExpireViewCopies", "ViewClosed", "ViewDownload", "PendingViewDrops", "MarkViewDropped",
 	}

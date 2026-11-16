@@ -49,6 +49,32 @@ origin, never `*`, and closes.
 KyDrive sends no `Cross-Origin-Opener-Policy`, so the opener survives without any relaxation;
 `/pick` keeps `frame-ancestors 'none'` and `X-Frame-Options: DENY` like every page.
 
+## Suite groups
+
+KyDrive follows KyIdentity's suite group contract (KyIdentity `docs/SUITE-DIRECTORY.md`,
+`GET /api/suite/groups`). Every 60 seconds, when KySignOn is configured, it reads the list with
+its own client credentials and reconciles each group, keyed on its ID only, never its name or
+slug:
+
+- `active`: one shared workspace for the group (created on first sight, quota 1 GiB, named
+  after the group, `Sales (2)` when the name is taken, deleted workspaces included), with a
+  local group `suite-group:<id>` granted editor on it. The name follows renames. Members are
+  exactly the listed subjects that have an active KyDrive account signed in through KyIdentity;
+  others are added at a later poll after their first sign-in. KyDrive administrators and the
+  local recovery account are never members, and nobody is made manager.
+- `archived`: members removed, then the workspace is deleted recoverably (Workspaces > Deleted
+  workspaces): links, service tokens and open editors are revoked, files kept. Turning the group
+  on again restores the same workspace.
+- A group missing from the list, or a call that fails or is refused, changes nothing.
+
+Suite group workspaces are kept for good: never purged by the trash age and never removed,
+even empty. An administrator can restore an archived one from Deleted workspaces, but while
+KyIdentity still lists the group as archived the next poll archives it again; likewise an
+administrator's delete of an active one is undone at the next poll. Removal delay: a member
+removed in KyIdentity loses access within one poll (60 s) plus one reconcile pass
+(about a millisecond for one group in the tests). Each change is audited as a
+`suite_group.*` drive event with IDs and counts only.
+
 ## Deviations from the contract text
 
 - Fetch (I2) reads only files the user picked in copy mode within the last 24 hours, not any
