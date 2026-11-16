@@ -14,6 +14,9 @@ func SignCSRFForTest(s *Server, r *http.Request) {
 	r.Header.Set(auth.HeaderCSRF, s.sessions.CSRFToken(s.sessions.SessionToken(r)))
 }
 
+// DeviceOriginForTest is the origin devices sign (devicesig.go). Test-only.
+func DeviceOriginForTest(s *Server) string { return canonicalOrigin(s.config.Server.AppURL) }
+
 // SetRecoveryClientForTest replaces the KyRecovery pairing client. Test-only: this file is not
 // part of the package build.
 func SetRecoveryClientForTest(s *Server, p recoveryClient) { s.recovery = p }

@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Devices must sign.** `POST /api/devices/token` refuses a link without `publicKey` (400,
+  the code is not spent). A device linked before signing gets 401
+  `{"error":"device_key_required"}` and must be linked again; a revoked one is still told
+  `device_revoked`, so it wipes. Upgrade the desktop and Android apps first.
 - **Signed TLS pin rollover.** KyDrive keeps a never-rotated Ed25519 identity key
   (`<data dir>/identity.key`, or `KYDRIVE_IDENTITY_KEY_FILE`), sealed in every backup capsule.
   `POST /api/devices/token` and `GET /api/drive/device` add `identity_key` (std base64, 32

@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -15,13 +16,18 @@ import (
 )
 
 func davRequest(srv *api.Server, method, target, user, secret string, body io.Reader, headers ...string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, target, body)
+	var raw []byte
+	if body != nil {
+		raw, _ = io.ReadAll(body)
+	}
+	r := httptest.NewRequest(method, target, bytes.NewReader(raw))
 	if user != "" || secret != "" {
 		r.SetBasicAuth(user, secret)
 	}
 	for i := 0; i+1 < len(headers); i += 2 {
 		r.Header.Set(headers[i], headers[i+1])
 	}
+	signIfDevice(r, raw)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, r)
 	return w

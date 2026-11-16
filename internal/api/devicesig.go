@@ -50,14 +50,15 @@ var signedHeaders = []string{"content-range", "depth", "destination", "if", "if-
 var (
 	errDeviceSignature = errors.New("device request signature refused")
 	errDeviceBody      = errors.New("request body does not match its signed digest")
+	// errDeviceKeyRequired refuses a device linked before signing: it must link again.
+	errDeviceKeyRequired = errors.New("device has no signing key")
 )
 
 // verifyDeviceRequest checks a request from the device id against its enrolled key, then binds
-// the body to the signed digest. A device linked before signing has no key and is let through:
-// that path closes once every client signs.
+// the body to the signed digest. A device linked before signing has no key and is refused.
 func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *ecdsa.PublicKey) error {
 	if key == nil {
-		return nil
+		return errDeviceKeyRequired
 	}
 	date, nonce, digest := r.Header.Get("KyDrive-Date"), r.Header.Get("KyDrive-Nonce"), r.Header.Get("KyDrive-Content-SHA256")
 	ms, err := strconv.ParseInt(date, 10, 64)

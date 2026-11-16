@@ -46,11 +46,7 @@ func approve(t *testing.T, srv *api.Server, cookie *http.Cookie) string {
 }
 
 func redeem(srv *api.Server, code, verifier string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(url.Values{"code": {code}, "verifier": {verifier}}.Encode()))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, r)
-	return w
+	return redeemDevice(srv, url.Values{"code": {code}, "verifier": {verifier}})
 }
 
 func linkDevice(t *testing.T, srv *api.Server, cookie *http.Cookie) string {
@@ -439,11 +435,7 @@ func TestPhoneQRLink(t *testing.T) {
 		return u.Query().Get("code")
 	}
 	redeemPhone := func(code, name, platform string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(url.Values{"grant": {"qr"}, "code": {code}, "name": {name}, "platform": {platform}}.Encode()))
-		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, r)
-		return w
+		return redeemDevice(srv, url.Values{"grant": {"qr"}, "code": {code}, "name": {name}, "platform": {platform}})
 	}
 
 	// Showing a code needs a session; nothing is minted on a GET.

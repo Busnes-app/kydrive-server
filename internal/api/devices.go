@@ -84,8 +84,8 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var token, id string
-	// publicKey is the device's P-256 signing key (SPKI DER, std base64). With it, every request
-	// the token makes must be signed (devicesig.go).
+	// publicKey is the device's P-256 signing key (SPKI DER, std base64), required: every request
+	// the token makes must be signed with it (devicesig.go).
 	key, err := base64.StdEncoding.DecodeString(r.PostFormValue("publicKey"))
 	if err != nil {
 		s.writeError(w, 400, "Invalid device key")
@@ -246,6 +246,9 @@ func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string
 	switch {
 	case errors.Is(err, errDeviceSignature), errors.Is(err, errDeviceBody):
 		s.writeError(w, 401, "Invalid device credential")
+		return nil, false
+	case errors.Is(err, errDeviceKeyRequired):
+		s.writeJSON(w, 401, map[string]string{"error": "device_key_required"})
 		return nil, false
 	case errors.As(err, &tooLarge):
 		s.writeError(w, http.StatusRequestEntityTooLarge, "Request body too large")
