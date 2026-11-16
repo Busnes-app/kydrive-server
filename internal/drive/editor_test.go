@@ -686,7 +686,7 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 			if _, _, err = d.ServiceToken(ctx, "service-secret"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = d.DeviceUser(ctx, token); err != nil {
+			if _, err = d.DeviceUser(ctx, token, anyKey); err != nil {
 				t.Fatal(err)
 			}
 			if err = change(st); err != nil {
@@ -698,14 +698,14 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 			if _, _, err = d.AgentTokenUser(ctx, agent, time.Now()); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("agent token survived: %v", err)
 			}
-			if _, _, err = d.RedeemLink(ctx, code, verifier); !errors.Is(err, drive.ErrDenied) {
+			if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("a computer link approved before the reset was redeemed after it: %v", err)
 			}
 			if _, _, err = d.ServiceToken(ctx, "service-secret"); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("service token survived: %v", err)
 			}
 			var wipe drive.ErrDeviceRevoked
-			if _, err = d.DeviceUser(ctx, token); !errors.As(err, &wipe) || wipe.Wipe {
+			if _, err = d.DeviceUser(ctx, token, anyKey); !errors.As(err, &wipe) || wipe.Wipe {
 				t.Fatalf("device survived or was wiped: %v", err)
 			}
 		})

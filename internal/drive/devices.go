@@ -2,9 +2,12 @@ package drive
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -21,7 +24,8 @@ import (
 // Device credentials are a client's own bearer tokens. A computer links through the browser:
 // it receives a one-time code on its loopback listener and redeems it with its PKCE verifier.
 // A phone scans a one-time code the signed-in user shows as a QR code. Codes and tokens are
-// 256 random bits, stored as SHA-256 only.
+// 256 random bits, stored as SHA-256 only. A device may enrol a P-256 signing key when it links,
+// and only then: DeviceUser hands it to the caller to check the request's signature.
 const (
 	DevicePrefix      = "kyd_"
 	devicesPerUser    = 20
@@ -105,29 +109,44 @@ func (s *Store) ApprovePhone(ctx context.Context, user string) (string, error) {
 
 // RedeemLink spends a computer's code once, checks the verifier against its S256 challenge and
 // returns a new device token and its user. Any failure is ErrDenied and burns the code.
-func (s *Store) RedeemLink(ctx context.Context, code, verifier string) (token, user string, err error) {
+func (s *Store) RedeemLink(ctx context.Context, code, verifier string, key []byte) (token, user string, err error) {
 	if code == "" || !validVerifier(verifier) {
 		return "", "", ErrDenied
 	}
 	sum := sha256.Sum256([]byte(verifier))
 	want := []byte(base64.RawURLEncoding.EncodeToString(sum[:]))
-	return s.redeem(ctx, code, "", "", func(challenge string) bool {
+	return s.redeem(ctx, code, "", "", key, func(challenge string) bool {
 		return challenge != "" && subtle.ConstantTimeCompare(want, []byte(challenge)) == 1
 	})
 }
 
 // RedeemPhone spends a phone code from ApprovePhone once and links the named phone. Any failure
 // is ErrDenied and burns the code.
-func (s *Store) RedeemPhone(ctx context.Context, code, name, platform string) (token, user string, err error) {
+func (s *Store) RedeemPhone(ctx context.Context, code, name, platform string, key []byte) (token, user string, err error) {
 	if code == "" || !ValidName(name) || len(name) > 100 || !validPhone(platform) {
 		return "", "", ErrDenied
 	}
-	return s.redeem(ctx, code, name, platform, func(challenge string) bool { return challenge == "" })
+	return s.redeem(ctx, code, name, platform, key, func(challenge string) bool { return challenge == "" })
+}
+
+// ParseDeviceKey accepts a P-256 public key as SPKI DER, the only signing key a device enrols.
+func ParseDeviceKey(der []byte) (*ecdsa.PublicKey, error) {
+	k, err := x509.ParsePKIXPublicKey(der)
+	if pub, ok := k.(*ecdsa.PublicKey); err == nil && ok && pub.Curve == elliptic.P256() {
+		return pub, nil
+	}
+	return nil, fmt.Errorf("%w: device key must be P-256 SPKI", ErrInvalid)
 }
 
 // redeem burns code, then mints a token if it is unexpired and proven. A computer's code holds
 // its name and platform; a phone's are empty and come from the redeeming request.
-func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform string, proven func(challenge string) bool) (token, user string, err error) {
+// key is the device's SPKI DER signing key, or empty for an unsigned device.
+func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform string, key []byte, proven func(challenge string) bool) (token, user string, err error) {
+	if len(key) > 0 {
+		if _, err := ParseDeviceKey(key); err != nil {
+			return "", "", err
+		}
+	}
 	denied := false
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		var name, platform, challenge string
@@ -156,7 +175,7 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 		}
 		token = DevicePrefix + secret256()
 		id := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_devices(id,user_id,name,platform,hash,created,last_used) VALUES(?,?,?,?,?,?,?)`, id, user, name, platform, tokenHash(token), now(), time.Now().Unix()); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_devices(id,user_id,name,platform,hash,created,last_used,pubkey) VALUES(?,?,?,?,?,?,?,?)`, id, user, name, platform, tokenHash(token), now(), time.Now().Unix(), base64.StdEncoding.EncodeToString(key)); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "device.linked", id)
@@ -185,20 +204,36 @@ func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
 	return nil
 }
 
-// DeviceUser returns the active user a live device token belongs to. A token revoked in the
-// last 30 days is ErrDeviceRevoked; anything else unusable is ErrDenied.
-func (s *Store) DeviceUser(ctx context.Context, token string) (string, error) {
+// DeviceUser returns the active user a live device token belongs to. verify gets the device's
+// ID and enrolled key (nil for an unsigned device) and runs before anything else is revealed or
+// written, so a token without its key learns nothing and keeps nothing alive; its error is
+// returned as is. A token revoked in the last 30 days is ErrDeviceRevoked; anything else
+// unusable is ErrDenied.
+func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id string, key *ecdsa.PublicKey) error) (string, error) {
 	if !strings.HasPrefix(token, DevicePrefix) {
 		return "", ErrDenied
 	}
-	var id, user, status string
+	var id, user, status, pubkey string
 	var lastUsed, revokedAt int64
 	var wipe bool
-	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,COALESCE(u.status,'') FROM drive_devices d LEFT JOIN users u ON u.id=d.user_id WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &status)
+	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,d.pubkey,COALESCE(u.status,'') FROM drive_devices d LEFT JOIN users u ON u.id=d.user_id WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &pubkey, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrDenied
 	}
 	if err != nil {
+		return "", err
+	}
+	var key *ecdsa.PublicKey
+	if pubkey != "" {
+		der, err := base64.StdEncoding.DecodeString(pubkey)
+		if err != nil {
+			return "", err
+		}
+		if key, err = ParseDeviceKey(der); err != nil {
+			return "", err
+		}
+	}
+	if err := verify(id, key); err != nil {
 		return "", err
 	}
 	t := time.Now()

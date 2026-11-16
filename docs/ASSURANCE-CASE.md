@@ -52,7 +52,9 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    and session binding both use it (`internal/auth`).
 2. **Credential surfaces.** Session cookies authenticate the web app; HTTP Basic app passwords only
    `/dav/`; device tokens (`kyd_`) only `/api/drive/*` and `/dav/`; agent tokens (`kya_`) only
-   `/mcp`. `/mcp` refuses any request carrying an `Origin` header, so a web page cannot use it
+   `/mcp`. A device that enrolled a P-256 key when it linked must sign every request (method, URI,
+   state-changing headers, body digest, date, nonce), so its token alone authorises nothing and a
+   captured request cannot be replayed (`internal/api/devicesig.go`). `/mcp` refuses any request carrying an `Origin` header, so a web page cannot use it
    (`internal/api/mcp.go`).
 3. **KyIdentity → KyDrive.** OIDC sign-in with PKCE `S256` and verified ID tokens; SCIM with a
    bearer token; a directory webhook that must carry a valid HMAC-SHA256 signature and a timestamp
@@ -129,7 +131,13 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 - **Not end-to-end.** The server, its operator and Euro-Office read plaintext. Workspace, group and
   service-token names are stored in plaintext; backups taken before name encryption hold plaintext
   names; the content search index reveals word-frequency and shared-word patterns.
-- **Rate limits and proof-of-work spent salts are process-local** (single-instance server).
+- **Rate limits, proof-of-work spent salts and device nonces are process-local** (single-instance
+  server); a restart forgets nonces, which the five-minute date window bounds.
+- **Devices linked before request signing still use the token alone** until every client signs
+  and the server refuses unsigned devices. Linking is trust on first use: whoever redeems the
+  two-minute code enrols the key. Signing stops a stolen token, not an interceptor reading or
+  changing file bytes in transit. The key signs without the user present, so background sync
+  works.
 - **AI agents may follow instructions in file contents.** The README says to give write access only
   when everyone who can message the agent is trusted.
 - **No govulncheck in CI.** Known Go vulnerabilities are caught by Dependabot alerts, not by a
