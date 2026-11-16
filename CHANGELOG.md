@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Devices must sign.** `POST /api/devices/token` refuses a link without `publicKey` (400,
+  the code is not spent). A device linked before signing gets 401
+  `{"error":"device_key_required"}` and must be linked again; a revoked one is still told
+  `device_revoked`, so it wipes. Upgrade the desktop and Android apps first.
 - **Signed device requests.** `POST /api/devices/token` takes an optional `publicKey` (P-256
   SPKI DER, std base64). A device that enrolled one must sign every request with
   `KyDrive-Date`, `KyDrive-Nonce`, `KyDrive-Content-SHA256` and `KyDrive-Signature`

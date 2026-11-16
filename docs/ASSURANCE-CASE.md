@@ -133,9 +133,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
   names; the content search index reveals word-frequency and shared-word patterns.
 - **Rate limits, proof-of-work spent salts and device nonces are process-local** (single-instance
   server); a restart forgets nonces, which the five-minute date window bounds.
-- **Devices linked before request signing still use the token alone** until every client signs
-  and the server refuses unsigned devices. Linking is trust on first use: whoever redeems the
-  two-minute code enrols the key. Signing stops a stolen token, not an interceptor reading or
+- **Linking is trust on first use:** whoever redeems the two-minute code enrols the key. Signing stops a stolen token, not an interceptor reading or
   changing file bytes in transit. The key signs without the user present, so background sync
   works.
 - **AI agents may follow instructions in file contents.** The README says to give write access only
