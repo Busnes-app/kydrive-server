@@ -258,3 +258,9 @@ func TokenHash(token string) string { return tokenHash(token) }
 func QueryRow(ctx context.Context, s *Store, q string, args ...any) *sql.Row {
 	return s.db.QueryRowContext(ctx, q, args...)
 }
+
+// AgeViewCopy moves a viewing copy's expiry and ticket expiry back by d.
+func AgeViewCopy(s *Store, id string, d time.Duration) error {
+	_, err := s.db.Exec(`UPDATE drive_view_copies SET expires=expires-?,ticket_expires=ticket_expires-? WHERE id=?`, int64(d.Seconds()), int64(d.Seconds()), id)
+	return err
+}

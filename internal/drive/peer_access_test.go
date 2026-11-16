@@ -17,7 +17,7 @@ import (
 var (
 	peerAllowed = []string{
 		"AppendUpload", "CompleteUpload", "CreateLink", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Publish", "StartUpload",
-		"Ticket", "TicketUpload", "Upload",
+		"Ticket", "TicketUpload", "Upload", "IssueViewTicket", "StoreViewCopy", "ViewTicket",
 	}
 	peerRefused = []string{
 		"AddFolder", "ApproveLink", "ApprovePhone", "AppPasswords", "Authorize", "AuthorizeItem", "AuthorizeSharedManager", "CancelUpload", "Changes", "Children",
@@ -28,6 +28,7 @@ var (
 		"RevokeAppPassword", "RevokeDevice", "RevokeLink", "RevokeServiceToken", "Search", "SearchContent", "SearchFolder", "SearchFolderContent",
 		"SetAgentScope", "SetEditorsShare", "SetFolderTrash", "SetFolderTrashSince", "SetPeerSetting", "SetRetention", "SetTrash", "Share",
 		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues", "RecordPicks", "SetPeerGuestSetting",
+		"ViewCopy", "CloseViewCopy",
 	}
 	// Credential checks, callbacks, the operator CLI and background workers take no user context.
 	peerUnreachable = []string{
@@ -36,6 +37,7 @@ var (
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
 		"PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
 		"RevokeUserEditorsBefore", "SealLegacyBlobs", "ServiceToken", "SweepOrphans", "UnlinkDevice", "UpgradeBlobs",
+		"ExpireViewCopies", "ViewClosed", "ViewDownload",
 	}
 )
 
@@ -323,7 +325,15 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 			}
 			return d.SetFolderTrashSince(c, "worker", x.ID, true, 1<<40)
 		},
-		"SetPeerSetting":      func(c context.Context) error { return d.SetPeerSetting(c, "worker", true) },
+		"SetPeerSetting": func(c context.Context) error { return d.SetPeerSetting(c, "worker", true) },
+		"ViewCopy": func(c context.Context) error {
+			_, err := d.ViewCopy(c, "worker", storeView(t, d, e.peer, "worker", e.blobs).ID)
+			return err
+		},
+		"CloseViewCopy": func(c context.Context) error {
+			_, err := d.CloseViewCopy(c, "worker", storeView(t, d, e.peer, "worker", e.blobs).ID)
+			return err
+		},
 		"RecordPicks":         func(c context.Context) error { return d.RecordPicks(c, "worker", []string{e.mail.ID}) },
 		"SetPeerGuestSetting": func(c context.Context) error { return d.SetPeerGuestSetting(c, "worker", true) },
 		"SetRetention":        func(c context.Context) error { return d.SetRetention(c, "admin", e.shared, 30, 0) },

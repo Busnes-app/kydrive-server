@@ -333,6 +333,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/suite/kypost/links", s.kypostSigned(kypostEventLink, 60, s.kypostLinkRoute))
 	s.mux.HandleFunc("POST /api/suite/kypost/status", s.kypostSigned(kypostEventStatus, 120, s.kypostStatusRoute))
 	s.mux.HandleFunc("POST /api/suite/kypost/fetch", s.kypostSigned(kypostEventFetch, 60, s.kypostFetchRoute))
+	s.mux.HandleFunc("POST /api/suite/kypost/view-tickets", s.kypostSigned(kypostEventView, 60, s.kypostViewTicket))
 	s.mux.HandleFunc("GET /api/settings/kypost", s.requireAdmin(s.handleKyPostStatus))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
 	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
@@ -500,6 +501,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Expose-Headers", "Upload-Offset")
 		}
 		s.handleTicketUpload(w, r, p)
+		return
+	}
+
+	// A viewing copy's bytes come from KyPost's server, never a browser: no CORS grant at all.
+	if strings.HasPrefix(r.URL.Path, viewPath) {
+		s.handleViewUpload(w, r)
 		return
 	}
 

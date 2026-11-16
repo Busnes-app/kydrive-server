@@ -105,7 +105,7 @@ func (s *Store) SetPeerGuestSetting(ctx context.Context, user string, enabled bo
 // PeerFree is the free quota of the user's My files, or a new one's quota when there is none.
 func (s *Store) PeerFree(ctx context.Context, user string) (int64, error) {
 	var free int64
-	err := s.db.QueryRowContext(ctx, `SELECT w.quota-COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0) FROM drive_personal_workspaces p JOIN drive_workspaces w ON w.id=p.workspace WHERE p.owner=?`, user).Scan(&free)
+	err := s.db.QueryRowContext(ctx, `SELECT w.quota-COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)-`+viewBytes+`w.id) FROM drive_personal_workspaces p JOIN drive_workspaces w ON w.id=p.workspace WHERE p.owner=?`, user).Scan(&free)
 	if errors.Is(err, sql.ErrNoRows) {
 		return personalQuota, nil
 	}

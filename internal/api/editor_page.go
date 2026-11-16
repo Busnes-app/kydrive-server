@@ -6,6 +6,11 @@ import (
 )
 
 func (s *Server) editorPage(w http.ResponseWriter, r *http.Request) {
+	s.documentPage(w, "/editor-bootstrap.js")
+}
+
+// documentPage is the Euro-Office page shell; script opens the document.
+func (s *Server) documentPage(w http.ResponseWriter, script string) {
 	if s.editor == nil {
 		s.writeError(w, 503, "Euro-Office is not configured")
 		return
@@ -13,7 +18,7 @@ func (s *Server) editorPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' "+s.editor.Origin+"; style-src 'self' 'unsafe-inline'; frame-src "+s.editor.Origin+"; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'")
-	io.WriteString(w, `<!doctype html><html><head><meta charset="utf-8"><title>KyDrive · Euro-Office</title><style>html,body,#editor{height:100%;margin:0}#message{padding:24px;font:16px system-ui}</style></head><body><div id="message" role="status">Opening document…</div><div id="editor"></div><script src="/editor-bootstrap.js"></script></body></html>`)
+	io.WriteString(w, `<!doctype html><html><head><meta charset="utf-8"><title>KyDrive · Euro-Office</title><style>html,body,#editor{height:100%;margin:0}#message{padding:24px;font:16px system-ui}</style></head><body><div id="message" role="status">Opening document…</div><div id="editor"></div><script src="`+script+`"></script></body></html>`)
 }
 func (s *Server) editorScript(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript")

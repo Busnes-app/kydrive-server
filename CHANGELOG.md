@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Open mail attachments read-only (KyPost).** KyPost can send one received Office or PDF
+  attachment as a viewing copy: `kypost.drive.view` (`POST /api/suite/kypost/view-tickets`)
+  reserves it and a one-time `PUT /api/suite/view/<ticket>` stores it; the person opens it at
+  `/view.html` in Euro-Office's view mode (no edit, download or print). It is visible to its
+  owner only, never shared, listed, searched or backed up, counts against My files' quota and
+  is deleted when the viewer closes or after 24 hours. Status adds `viewer`. Schema 24.
+
 - **Content searches are rate-limited.** Searches that look inside files are limited to 60 a minute
   and 600 an hour per user, web and MCP together. Over the limit `GET /api/drive/search` answers
   429 `{"code":"rate_limited"}` with `Retry-After`, and MCP `search_files` returns an error.

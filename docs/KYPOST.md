@@ -172,9 +172,9 @@ An unknown `audience` is 400 `bad_body`.
 ### Status
 
 `{"sub":"…","issuer":"…"}` → 200
-`{"enabled":true,"free_bytes":123,"max_file_bytes":123,"guest_links":false,"guest_max_days":0}`.
+`{"enabled":true,"free_bytes":123,"max_file_bytes":123,"viewer":true,"guest_links":false,"guest_max_days":0}`.
 `free_bytes` is My files' free quota (0 while the switch is off); `max_file_bytes` is
-`KYDRIVE_MAX_FILE_SIZE`; `guest_links` is whether a guest link would be made now (policy,
+`KYDRIVE_MAX_FILE_SIZE`; `viewer` is whether Euro-Office is configured (viewing copies, below); `guest_links` is whether a guest link would be made now (policy,
 both switches) and `guest_max_days` the policy's `max_days` then, else 0.
 
 ### Fetch
@@ -190,6 +190,50 @@ them; anything else 404 `not_found`. `max_bytes` (KyPost's attachment limit) is 
 whole number of at least 0, else 400 `bad_body`; a larger file 413 `too_large`. Each answer is
 also audited `kypost.file_fetched` (`file:<id>`). Picks expire with the hourly ticket sweep.
 
+## Viewing copies
+
+Open an attachment read-only in Euro-Office (design:
+`docs/superpowers/specs/2026-11-15-office-attachments-design.md`). KyPost offers **Open** only
+while status says `"viewer":true` (Euro-Office configured), never for encrypted mail.
+
+| Event type | Route |
+|---|---|
+| `kypost.drive.view` | `POST /api/suite/kypost/view-tickets` |
+
+Checked like the routes above (same refusals, per user 60 a minute, the switch).
+
+```json
+{"sub":"…","issuer":"…","name":"report.docx","size":7340032}
+```
+
+201 `{"upload_url":"https://drive.example/api/suite/view/<ticket>","expires":"<RFC 3339>"}`.
+The name's extension must be docx, xlsx, pptx, odt, ods, odp, csv or pdf (any case) and the
+size 1 to the smaller of `KYDRIVE_MAX_FILE_SIZE` and 25 MiB. Refusals: 400 `bad_body`,
+413 `too_large`, 507 `quota` (the size counts against My files from now until the copy is
+gone), 429 `too_many_tickets` (4 live copies or unused tickets per person), 409 `editor_off`.
+The ticket is 256 random bits stored as SHA-256, valid 15 minutes and spent by its upload.
+
+`PUT <upload_url>` from KyPost's server: exactly `size` bytes in one request, no cookie, no
+CSRF, no signature, and no `Origin` (403 `bad_origin`; the route answers no CORS). The first
+512 bytes must sniff as the extension's kind (`http.DetectContentType`: zip for the Office and
+OpenDocument types, pdf, text for csv), else 415 `bad_type`; the ticket stays usable. Wrong
+length 400 `size_mismatch`; unknown, spent or expired 404 `not_found`; switch off 409
+`sharing_off`; another pairing 404 `kypost_off`; 60 a minute per person, 240 per address.
+201 `{"view_url":"https://drive.example/view.html?copy=<id>","expires":"<RFC 3339>"}`.
+
+The copy (`drive_view_copies`, schema 24; sealed bytes in `<data>/view/`) is not a file: no
+folder, share, link, guest link, search, change feed, WebDAV, MCP or sync sees it, and bulk
+backups skip it. Only its owner's browser sign-in opens it (`/view.html`, then
+`POST /api/drive/view-copies/{id}/editor`; service, device and peer contexts refused; another
+person 404). Euro-Office gets view mode with edit, download, print, comment, review and form
+filling off, key `view-<id>`, and fetches `GET /api/editor/view/{id}` with its own signature.
+A callback for that key with status 2 or 6 is refused (403 `{"error":1}`); status 4 deletes it.
+The copy is deleted when the viewer page closes (`POST /api/drive/view-copies/{id}/close`),
+when Euro-Office closes the document, or at 24 hours (access ends then; the hourly sweep
+removes rows and bytes, and anything in `<data>/view/` older than 25 hours). Audited with IDs
+only: `kypost.view` (`event:<id>`), `kypost.view_stored`, `kypost.view_opened` (`view:<id>`);
+drive events `kypost.view_ticket_issued`, `kypost.view_stored`, `view.closed`, `view.expired`.
+
 ## What KyPost can do with the pair secret
 
 The routes act through a peer context (`internal/drive/access.go`). It holds no rank:
@@ -197,8 +241,9 @@ reading, listing, downloading, searching, moving, trashing, purging, sharing wit
 guest links (but through the guest switch, below), credentials, editor sessions, settings and every shared workspace are refused
 (but for a picked file, below), and `peer_access_test.go` proves each refusal. It may only add new files directly in the
 person's Mail attachments folder, put a reader organisation link (or, with the guest switch,
-a guest link) on a file there, and read a
-file the person picked for it in the last 24 hours (`peerRead`).
+a guest link) on a file there, read a
+file the person picked for it in the last 24 hours (`peerRead`), and reserve and store a
+viewing copy (`IssueViewTicket`, `StoreViewCopy`), which it can never read back.
 
 ## Deviations from the contract text
 

@@ -116,6 +116,10 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	`CREATE TABLE drive_peer_picks(owner TEXT NOT NULL,file TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(owner,file));`,
 	// Users who let KyPost make guest links (peer.go); no row is off.
 	`CREATE TABLE drive_peer_guest(user_id TEXT PRIMARY KEY);`,
+	// KyPost viewing copies (viewcopies.go); not files, counted in the owner's quota.
+	`CREATE TABLE drive_view_copies(id TEXT PRIMARY KEY,owner TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,pairing TEXT NOT NULL,token_hash TEXT UNIQUE,ticket_expires INTEGER NOT NULL,expires INTEGER NOT NULL,blob TEXT NOT NULL DEFAULT '');
+	CREATE INDEX drive_view_copies_workspace ON drive_view_copies(workspace);
+	CREATE INDEX drive_view_copies_owner ON drive_view_copies(owner);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
