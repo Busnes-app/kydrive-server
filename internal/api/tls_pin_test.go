@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,6 +130,7 @@ func TestTLSPinSignsTheServedLeaf(t *testing.T) {
 	base, want, roots := tlsOrigin(t)
 	s := pinServer(t, base) // host "LocalHost": the signed host is lowercased
 	s.pinProbeRoots = roots
+	s.config.Security.TLSPinProbe = true
 	before := time.Now().Unix()
 	rec := getPin(s, "192.0.2.1")
 	if rec.Code != 200 {
@@ -160,13 +162,15 @@ func TestTLSPinSignsTheServedLeaf(t *testing.T) {
 func TestTLSPinRefusals(t *testing.T) {
 	base, _, roots := tlsOrigin(t)
 	for name, setup := range map[string]func(*Server){
-		"no identity key": func(s *Server) { s.pinProbeRoots, s.config.Security.IdentityKey = roots, nil },
-		"http app url":    func(s *Server) { s.config.Server.AppURL = "http://drive.example.com" },
-		"no servable pin": func(s *Server) { s.config.Server.AppURL = closedHTTPSOrigin(t) },
-		"untrusted leaf":  func(s *Server) { s.pinProbeRoots = x509.NewCertPool() },
+		"no identity key":                         func(s *Server) { s.pinProbeRoots, s.config.Security.IdentityKey = roots, nil },
+		"no certificate file and no probe opt-in": func(s *Server) { s.pinProbeRoots, s.config.Security.TLSPinProbe = roots, false },
+		"http app url":                            func(s *Server) { s.config.Server.AppURL = "http://drive.example.com" },
+		"no servable pin":                         func(s *Server) { s.config.Server.AppURL = closedHTTPSOrigin(t) },
+		"untrusted leaf":                          func(s *Server) { s.pinProbeRoots = x509.NewCertPool() },
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := pinServer(t, base)
+			s.config.Security.TLSPinProbe = true // each case removes one thing the probe path needs
 			setup(s)
 			if rec := getPin(s, "192.0.2.1"); rec.Code != http.StatusServiceUnavailable {
 				t.Fatalf("status %d, want 503: %s", rec.Code, rec.Body)
@@ -196,6 +200,7 @@ func TestTLSPinIsRateLimitedPerIP(t *testing.T) {
 func TestTLSPinCachesAFailedProbe(t *testing.T) {
 	base, _, roots := tlsOrigin(t)
 	s := pinServer(t, base)
+	s.config.Security.TLSPinProbe = true
 	if rec := getPin(s, "192.0.2.1"); rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("untrusted probe: %d", rec.Code)
 	}
@@ -247,6 +252,7 @@ func TestTLSPinSignsOnlyTheOperatorsCertificate(t *testing.T) {
 	base, intercepted, roots := tlsOrigin(t)
 	s := pinServer(t, base)
 	s.pinProbeRoots = roots
+	s.config.Security.TLSPinProbe = true
 	file, want := certFile(t, "localhost", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
 	s.config.Security.TLSCertFile = file
 	rec := getPin(s, "192.0.2.5")
@@ -274,5 +280,16 @@ func TestTLSPinSignsOnlyTheOperatorsCertificate(t *testing.T) {
 		if rec := getPin(s, fmt.Sprintf("192.0.2.%d", 10+i)); rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("file %d: %d %s", i, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestTLSPinSignsNothingWithoutACertificateSource(t *testing.T) {
+	// The probe would present a trusted, hostname-valid leaf, but nobody chose to trust a probe.
+	base, _, roots := tlsOrigin(t)
+	s := pinServer(t, base)
+	s.pinProbeRoots = roots
+	rec := getPin(s, "192.0.2.20")
+	if rec.Code != http.StatusServiceUnavailable || strings.Contains(rec.Body.String(), "signature") {
+		t.Fatalf("signed without KYDRIVE_TLS_CERT_FILE or KYDRIVE_TLS_PIN_PROBE: %d %s", rec.Code, rec.Body)
 	}
 }

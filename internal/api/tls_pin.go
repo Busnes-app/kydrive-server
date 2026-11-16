@@ -92,7 +92,7 @@ func (s *Server) handleTLSPin(w http.ResponseWriter, r *http.Request) {
 		if pin, err = filePin(file, host, s.now()); err != nil {
 			log.Printf("tls pin: KYDRIVE_TLS_CERT_FILE: %v", err)
 		}
-	} else {
+	} else if s.config.Security.TLSPinProbe {
 		pin = s.probedPin(base)
 	}
 	if pin == "" {

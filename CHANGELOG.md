@@ -18,8 +18,9 @@ Interface and behaviour changes, newest first.
   `internal/api/testdata/tls-pin-v1.json`). 503 without an `https` `KY_APP_URL` or when the
   server cannot read its own certificate through system trust. A pinning client survives a
   certificate renewal without re-linking. Set `KYDRIVE_TLS_CERT_FILE` to the reverse proxy's
-  certificate (PEM) so only that key is signed; without it the server signs what its probe
-  reaches, which an interceptor on the server's own network path could exploit.
+  certificate (PEM) so only that key is signed. Behind Cloudflare Tunnel, where there is no
+  certificate to mount, `KYDRIVE_TLS_PIN_PROBE=true` signs what a probe of `KY_APP_URL` reaches
+  instead (warned at startup). With neither, the route answers 503.
 - **Signed device requests.** `POST /api/devices/token` takes an optional `publicKey` (P-256
   SPKI DER, std base64). A device that enrolled one must sign every request with
   `KyDrive-Date`, `KyDrive-Nonce`, `KyDrive-Content-SHA256` and `KyDrive-Signature`

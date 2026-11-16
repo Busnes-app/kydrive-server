@@ -90,9 +90,12 @@ type SecurityConfig struct {
 	// an operator command on a deployment whose server has not yet created it.
 	IdentityKey ed25519.PrivateKey `json:"-"`
 	// TLSCertFile (KYDRIVE_TLS_CERT_FILE, absolute) is the certificate the reverse proxy serves,
-	// PEM, leaf first. Set, the TLS pin statement signs only its key; unset, it signs the leaf a
-	// probe of KY_APP_URL reaches (owner decision 2026-11-16, residual risk in ASSURANCE-CASE).
+	// PEM, leaf first: the TLS pin statement signs only its key.
 	TLSCertFile string `json:"-"`
+	// TLSPinProbe (KYDRIVE_TLS_PIN_PROBE, off) signs the leaf a probe of KY_APP_URL reaches when
+	// no TLSCertFile is set: for a front with no certificate to mount (Cloudflare Tunnel). Anyone
+	// on the server's own path with a trusted certificate for the name gets it signed.
+	TLSPinProbe bool `json:"-"`
 }
 
 // SSOConfig holds identity provider and federation parameters.
@@ -361,6 +364,7 @@ func load(existing bool) (*Config, error) {
 			KeyInDataDir:            statErr == nil || len(drillResidue) > 0,
 			IdentityKey:             identityKey,
 			TLSCertFile:             tlsCertFile,
+			TLSPinProbe:             envBool("KYDRIVE_TLS_PIN_PROBE", false),
 			CookieSecure:            envBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:            getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:              7 * 24 * time.Hour,

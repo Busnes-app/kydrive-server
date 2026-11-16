@@ -173,6 +173,9 @@ func runServer() {
 	if cfg.Security.KeyInDataDir {
 		log.Printf("[SECURITY] encryption key loaded from the data directory: a copy of the data directory can decrypt its files; move the key to KY_ENCRYPTION_KEY")
 	}
+	if cfg.Security.TLSPinProbe && cfg.Security.TLSCertFile == "" {
+		log.Printf("[SECURITY] KYDRIVE_TLS_PIN_PROBE is on: app pin rollover signs whatever certificate a probe of KY_APP_URL reaches; set KYDRIVE_TLS_CERT_FILE instead unless the front has no certificate to mount (Cloudflare Tunnel)")
+	}
 	if cfg.Backup.AllowPrivateRecovery {
 		log.Printf("[BACKUP] KY_BACKUP_ALLOW_PRIVATE_RECOVERY is on: RFC1918 and CGNAT destinations admitted; loopback, link-local and other reserved addresses remain refused (HTTPS still required)")
 	}
