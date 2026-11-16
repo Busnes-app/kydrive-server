@@ -93,3 +93,17 @@ func TestIdentityKeyWrongLengthIsRefused(t *testing.T) {
 		t.Fatalf("the seed file was rewritten: %q", got)
 	}
 }
+
+func TestTLSCertFileMustBeAbsolute(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	t.Setenv("KYDRIVE_IDENTITY_KEY_FILE", "")
+	t.Setenv("KYDRIVE_TLS_CERT_FILE", "certs/fullchain.pem")
+	if _, err := LoadFromEnv(); err == nil {
+		t.Fatal("a relative KYDRIVE_TLS_CERT_FILE was accepted")
+	}
+	t.Setenv("KYDRIVE_TLS_CERT_FILE", "/certs/fullchain.pem")
+	cfg, err := LoadFromEnv()
+	if err != nil || cfg.Security.TLSCertFile != "/certs/fullchain.pem" {
+		t.Fatalf("%v %+v", err, cfg)
+	}
+}

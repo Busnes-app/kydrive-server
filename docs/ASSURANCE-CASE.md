@@ -140,6 +140,12 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
   changing file bytes in transit. The key signs without the user present, so background sync
   works. TLS leaf pinning with signed rollover is server-side only: no released client pins yet,
   and the QR link does not carry a pin, so the first link is still trust on first use.
+- **Without `KYDRIVE_TLS_CERT_FILE`, the server signs the leaf its probe of `KY_APP_URL` reaches**
+  (owner decision, 2026-11-16: works without configuration). Someone who controls the server's
+  own outbound path and holds a hostname-valid certificate both the server and the devices trust
+  gets that certificate's key signed, and pinning devices then accept it. Setting
+  `KYDRIVE_TLS_CERT_FILE` to the reverse proxy's certificate closes this: only that file's key is
+  signed.
 - **The TLS pin identity key lives in the data directory by default** and in every backup. Anyone
   who copies it can sign a pin for their own leaf; they still need a certificate the device's
   system trust accepts and a position on the network.

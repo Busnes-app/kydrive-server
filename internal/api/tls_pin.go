@@ -16,11 +16,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -81,12 +83,22 @@ func (s *Server) handleTLSPin(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusServiceUnavailable, "TLS pin rollover is not available")
 		return
 	}
-	pin := s.probedPin(base)
+	host := strings.ToLower(base.Hostname())
+	var pin string
+	if file := s.config.Security.TLSCertFile; file != "" {
+		// The operator's file is the authority: a probe would sign whatever certificate its
+		// network path presents, an interceptor's included.
+		var err error
+		if pin, err = filePin(file, host, s.now()); err != nil {
+			log.Printf("tls pin: KYDRIVE_TLS_CERT_FILE: %v", err)
+		}
+	} else {
+		pin = s.probedPin(base)
+	}
 	if pin == "" {
 		s.writeError(w, http.StatusServiceUnavailable, "The serving certificate could not be read")
 		return
 	}
-	host := strings.ToLower(base.Hostname())
 	issuedAt := s.now().Unix()
 	s.writeJSON(w, http.StatusOK, map[string]any{
 		"host":      host,
@@ -94,6 +106,36 @@ func (s *Server) handleTLSPin(w http.ResponseWriter, r *http.Request) {
 		"issued_at": issuedAt,
 		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(key, tlsPinStatement(host, pin, issuedAt))),
 	})
+}
+
+// filePin is the pin of the leaf in the operator's PEM certificate file, re-read on each call so
+// a renewal is signed at once. The leaf must name host and be within its validity at now: a stale
+// or wrong file is refused rather than signed.
+func filePin(path, host string, now time.Time) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	for rest := raw; ; {
+		var block *pem.Block
+		if block, rest = pem.Decode(rest); block == nil {
+			return "", errors.New("no certificate in the file")
+		}
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		leaf, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return "", err
+		}
+		if err := leaf.VerifyHostname(host); err != nil {
+			return "", err
+		}
+		if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+			return "", errors.New("the certificate is not currently valid")
+		}
+		return spkiPin(leaf), nil
+	}
 }
 
 // probedPin handshakes with base and returns its leaf pin, or "" (failures cached).

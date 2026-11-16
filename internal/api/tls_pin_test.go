@@ -11,11 +11,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -215,5 +218,61 @@ func TestIdentityKeyIsOmittedWithoutAKey(t *testing.T) {
 	s.config.Security.IdentityKey = nil
 	if _, ok := s.withIdentityKey(map[string]string{})["identity_key"]; ok {
 		t.Fatal("no key must mean no field, not an empty one")
+	}
+}
+
+// certFile writes a PEM certificate for host, valid from notBefore to notAfter, and returns its
+// path and pin.
+func certFile(t *testing.T, host string, notBefore, notAfter time.Time) (string, string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(2), DNSNames: []string{host}, NotBefore: notBefore, NotAfter: notAfter}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, _ := x509.ParseCertificate(der)
+	path := filepath.Join(t.TempDir(), "fullchain.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, spkiPin(leaf)
+}
+
+func TestTLSPinSignsOnlyTheOperatorsCertificate(t *testing.T) {
+	// The probe path is intercepted: it presents a trusted, hostname-valid leaf of its own.
+	base, intercepted, roots := tlsOrigin(t)
+	s := pinServer(t, base)
+	s.pinProbeRoots = roots
+	file, want := certFile(t, "localhost", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	s.config.Security.TLSCertFile = file
+	rec := getPin(s, "192.0.2.5")
+	var body struct {
+		Host, Pin, Signature string
+		IssuedAt             int64 `json:"issued_at"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &body) != nil {
+		t.Fatalf("status %d %s", rec.Code, rec.Body)
+	}
+	if body.Pin == intercepted || body.Pin != want {
+		t.Fatalf("signed %q; the operator's certificate is %q, the intercepted one %q", body.Pin, want, intercepted)
+	}
+	sig, _ := base64.StdEncoding.DecodeString(body.Signature)
+	pub, _ := base64.StdEncoding.DecodeString(s.identityKey())
+	if !ed25519.Verify(pub, tlsPinStatement(body.Host, body.Pin, body.IssuedAt), sig) {
+		t.Fatal("signature does not verify")
+	}
+
+	// A file that does not name the host, is outside its validity, or is gone is never signed.
+	other, _ := certFile(t, "elsewhere.example", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	expired, _ := certFile(t, "localhost", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	for i, f := range []string{other, expired, filepath.Join(t.TempDir(), "missing.pem")} {
+		s.config.Security.TLSCertFile = f
+		if rec := getPin(s, fmt.Sprintf("192.0.2.%d", 10+i)); rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("file %d: %d %s", i, rec.Code, rec.Body)
+		}
 	}
 }

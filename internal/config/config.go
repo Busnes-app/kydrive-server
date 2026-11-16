@@ -89,6 +89,10 @@ type SecurityConfig struct {
 	// default <DataDir>/identity.key). Never rotated: devices hold its public half. nil only for
 	// an operator command on a deployment whose server has not yet created it.
 	IdentityKey ed25519.PrivateKey `json:"-"`
+	// TLSCertFile (KYDRIVE_TLS_CERT_FILE, absolute) is the certificate the reverse proxy serves,
+	// PEM, leaf first. Set, the TLS pin statement signs only its key; unset, it signs the leaf a
+	// probe of KY_APP_URL reaches (owner decision 2026-11-16, residual risk in ASSURANCE-CASE).
+	TLSCertFile string `json:"-"`
 }
 
 // SSOConfig holds identity provider and federation parameters.
@@ -267,6 +271,10 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	tlsCertFile := getEnv("KYDRIVE_TLS_CERT_FILE", "")
+	if tlsCertFile != "" && !filepath.IsAbs(tlsCertFile) {
+		return nil, fmt.Errorf("KYDRIVE_TLS_CERT_FILE must be an absolute path")
+	}
 	drillDir := getEnv("KY_DRILL_DIR", filepath.Join(dataDir, "drill"))
 	if !filepath.IsAbs(drillDir) && getEnv("KY_DRILL_DIR", "") != "" {
 		return nil, fmt.Errorf("KY_DRILL_DIR must be an absolute path")
@@ -352,6 +360,7 @@ func load(existing bool) (*Config, error) {
 			EncryptionKey:           encryptionKey,
 			KeyInDataDir:            statErr == nil || len(drillResidue) > 0,
 			IdentityKey:             identityKey,
+			TLSCertFile:             tlsCertFile,
 			CookieSecure:            envBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:            getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:              7 * 24 * time.Hour,

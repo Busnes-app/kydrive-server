@@ -17,7 +17,9 @@ Interface and behaviour changes, newest first.
   `kydrive-tls-pin/1\n<host>\n<pin>\n<issued_at>` (golden vector
   `internal/api/testdata/tls-pin-v1.json`). 503 without an `https` `KY_APP_URL` or when the
   server cannot read its own certificate through system trust. A pinning client survives a
-  certificate renewal without re-linking.
+  certificate renewal without re-linking. Set `KYDRIVE_TLS_CERT_FILE` to the reverse proxy's
+  certificate (PEM) so only that key is signed; without it the server signs what its probe
+  reaches, which an interceptor on the server's own network path could exploit.
 - **Signed device requests.** `POST /api/devices/token` takes an optional `publicKey` (P-256
   SPKI DER, std base64). A device that enrolled one must sign every request with
   `KyDrive-Date`, `KyDrive-Nonce`, `KyDrive-Content-SHA256` and `KyDrive-Signature`
