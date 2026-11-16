@@ -294,40 +294,52 @@ func (s *Store) dropView(ctx context.Context, where, action string, args ...any)
 	return blob, err
 }
 
-// ExpireViewCopies deletes copies past ViewLife, tickets never used and revoked copies no
-// longer shown, returning the blobs
-// to remove.
+// ExpireViewCopies ends copies past ViewLife and returns the blobs to remove. An opened copy
+// Euro-Office may still be showing is revoked, not deleted, so PendingViewDrops still drops
+// it; its row goes once the drop is delivered, or editorGrace after expiry if it never is.
+// Unopened copies, unused tickets and delivered drops are deleted.
 func (s *Store) ExpireViewCopies(ctx context.Context) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		now := time.Now().Unix()
-		rows, err := tx.QueryContext(ctx, `DELETE FROM drive_view_copies WHERE expires<=? OR (blob='' AND ticket_expires<=?) OR (revoked=1 AND (dropped=1 OR login_at=0)) RETURNING id,user_id,blob`, now, now)
+		ended, err := s.viewRows(ctx, tx, `SELECT id,user_id,blob FROM drive_view_copies WHERE expires<=? AND login_at>0 AND revoked=0`, now)
 		if err != nil {
 			return err
 		}
-		type gone struct{ id, owner string }
-		var done []gone
-		for rows.Next() {
-			var g gone
-			var blob string
-			if err = rows.Scan(&g.id, &g.owner, &blob); err != nil {
-				rows.Close()
-				return err
-			}
-			done = append(done, g)
-			if blob != "" {
-				blobs = append(blobs, blob)
-			}
-		}
-		if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE drive_view_copies SET revoked=1,blob='' WHERE expires<=? AND login_at>0 AND revoked=0`, now); err != nil {
 			return err
 		}
-		for _, g := range done {
-			if err = event(ctx, tx, g.owner, "view.expired", "view:"+g.id); err != nil {
+		gone, err := s.viewRows(ctx, tx, `DELETE FROM drive_view_copies WHERE (login_at=0 AND (expires<=? OR (blob='' AND ticket_expires<=?))) OR (revoked=1 AND (dropped=1 OR login_at=0)) OR expires<=? RETURNING id,user_id,blob`, now, now, now-int64(editorGrace.Seconds()))
+		if err != nil {
+			return err
+		}
+		for _, r := range append(ended, gone...) {
+			if r[2] != "" {
+				blobs = append(blobs, r[2])
+			}
+			if err = event(ctx, tx, r[1], "view.expired", "view:"+r[0]); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
 	return blobs, err
+}
+
+// viewRows reads id, user and blob triples.
+func (s *Store) viewRows(ctx context.Context, tx *sql.Tx, q string, args ...any) ([][3]string, error) {
+	rows, err := tx.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	var out [][3]string
+	for rows.Next() {
+		var r [3]string
+		if err = rows.Scan(&r[0], &r[1], &r[2]); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, errors.Join(rows.Err(), rows.Close())
 }

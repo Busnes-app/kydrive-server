@@ -315,6 +315,16 @@ func TestClosedViewCopyKeepsItsDrop(t *testing.T) {
 	if _, err = d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("closed copy served: %v", err)
 	}
+	// Neither its ticket's nor its own expiry loses the pending drop.
+	if err = drive.AgeViewCopy(d, c.ID, drive.ViewLife); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.ExpireViewCopies(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if drops, _ = d.PendingViewDrops(ctx); len(drops) != 1 {
+		t.Fatalf("expiry lost the drop: %+v", drops)
+	}
 	if err = d.MarkViewDropped(ctx, c.ID, true); err != nil {
 		t.Fatal(err)
 	}
@@ -327,5 +337,42 @@ func TestClosedViewCopyKeepsItsDrop(t *testing.T) {
 	}
 	if drops, _ = d.PendingViewDrops(ctx); len(drops) != 0 {
 		t.Fatalf("unopened copy queued a drop: %+v", drops)
+	}
+}
+
+// An opened copy reaching ViewLife is revoked and dropped before its row goes; one that never
+// gets dropped goes editorGrace later.
+func TestExpiredOpenViewCopyIsDropped(t *testing.T) {
+	st, _, root := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	peer := drive.WithPeer(ctx, livePeer)
+	c := storeView(t, d, peer, "worker", root)
+	if _, err := d.ViewCopy(drive.WithLogin(ctx, drive.Login{At: time.Now()}), "worker", c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.AgeViewCopy(d, c.ID, drive.ViewLife); err != nil {
+		t.Fatal(err)
+	}
+	blobs, err := d.ExpireViewCopies(ctx)
+	if err != nil || len(blobs) != 1 {
+		t.Fatalf("bytes not removed at expiry: %v %v", blobs, err)
+	}
+	if drops, _ := d.PendingViewDrops(ctx); len(drops) != 1 || drops[0].ID != c.ID {
+		t.Fatalf("expired open copy not dropped: %+v", drops)
+	}
+	if blobs, _ = d.ExpireViewCopies(ctx); len(blobs) != 0 {
+		t.Fatalf("second sweep: %v", blobs)
+	}
+	if drops, _ := d.PendingViewDrops(ctx); len(drops) != 1 {
+		t.Fatalf("sweep lost the drop: %+v", drops)
+	}
+	if err = drive.AgeViewCopy(d, c.ID, 8*24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = d.ExpireViewCopies(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if drops, _ := d.PendingViewDrops(ctx); len(drops) != 0 {
+		t.Fatalf("undeliverable drop kept past the grace: %+v", drops)
 	}
 }

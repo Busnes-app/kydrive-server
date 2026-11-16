@@ -234,7 +234,7 @@ deactivation that revokes the sign-in's editor sessions revokes the copy at once
 Euro-Office drop of its key (retried every minute until it succeeds).
 The copy is deleted when the viewer page closes (`POST /api/drive/view-copies/{id}/close`; an opened copy's row stays, revoked and without bytes, until Euro-Office has dropped its key, in case another tab still shows it),
 when Euro-Office closes the document, or at 24 hours (access ends then; the hourly sweep
-removes rows and bytes, and anything in `<data>/view/` older than 25 hours). Audited with IDs
+removes the bytes, and the row once any opened copy's Euro-Office drop is delivered or 7 days have passed, and anything in `<data>/view/` older than 25 hours). Audited with IDs
 only: `kypost.view` (`event:<id>`), `kypost.view_stored`, `kypost.view_opened` (`view:<id>`);
 drive events `kypost.view_ticket_issued`, `kypost.view_stored`, `view.closed`, `view.expired`.
 
