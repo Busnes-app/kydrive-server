@@ -698,7 +698,7 @@ func TestPasswordChangeRevokesCredentials(t *testing.T) {
 			if _, _, err = d.AgentTokenUser(ctx, agent, time.Now()); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("agent token survived: %v", err)
 			}
-			if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+			if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 				t.Fatalf("a computer link approved before the reset was redeemed after it: %v", err)
 			}
 			if _, _, err = d.ServiceToken(ctx, "service-secret"); !errors.Is(err, drive.ErrDenied) {

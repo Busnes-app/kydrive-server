@@ -12,8 +12,15 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
-// anyKey accepts every request, signed or not: the signature itself is the transport's check.
+// anyKey accepts every request: the signature itself is the transport's check.
 var anyKey = func(string, *ecdsa.PublicKey) error { return nil }
+
+// devKey is a device signing key (SPKI DER) for links whose key the test does not inspect.
+var devKey = func() []byte {
+	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	der, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
+	return der
+}()
 
 func deviceKey(t *testing.T, curve elliptic.Curve) (*ecdsa.PrivateKey, []byte) {
 	t.Helper()
@@ -55,15 +62,44 @@ func TestDeviceEnrolsItsKeyOnlyWhenLinking(t *testing.T) {
 	if gotID == "" || gotKey == nil || !gotKey.Equal(&priv.PublicKey) {
 		t.Fatalf("enrolled key not handed to verify: %q %v", gotID, gotKey)
 	}
-	// An unsigned link has no key.
-	unsigned := link(t, d, "worker")
-	if _, err := d.DeviceUser(ctx, unsigned, func(_ string, key *ecdsa.PublicKey) error {
-		if key != nil {
-			t.Error("unsigned device has a key")
-		}
-		return nil
-	}); err != nil {
+	// A link without a key is refused, and the code survives for the real client.
+	code, err = d.ApprovePhone(ctx, "worker")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := d.RedeemPhone(ctx, code, "Pixel 9", "android", nil); !errors.Is(err, drive.ErrInvalid) {
+		t.Fatalf("keyless link: %v", err)
+	}
+	if _, _, err := d.RedeemPhone(ctx, code, "Pixel 9", "android", der); err != nil {
+		t.Fatalf("code spent by a keyless attempt: %v", err)
+	}
+}
+
+func TestKeylessDeviceIsToldItWasRevokedThenRefused(t *testing.T) {
+	st, _, _ := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	token := link(t, d, "worker")
+	// A device linked before signing: its row has no key.
+	if err := drive.ExecSQL(ctx, d, `UPDATE drive_devices SET pubkey=''`); err != nil {
+		t.Fatal(err)
+	}
+	keyless := errors.New("key required")
+	refuse := func(_ string, key *ecdsa.PublicKey) error {
+		if key != nil {
+			t.Error("keyless device has a key")
+		}
+		return keyless
+	}
+	if _, err := d.DeviceUser(ctx, token, refuse); !errors.Is(err, keyless) {
+		t.Fatalf("live keyless device: %v", err)
+	}
+	if err := d.RevokeDevice(ctx, "worker", mustDevices(t, d, "worker")[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	// It still learns it must wipe: its token is all it has.
+	var revoked drive.ErrDeviceRevoked
+	if _, err := d.DeviceUser(ctx, token, refuse); !errors.As(err, &revoked) || !revoked.Wipe {
+		t.Fatalf("revoked keyless device: %v", err)
 	}
 }
 

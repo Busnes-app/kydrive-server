@@ -93,26 +93,26 @@ func TestDeviceLink(t *testing.T) {
 	}
 
 	// A wrong verifier burns the code: the right one cannot follow.
-	if _, _, err = d.RedeemLink(ctx, code, verifier+"x", nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier+"x", devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("wrong verifier: %v", err)
 	}
-	if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("code reused after a wrong verifier: %v", err)
 	}
 
 	code, _ = approve("http://127.0.0.1:8080/cb")
-	token, user, err := d.RedeemLink(ctx, code, verifier, nil)
+	token, user, err := d.RedeemLink(ctx, code, verifier, devKey)
 	if err != nil || user != "worker" || !strings.HasPrefix(token, "kyd_") || len(token) != 47 {
 		t.Fatalf("redeem %q %q %v", token, user, err)
 	}
 	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_devices WHERE hash=? OR hash LIKE ?`, token, "%"+token[4:24]+"%"); err != nil || n != 0 {
 		t.Fatalf("token stored in clear: %d %v", n, err)
 	}
-	if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("reused code: %v", err)
 	}
 	for _, c := range []struct{ code, verifier string }{{"", verifier}, {code, ""}, {"unknown", verifier}, {code, "short"}} {
-		if _, _, err = d.RedeemLink(ctx, c.code, c.verifier, nil); !errors.Is(err, drive.ErrDenied) {
+		if _, _, err = d.RedeemLink(ctx, c.code, c.verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 			t.Errorf("%+v: %v", c, err)
 		}
 	}
@@ -122,7 +122,7 @@ func TestDeviceLink(t *testing.T) {
 	if err = drive.ExecSQL(ctx, d, `UPDATE drive_device_codes SET expires=? WHERE used=0`, time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("expired code: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestDeviceLink(t *testing.T) {
 	if err = drive.ExecSQL(ctx, d, `UPDATE users SET status='inactive' WHERE id='worker'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("inactive user redeemed: %v", err)
 	}
 	if _, err = approve("http://127.0.0.1:8080/cb"); !errors.Is(err, drive.ErrDenied) {
@@ -149,7 +149,7 @@ func TestDeviceLink(t *testing.T) {
 	// At most 20 live devices; revoking one frees a slot.
 	for len(mustDevices(t, d, "worker")) < 20 {
 		code, _ = approve("http://127.0.0.1:8080/cb")
-		if _, _, err = d.RedeemLink(ctx, code, verifier, nil); err != nil {
+		if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -183,7 +183,7 @@ func link(t *testing.T, d *drive.Store, user string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := d.RedeemLink(ctx, code, verifier, nil)
+	token, _, err := d.RedeemLink(ctx, code, verifier, devKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,15 +369,15 @@ func TestPhoneLink(t *testing.T) {
 		t.Fatalf("code stored in clear: %d %v", n, err)
 	}
 	for _, c := range []struct{ name, platform string }{{"", "android"}, {" Pixel", "android"}, {strings.Repeat("x", 101), "android"}, {"Pixel", "linux"}, {"Pixel", ""}} {
-		if _, _, err := d.RedeemPhone(ctx, code, c.name, c.platform, nil); !errors.Is(err, drive.ErrDenied) {
+		if _, _, err := d.RedeemPhone(ctx, code, c.name, c.platform, devKey); !errors.Is(err, drive.ErrDenied) {
 			t.Errorf("%+v: %v", c, err)
 		}
 	}
-	token, user, err := d.RedeemPhone(ctx, code, "Pixel 9", "android", nil)
+	token, user, err := d.RedeemPhone(ctx, code, "Pixel 9", "android", devKey)
 	if err != nil || user != "worker" || !strings.HasPrefix(token, "kyd_") || len(token) != 47 {
 		t.Fatalf("redeem %q %q %v", token, user, err)
 	}
-	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("reused phone code: %v", err)
 	}
 	if got, err := d.DeviceUser(ctx, token, anyKey); err != nil || got != "worker" {
@@ -390,17 +390,17 @@ func TestPhoneLink(t *testing.T) {
 
 	// The two kinds of code never cross, and trying burns the code.
 	code = phone()
-	if _, _, err = d.RedeemLink(ctx, code, verifier, nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemLink(ctx, code, verifier, devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("phone code redeemed as a computer: %v", err)
 	}
-	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("phone code reused after a computer attempt: %v", err)
 	}
 	link, err := d.ApproveLink(ctx, "worker", "Laptop", "linux", challengeOf(verifier), "http://127.0.0.1:8080/cb")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = d.RedeemPhone(ctx, link, "Pixel 9", "android", nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemPhone(ctx, link, "Pixel 9", "android", devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("computer code redeemed as a phone: %v", err)
 	}
 
@@ -412,7 +412,7 @@ func TestPhoneLink(t *testing.T) {
 	if err = drive.ExecSQL(ctx, d, `UPDATE drive_device_codes SET expires=? WHERE used=0`, time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", nil); !errors.Is(err, drive.ErrDenied) {
+	if _, _, err = d.RedeemPhone(ctx, code, "Pixel 9", "android", devKey); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("expired phone code: %v", err)
 	}
 }

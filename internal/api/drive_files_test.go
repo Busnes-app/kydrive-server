@@ -23,6 +23,7 @@ func send(t *testing.T, srv *api.Server, method, path, body string, cookie *http
 	}
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
+		signIfDevice(req, []byte(body))
 	}
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
