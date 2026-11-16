@@ -41,7 +41,7 @@ var (
 		"ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
 		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Ticket", "TicketUpload",
-		"IssueViewTicket", "StoreViewCopy", "ViewTicket", "ExpireViewCopies", "ViewClosed", "ViewDownload",
+		"IssueViewTicket", "StoreViewCopy", "ViewTicket", "ExpireViewCopies", "ViewClosed", "ViewDownload", "PendingViewDrops", "MarkViewDropped",
 	}
 )
 

@@ -30,6 +30,7 @@ per-user switch (**Let KyPost save and share my files**, resource owner side) an
 | Decrypted end-to-end content reaches a server-side editor | Server refusal on any encrypted part, armor or unparseable message (fail closed); client hides the actions. Test on both sides. |
 | Another user's message or attachment | KyPost reads only the caller's own mailbox (`withMailAuth`/`withMailbox`, existing); KyDrive opens a copy only for its owner's cookie session. |
 | The view config is reused to save | The document key is `view-<id>`, a namespace `ParseDocumentKey` refuses; the callback refuses status 2/6 for it, and the config sets `edit:false`. The JWT signs `mode:"view"`, so a browser cannot flip it. |
+| A revoked sign-in keeps viewing | Opening binds the copy to the browser sign-in (as editor sessions are); the revocations that end its editor sessions revoke the copy, Euro-Office's download stops and a drop of its key is queued. |
 | Euro-Office download URL guessed | `/api/editor/view/{id}` needs Euro-Office's outbox JWT naming that exact URL, as `/api/editor/download/{id}` does. |
 | Replay of a signed request | `syncauth` replay guard: 200 `duplicate`, nothing issued twice. |
 | Ticket replay | The upload ticket is single-use: the PUT that stores the bytes clears its hash in the same transaction. |

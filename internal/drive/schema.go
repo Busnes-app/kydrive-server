@@ -117,9 +117,11 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// Users who let KyPost make guest links (peer.go); no row is off.
 	`CREATE TABLE drive_peer_guest(user_id TEXT PRIMARY KEY);`,
 	// KyPost viewing copies (viewcopies.go); not files, counted in the owner's quota.
-	`CREATE TABLE drive_view_copies(id TEXT PRIMARY KEY,owner TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,pairing TEXT NOT NULL,token_hash TEXT UNIQUE,ticket_expires INTEGER NOT NULL,expires INTEGER NOT NULL,blob TEXT NOT NULL DEFAULT '');
+	// user_id, sso_sid, login_at and service_token (always empty) match drive_editor_sessions, so
+	// revokeEditors' filters apply.
+	`CREATE TABLE drive_view_copies(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,pairing TEXT NOT NULL,token_hash TEXT UNIQUE,ticket_expires INTEGER NOT NULL,expires INTEGER NOT NULL,blob TEXT NOT NULL DEFAULT '',sso_sid TEXT NOT NULL DEFAULT '',login_at INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0,dropped INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL DEFAULT 0,service_token TEXT NOT NULL DEFAULT '');
 	CREATE INDEX drive_view_copies_workspace ON drive_view_copies(workspace);
-	CREATE INDEX drive_view_copies_owner ON drive_view_copies(owner);`,
+	CREATE INDEX drive_view_copies_user ON drive_view_copies(user_id);`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

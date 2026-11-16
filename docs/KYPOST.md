@@ -228,6 +228,10 @@ backups skip it. Only its owner's browser sign-in opens it (`/view.html`, then
 person 404). Euro-Office gets view mode with edit, download, print, comment, review and form
 filling off, key `view-<id>`, and fetches `GET /api/editor/view/{id}` with its own signature.
 A callback for that key with status 2 or 6 is refused (403 `{"error":1}`); status 4 deletes it.
+Opening binds the copy to that browser sign-in, as an editor session is bound: Euro-Office
+fetches only an opened copy, and a logout, SSO back-channel logout, password reset or
+deactivation that revokes the sign-in's editor sessions revokes the copy at once and queues a
+Euro-Office drop of its key (retried every minute until it succeeds).
 The copy is deleted when the viewer page closes (`POST /api/drive/view-copies/{id}/close`),
 when Euro-Office closes the document, or at 24 hours (access ends then; the hourly sweep
 removes rows and bytes, and anything in `<data>/view/` older than 25 hours). Audited with IDs

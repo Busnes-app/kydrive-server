@@ -92,7 +92,7 @@ func (s *Store) IssueViewTicket(ctx context.Context, user, name string, size, ma
 			return err
 		}
 		var live int
-		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_view_copies WHERE owner=? AND expires>? AND (blob!='' OR ticket_expires>?)`, user, at.Unix(), at.Unix()).Scan(&live); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_view_copies WHERE user_id=? AND expires>? AND (blob!='' OR ticket_expires>?)`, user, at.Unix(), at.Unix()).Scan(&live); err != nil {
 			return err
 		}
 		if live >= viewCopiesPerUser {
@@ -102,7 +102,7 @@ func (s *Store) IssueViewTicket(ctx context.Context, user, name string, size, ma
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_view_copies(id,owner,workspace,name,size,pairing,token_hash,ticket_expires,expires) VALUES(?,?,?,?,?,?,?,?,?)`, c.ID, user, ws, stored, size, c.Pairing, tokenHash(token), at.Add(TicketLife).Unix(), c.Expires); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_view_copies(id,user_id,workspace,name,size,pairing,token_hash,ticket_expires,expires) VALUES(?,?,?,?,?,?,?,?,?)`, c.ID, user, ws, stored, size, c.Pairing, tokenHash(token), at.Add(TicketLife).Unix(), c.Expires); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "kypost.view_ticket_issued", "view:"+c.ID)
@@ -119,7 +119,7 @@ func (s *Store) ViewTicket(ctx context.Context, token string) (ViewCopy, error) 
 func (s *Store) viewCopy(ctx context.Context, where string, args ...any) (ViewCopy, error) {
 	var c ViewCopy
 	var stored string
-	err := s.db.QueryRowContext(ctx, `SELECT id,owner,name,blob,pairing,size,expires FROM drive_view_copies WHERE `+where, args...).Scan(&c.ID, &c.Owner, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
+	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,name,blob,pairing,size,expires FROM drive_view_copies WHERE revoked=0 AND `+where, args...).Scan(&c.ID, &c.Owner, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -181,17 +181,67 @@ func signedIn(ctx context.Context) bool {
 	return !service && !narrowed(ctx)
 }
 
-// ViewCopy is user's own stored, unexpired copy id; anything else is ErrNotFound.
+// ViewCopy opens user's own stored, unexpired copy id through the sign-in on ctx (WithLogin),
+// binding the copy to it as EditorSession does: whatever revokes that sign-in's editors
+// (revokeEditors) revokes the copy too. Anything else is ErrNotFound.
 func (s *Store) ViewCopy(ctx context.Context, user, id string) (ViewCopy, error) {
 	if !signedIn(ctx) {
 		return ViewCopy{}, ErrDenied
 	}
-	return s.viewCopy(ctx, `id=? AND owner=? AND blob!='' AND expires>?`, id, user, time.Now().Unix())
+	login, _ := ctx.Value(loginKey{}).(Login)
+	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := liveLogin(ctx, tx); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET sso_sid=?,login_at=? WHERE id=? AND user_id=? AND blob!='' AND expires>? AND revoked=0`, login.SSOSID, max(login.At.UnixNano(), 1), id, user, time.Now().Unix())
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return ViewCopy{}, err
+	}
+	return s.viewCopy(ctx, `id=? AND user_id=?`, id, user)
 }
 
-// ViewDownload is copy id for Euro-Office, whose signature the caller verified.
+// ViewDownload is copy id for Euro-Office, whose signature the caller verified: only a copy
+// opened through a sign-in that has not been revoked.
 func (s *Store) ViewDownload(ctx context.Context, id string) (ViewCopy, error) {
-	return s.viewCopy(ctx, `id=? AND blob!='' AND expires>?`, id, time.Now().Unix())
+	return s.viewCopy(ctx, `id=? AND blob!='' AND expires>? AND login_at>0`, id, time.Now().Unix())
+}
+
+// PendingViewDrops are revoked copies Euro-Office may still be showing; the API drops each
+// from Euro-Office and marks it with MarkViewDropped.
+func (s *Store) PendingViewDrops(ctx context.Context) ([]ViewCopy, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id FROM drive_view_copies WHERE revoked=1 AND dropped=0 AND login_at>0 AND next_attempt<=? LIMIT 100`, time.Now().Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ViewCopy
+	for rows.Next() {
+		var c ViewCopy
+		if err = rows.Scan(&c.ID, &c.Owner); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// MarkViewDropped records a drop, or with ok false backs the next attempt off a minute.
+// ponytail: a flat one-minute retry, not editor sessions' doubling backoff; copies die at ViewLife anyway.
+func (s *Store) MarkViewDropped(ctx context.Context, id string, ok bool) error {
+	q := `UPDATE drive_view_copies SET next_attempt=? WHERE id=?`
+	if ok {
+		q = `UPDATE drive_view_copies SET dropped=1,next_attempt=? WHERE id=?`
+	}
+	_, err := s.db.ExecContext(ctx, q, time.Now().Add(time.Minute).Unix(), id)
+	return err
 }
 
 // CloseViewCopy deletes user's own copy id and returns its blob for removal ("" when none).
@@ -199,7 +249,7 @@ func (s *Store) CloseViewCopy(ctx context.Context, user, id string) (string, err
 	if !signedIn(ctx) {
 		return "", ErrDenied
 	}
-	return s.dropView(ctx, `id=? AND owner=?`, "view.closed", id, user)
+	return s.dropView(ctx, `id=? AND user_id=?`, "view.closed", id, user)
 }
 
 // ViewClosed deletes copy id when Euro-Office reports its document closed.
@@ -210,7 +260,7 @@ func (s *Store) ViewClosed(ctx context.Context, id string) (string, error) {
 func (s *Store) dropView(ctx context.Context, where, action string, args ...any) (blob string, err error) {
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		var id, owner string
-		err := tx.QueryRowContext(ctx, `DELETE FROM drive_view_copies WHERE `+where+` RETURNING id,owner,blob`, args...).Scan(&id, &owner, &blob)
+		err := tx.QueryRowContext(ctx, `DELETE FROM drive_view_copies WHERE `+where+` RETURNING id,user_id,blob`, args...).Scan(&id, &owner, &blob)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -222,13 +272,14 @@ func (s *Store) dropView(ctx context.Context, where, action string, args ...any)
 	return blob, err
 }
 
-// ExpireViewCopies deletes copies past ViewLife and tickets never used, returning the blobs
+// ExpireViewCopies deletes copies past ViewLife, tickets never used and revoked copies no
+// longer shown, returning the blobs
 // to remove.
 func (s *Store) ExpireViewCopies(ctx context.Context) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		now := time.Now().Unix()
-		rows, err := tx.QueryContext(ctx, `DELETE FROM drive_view_copies WHERE expires<=? OR (blob='' AND ticket_expires<=?) RETURNING id,owner,blob`, now, now)
+		rows, err := tx.QueryContext(ctx, `DELETE FROM drive_view_copies WHERE expires<=? OR (blob='' AND ticket_expires<=?) OR (revoked=1 AND (dropped=1 OR login_at=0)) RETURNING id,user_id,blob`, now, now)
 		if err != nil {
 			return err
 		}

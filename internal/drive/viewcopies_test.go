@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -218,5 +219,57 @@ func TestViewCopyExpiry(t *testing.T) {
 	// Euro-Office closing the document deletes it too.
 	if blob, err := d.ViewClosed(ctx, kept.ID); err != nil || blob == "" {
 		t.Fatalf("closed %q %v", blob, err)
+	}
+}
+
+// A copy is bound to the sign-in that opened it: ending that sign-in revokes it at once and
+// queues a Euro-Office drop, as for editor sessions.
+func TestViewCopyEndsWithItsSignIn(t *testing.T) {
+	st, _, root := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	peer := drive.WithPeer(ctx, livePeer)
+	c := storeView(t, d, peer, "worker", root)
+	other := storeView(t, d, peer, "worker", root)
+	if _, err := d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
+		t.Fatalf("an unopened copy was served: %v", err)
+	}
+	login := drive.WithLogin(ctx, drive.Login{SSOSID: "sid-1", At: time.Now()})
+	if _, err := d.ViewCopy(login, "worker", c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ViewCopy(drive.WithLogin(ctx, drive.Login{SSOSID: "sid-2", At: time.Now()}), "worker", other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Sessions().EndSSOSession(ctx, "sid-1", time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
+		t.Fatalf("revoked copy served: %v", err)
+	}
+	if _, err := d.ViewCopy(login, "worker", c.ID); !errors.Is(err, drive.ErrNotFound) {
+		t.Fatalf("revoked copy reopened: %v", err)
+	}
+	if _, err := d.ViewDownload(ctx, other.ID); err != nil {
+		t.Fatalf("another sign-in's copy revoked: %v", err)
+	}
+	drops, err := d.PendingViewDrops(ctx)
+	if err != nil || len(drops) != 1 || drops[0].ID != c.ID || drops[0].Owner != "worker" {
+		t.Fatalf("drops %+v %v", drops, err)
+	}
+	// A failed drop retries later; a done one lets the sweep remove the bytes.
+	if err = d.MarkViewDropped(ctx, c.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if drops, _ = d.PendingViewDrops(ctx); len(drops) != 0 {
+		t.Fatalf("retry not backed off: %+v", drops)
+	}
+	if blobs, _ := d.ExpireViewCopies(ctx); len(blobs) != 0 {
+		t.Fatalf("swept before its drop: %v", blobs)
+	}
+	if err = d.MarkViewDropped(ctx, c.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if blobs, _ := d.ExpireViewCopies(ctx); len(blobs) != 1 {
+		t.Fatalf("dropped copy not swept: %v", blobs)
 	}
 }

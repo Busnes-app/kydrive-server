@@ -285,6 +285,8 @@ var noChange = map[string]string{
 	"CloseViewCopy":           "viewing copies are not items",
 	"ViewClosed":              "viewing copies are not items",
 	"ExpireViewCopies":        "viewing copies are not items",
+	"PendingViewDrops":        "read",
+	"MarkViewDropped":         "viewing copies are not items",
 	"AppendUpload":            "stages bytes; the item appears on CompleteUpload",
 	"ApplyRetention":          "purges trashed items and old versions only (Decision 4)",
 	"AgentTokenUser":          "credential bookkeeping",

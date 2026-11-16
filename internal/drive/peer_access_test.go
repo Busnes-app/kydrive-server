@@ -37,7 +37,7 @@ var (
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
 		"PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
 		"RevokeUserEditorsBefore", "SealLegacyBlobs", "ServiceToken", "SweepOrphans", "UnlinkDevice", "UpgradeBlobs",
-		"ExpireViewCopies", "ViewClosed", "ViewDownload",
+		"ExpireViewCopies", "ViewClosed", "ViewDownload", "PendingViewDrops", "MarkViewDropped",
 	}
 )
 

@@ -187,6 +187,32 @@ func TestKyPostViewCopy(t *testing.T) {
 	if rec := send(t, w.srv, "POST", "/api/drive/view-copies/"+id+"/editor", "", w.ann, ""); rec.Code != 404 {
 		t.Fatalf("closed copy opened: %d", rec.Code)
 	}
+	// Signing out ends the viewer: Euro-Office's download stops and a drop is queued.
+	id = w.viewUpload("sub-ann", "deck.pptx", viewDocx)
+	if rec := send(t, w.srv, "POST", "/api/drive/view-copies/"+id+"/editor", "", w.ann, ""); rec.Code != 200 {
+		t.Fatalf("open %d", rec.Code)
+	}
+	url := w.driveOrigin + "/api/editor/view/" + id
+	signed, _ = w.signer.Sign(map[string]any{"payload": map[string]string{"url": url}, "exp": time.Now().Add(time.Minute).Unix()})
+	get := func() int {
+		req := httptest.NewRequest("GET", "/api/editor/view/"+id, nil)
+		req.Header.Set("Authorization", "Bearer "+signed)
+		rec := httptest.NewRecorder()
+		w.srv.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := get(); got != 200 {
+		t.Fatalf("download before logout %d", got)
+	}
+	if rec := send(t, w.srv, "POST", "/api/auth/logout", "", w.ann, ""); rec.Code != 200 {
+		t.Fatalf("logout %d", rec.Code)
+	}
+	if got := get(); got != 404 {
+		t.Fatalf("download after logout %d", got)
+	}
+	if drops, err := w.st.Drive().PendingViewDrops(context.Background()); err != nil || len(drops) != 1 || drops[0].ID != id {
+		t.Fatalf("drop not queued: %+v %v", drops, err)
+	}
 	if strings.Contains(w.logs.String(), "Q3 plan") || strings.Contains(w.logs.String(), "sheet.csv") {
 		t.Fatalf("a file name reached the log:\n%s", w.logs.String())
 	}

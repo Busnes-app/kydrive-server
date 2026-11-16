@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
 // EditorConfigurationError is checked by the CLI before serving requests.
@@ -35,6 +37,22 @@ func (s *Server) revokeEditors(ctx context.Context) {
 		}
 		if err = s.store.Drive().MarkDropped(ctx, e.ID); err != nil {
 			log.Printf("editor revocation receipt failed session=%s: %v", e.ID, err)
+		}
+	}
+	views, err := s.store.Drive().PendingViewDrops(ctx)
+	if err != nil {
+		log.Printf("viewing copy revocation scan failed: %v", err)
+		return
+	}
+	for _, c := range views {
+		attempt, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err = s.editor.Drop(attempt, drive.ViewKeyPrefix+c.ID, c.Owner)
+		cancel()
+		if err != nil {
+			log.Printf("viewing copy revocation pending view=%s: %v", c.ID, err)
+		}
+		if err = s.store.Drive().MarkViewDropped(ctx, c.ID, err == nil); err != nil {
+			log.Printf("viewing copy revocation receipt failed view=%s: %v", c.ID, err)
 		}
 	}
 }
