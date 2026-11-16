@@ -27,6 +27,7 @@ the recovery pin or delete accounts.
 | Euro-Office JWT (HS256) | Operator-supplied | `KYDRIVE_EDITOR_SECRET` below 32 bytes is refused; the editor Compose overlay refuses the same. |
 | OIDC ID tokens | Verified by `coreos/go-oidc` against the provider's JWKS | Every RSA key in the fetched JWKS must have at least 2048 modulus bits, or the whole set is refused and sign-in fails. The check reads JWK members the way the verifier does. EC/Ed25519 key handling stays with go-jose. |
 | Recovery capsules | Sealed by `ky-primitives/recoveryclient` to the pinned fixed-suite public key | No size is selectable; the suite is fixed. |
+| TLS pin identity key (Ed25519) | 32-byte seed created once in `data/identity.key`, or `KYDRIVE_IDENTITY_KEY_FILE` (absolute path); sealed in every backup capsule | No size is selectable. A wrong-length file is refused at startup, never overwritten. Never rotated: linked apps hold its public half. |
 | Generated tokens | Session, service, device, sharing-link and guest tokens 256 random bits; app passwords and agent tokens 160; stored as SHA-256 hashes | Not operator-supplied. |
 
 `KY_SCIM_TOKEN` (default 24 random bytes) and `KY_KYSIGNON_SECRET` are bearer
@@ -49,6 +50,8 @@ P-256/P-384/P-521 or Ed25519 keys. This covers each TLS client in KyDrive's code
   and refuses discovery and token redirects.
 - The Euro-Office API (`internal/editor`), HTTPS outside `KY_ENV=development`.
 - KyRecovery deposits and restore (`ky-primitives/recoveryclient`), always HTTPS.
+- The TLS pin probe (`internal/api/tls_pin.go`): a handshake with `KY_APP_URL`, TLS 1.2+,
+  system roots, 2-second timeout, to read the leaf it signs for `GET /api/devices/tls-pin`.
 
 Certificate and hostname verification stay on. A private CA does not waive the
 floor: replace a weak chain, never disable verification.

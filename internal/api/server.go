@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"log"
@@ -74,6 +75,10 @@ type Server struct {
 	search         *search.Index // content search; nil when off
 	suiteApps      suiteAppsCache
 	kypost         kypostLink // KyPost pairing (kypost.go)
+	// TLS pin probe (tls_pin.go): roots nil is the system pool; tests inject a CA.
+	pinProbeRoots    *x509.CertPool
+	pinProbeMu       sync.Mutex
+	pinProbeFailedAt time.Time
 }
 
 // detachedCounter is a WaitGroup that tolerates a registration arriving while the wait is

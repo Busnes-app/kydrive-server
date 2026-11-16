@@ -29,6 +29,7 @@ func (s *Server) deviceRoutes() {
 	s.mux.HandleFunc("POST /api/devices/approve", s.requireAuthenticated(s.requireStepUp(s.handleApproveDevice)))
 	s.mux.HandleFunc("POST /api/devices/phone-code", s.requireAuthenticated(s.requireStepUp(s.handlePhoneCode)))
 	s.mux.HandleFunc("POST /api/devices/token", s.handleDeviceToken)
+	s.mux.HandleFunc("GET /api/devices/tls-pin", s.handleTLSPin)
 	s.mux.HandleFunc("GET /api/devices", s.requireAuthenticated(s.handleDevices))
 	s.mux.HandleFunc("DELETE /api/devices/{id}", s.requireAuthenticated(s.handleRevokeDevice))
 	s.mux.HandleFunc("DELETE /api/devices/self", s.handleUnlinkDevice)
@@ -109,7 +110,8 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// user_id is the account's immutable ID: the client keys its pairing on it, since a username can change.
-	s.writeJSON(w, 200, map[string]string{"token": token, "user_id": user.ID, "user": user.Username, "devices_url": s.config.Server.AppURL + "/"})
+	// identity_key reaches the device over its pinned channel; it verifies GET /api/devices/tls-pin.
+	s.writeJSON(w, 200, s.withIdentityKey(map[string]string{"token": token, "user_id": user.ID, "user": user.Username, "devices_url": s.config.Server.AppURL + "/"}))
 }
 
 // handleDeviceAccount tells a linked computer which account its own device token belongs to.
@@ -124,7 +126,7 @@ func (s *Server) handleDeviceAccount(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.writeJSON(w, 200, map[string]string{"user_id": user.ID, "user": user.Username})
+	s.writeJSON(w, 200, s.withIdentityKey(map[string]string{"user_id": user.ID, "user": user.Username}))
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {

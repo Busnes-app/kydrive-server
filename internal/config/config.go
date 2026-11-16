@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -84,6 +85,10 @@ type SecurityConfig struct {
 	// read from it, or while <DataDir>/drill holds residue of an interrupted recovery drill
 	// (its opened capsule carries the key): a copy of the data directory then decrypts itself.
 	KeyInDataDir bool `json:"-"`
+	// IdentityKey signs the TLS pin statement linked devices roll over to (KYDRIVE_IDENTITY_KEY_FILE,
+	// default <DataDir>/identity.key). Never rotated: devices hold its public half. nil only for
+	// an operator command on a deployment whose server has not yet created it.
+	IdentityKey ed25519.PrivateKey `json:"-"`
 }
 
 // SSOConfig holds identity provider and federation parameters.
@@ -154,6 +159,34 @@ func LoadExisting() (*Config, error) {
 		return nil, fmt.Errorf("no existing database at %s (check KY_DATA_DIR/KY_DB_DSN): %w", path, err)
 	}
 	return cfg, nil
+}
+
+// identityKeyFile is the identity seed's path: KYDRIVE_IDENTITY_KEY_FILE, else <dataDir>/identity.key.
+func identityKeyFile(dataDir string) string {
+	return getEnv("KYDRIVE_IDENTITY_KEY_FILE", filepath.Join(dataDir, "identity.key"))
+}
+
+// loadIdentityKey reads the identity seed, creating it unless existing. An operator command
+// never mints one: the server does, and a key no device learned need not be backed up.
+func loadIdentityKey(dataDir string, existing bool) (ed25519.PrivateKey, error) {
+	path := identityKeyFile(dataDir)
+	if getEnv("KYDRIVE_IDENTITY_KEY_FILE", "") != "" && !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("KYDRIVE_IDENTITY_KEY_FILE must be an absolute path")
+	}
+	var seed []byte
+	var err error
+	if existing {
+		seed, err = keyfile.Load(path, ed25519.SeedSize)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+	} else {
+		seed, err = keyfile.LoadOrCreate(path, ed25519.SeedSize)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("KYDRIVE_IDENTITY_KEY_FILE: %w", err)
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
 }
 
 func load(existing bool) (*Config, error) {
@@ -229,6 +262,10 @@ func load(existing bool) (*Config, error) {
 	_, statErr := os.Lstat(keyPath)
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fmt.Errorf("encryption key: %w", statErr)
+	}
+	identityKey, err := loadIdentityKey(dataDir, existing)
+	if err != nil {
+		return nil, err
 	}
 	drillDir := getEnv("KY_DRILL_DIR", filepath.Join(dataDir, "drill"))
 	if !filepath.IsAbs(drillDir) && getEnv("KY_DRILL_DIR", "") != "" {
@@ -314,6 +351,7 @@ func load(existing bool) (*Config, error) {
 			SessionSecret:           sessionSecret,
 			EncryptionKey:           encryptionKey,
 			KeyInDataDir:            statErr == nil || len(drillResidue) > 0,
+			IdentityKey:             identityKey,
 			CookieSecure:            envBool("KY_COOKIE_SECURE", env == "production"),
 			CookieDomain:            getEnv("KY_COOKIE_DOMAIN", ""),
 			SessionTTL:              7 * 24 * time.Hour,

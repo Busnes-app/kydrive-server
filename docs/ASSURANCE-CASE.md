@@ -54,7 +54,10 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    `/dav/`; device tokens (`kyd_`) only `/api/drive/*` and `/dav/`; agent tokens (`kya_`) only
    `/mcp`. A device that enrolled a P-256 key when it linked must sign every request (method, URI,
    state-changing headers, body digest, date, nonce), so its token alone authorises nothing and a
-   captured request cannot be replayed (`internal/api/devicesig.go`). `/mcp` refuses any request carrying an `Origin` header, so a web page cannot use it
+   captured request cannot be replayed (`internal/api/devicesig.go`). A pinning app learns the
+   server's Ed25519 identity key over its pinned link and repins after a certificate renewal only
+   to a leaf that key signed for this host (`GET /api/devices/tls-pin`, `internal/api/tls_pin.go`),
+   so an interceptor holding a certificate the device trusts cannot take over the pin. `/mcp` refuses any request carrying an `Origin` header, so a web page cannot use it
    (`internal/api/mcp.go`).
 3. **KyIdentity → KyDrive.** OIDC sign-in with PKCE `S256` and verified ID tokens; SCIM with a
    bearer token; a directory webhook that must carry a valid HMAC-SHA256 signature and a timestamp
@@ -96,7 +99,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
   parsing from `elimity-com/scim`, passwords from `ky-primitives/password`.
 - **Separation of privilege.** Two-factor sign-in is enforced by KyIdentity, not KyDrive; administration of
   workspaces does not grant read access to their content.
-- **Open design.** Only published algorithms: AES-256-GCM, HKDF-SHA256, HMAC-SHA256, SHA-256,
+- **Open design.** Only published algorithms: AES-256-GCM, HKDF-SHA256, HMAC-SHA256, SHA-256, Ed25519,
   Argon2id through `ky-primitives/password`, OIDC with PKCE.
 - **Psychological acceptability.** Startup and the Recovery screen warn when the deployment key
   lives in the data directory; the agent token page shows the access it grants.
@@ -137,7 +140,11 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
   and the server refuses unsigned devices. Linking is trust on first use: whoever redeems the
   two-minute code enrols the key. Signing stops a stolen token, not an interceptor reading or
   changing file bytes in transit. The key signs without the user present, so background sync
-  works.
+  works. TLS leaf pinning with signed rollover is server-side only: no released client pins yet,
+  and the QR link does not carry a pin, so the first link is still trust on first use.
+- **The TLS pin identity key lives in the data directory by default** and in every backup. Anyone
+  who copies it can sign a pin for their own leaf; they still need a certificate the device's
+  system trust accepts and a position on the network.
 - **AI agents may follow instructions in file contents.** The README says to give write access only
   when everyone who can message the agent is trusted.
 - **No govulncheck in CI.** Known Go vulnerabilities are caught by Dependabot alerts, not by a
