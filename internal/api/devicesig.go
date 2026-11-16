@@ -79,7 +79,11 @@ func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *ecdsa.Publ
 	if err != nil {
 		return errDeviceSignature
 	}
-	msg, ok := deviceMessage(canonicalOrigin(s.config.Server.AppURL), r.Method, r.RequestURI, date, nonce, headerDigest(r.Header), digest)
+	headers, ok := headerDigest(r.Header)
+	if !ok {
+		return errDeviceSignature
+	}
+	msg, ok := deviceMessage(canonicalOrigin(s.config.Server.AppURL), r.Method, r.RequestURI, date, nonce, headers, digest)
 	sum := sha256.Sum256([]byte(msg))
 	if !ok || !ecdsa.VerifyASN1(key, sum[:], sig) {
 		return errDeviceSignature
@@ -124,14 +128,20 @@ func canonicalOrigin(raw string) string {
 	return scheme + "://" + host + ":" + port
 }
 
-func headerDigest(h http.Header) string {
+// headerDigest is false when a signed header is sent more than once: handlers read only the
+// first field, so the fields' boundaries must not be lost in what was signed.
+func headerDigest(h http.Header) (string, bool) {
 	sum := sha256.New()
 	for _, name := range signedHeaders {
-		if v := h.Values(name); len(v) > 0 {
-			io.WriteString(sum, name+":"+strings.Join(v, ",")+"\n")
+		switch v := h.Values(name); len(v) {
+		case 0:
+		case 1:
+			io.WriteString(sum, name+":"+v[0]+"\n")
+		default:
+			return "", false
 		}
 	}
-	return hex.EncodeToString(sum.Sum(nil))
+	return hex.EncodeToString(sum.Sum(nil)), true
 }
 
 // bindBody makes the handler see only the bytes the device signed. A body up to

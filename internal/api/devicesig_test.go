@@ -154,6 +154,18 @@ func TestSignedDeviceRequests(t *testing.T) {
 	r.Header.Set("Depth", "1")
 	expect(serve(srv, r), 401, "other Depth")
 	expect(serve(srv, d.request("PROPFIND", "/dav/", nil, "Depth", "1")), 207, "signed DAV")
+	// A signed header sent twice is refused: the handler would act on the first field only.
+	expect(serve(srv, d.request("MKCOL", "/dav/Team/Src/", nil)), 201, "signed MKCOL")
+	r = httptest.NewRequest("MOVE", "/dav/Team/Src/", nil)
+	r.Header.Set("Destination", "/dav/Team/Other/,/dav/Team/Dst/")
+	d.sign(r, nil)
+	r.Header.Del("Destination")
+	r.Header.Add("Destination", "/dav/Team/Other/")
+	r.Header.Add("Destination", "/dav/Team/Dst/")
+	expect(serve(srv, r), 401, "split Destination")
+	if got := serve(srv, d.request("PROPFIND", "/dav/Team/Src/", nil, "Depth", "0")); got.Code != 207 {
+		t.Fatalf("refused MOVE changed files: %d %s", got.Code, got.Body.String())
+	}
 	old := &signer{key: d.key, token: d.token, origin: origin, now: func() time.Time { return time.Now().Add(-6 * time.Minute) }}
 	expect(serve(srv, old.request("GET", "/api/drive/workspaces", nil)), 401, "stale date")
 	other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

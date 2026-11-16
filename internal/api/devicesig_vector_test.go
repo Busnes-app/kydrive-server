@@ -50,7 +50,7 @@ func TestDeviceSigningGoldenVector(t *testing.T) {
 		r.Header.Set(name, value)
 	}
 	wantHeaders := hexSHA(v.SignedHeaders)
-	if got := headerDigest(r.Header); got != wantHeaders {
+	if got, ok := headerDigest(r.Header); !ok || got != wantHeaders {
 		t.Fatalf("header digest %s, want %s", got, wantHeaders)
 	}
 	msg, ok := deviceMessage(v.Origin, v.Method, v.RequestURI, v.Date, v.Nonce, wantHeaders, hexSHA(v.Body))
