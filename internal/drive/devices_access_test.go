@@ -38,7 +38,7 @@ var (
 		"DeferRevocation", "DeletedWorkspaces", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",
 		"PruneChanges", "PruneDevices", "PublishEditor", "PurgeDeletedWorkspaces", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors", "RevokeUserEditorsBefore", "SealLegacyBlobs", "UpgradeBlobs",
-		"ServiceToken", "SweepOrphans",
+		"ReconcileSuiteGroups", "ServiceToken", "SweepOrphans",
 		// KyPost's signed routes and ticket uploads.
 		"ExpireTickets", "IssueTicket", "PeerFetch", "PeerFree", "PeerGuestLink", "PeerGuestSetting", "PeerSetting", "Ticket", "TicketUpload",
 		"IssueViewTicket", "StoreViewCopy", "ViewTicket", "ExpireViewCopies", "ViewClosed", "ViewDownload", "PendingViewDrops", "MarkViewDropped",

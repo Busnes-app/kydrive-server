@@ -122,6 +122,9 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	`CREATE TABLE drive_view_copies(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,size INTEGER NOT NULL,pairing TEXT NOT NULL,token_hash TEXT UNIQUE,ticket_expires INTEGER NOT NULL,expires INTEGER NOT NULL,blob TEXT NOT NULL DEFAULT '',sso_sid TEXT NOT NULL DEFAULT '',login_at INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0,dropped INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL DEFAULT 0,service_token TEXT NOT NULL DEFAULT '');
 	CREATE INDEX drive_view_copies_workspace ON drive_view_copies(workspace);
 	CREATE INDEX drive_view_copies_user ON drive_view_copies(user_id);`,
+	// Suite groups (suitegroups.go): one shared workspace and one local group per KyIdentity
+	// suite group, keyed on its ID. Rows are never deleted.
+	`CREATE TABLE drive_suite_groups(kyid TEXT PRIMARY KEY,workspace TEXT NOT NULL UNIQUE REFERENCES drive_workspaces(id),grp TEXT NOT NULL UNIQUE REFERENCES groups(id));`,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

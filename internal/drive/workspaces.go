@@ -99,30 +99,21 @@ func (s *Store) DeleteWorkspace(ctx context.Context, user, workspace, confirm st
 			return nil
 		}
 		now := time.Now()
-		var files, folders, uploads int
-		if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?),(SELECT COUNT(*) FROM drive_folders WHERE workspace=?),(SELECT COUNT(*) FROM drive_upload_sessions WHERE workspace=? AND (expires>? OR completing>?))`,
-			workspace, workspace, workspace, now.Unix(), now.Unix()-int64(completionClaim/time.Second)).Scan(&files, &folders, &uploads); err != nil {
+		var files, folders, uploads, suite int
+		if err := tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?),(SELECT COUNT(*) FROM drive_folders WHERE workspace=?),(SELECT COUNT(*) FROM drive_upload_sessions WHERE workspace=? AND (expires>? OR completing>?)),(SELECT COUNT(*) FROM drive_suite_groups WHERE workspace=?)`,
+			workspace, workspace, workspace, now.Unix(), now.Unix()-int64(completionClaim/time.Second), workspace).Scan(&files, &folders, &uploads, &suite); err != nil {
 			return err
 		}
 		resource := fmt.Sprintf("%s name=%q", workspace, name)
-		if files+folders > 0 {
-			if confirm != name {
+		// A suite group's workspace is never removed, even empty: KyIdentity may turn it on again.
+		if files+folders > 0 || suite > 0 {
+			if files+folders > 0 && confirm != name {
 				return fmt.Errorf("%w: workspace is not empty; confirm with its name", ErrConflict)
 			}
 			recoverable = true
 			resource += fmt.Sprintf(" recoverable=true files=%d folders=%d", files, folders)
-			counts, err := run(ctx, tx, workspace, []step{
-				{"links", `UPDATE drive_links SET revoked=1 WHERE workspace=? AND revoked=0`},
-				{"service_tokens", `UPDATE drive_service_tokens SET revoked=true WHERE workspace=? AND revoked=false`},
-				{"agent_tokens", `DELETE FROM drive_app_passwords WHERE root_workspace=?`},
-				{"editor_sessions", `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (SELECT id FROM drive_files WHERE workspace=?)`},
-				{"", `UPDATE drive_editor_documents SET closed=true WHERE file_id IN (SELECT id FROM drive_files WHERE workspace=?)`},
-				{"", `UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE workspace=?`},
-			})
+			counts, err := archiveWorkspace(ctx, tx, user, workspace, now)
 			if err != nil {
-				return err
-			}
-			if _, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET deleted_at=?,deleted_by=? WHERE id=?`, now.UTC().Format(time.RFC3339Nano), user, workspace); err != nil {
 				return err
 			}
 			return event(ctx, tx, user, "workspace.deleted", resource+counts)
@@ -147,19 +138,46 @@ func (s *Store) RestoreWorkspace(ctx context.Context, user, workspace string) er
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
-		var name string
-		err := tx.QueryRowContext(ctx, `SELECT w.name FROM drive_workspaces w WHERE w.id=? AND w.deleted_at!='' AND NOT EXISTS(SELECT 1 FROM drive_personal_workspaces p WHERE p.workspace=w.id)`, workspace).Scan(&name)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
+		name, err := restoreWorkspace(ctx, tx, workspace)
 		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET deleted_at='',deleted_by='' WHERE id=?`, workspace); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "workspace.restored", fmt.Sprintf("%s name=%q", workspace, name))
 	})
+}
+
+// restoreWorkspace clears a deleted shared workspace's deletion and returns its name; a live,
+// personal or unknown workspace is ErrNotFound.
+func restoreWorkspace(ctx context.Context, tx *sql.Tx, workspace string) (string, error) {
+	var name string
+	err := tx.QueryRowContext(ctx, `SELECT w.name FROM drive_workspaces w WHERE w.id=? AND w.deleted_at!='' AND NOT EXISTS(SELECT 1 FROM drive_personal_workspaces p WHERE p.workspace=w.id)`, workspace).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE drive_workspaces SET deleted_at='',deleted_by='' WHERE id=?`, workspace)
+	return name, err
+}
+
+// archiveWorkspace deletes a shared workspace recoverably: its links, service tokens, rooted
+// agent tokens and editor sessions are revoked for good, grants and shares lapse, items stay.
+// It returns the revoked counts for the caller's event.
+func archiveWorkspace(ctx context.Context, tx *sql.Tx, actor, workspace string, now time.Time) (string, error) {
+	counts, err := run(ctx, tx, workspace, []step{
+		{"links", `UPDATE drive_links SET revoked=1 WHERE workspace=? AND revoked=0`},
+		{"service_tokens", `UPDATE drive_service_tokens SET revoked=true WHERE workspace=? AND revoked=false`},
+		{"agent_tokens", `DELETE FROM drive_app_passwords WHERE root_workspace=?`},
+		{"editor_sessions", `UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (SELECT id FROM drive_files WHERE workspace=?)`},
+		{"", `UPDATE drive_editor_documents SET closed=true WHERE file_id IN (SELECT id FROM drive_files WHERE workspace=?)`},
+		{"", `UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE workspace=?`},
+	})
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE drive_workspaces SET deleted_at=?,deleted_by=? WHERE id=?`, now.UTC().Format(time.RFC3339Nano), actor, workspace)
+	return counts, err
 }
 
 // DeletedWorkspaces lists deleted shared workspaces, newest first. Admin only.
@@ -195,7 +213,8 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 		return nil, nil
 	}
 	stamp := at.UTC().Format(time.RFC3339Nano)
-	const expired = `deleted_at!='' AND julianday(?)-julianday(deleted_at)>?`
+	// Suite group workspaces are kept forever (suitegroups.go).
+	const expired = `deleted_at!='' AND julianday(?)-julianday(deleted_at)>? AND id NOT IN (SELECT workspace FROM drive_suite_groups)`
 	ids, err := column(ctx, s.db, `SELECT id FROM drive_workspaces WHERE `+expired+` ORDER BY deleted_at`, stamp, days)
 	if err != nil {
 		return nil, err

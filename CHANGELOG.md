@@ -10,6 +10,14 @@ Interface and behaviour changes, newest first.
   `/view.html` in Euro-Office's view mode (no edit, download or print). It is visible to its
   owner only, never shared, listed, searched or backed up, counts against My files' quota and
   is deleted when the viewer closes or after 24 hours. Status adds `viewer`. Schema 24.
+- **Suite groups.** When KySignOn is configured, KyDrive reads KyIdentity's suite groups
+  (`GET /api/suite/groups`) every 60 seconds and gives each one a shared workspace, keyed on
+  the group's ID: its name follows the group (numbered `Sales (2)` on a clash), and its members
+  are exactly the group's listed members with a KyDrive account, as editors; KyDrive
+  administrators are never added. A group KyIdentity lists as archived has its workspace
+  archived in Deleted workspaces with its files kept; turning it on again restores the same
+  workspace. Suite group workspaces are never purged or removed. A failed or refused call
+  changes nothing. Schema 25 adds `drive_suite_groups`. See `docs/SUITE.md#suite-groups`.
 
 - **Content searches are rate-limited.** Searches that look inside files are limited to 60 a minute
   and 600 an hour per user, web and MCP together. Over the limit `GET /api/drive/search` answers

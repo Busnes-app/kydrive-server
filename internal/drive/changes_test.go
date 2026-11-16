@@ -346,6 +346,7 @@ var noChange = map[string]string{
 	"PurgeDeletedWorkspaces":  "the whole workspace and its change log go; access was already gone",
 	"PurgeVersion":            "non-current versions only; current state is unchanged",
 	"Quota":                   "workspace setting",
+	"ReconcileSuiteGroups":    "workspaces, grants and memberships only; never items (archive is DeleteWorkspace's recoverable path)",
 	"RedeemLink":              "device credential bookkeeping",
 	"RedeemPhone":             "device credential bookkeeping",
 	"RenameWorkspace":         "workspace setting",

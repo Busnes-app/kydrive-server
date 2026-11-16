@@ -111,3 +111,6 @@ func ResolveKyPostForTest(s *Server, ctx context.Context) bool { return s.resolv
 
 // PickTypeForTest is the mime a picked file named name carries, or "".
 func PickTypeForTest(name string) string { return pickType(name) }
+
+// SyncSuiteGroupsForTest runs one suite group pass.
+func SyncSuiteGroupsForTest(s *Server, ctx context.Context) { s.syncSuiteGroups(ctx) }
