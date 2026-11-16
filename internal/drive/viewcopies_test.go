@@ -233,12 +233,21 @@ func TestViewCopyEndsWithItsSignIn(t *testing.T) {
 	if _, err := d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("an unopened copy was served: %v", err)
 	}
-	login := drive.WithLogin(ctx, drive.Login{SSOSID: "sid-1", At: time.Now()})
+	login := drive.WithLogin(ctx, drive.Login{SSOSID: "sid-1", At: time.Now().Add(-time.Minute)})
 	if _, err := d.ViewCopy(login, "worker", c.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.ViewCopy(drive.WithLogin(ctx, drive.Login{SSOSID: "sid-2", At: time.Now()}), "worker", other.ID); err != nil {
 		t.Fatal(err)
+	}
+	// Bound to its first sign-in: the same one reopens it, another (even the same user) cannot.
+	if _, err := d.ViewCopy(login, "worker", c.ID); err != nil {
+		t.Fatalf("same sign-in reopen: %v", err)
+	}
+	for _, l := range []drive.Login{{SSOSID: "sid-2", At: time.Now()}, {At: time.Now().Add(time.Second)}} {
+		if _, err := d.ViewCopy(drive.WithLogin(ctx, l), "worker", c.ID); !errors.Is(err, drive.ErrNotFound) {
+			t.Fatalf("another sign-in %+v opened it: %v", l, err)
+		}
 	}
 	if err := st.Sessions().EndSSOSession(ctx, "sid-1", time.Now().Add(time.Minute)); err != nil {
 		t.Fatal(err)

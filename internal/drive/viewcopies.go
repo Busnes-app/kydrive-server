@@ -182,7 +182,7 @@ func signedIn(ctx context.Context) bool {
 }
 
 // ViewCopy opens user's own stored, unexpired copy id through the sign-in on ctx (WithLogin),
-// binding the copy to it as EditorSession does: whatever revokes that sign-in's editors
+// binding the copy to it as EditorSession does (only the first sign-in may open it): whatever revokes that sign-in's editors
 // (revokeEditors) revokes the copy too. Anything else is ErrNotFound.
 func (s *Store) ViewCopy(ctx context.Context, user, id string) (ViewCopy, error) {
 	if !signedIn(ctx) {
@@ -193,7 +193,9 @@ func (s *Store) ViewCopy(ctx context.Context, user, id string) (ViewCopy, error)
 		if err := liveLogin(ctx, tx); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET sso_sid=?,login_at=? WHERE id=? AND user_id=? AND blob!='' AND expires>? AND revoked=0`, login.SSOSID, max(login.At.UnixNano(), 1), id, user, time.Now().Unix())
+		// Bound once, at the first open; another sign-in cannot open it, so one binding is enough.
+		at := max(login.At.UnixNano(), 1)
+		res, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET sso_sid=?,login_at=? WHERE id=? AND user_id=? AND blob!='' AND expires>? AND revoked=0 AND (login_at=0 OR (login_at=? AND sso_sid=?))`, login.SSOSID, at, id, user, time.Now().Unix(), at, login.SSOSID)
 		if err != nil {
 			return err
 		}
