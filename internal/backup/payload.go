@@ -30,6 +30,10 @@ const encryptionKeyPath = "data/encryption.key"
 // <DataDir>/recovery.pub that recoveryclient.RecoveryKeyPath reads.
 const recoveryPubPath = "data/recovery.pub"
 
+// identityKeyPath is where a restore drops the TLS pin identity seed: the default
+// <DataDir>/identity.key. Without it every linked device must re-link to learn a new key.
+const identityKeyPath = "data/identity.key"
+
 // dbName is the restored database file; dbPath is its capsule member when it fits in one.
 const (
 	dbName = "ky_server.db"
@@ -108,6 +112,10 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 		Data: []byte(hex.EncodeToString(cfg.Security.EncryptionKey) + "\n"),
 		Mode: 0600,
 	})
+
+	if key := cfg.Security.IdentityKey; key != nil {
+		files = append(files, recoveryclient.File{Path: identityKeyPath, Data: []byte(hex.EncodeToString(key.Seed()) + "\n"), Mode: 0600})
+	}
 
 	if pub, err := os.ReadFile(recoveryclient.RecoveryKeyPath(cfg.Database.DataDir)); err == nil {
 		files = append(files, recoveryclient.File{Path: recoveryPubPath, Data: pub, Mode: 0600})
@@ -357,6 +365,9 @@ func SizeWarning(cfg *config.Config) string {
 // Members names what a capsule carries, for the screen; it is what Collect would seal now.
 func Members(cfg *config.Config) []string {
 	m := []string{"data/ky_server.db", "config/settings.json", "config/integrations.json", encryptionKeyPath}
+	if cfg.Security.IdentityKey != nil {
+		m = append(m, identityKeyPath)
+	}
 	if os.Getenv("KYDRIVE_BULK_BACKUP_REPOSITORY") != "" {
 		m = append(m, BulkManifestPath)
 	}

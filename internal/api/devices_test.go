@@ -374,9 +374,10 @@ func TestDeviceAccount(t *testing.T) {
 	}
 	user := loginAs(t, srv, st, "acct", "user")
 	type account struct {
-		UserID string `json:"user_id"`
-		User   string
-		Token  string
+		UserID      string `json:"user_id"`
+		User        string
+		Token       string
+		IdentityKey string `json:"identity_key"`
 	}
 	out := redeem(srv, approve(t, srv, user), linkVerifier)
 	var got account
@@ -387,6 +388,10 @@ func TestDeviceAccount(t *testing.T) {
 	var who account
 	if me.Code != 200 || json.Unmarshal(me.Body.Bytes(), &who) != nil || who.UserID != "usr_acct" || who.User != "acct" {
 		t.Fatalf("device account %d %s", me.Code, me.Body.String())
+	}
+	// Both pinned-channel replies carry the TLS pin identity key (32-byte Ed25519, std base64).
+	if raw, err := base64.StdEncoding.DecodeString(got.IdentityKey); err != nil || len(raw) != 32 || who.IdentityKey != got.IdentityKey {
+		t.Fatalf("identity_key token %q device %q", got.IdentityKey, who.IdentityKey)
 	}
 	if got := send(t, srv, "GET", "/api/drive/device", "", user, ""); got.Code != 401 {
 		t.Fatalf("a session asked whose device: %d %s", got.Code, got.Body.String())

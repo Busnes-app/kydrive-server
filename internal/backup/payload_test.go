@@ -1,7 +1,9 @@
 package backup_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -154,5 +156,25 @@ func TestCollectRefusesADriverItCannotSnapshot(t *testing.T) {
 	cfg.Database.Driver = "postgres"
 	if _, err := backup.Collect(context.Background(), cfg, "1.0.0", backup.PurposeDeposit); !errors.Is(err, backup.ErrNoDatabaseSnapshot) {
 		t.Fatalf("got %v, want ErrNoDatabaseSnapshot", err)
+	}
+}
+
+// The TLS pin identity key rides in the capsule: without it a restore re-keys every device.
+func TestCollectCarriesTheIdentityKey(t *testing.T) {
+	cfg, _ := payloadConfig(t)
+	cfg.Security.IdentityKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{2}, ed25519.SeedSize))
+	payload, err := backup.Collect(context.Background(), cfg, "1.0.0", backup.PurposeDeposit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(payload.Files, func(f recoveryclient.File) bool { return f.Path == "data/identity.key" })
+	if i < 0 {
+		t.Fatal("payload has no data/identity.key")
+	}
+	if f := payload.Files[i]; string(f.Data) != hex.EncodeToString(cfg.Security.IdentityKey.Seed())+"\n" || f.Mode != 0600 {
+		t.Errorf("identity.key %q mode %o", f.Data, f.Mode)
+	}
+	if !slices.Contains(backup.Members(cfg), "data/identity.key") {
+		t.Error("Members does not list data/identity.key")
 	}
 }

@@ -27,8 +27,10 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   (`data/drive-bulk.json.000-of-NNN`). The library limits are never raised. `Collect` logs a
   warning once its members pass 80% of `capsule.MaxExpandedBytes` (256 MiB); `SizeWarning`
   gives the status route the same warning for the live database file. It also carries the encryption key (`data/encryption.key`, required — without it
-  the restored files and names are unreadable) and the pinned recovery public key
-  (`data/recovery.pub`, only when paired).
+  the restored files and names are unreadable), the TLS pin identity seed (`data/identity.key`,
+  hex, whenever `Security.IdentityKey` is set; without it a restore re-keys every device;
+  `TestCollectCarriesTheIdentityKey`, `cmd/server` `TestRestoreKeepsTheIdentityKey`) and the
+  pinned recovery public key (`data/recovery.pub`, only when paired).
 - `JoinDatabase(dataDir)` reassembles parts into `ky_server.db` (and `drive-bulk.json`) and
   removes them before anything opens them; with no parts it does nothing. It refuses a missing, extra or
   renumbered part and parts beside a different whole database (`ErrDatabaseParts`). In a capsule `restore`, `recoveryclient.Restore` joins the same names first and refuses such a set with `recoveryclient.ErrSplitParts` before this runs; a whole
