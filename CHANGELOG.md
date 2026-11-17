@@ -4,6 +4,8 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- Refresh compatible dependency versions and lockfiles. Rebuild or install the updated application; no database, configuration, account or key migration is required.
+
 - **Devices must sign.** `POST /api/devices/token` refuses a link without `publicKey` (400,
   the code is not spent). A device linked before signing gets 401
   `{"error":"device_key_required"}` and must be linked again; a revoked one is still told
