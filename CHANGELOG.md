@@ -4,6 +4,8 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- Keep SQLite `v1.62.0` with its upstream-required libc `v1.80.1` and memory `v1.12.1`; defer independent updates of those runtime dependencies.
+
 - Full Go checks use a fresh run and a 20-minute per-package timeout in CI and local Makefile targets. The real-password API suite can exceed Go's ten-minute default under race/FIPS instrumentation. Test assertions and cryptographic settings are unchanged; no production behavior or data migration changes.
 
 - Prepare application version `0.6.1` (from `0.6.0`) for the compatible dependency refresh. Rebuild or install the updated application; this version bump requires no additional data, account, key or configuration migration.
