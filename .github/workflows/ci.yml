@@ -14,6 +14,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   # The race and strong-key passes run beside everything else.
+  # The real-password API suite can exceed Go's 10-minute package default.
   race:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
@@ -31,7 +32,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y restic
       # web/dist is built, not committed; the Go packages embed it.
       - run: cd web && npm ci && npm run build
-      - run: go test -race ./... && go vet ./...
+      - run: go test -race -count=1 -timeout=20m ./... && go vet ./...
 
   fips:
     if: github.event.pull_request.draft != true
@@ -52,7 +53,7 @@ jobs:
       - name: test supported strong-key profile
         env:
           GODEBUG: fips140=on
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -timeout=20m ./...
 
   checks:
     if: github.event.pull_request.draft != true
