@@ -4,6 +4,8 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- Full Go checks use a fresh run and a 20-minute per-package timeout in CI and local Makefile targets. The real-password API suite can exceed Go's ten-minute default under race/FIPS instrumentation. Test assertions and cryptographic settings are unchanged; no production behavior or data migration changes.
+
 - Prepare application version `0.6.1` (from `0.6.0`) for the compatible dependency refresh. Rebuild or install the updated application; this version bump requires no additional data, account, key or configuration migration.
 
 - Refresh compatible dependency versions and lockfiles. Rebuild or install the updated application; no database, configuration, account or key migration is required.

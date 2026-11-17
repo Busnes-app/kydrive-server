@@ -12,17 +12,17 @@ build:
 
 test:
 	@echo "==> Running test suite..."
-	@go test -v ./...
+	@go test -v -count=1 -timeout=20m ./...
 
 test-race:
 	@echo "==> Running test suite with race detector..."
-	@go test -race -covermode=atomic -coverprofile=coverage.out ./...
+	@go test -race -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage.out ./...
 	@go tool cover -func=coverage.out | tail -1
 
 # Runs the same suite against PostgreSQL; needs a reachable server.
 test-postgres:
 	@echo "==> Running test suite against PostgreSQL..."
-	@KY_TEST_POSTGRES_DSN="$${KY_TEST_POSTGRES_DSN:-postgres://postgres:postgrespassword@127.0.0.1:5432/ky_server?sslmode=disable}" go test -count=1 ./...
+	@KY_TEST_POSTGRES_DSN="$${KY_TEST_POSTGRES_DSN:-postgres://postgres:postgrespassword@127.0.0.1:5432/ky_server?sslmode=disable}" go test -count=1 -timeout=20m ./...
 
 test-web:
 	@echo "==> Running frontend test suite..."
