@@ -52,7 +52,7 @@ PR 3 until it does.
 |---|---|---|
 | D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets multi-only constraints (D4) be created on empty tables. |
 | D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is open question 6. |
-| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged)`, filled only from `GET /api/suite/orgs` (T "Suite directory"), polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
+| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded)`, filled only from `GET /api/suite/orgs` (T "Suite directory"), polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
@@ -366,6 +366,19 @@ alert. Logouts are not refused for it, since a logout only takes access away.
 
 - The bootstrap and recovery local administrator (`docs/PERMISSIONS.md:32`) are staff
   accounts in multi-tenant mode, in the staff org (D9).
+- **Seeding the staff org.** On the first start of an empty multi-tenant database, before
+  bootstrap creates its administrator, KyDrive inserts one `drive_orgs` row for
+  `KYDRIVE_STAFF_ORG`: `active`, `seeded=1`, no storage limit. That row exists before any
+  poll, so the administrator can be created while KyIdentity is unreachable, and the
+  `users` insert passes the existence trigger.
+  - The first poll that lists the org replaces the seeded values and clears `seeded`.
+  - If a later poll reports the staff org as anything but `active`, staff are refused like
+    any other org's members, and KyDrive raises an alert. The local recovery administrator
+    is refused too. Recovery is an operator `set-org-status` CLI, audited, which re-seeds
+    the staff org's row only.
+  - The staff org gets no storage pool check (staff hold no customer content). Unverified:
+    whether KyIdentity's `/api/suite/orgs` lists the staff org at all. If it doesn't, the
+    seeded row simply stays.
 - `set-directory-role -role admin` is refused for an account outside the staff org.
 - `ApplyInstaller` (installer channel) is refused in multi-tenant mode, as in T.
 
@@ -530,7 +543,8 @@ fails the build.
 ## Lifecycle
 
 The poll (D3) applies a status change in one transaction per org, which also writes an audit
-row (`tenancy.org_status`, platform and org log). At most about 60 s pass between KyIdentity's
+row (`tenancy.org_status`, platform and org log; platform log only for `deleted`, see
+below). At most about 60 s pass between KyIdentity's
 change and KyDrive's.
 
 ### `suspended`, `deletion_scheduled`, or `enabled: false`
@@ -578,7 +592,18 @@ crash halfway repeats safely.
    row records the org ID and row counts per table, with no names.
 
 The `org_id` existence trigger refuses any new row once `drive_orgs.status` is `deleted`
-(see Triggers), during the purge and after it. Copies of the org's
+(see Triggers), during the purge and after it. That includes the two audit tables, whose
+org rows the purge deletes with everything else.
+- Every audit or event row written about a deleted org is a platform row instead: `org_id`
+  NULL, with the org ID in `resource` or `details`. That covers the status change itself,
+  each purge step and `DeleteUser`'s audit.
+- The audit and event helpers (`event`, `store.go:195`, and the base audit writer) choose
+  NULL when the row's org is `deleted`. So no purge transaction trips the trigger on its
+  own audit row, and a retried purge does not fail for that reason.
+- A test runs the whole purge against the triggers and expects `purged=1`, no org-stamped
+  row left, and the platform rows present.
+
+Copies of the org's
 data stay in capsules and Restic snapshots until backup retention drops them (residual risk,
 open question 5).
 
@@ -661,7 +686,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      entry, staging directory or index ref for the org, which is checked against the
      classification. The purge is killed halfway and rerun. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
-   `KYDRIVE_STAFF_ORG`. The admin UI gains the org selector and staff audit views. Operator
+   `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
    `docs/ASSURANCE-CASE.md`, whose trust boundaries change here.
    - Tests: the browser flow for staff org selection (`UI-VERIFICATION.md`). An end-to-end
