@@ -50,9 +50,9 @@ PR 3 until it does.
 
 | # | Decision | Why |
 |---|---|---|
-| D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets multi-only constraints (D4) be created on empty tables. |
+| D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets the multi-only DDL (see Triggers, "Mode-only DDL") be created on empty tables. |
 | D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is open question 6. |
-| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded)`, filled only from `GET /api/suite/orgs` (T "Suite directory"), polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
+| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded)`, filled from `GET /api/suite/orgs` (T "Suite directory"), with one exception: the staff org's row, seeded from `KYDRIVE_STAFF_ORG` and never overwritten by the poll (Local accounts). Polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
@@ -61,7 +61,7 @@ PR 3 until it does.
 | D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (open question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
 | D10 | In multi-tenant mode, shared workspaces exist only as suite group workspaces (`suitegroups.go:57`). Creating, renaming, deleting and re-quotaing a shared workspace through the admin API answers 404. | Customers have no administrator to create workspaces. Suite groups give households shared folders, and staff should not curate customer folders. |
 | D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers a purge. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
-| D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
+| D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. One named exception: the local bootstrap and recovery administrators take the staff org from operator configuration (`KYDRIVE_STAFF_ORG`), since no token exists when they are created. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
 
 ## KyDrive's half of the downstream contract
 
@@ -71,8 +71,8 @@ T "Tokens and suite contracts (multi-tenant)", **Downstream contract**, point by
 |---|---|---|---|---|
 | 1 | Refuse a token without `org_id` | The sign-on callback refuses an ID token with no `org_id` (403 "User account not provisioned", like a refused provision today), before any account lookup. So do the back-channel logout receiver (400 `invalid_request`) and the webhook (400). Single-tenant ignores the claim. | `claimsFromIDToken` reads no org (`oauth.go:145-169`); the callback looks up `sub` only (`sso_handlers.go:119`) | Callback, logout and webhook tests with the claim absent, in both modes |
 | 2 | Key every row by `org_id` | Every table in the inventory marked **O** gets `org_id` (D4). Derived tables (**D**) reach it through a foreign key. Platform tables (**P**) hold no customer data. | No `org_id` anywhere (`grep -rn org_id internal` finds none) | `TestEveryTableIsClassified`, `TestOrgOwnedTablesHaveOrgID` (see Isolation) |
-| 3 | Bind a local account to `(sub, org_id)`; refuse a known `sub` with a different `org_id` | `users.org_id` is set once, at account creation, from the token or webhook, and is immutable (trigger). A partial unique index on `(sso_provider, sso_subject)` for `kysignon` accounts (multi only, fresh database) makes `sub` resolve to one account. Callback, webhook, logout, suite group members and KyPost all compare the incoming `org_id` with the account's, and refuse a mismatch with the same answer as an unknown subject, plus an audit row `tenancy.org_mismatch`. | `DirectorySubject` resolves by subject alone (`sso_handlers.go:119`, `kysignon.go:92`, `kypost.go:334`, `suitegroups.go:215`); `idx_users_sso` is not unique (`migrations.go:50`) | A test per entry point: a known `sub` arrives with org B's ID |
-| 4 | Take the org only from a verified token, a signed webhook or a suite answer | D12. No route reads an org from a URL, form, cookie or header, except staff's org selection on `org` admin routes (see Admin surface), which applies only after the caller is proven staff. | n/a | `TestOrgSQLNamesOrgID`'s allowlist, plus review: the only `X-Ky-Org` reader is the admin middleware |
+| 3 | Bind a local account to `(sub, org_id)`; refuse a known `sub` with a different `org_id` | `users.org_id` is set once, at account creation, from the token or webhook, and is immutable (trigger). A partial unique index on `(sso_provider, sso_subject)` for `kysignon` accounts, multi-tenant only and created by the mode-only DDL (see Triggers), makes `sub` resolve to one account. Callback, webhook, logout, suite group members and KyPost all compare the incoming `org_id` with the account's, and refuse a mismatch with the same answer as an unknown subject, plus an audit row `tenancy.org_mismatch`. | `DirectorySubject` resolves by subject alone (`sso_handlers.go:119`, `kysignon.go:92`, `kypost.go:334`, `suitegroups.go:215`); `idx_users_sso` is not unique (`migrations.go:50`) | A test per entry point: a known `sub` arrives with org B's ID |
+| 4 | Take the org only from a verified token, a signed webhook or a suite answer | D12, including its one exception (local staff administrators, from operator configuration). No route reads an org from a URL, form, cookie or header, except staff's org selection on `org` admin routes (see Admin surface), which applies only after the caller is proven staff. | n/a | `TestOrgSQLNamesOrgID`'s allowlist, plus review: the only `X-Ky-Org` reader is the admin middleware |
 | 5 | Stop serving an org whose status is not `active`; keep its data unless `deleted` | D11 and Lifecycle. Every principal resolution reads `drive_orgs` in the same statement as the user's status. | Principals check `users.status='active'` only (`access.go:20,22,43`, `apppasswords.go:223,248`, `devices.go:217,249`, `session.go:108`) | `TestSuspendedOrgServesNothing`: every credential type, before and after a status change |
 | 6 | Enforce its own quotas from `/api/suite/orgs` | D7: `storage_bytes`, in `fits`. | `fits` checks one workspace (`store.go:682-692`) | Quota tests on every byte-adding path (see Quotas) |
 
@@ -251,13 +251,29 @@ Created by one drive schema entry (appended to `schema.go:15`, append-only):
   `deleted`, so nothing can be written into a deleted org. That covers a late guest upload,
   a KyPost ticket, or a worker racing the purge.
 - Single-tenant rows get `DEFAULT '<default org id>'` so the upgrade fills them in place.
-  SQLite allows `ADD COLUMN … NOT NULL DEFAULT` with a constant. One schema entry serves
-  both modes, so a multi-tenant database has the same column default. A multi-tenant
+  SQLite allows `ADD COLUMN … NOT NULL DEFAULT` with a constant. The shared schema entry
+  serves both modes, so a multi-tenant database has the same column default. A multi-tenant
   database therefore never holds the default org's row in `drive_orgs`, as in T ("A
   multi-tenant install has no default org row"). An insert that forgets `org_id` hits the
   existence check and fails, instead of landing in the default org.
   `TestMultiTenantRefusesDefaultOrg` inserts into every **O** table without `org_id` on a
   multi-tenant database and expects each insert to fail.
+- **Mode-only DDL.** The appended drive schema entry is mode-agnostic: the same columns,
+  defaults and triggers for both modes. Nothing in it depends on the mode, so a
+  single-tenant upgrade runs exactly what every install runs.
+  - DDL only multi-tenant needs lives in one separate function, `initMultiTenant`. Today
+    that is the partial unique index on `users(sso_provider, sso_subject) WHERE
+    sso_provider='kysignon'`.
+  - It runs once, in the transaction that first records `tenancy_mode=multi` on an empty
+    database (D1), and writes a `tenancy_multi_ddl` version to `server_settings`.
+  - No migration calls it. A single-tenant database can never be switched to multi
+    (D1), so it never runs on an upgrade, and the non-unique `idx_users_sso`
+    (`migrations.go:50`) stays as it is on single-tenant installs.
+  - Later multi-only DDL appends a numbered step to `initMultiTenant`. Each step runs only
+    on multi-tenant databases, at start, while the stored `tenancy_multi_ddl` version is
+    below that step.
+  - A test upgrades a single-tenant database that holds duplicate `kysignon` subjects and
+    expects success.
 - Same-org checks (`BEFORE INSERT` and `BEFORE UPDATE`) on `group_members`,
   `drive_personal_workspaces`, `drive_grants`, `drive_shares` (user and group principals),
   `drive_link_users` and `drive_suite_groups`.
@@ -371,14 +387,17 @@ alert. Logouts are not refused for it, since a logout only takes access away.
   `KYDRIVE_STAFF_ORG`: `active`, `seeded=1`, no storage limit. That row exists before any
   poll, so the administrator can be created while KyIdentity is unreachable, and the
   `users` insert passes the existence trigger.
-  - The first poll that lists the org replaces the seeded values and clears `seeded`.
-  - If a later poll reports the staff org as anything but `active`, staff are refused like
-    any other org's members, and KyDrive raises an alert. The local recovery administrator
-    is refused too. Recovery is an operator `set-org-status` CLI, audited, which re-seeds
-    the staff org's row only.
-  - The staff org gets no storage pool check (staff hold no customer content). Unverified:
-    whether KyIdentity's `/api/suite/orgs` lists the staff org at all. If it doesn't, the
-    seeded row simply stays.
+  - The row is sticky. The poller never updates the `seeded` row, so the staff org is
+    always `active` locally, and there is no recovery command to fight the poll.
+  - KyIdentity still decides staff access where it matters: a directory staff account
+    needs a fresh ID token to sign in, and KyIdentity refuses one for a suspended org
+    (T `active_principals`). So the sticky row keeps only the local recovery
+    administrator working during a KyIdentity-side problem, which is what it is for.
+  - If a poll reports the staff org as anything but `active`, KyDrive logs an alert and
+    changes nothing.
+  - The staff org gets no storage pool check (staff hold no customer content).
+  - `KYDRIVE_STAFF_ORG` is recorded at first start and immutable (open question 2). An
+    ID token whose `org_id` equals it is a staff account like any other.
 - `set-directory-role -role admin` is refused for an account outside the staff org.
 - `ApplyInstaller` (installer channel) is refused in multi-tenant mode, as in T.
 
@@ -635,7 +654,7 @@ sends those.
 | Anyone with a guest link | Read the shared item | Intended: guest links are the deliberate public path. They expire (`guest.go:69`) and can have a password. They stop with the creator's access or org (`guest.go:155-182`). Unchanged. |
 | Member of org A | Infer that B has a workspace or file name | Workspace names are free per org (`nameFree`). Search scores A's refs only. The vocabulary expands only words in A's refs. |
 | Member of org A | Get B's blob, by copy, by move, or by guessing | Blob IDs are random. No route takes a blob ID. Copy and move need ranks in both workspaces. D8's trigger refuses a version naming another org's blob. |
-| Malicious or buggy relying party, or a request field | Set or swap the org | The org comes only from the verified ID token, the `syncauth`-verified webhook or the suite directory (D12). `users.org_id` is set once and is immutable (trigger). A known `sub` with another org is refused (point 3). |
+| Malicious or buggy relying party, or a request field | Set or swap the org | The org comes only from the verified ID token, the `syncauth`-verified webhook or the suite directory (D12). The one exception, the staff org for local administrators, comes from operator configuration, not a request. `users.org_id` is set once and is immutable (trigger). A known `sub` with another org is refused (point 3). |
 | Holder of a stolen KyPost pair secret, or a buggy KyPost | Act as org B's user for org A, or name a user in the wrong org | Every body carries `org_id`, and `kypostAccount` refuses a mismatch. Peer contexts can do only three narrow things (`access.go:85-103`). A stolen secret still reaches every user whose `sub` and org it can name: residual, as in T. |
 | User of a suspended org | Keep working through WebDAV, the desktop client, an agent or a service token | `activePrincipal` on every credential path. Editor sessions are revoked. Within one poll (about 60 s). |
 | Customer of org A | Fill the shared disk | The org pool in `fits`, failing closed. The resumable upload cap and the file size limit bound staging (`uploads.go:100`, `config.go:328`). |
