@@ -52,7 +52,7 @@ PR 3 until it does.
 |---|---|---|
 | D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets the multi-only DDL (see Triggers, "Mode-only DDL") be created on empty tables. |
 | D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is open question 6. |
-| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded)`, filled from `GET /api/suite/orgs` (T "Suite directory"), with one exception: the staff org's row, seeded from `KYDRIVE_STAFF_ORG` and never overwritten by the poll (Local accounts). Polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
+| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded, retention_after)`, filled from `GET /api/suite/orgs` (T "Suite directory"), with one exception: the staff org's row, seeded from `KYDRIVE_STAFF_ORG` and never overwritten by the poll (Local accounts). Polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
@@ -398,6 +398,11 @@ alert. Logouts are not refused for it, since a logout only takes access away.
   - The staff org gets no storage pool check (staff hold no customer content).
   - `KYDRIVE_STAFF_ORG` is recorded at first start and immutable (open question 2). An
     ID token whose `org_id` equals it is a staff account like any other.
+  - Startup refuses a `KYDRIVE_STAFF_ORG` that is not a canonical UUID, or that equals the
+    default org ID (`00000000-0000-0000-0000-000000000001`). Otherwise the staff row would
+    be seeded under the default ID, and an insert that forgets `org_id` would land in the
+    staff org instead of failing the existence trigger (Triggers). A config test covers
+    both refusals.
 - `set-directory-role -role admin` is refused for an account outside the staff org.
 - `ApplyInstaller` (installer channel) is refused in multi-tenant mode, as in T.
 
@@ -510,14 +515,17 @@ wording is open question 8.
   `org_id`. Trashed files and old versions count, as today.
 - **Enforcement.** One check in `fits` (`store.go:682-692`), inside the write transaction.
   SQLite's one writer serialises check and insert, so two uploads cannot both take the last
-  bytes. Every path that adds bytes ends there:
+  bytes. The org check uses the org's net change, not the bytes written to the target
+  workspace. Bytes that move between two workspaces of one org change nothing, so an
+  over-quota org can still move files and receive a handover. Every path that adds bytes
+  ends there:
 
   | Path | Call |
   |---|---|
   | New version: upload, DAV `PUT`, MCP `write_file`, new document, editor save, copy, guest upload | `publishTX` (`store.go:630-640`), from `store.go:494,602`, `sessions.go:316`, `move.go:132`, `guest.go:319` |
   | Resumable upload, at start and again at publish | `uploads.go:92`, then `publishTX` |
-  | Move to another workspace | `move.go:63` (inside one org, so the pool is unchanged, but the check stays) |
-  | Handover | `handover.go:139` |
+  | Move to another workspace | `move.go:63`. Inside one org the net change is 0, so the org check always passes. The single-tenant workspace check is unchanged. |
+  | Handover | `handover.go:139`. Same as move: net 0 inside one org. |
   | KyPost upload ticket | `peer.go:141` |
   | KyPost viewing copy | `viewcopies.go:91` |
 
@@ -528,7 +536,9 @@ wording is open question 8.
   cap, `uploads.go:100`, and `KYDRIVE_MAX_FILE_SIZE`, `config.go:328`), thumbnails, text
   caches and the search index. That is open question 7.
 - **Downgrade.** Lowering `storage_bytes` below usage deletes nothing. Writes are refused
-  until usage drops, and reads, trash and purge keep working.
+  until usage drops. Reads, trash, purge, moves and handover keep working. A test lowers
+  the pool below usage and expects a move and a handover to succeed and an upload to be
+  refused.
 - **Per-workspace quota** (`drive_workspaces.quota`, the 10 GiB My files default at
   `peer.go:24` and `store.go:276`, 1 GiB for suite groups at `suitegroups.go:18`) is not
   enforced in multi-tenant mode. The column stays for single-tenant.
@@ -575,7 +585,7 @@ change and KyDrive's.
 | Editor sessions | Revoked in the status transaction (`RevokeUserEditors` for each of the org's users, as `internal/store/AGENTS.md` describes for revocation paths), so Euro-Office callbacks in flight are fenced. |
 | Guest links, organisation links, KyPost tickets and routes, viewing copies | Refused, through the creator's or owner's `activePrincipal` |
 | Suite group reconcile | Skips the org |
-| Trash retention, version pruning, deleted-workspace purge | Paused for the org (D11). The timers count on, so trash older than the age is purged on the first pass after a resume. |
+| Trash retention, version pruning, deleted-workspace purge | Paused for the org (D11). On resume, `drive_orgs.retention_after` is set to the resume time plus 14 days. Until then, retention, version pruning and workspace purge skip the org, so a customer whose trash aged during the suspension has two weeks to restore it. After that, the usual ages apply. A test suspends an org past its trash age, resumes it, and expects nothing purged until `retention_after`. |
 | Data | Nothing changed or deleted |
 
 `resume` (back to `active`) needs no action in KyDrive beyond the status row. Sessions do not
