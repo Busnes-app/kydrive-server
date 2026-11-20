@@ -52,7 +52,7 @@ PR 3 until it does.
 |---|---|---|
 | D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets multi-only constraints (D4) be created on empty tables. |
 | D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is open question 6. |
-| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged)`, filled only from `GET /api/suite/orgs` (T "Suite directory"), polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
+| D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged)`, filled only from `GET /api/suite/orgs` (T "Suite directory"), polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
@@ -247,8 +247,17 @@ The test below compares the two answers instead of assuming 404.
 Created by one drive schema entry (appended to `schema.go:15`, append-only):
 
 - `org_id` existence (`BEFORE INSERT`) and immutability (`BEFORE UPDATE OF org_id`) on every
-  **O** table. Single-tenant rows get `DEFAULT '<default org id>'` so the upgrade fills them
-  in place. SQLite allows `ADD COLUMN … NOT NULL DEFAULT` with a constant.
+  **O** table. The existence check requires a `drive_orgs` row whose `status` is not
+  `deleted`, so nothing can be written into a deleted org. That covers a late guest upload,
+  a KyPost ticket, or a worker racing the purge.
+- Single-tenant rows get `DEFAULT '<default org id>'` so the upgrade fills them in place.
+  SQLite allows `ADD COLUMN … NOT NULL DEFAULT` with a constant. One schema entry serves
+  both modes, so a multi-tenant database has the same column default. A multi-tenant
+  database therefore never holds the default org's row in `drive_orgs`, as in T ("A
+  multi-tenant install has no default org row"). An insert that forgets `org_id` hits the
+  existence check and fails, instead of landing in the default org.
+  `TestMultiTenantRefusesDefaultOrg` inserts into every **O** table without `org_id` on a
+  multi-tenant database and expects each insert to fail.
 - Same-org checks (`BEFORE INSERT` and `BEFORE UPDATE`) on `group_members`,
   `drive_personal_workspaces`, `drive_grants`, `drive_shares` (user and group principals),
   `drive_link_users` and `drive_suite_groups`.
@@ -545,10 +554,15 @@ A purge job runs from the hourly retention pass (`drive_retention.go:62`). It is
 each step deletes what is left, and `drive_orgs.purged` is set only after the last step. A
 crash halfway repeats safely.
 
+0. Revoke the org's editor sessions, in the transaction that records `deleted`. This is
+   the same step as suspension's. Do not rely on an earlier transition: a poll can see
+   `active` go straight to `deleted`, because `since=<revision>` returns only the latest
+   state, and one missed intermediate status between polls is enough. Every move from
+   `active` to any other status runs that step.
 1. For each workspace of the org, today's purge steps in one transaction
    (`workspaces.go:242-264` and `removeWorkspace`, `:298-312`). Each collects the blobs it
-   left unreferenced. Open editor sessions were revoked at suspension, so the "undelivered
-   drop" skip (`:235-241`) is waited out, as today.
+   left unreferenced. Step 0 revoked the editor sessions, so the "undelivered drop" skip
+   (`:235-241`) only waits for drops in flight to be delivered, as today.
    - This includes suite group workspaces, which today's purge keeps forever
      (`workspaces.go:216-217`), and their `drive_suite_groups` rows, which are otherwise
      never deleted (`schema.go:125-126`). The org's tombstone is what stops a reused ID.
@@ -563,7 +577,8 @@ crash halfway repeats safely.
 5. `drive_orgs` keeps the tombstone (`status='deleted'`, `purged=1`), and a platform audit
    row records the org ID and row counts per table, with no names.
 
-The trigger on `org_id` existence admits no new row for a deleted org. Copies of the org's
+The `org_id` existence trigger refuses any new row once `drive_orgs.status` is `deleted`
+(see Triggers), during the purge and after it. Copies of the org's
 data stay in capsules and Restic snapshots until backup retention drops them (residual risk,
 open question 5).
 
@@ -644,7 +659,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      uploads with room for one. `TestSuspendedOrgServesNothing` for every credential type.
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
      entry, staging directory or index ref for the org, which is checked against the
-     classification. The purge is killed halfway and rerun.
+     classification. The purge is killed halfway and rerun. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
    `KYDRIVE_STAFF_ORG`. The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
