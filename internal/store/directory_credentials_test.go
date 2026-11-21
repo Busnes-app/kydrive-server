@@ -87,3 +87,33 @@ func TestRevokeDirectoryCredentials(t *testing.T) {
 		t.Fatalf("local account: %v", err)
 	}
 }
+
+// An SSO callback already holding a pre-reset ID token cannot sign in after the MFA reset; a
+// login issued after it can.
+func TestRevokeDirectoryCredentialsFencesPendingLogins(t *testing.T) {
+	ctx := context.Background()
+	st := newTestStore(t)
+	if st.Drive() == nil {
+		t.Skip("SQLite drive")
+	}
+	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s-fence", Username: "dave@example.com", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified := time.Now().Add(-time.Minute) // the paused callback's ID token iat
+	if err := st.Users().RevokeDirectoryCredentials(ctx, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	session := func(hash string, iat time.Time) error {
+		return st.Sessions().CreateSession(ctx, &store.Session{TokenHash: hash, UserID: u.ID, CreatedAt: iat, ExpiresAt: time.Now().Add(time.Hour), SSOSID: hash}, "", false)
+	}
+	if err := session("pending", verified); !errors.Is(err, store.ErrSSOSessionEnded) {
+		t.Fatalf("pre-reset callback: %v", err)
+	}
+	if _, err := st.Sessions().GetSession(ctx, "pending"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("pre-reset session kept", err)
+	}
+	if err := session("fresh", time.Now().Add(2*time.Second)); err != nil {
+		t.Fatalf("post-reset login: %v", err)
+	}
+}

@@ -7,8 +7,8 @@ Interface and behaviour changes, newest first.
 - **A KyIdentity MFA reset signs the account out.** The directory webhook's `user.mfa_reset`
   now ends the account's sessions, open editors and every credential it issued (WebDAV
   passwords, agent and service tokens, linked computers, guest links), audited as
-  `sso.mfa_reset`. The account stays active, and the person signs in again. Before, the event
-  was ignored.
+  `sso.mfa_reset`. A login still finishing with a pre-reset ID token is refused too. The
+  account stays active, and the person signs in again. Before, the event was ignored.
 
 - **Directory webhook speaks KyIdentity's suite webhook.** `/api/sso/kysignon/sync` now
   verifies `syncauth` headers (`X-KySignOn-Signature: v1=…` over timestamp, event type, event

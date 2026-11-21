@@ -250,10 +250,6 @@ func (s *Server) handleKySignOnSyncWebhook(w http.ResponseWriter, r *http.Reques
 	s.writeJSON(w, http.StatusOK, map[string]bool{"synced": true})
 }
 
-// ssoLogoutFence outlives the 5-minute login callback window, so a logout that lands
-// while the browser is still finishing that login also ends it.
-const ssoLogoutFence = 10 * time.Minute
-
 // handleKySignOnBackchannelLogout is the OpenID Connect Back-Channel Logout receiver: KySignOn
 // POSTs a signed logout_token when a login ends, and every local session of it ends here.
 // Not rate-limited: a KyIdentity restore sends a burst, and a 429 spends its few retries.
@@ -266,7 +262,7 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 		return
 	}
 	rec := &store.AuditRecord{Action: "auth.sso_backchannel_logout", Resource: "session", IPAddress: s.requestIP(r)}
-	fenceUntil := time.Now().Add(ssoLogoutFence)
+	fenceUntil := time.Now().Add(store.SSOLogoutFence)
 	if claims.SessionID != "" {
 		err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, fenceUntil)
 	} else {
