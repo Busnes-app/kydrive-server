@@ -353,14 +353,15 @@ against the step-up token's.
     in headers. KyDrive parses its own `event`/`timestamp` body.
   - KyIdentity already adds `org_id` to suite webhook bodies in multi-tenant mode
     (`internal/sync/sync.go:466-468`). No KyIdentity change is needed.
-- The owner chose to fix this ahead of PR 4, in both modes: a separate PR makes the receiver
-  verify with `syncauth.Verify` and read the SCIM resource, as KyMessage's receiver does.
+- The owner chose to fix this ahead of PR 4, in both modes: #154 makes the receiver verify
+  with `syncauth.Verify`, read the SCIM resource and order events by its `meta.version`
+  revision, as KyMessage's receiver does.
 - Multi-tenant (PR 4) then adds `org_id`, which T authenticates through the signature (T
   "Outbound sync").
   - No `org_id`: 400.
   - A known `sub` with another org: refused and audited (point 3).
   - `user.created` for an unknown `sub`: creates the account in that org.
-  - Event ordering is as the fix PR leaves it (`sso` `AGENTS.md`).
+  - Events are ordered by revision, as #154 leaves it (`sso` `AGENTS.md`).
 
 ### Back-channel logout
 
@@ -722,8 +723,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      existing suite unchanged.
 4. **Identity binding** (needs KyIdentity step 3).
    - `org_id` from the ID token, the step-up token and the logout token.
-   - `org_id` in the `syncauth` webhook receiver, which the separate fix PR has already
-     moved to `syncauth` and SCIM bodies.
+   - `org_id` in the `syncauth` webhook receiver, which #154 already moved to `syncauth`
+     and SCIM bodies.
    - The `/api/suite/orgs` poller, through a `ky-primitives/suitedir` `Orgs` method (T
      PR 3).
    - Suite groups per org. Inbound SCIM off in multi-tenant mode. Forced auto-provisioning.
@@ -791,7 +792,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 7. **Staging bytes outside the quota.** Accepted, given the bounds in Quotas.
 8. **What an organisation link is called on the hosted service.** "Household link".
 9. **Webhook compatibility.** Checked: the two sides do not interoperate (Signed webhook).
-   Fixed ahead of PR 4 in a separate PR, in both modes.
+   Fixed ahead of PR 4 by #154, in both modes.
 10. **Suite group poll cost.** Measure first, as part of question 6, before asking
     KyIdentity for one request across orgs.
 11. **Per-workspace retention on the hosted service.** Stays refused (D10). Revisit only if
