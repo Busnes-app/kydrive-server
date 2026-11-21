@@ -105,7 +105,11 @@ func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *st
 	if err != nil {
 		return nil, nil, err
 	}
-	if user.Status != "active" {
+	active, err := store.ActivePrincipal(r.Context(), sm.store, user)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !active {
 		if err := sm.store.Sessions().DeleteSession(r.Context(), tokenHash); err != nil {
 			log.Printf("session of inactive account not deleted: %v", err)
 		}

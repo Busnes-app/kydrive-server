@@ -101,6 +101,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
+	if active, err := store.ActivePrincipal(r.Context(), s.store, user); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Authentication error")
+		return
+	} else if !active {
+		s.writeError(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
 	s.resetAttempts(accountKey) // the account window counts guesses, not sign-ins
 
 	// Issue active session

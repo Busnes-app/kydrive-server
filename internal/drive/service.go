@@ -32,7 +32,7 @@ func (s *Store) CreateServiceToken(ctx context.Context, user, workspace, name, r
 		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_service_tokens(id,user_id,workspace,name,role,token_hash,expires) VALUES(?,?,?,?,?,?,?)`, id, user, workspace, name, role, tokenHash(token), time.Now().Add(90*24*time.Hour).Unix())
+		_, err := tx.ExecContext(ctx, `INSERT INTO drive_service_tokens(id,user_id,workspace,name,role,token_hash,expires,org_id) VALUES(?,?,?,?,?,?,?,`+workspaceOrg("?")+`)`, id, user, workspace, name, role, tokenHash(token), time.Now().Add(90*24*time.Hour).Unix(), workspace)
 		if err != nil {
 			return err
 		}

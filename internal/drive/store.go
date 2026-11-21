@@ -87,11 +87,12 @@ type Event struct {
 
 // New opens the drive store. key is the deployment key; names are sealed under keys derived from it.
 func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
-	return open(ctx, db, key, len(schema))
+	return open(ctx, db, key, len(schema), TenancySingle)
 }
 
-// open migrates to schema version, which only upgrade tests set below the latest.
-func open(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, error) {
+// open migrates to schema version, which only upgrade tests set below the latest, in tenancy
+// mode, which only tests set to multi.
+func open(ctx context.Context, db *sql.DB, key []byte, version int, mode string) (*Store, error) {
 	n, err := newNames(key)
 	if err != nil {
 		return nil, err
@@ -119,7 +120,7 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, err
 	if err = checkKey(ctx, db, key); err != nil {
 		return nil, err
 	}
-	if err = recordTenancy(ctx, db, TenancySingle); err != nil {
+	if err = recordTenancy(ctx, db, mode); err != nil {
 		return nil, err
 	}
 	s := &Store{db: db, names: n}
@@ -191,7 +192,7 @@ func admin(ctx context.Context, q queryer, user string) error {
 		return ErrDenied
 	}
 	var n int
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active' AND role='admin'`, user).Scan(&n)
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u WHERE u.id=? AND u.role='admin' AND `+activePrincipal("u.id"), user).Scan(&n)
 	if err != nil {
 		return err
 	}
@@ -201,7 +202,7 @@ func admin(ctx context.Context, q queryer, user string) error {
 	return nil
 }
 func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created) VALUES(?,?,?,?,?)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano))
+	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES(?,?,?,?,?,`+userOrg("?")+`)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano), user)
 	return err
 }
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
@@ -228,7 +229,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active') ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND w.org_id=(SELECT org_id FROM users WHERE id=q.u) AND `+activePrincipal("q.u")+` ORDER BY w.name`, user)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +269,7 @@ func (s *Store) EnsurePersonalWorkspace(ctx context.Context, user string) (strin
 // ensurePersonal records the owner's name so a deleted account's workspace stays labelled.
 func ensurePersonal(ctx context.Context, tx *sql.Tx, user string) (string, error) {
 	var name string
-	err := tx.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=? AND status='active'`, user).Scan(&name)
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(u.display_name,''),u.username) FROM users u WHERE u.id=? AND `+activePrincipal("u.id"), user).Scan(&name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrDenied
 	}
@@ -281,7 +282,7 @@ func ensurePersonal(ctx context.Context, tx *sql.Tx, user string) (string, error
 		return id, err
 	}
 	id = uuid.NewString()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, id, "My files", personalQuota); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,?,?,`+userOrg("?")+`)`, id, "My files", personalQuota, user); err != nil {
 		return "", err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO drive_personal_workspaces(workspace,owner,owner_name) VALUES(?,?,?)`, id, user, name); err != nil {
@@ -299,10 +300,14 @@ func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota in
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
-		if err := nameFree(ctx, tx, name, ""); err != nil {
+		var org sql.NullString
+		if err := tx.QueryRowContext(ctx, `SELECT `+userOrg("?"), user).Scan(&org); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, w.ID, name, quota); err != nil {
+		if err := nameFree(ctx, tx, org.String, name, ""); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,?,?,`+userOrg("?")+`)`, w.ID, name, quota, user); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "workspace.created", w.ID)
@@ -375,6 +380,13 @@ func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) 
 				return err
 			}
 		} else {
+			var known int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM groups WHERE id=? AND org_id=`+workspaceOrg("?"), group, workspace).Scan(&known); err != nil {
+				return err
+			}
+			if known != 1 {
+				return ErrInvalid // no such group in the workspace's org
+			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_grants VALUES(?,?,?) ON CONFLICT(workspace,group_id) DO UPDATE SET role=excluded.role`, workspace, group, role); err != nil {
 				return err
 			}
@@ -470,7 +482,7 @@ func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	return f, err
 }
 func (s *Store) File(ctx context.Context, user, id string, need int) (File, error) {
-	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
+	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM (SELECT ? AS u) q JOIN drive_files f ON f.id=? JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+sameOrg("q.u", "f.workspace"), user, id))
 	if err != nil {
 		return f, err
 	}

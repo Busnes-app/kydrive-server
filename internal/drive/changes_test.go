@@ -289,6 +289,7 @@ var noChange = map[string]string{
 	"MarkViewDropped":         "viewing copies are not items",
 	"AppendUpload":            "stages bytes; the item appears on CompleteUpload",
 	"ApplyRetention":          "purges trashed items and old versions only (Decision 4)",
+	"ActivePrincipal":         "read",
 	"AgentTokenUser":          "credential bookkeeping",
 	"AppPasswordUser":         "credential bookkeeping",
 	"AppPasswords":            "read",

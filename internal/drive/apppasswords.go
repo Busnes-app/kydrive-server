@@ -98,7 +98,7 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 			return err
 		}
 		var active, count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active'`, user).Scan(&active); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {
 			return err
 		}
 		if active != 1 {
@@ -118,7 +118,7 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 				return err
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_app_passwords(id,user_id,name,hash,created,scope,root_workspace,root_folder) VALUES(?,?,?,?,?,?,?,?)`, p.ID, user, name, appPasswordHash(secret), p.Created, scope, workspace, folder); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_app_passwords(id,user_id,name,hash,created,scope,root_workspace,root_folder,org_id) VALUES(?,?,?,?,?,?,?,?,`+userOrg("?")+`)`, p.ID, user, name, appPasswordHash(secret), p.Created, scope, workspace, folder, user); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "app_password.created", p.ID)
@@ -215,12 +215,12 @@ func (s *Store) SetAgentScope(ctx context.Context, user, id, scope string) error
 	})
 }
 
-// AppPasswordUser returns the ID of the active user named username (any case) that owns secret.
+// AppPasswordUser returns the ID of the active principal named username (any case) that owns secret.
 // Agent tokens never match.
 func (s *Store) AppPasswordUser(ctx context.Context, username, secret string) (string, error) {
 	var id, user string
 	var lastUsed int64
-	err := s.db.QueryRowContext(ctx, `SELECT p.id,u.id,p.last_used FROM drive_app_passwords p JOIN users u ON u.id=p.user_id WHERE p.hash=? AND p.scope='dav' AND lower(u.username)=lower(?) AND u.status='active'`, appPasswordHash(secret), username).Scan(&id, &user, &lastUsed)
+	err := s.db.QueryRowContext(ctx, `SELECT p.id,u.id,p.last_used FROM drive_app_passwords p JOIN users u ON u.id=p.user_id WHERE p.hash=? AND p.scope='dav' AND lower(u.username)=lower(?) AND `+activePrincipal("u.id"), appPasswordHash(secret), username).Scan(&id, &user, &lastUsed)
 	if errors.Is(err, sql.ErrNoRows) || secret == "" {
 		return "", ErrDenied
 	}
@@ -235,7 +235,7 @@ func (s *Store) AppPasswordUser(ctx context.Context, username, secret string) (s
 	return user, nil
 }
 
-// AgentTokenUser returns the user and record of an active user's agent token. WebDAV passwords
+// AgentTokenUser returns the user and record of an active principal's agent token. WebDAV passwords
 // never match. A token unused for AgentIdleLimit before at is deleted and refused like a wrong
 // one, whether or not the sweep has run.
 func (s *Store) AgentTokenUser(ctx context.Context, token string, at time.Time) (string, AppPassword, error) {
@@ -245,7 +245,7 @@ func (s *Store) AgentTokenUser(ctx context.Context, token string, at time.Time) 
 	if !ok || secret == "" {
 		return "", p, ErrDenied
 	}
-	err := s.db.QueryRowContext(ctx, `SELECT p.id,p.name,p.created,p.last_used,p.scope,p.root_workspace,p.root_folder,u.id FROM drive_app_passwords p JOIN users u ON u.id=p.user_id WHERE p.hash=? AND p.scope IN ('mcp:read','mcp:write') AND u.status='active'`, appPasswordHash(secret)).
+	err := s.db.QueryRowContext(ctx, `SELECT p.id,p.name,p.created,p.last_used,p.scope,p.root_workspace,p.root_folder,u.id FROM drive_app_passwords p JOIN users u ON u.id=p.user_id WHERE p.hash=? AND p.scope IN ('mcp:read','mcp:write') AND `+activePrincipal("u.id"), appPasswordHash(secret)).
 		Scan(&p.ID, &p.Name, &p.Created, &p.LastUsed, &p.Scope, &p.Workspace, &p.Folder, &user)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", AppPassword{}, ErrDenied

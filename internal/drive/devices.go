@@ -81,7 +81,7 @@ func (s *Store) ApproveLink(ctx context.Context, user, name, platform, challenge
 		if err := deviceSlot(ctx, tx, user); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_device_codes(code_hash,user_id,name,platform,challenge,expires) VALUES(?,?,?,?,?,?)`, tokenHash(code), user, name, platform, challenge, time.Now().Add(deviceCodeLife).Unix())
+		_, err := tx.ExecContext(ctx, `INSERT INTO drive_device_codes(code_hash,user_id,name,platform,challenge,expires,org_id) VALUES(?,?,?,?,?,?,`+userOrg("?")+`)`, tokenHash(code), user, name, platform, challenge, time.Now().Add(deviceCodeLife).Unix(), user)
 		return err
 	})
 	return code, err
@@ -101,7 +101,7 @@ func (s *Store) ApprovePhone(ctx context.Context, user string) (string, error) {
 		if err := deviceSlot(ctx, tx, user); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_device_codes(code_hash,user_id,name,platform,challenge,expires) VALUES(?,?,'','','',?)`, tokenHash(code), user, time.Now().Add(phoneCodeLife).Unix())
+		_, err := tx.ExecContext(ctx, `INSERT INTO drive_device_codes(code_hash,user_id,name,platform,challenge,expires,org_id) VALUES(?,?,'','','',?,`+userOrg("?")+`)`, tokenHash(code), user, time.Now().Add(phoneCodeLife).Unix(), user)
 		return err
 	})
 	return code, err
@@ -173,7 +173,7 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 		}
 		token = DevicePrefix + secret256()
 		id := uuid.NewString()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_devices(id,user_id,name,platform,hash,created,last_used,pubkey) VALUES(?,?,?,?,?,?,?,?)`, id, user, name, platform, tokenHash(token), now(), time.Now().Unix(), base64.StdEncoding.EncodeToString(key)); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_devices(id,user_id,name,platform,hash,created,last_used,pubkey,org_id) VALUES(?,?,?,?,?,?,?,?,`+userOrg("?")+`)`, id, user, name, platform, tokenHash(token), now(), time.Now().Unix(), base64.StdEncoding.EncodeToString(key), user); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "device.linked", id)
@@ -184,10 +184,10 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 	return token, user, nil
 }
 
-// deviceSlot requires an active user with fewer than 20 live devices.
+// deviceSlot requires an active principal with fewer than 20 live devices.
 func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
 	var active, count int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id=? AND status='active'`, user).Scan(&active); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {
 		return err
 	}
 	if active != 1 {
@@ -202,7 +202,7 @@ func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
 	return nil
 }
 
-// DeviceUser returns the active user a live device token belongs to. verify gets the device's
+// DeviceUser returns the active principal a live device token belongs to. verify gets the device's
 // ID and enrolled key (nil for an unsigned device) and runs before anything else is revealed or
 // written, so a token without its key learns nothing and keeps nothing alive; its error is
 // returned as is. A token revoked in the last 30 days is ErrDeviceRevoked; anything else
@@ -214,7 +214,7 @@ func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id str
 	var id, user, status, pubkey string
 	var lastUsed, revokedAt int64
 	var wipe bool
-	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,d.pubkey,COALESCE(u.status,'') FROM drive_devices d LEFT JOIN users u ON u.id=d.user_id WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &pubkey, &status)
+	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,d.pubkey,CASE WHEN `+activePrincipal("d.user_id")+` THEN 'active' ELSE '' END FROM drive_devices d WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &pubkey, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrDenied
 	}

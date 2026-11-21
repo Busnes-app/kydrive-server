@@ -257,15 +257,19 @@ func fillOldSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 			t.Fatal(q, err)
 		}
 	}
-	ws, err := d.EnsurePersonalWorkspace(ctx, "owner")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := d.Publish(ctx, "owner", drive.File{Workspace: ws, Name: "kept.txt"}, drive.Version{Blob: "blob", Size: 4, Digest: strings.Repeat("a", 64)}, 0)
+	// The older release's own statements: this one's write org_id, which schema 26 lacks.
+	ws, f := "ws", drive.File{ID: "kept"}
+	stored, mac, err := drive.SealName(d, "drive_files", f.ID, "kept.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
+		`INSERT INTO drive_workspaces(id,name,quota) VALUES('ws','My files',1073741824)`,
+		`INSERT INTO drive_personal_workspaces(workspace,owner,owner_name) VALUES('ws','owner','owner')`,
+		`INSERT INTO drive_files(id,workspace,parent,name,name_hmac,revision) VALUES('kept','ws','','` + stored + `','` + mac + `',1)`,
+		`INSERT INTO drive_versions(file_id,revision,blob,digest,size,created) VALUES('kept',1,'blob','` + strings.Repeat("a", 64) + `',4,'now')`,
+		`INSERT INTO drive_changes(workspace,kind,item,created) VALUES('ws','file','kept',1)`,
+		`INSERT INTO drive_events(id,user_id,action,resource,created) VALUES('event','owner','file.published','kept','now')`,
 		`INSERT INTO drive_grants VALUES('` + ws + `','g','reader')`,
 		`INSERT INTO drive_shares(id,workspace,resource_kind,resource_id,principal_kind,principal_id,role,created_by,created) VALUES('share','` + ws + `','file','` + f.ID + `','user','twin','reader','owner','now')`,
 		`INSERT INTO drive_links(id,workspace,resource_kind,resource_id,role,scope,token_hash,created_by,created) VALUES('org','` + ws + `','file','` + f.ID + `','reader','org','org-hash','owner','now')`,

@@ -187,14 +187,15 @@ func suiteNameMatches(current, want string) bool {
 	return ok && n != "" && strings.Trim(n, "0123456789") == ""
 }
 
-// freeSuiteName is want, else the first free "want (n)"; ErrConflict when none is free.
+// freeSuiteName is want, else the first free "want (n)"; ErrConflict when none is free. Suite
+// groups are in the default org until identity binding gives each its own.
 func freeSuiteName(ctx context.Context, tx *sql.Tx, want, except string) (string, error) {
 	for n := 1; n <= 100; n++ {
 		name := want
 		if n > 1 {
 			name = fmt.Sprintf("%s (%d)", want, n)
 		}
-		err := nameFree(ctx, tx, name, except)
+		err := nameFree(ctx, tx, DefaultOrg, name, except)
 		if err == nil {
 			return name, nil
 		}

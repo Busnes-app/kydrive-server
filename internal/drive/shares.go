@@ -43,16 +43,17 @@ type Person struct {
 
 var roles = []string{"", "reader", "editor", "manager"}
 
-// resource loads a folder or file: its workspace, the folder/file pair the access definition
-// takes, and whether it is trashed. A missing item is ErrDenied, like an unreadable one.
-func resource(ctx context.Context, q queryer, kind, id string) (workspace, folder, file string, trashed bool, err error) {
+// resource loads a folder or file in user's org: its workspace, the folder/file pair the access
+// definition takes, and whether it is trashed. A missing item, or one in another org, is
+// ErrDenied, like an unreadable one.
+func resource(ctx context.Context, q queryer, user, kind, id string) (workspace, folder, file string, trashed bool, err error) {
 	switch kind {
 	case "folder":
 		folder = id
-		err = q.QueryRowContext(ctx, `SELECT workspace,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &trashed)
+		err = q.QueryRowContext(ctx, `SELECT d.workspace,d.trashed FROM (SELECT ? AS u) q JOIN drive_folders d ON d.id=? WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&workspace, &trashed)
 	case "file":
 		file = id
-		err = q.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_files WHERE id=?`, id).Scan(&workspace, &folder, &trashed)
+		err = q.QueryRowContext(ctx, `SELECT f.workspace,f.parent,f.trashed FROM (SELECT ? AS u) q JOIN drive_files f ON f.id=? WHERE `+sameOrg("q.u", "f.workspace"), user, id).Scan(&workspace, &folder, &trashed)
 	default:
 		return "", "", "", false, ErrInvalid
 	}
@@ -96,14 +97,15 @@ func mayShare(ctx context.Context, q queryer, user, workspace, folder, file, rol
 	return ErrDenied
 }
 
-func principalName(ctx context.Context, q queryer, kind, id string) (string, error) {
+// principalName names an active user or a group in workspace's org; any other ID is ErrInvalid.
+func principalName(ctx context.Context, q queryer, workspace, kind, id string) (string, error) {
 	var name string
 	var err error
 	switch kind {
 	case "user":
-		err = q.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=? AND status='active'`, id).Scan(&name)
+		err = q.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(u.display_name,''),u.username) FROM users u WHERE u.id=? AND u.status='active' AND u.org_id=`+workspaceOrg("?"), id, workspace).Scan(&name)
 	case "group":
-		err = q.QueryRowContext(ctx, `SELECT display_name FROM groups WHERE id=?`, id).Scan(&name)
+		err = q.QueryRowContext(ctx, `SELECT display_name FROM groups WHERE id=? AND org_id=`+workspaceOrg("?"), id, workspace).Scan(&name)
 	default:
 		return "", ErrInvalid
 	}
@@ -124,7 +126,7 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 		return sh, ErrInvalid
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		workspace, folder, file, trashed, err := resource(ctx, tx, kind, id)
+		workspace, folder, file, trashed, err := resource(ctx, tx, user, kind, id)
 		if err != nil {
 			return err
 		}
@@ -134,7 +136,7 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 		if trashed {
 			return ErrConflict
 		}
-		if sh.Name, err = principalName(ctx, tx, principalKind, principalID); err != nil {
+		if sh.Name, err = principalName(ctx, tx, workspace, principalKind, principalID); err != nil {
 			return err
 		}
 		var existing string
@@ -170,7 +172,7 @@ func (s *Store) Unshare(ctx context.Context, user, id string) error {
 		if err != nil {
 			return err
 		}
-		workspace, folder, file, _, err := resource(ctx, tx, kind, rid)
+		workspace, folder, file, _, err := resource(ctx, tx, user, kind, rid)
 		if err != nil {
 			return err
 		}
@@ -186,7 +188,7 @@ func (s *Store) Unshare(ctx context.Context, user, id string) error {
 
 // Shares lists the people and groups an item is shared with, for those who may share it.
 func (s *Store) Shares(ctx context.Context, user, kind, id string) ([]Share, error) {
-	workspace, folder, file, _, err := resource(ctx, s.db, kind, id)
+	workspace, folder, file, _, err := resource(ctx, s.db, user, kind, id)
 	if err != nil {
 		return nil, err
 	}
@@ -231,8 +233,8 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
  LEFT JOIN drive_files f ON g.kind='file' AND f.id=g.rid AND f.trashed=false
  LEFT JOIN drive_folders d ON g.kind='folder' AND d.id=g.rid AND d.trashed=false
  WHERE (f.id IS NOT NULL OR d.id IS NOT NULL)
- AND EXISTS(SELECT 1 FROM users WHERE id=q.u AND status='active')
- AND (p.workspace IS NULL OR EXISTS(SELECT 1 FROM users WHERE id=p.owner AND status='active'))
+ AND `+activePrincipal("q.u")+` AND `+sameOrg("q.u", "g.workspace")+`
+ AND (p.workspace IS NULL OR `+activePrincipal("p.owner")+`)
  AND `+rankSQL("q.u", "g.workspace")+`<CASE g.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END`, user)
 	if err != nil {
 		return nil, err
@@ -266,8 +268,8 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 	return out, nil
 }
 
-// People finds active accounts by name or username for an active signed-in user to share with:
-// 2–100 characters, at most 20 results, never the caller, never an email address.
+// People finds active accounts in the user's org by name or username, for an active principal
+// to share with: 2–100 characters, at most 20 results, never the caller, never an email address.
 func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || isPeer(ctx) {
 		return nil, ErrDenied
@@ -277,7 +279,7 @@ func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
 		return nil, ErrInvalid
 	}
 	like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
-	rows, err := s.db.QueryContext(ctx, `SELECT id,COALESCE(NULLIF(display_name,''),username),username FROM users WHERE status='active' AND id!=? AND (lower(username) LIKE ? ESCAPE '\' OR lower(display_name) LIKE ? ESCAPE '\') AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active') ORDER BY 2 LIMIT 20`, user, like, like, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT u.id,COALESCE(NULLIF(u.display_name,''),u.username),u.username FROM (SELECT ? AS u) q JOIN users u ON u.status='active' AND u.id!=q.u AND u.org_id=(SELECT org_id FROM users WHERE id=q.u) WHERE (lower(u.username) LIKE ? ESCAPE '\' OR lower(u.display_name) LIKE ? ESCAPE '\') AND `+activePrincipal("q.u")+` ORDER BY 2 LIMIT 20`, user, like, like)
 	if err != nil {
 		return nil, err
 	}

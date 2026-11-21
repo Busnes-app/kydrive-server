@@ -128,6 +128,13 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		if target == source {
 			return ErrInvalid
 		}
+		var together int
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces s JOIN drive_workspaces t ON t.org_id=s.org_id WHERE s.id=? AND t.id=?`, source, target).Scan(&together); err != nil {
+			return err
+		}
+		if together != 1 {
+			return ErrDenied // a target in another org answers like a missing one
+		}
 		var files, folders int
 		var size int64
 		if err = tx.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_files WHERE workspace=?),(SELECT COUNT(*) FROM drive_folders WHERE workspace=?),COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=?),0)`, source, source, source).Scan(&files, &folders, &size); err != nil {
@@ -185,7 +192,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		}
 		resource := fmt.Sprintf("%s->%s:%s files=%d folders=%d bytes=%d shares_dropped=%d", source, target, folder, files, folders, size, shares)
 		if operator {
-			if _, err = tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`, user, "drive.handover", source, resource, "operator-cli", time.Now().UTC()); err != nil {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at,org_id) VALUES(?,?,?,?,?,?,`+workspaceOrg("?")+`)`, user, "drive.handover", source, resource, "operator-cli", time.Now().UTC(), source); err != nil {
 				return err
 			}
 		}

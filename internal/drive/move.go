@@ -142,7 +142,7 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		var from string
-		err := tx.QueryRowContext(ctx, `SELECT workspace,parent FROM drive_folders WHERE id=? AND trashed=false`, id).Scan(&f.Workspace, &from)
+		err := tx.QueryRowContext(ctx, `SELECT d.workspace,d.parent FROM (SELECT ? AS u) q JOIN drive_folders d ON d.id=? AND d.trashed=false WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&f.Workspace, &from)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrDenied
 		}
