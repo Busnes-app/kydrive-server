@@ -223,7 +223,7 @@ func TestKySignOnWebhookAppliesOnlyNewerRevisions(t *testing.T) {
 		t.Fatal("newer event not applied")
 	}
 	// Events this version does not consume are acknowledged.
-	if err := send(t, client, "user.mfa_reset", scimUser("sub-2", "carol", true, 7)); err != nil {
+	if err := send(t, client, "group.updated", scimUser("sub-2", "carol", true, 7)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -245,5 +245,31 @@ func TestKySignOnWebhookUpdatesTheSCIMAccount(t *testing.T) {
 	}
 	if u, _ := st.Users().GetUserByID(ctx, scimRow.ID); u.DisplayName != "Dave" {
 		t.Fatalf("SCIM account not updated: %+v", u)
+	}
+}
+
+func TestKySignOnWebhookMFAResetSignsOut(t *testing.T) {
+	client, st := webhookClient(t)
+	ctx := context.Background()
+	if err := send(t, client, "user.created", scimUser("sub-4", "erin", true, 2)); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := st.Users().GetUserBySSO(ctx, "kysignon", "sub-4")
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "erin", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	// Any revision, older ones included: revoking is never stale.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-4", "erin", true, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Sessions().GetSession(ctx, "erin"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("MFA reset kept the session", err)
+	}
+	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Status != "active" {
+		t.Fatalf("MFA reset disabled the account: %+v", u)
+	}
+	// An unknown subject is acknowledged without effect.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-none", "nobody", true, 1)); err != nil {
+		t.Fatal(err)
 	}
 }

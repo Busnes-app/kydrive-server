@@ -484,6 +484,31 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision
 	return tx.Commit()
 }
 
+func (u *userStore) RevokeDirectoryCredentials(ctx context.Context, id string) error {
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(1) FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&n); err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrNotFound
+	}
+	if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // newerThan compares an event's revision to the account's last one. An equal revision is a
 // redelivery, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
 func newerThan(enables bool) string {

@@ -24,7 +24,7 @@ MCP endpoint for AI agents, desktop sync and Euro-Office editing. Its security r
 4. **File contents and names at rest stay secret** from someone who copies the data directory,
    when the deployment key is kept outside it.
 5. **Directory changes take effect.** Disabling or deleting an account in KyIdentity ends its
-   sessions; old or forged directory events change nothing.
+   sessions, and resetting its second factor ends its sessions and credentials; old or forged directory events change nothing.
 6. **Recovery restores a complete, consistent drive** from sealed metadata plus the bound bulk
    snapshot, and restored credentials are invalidated.
 

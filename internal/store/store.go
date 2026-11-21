@@ -49,6 +49,9 @@ type UserStore interface {
 	ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error)
 	// DeleteDirectoryUser deletes a directory account; revision orders it like ApplyDirectoryUser.
 	DeleteDirectoryUser(ctx context.Context, id string, revision int64) error
+	// RevokeDirectoryCredentials ends a directory account's sessions and every credential it
+	// issued, as disabling does, but leaves it active. KyIdentity's MFA reset calls it.
+	RevokeDirectoryCredentials(ctx context.Context, id string) error
 	ResetAdminPassword(ctx context.Context, userID, newHash string) error
 	RenameLocalAdmin(ctx context.Context, oldName, newName string) error
 	SetDirectoryRole(ctx context.Context, subject, role string) error
