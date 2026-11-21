@@ -268,8 +268,19 @@ func TestKySignOnWebhookMFAResetSignsOut(t *testing.T) {
 	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Status != "active" {
 		t.Fatalf("MFA reset disabled the account: %+v", u)
 	}
-	// An unknown subject is acknowledged without effect.
-	if err := send(t, client, "user.mfa_reset", scimUser("sub-none", "nobody", true, 1)); err != nil {
+	// A subject with no account yet is fenced: a first login still holding a pre-reset ID
+	// token cannot finish, while a login after the reset can.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-new", "frank", true, 1)); err != nil {
 		t.Fatal(err)
+	}
+	f, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "sub-new", Username: "frank", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "frank-old", UserID: f.ID, CreatedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Hour)}, "", false); !errors.Is(err, store.ErrSSOSessionEnded) {
+		t.Fatalf("pre-reset first login: %v", err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "frank-new", UserID: f.ID, CreatedAt: time.Now().Add(2 * time.Second), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatalf("post-reset login: %v", err)
 	}
 }
