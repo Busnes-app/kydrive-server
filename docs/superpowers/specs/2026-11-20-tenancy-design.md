@@ -658,18 +658,17 @@ that member's My files at once, inside the org:
   starts a purge, so it fails closed like D7 and question 4.
 
 - **Shared files move to the account holder, and stay shared.** An item is shared if it,
-  or a folder above it, has a share to a person or group, an unrevoked Household link, or
-  an unexpired guest link, revoked or not. The test reads the share records, not whether
-  they work right now, so it gives the same answer whether or not KyIdentity deactivated
-  the member first.
+  or a folder above it, has a share to a person or group or an unrevoked Household link.
+  The test reads the share records, not whether they work right now, so it gives the same
+  answer whether or not KyIdentity deactivated the member first.
   - A deactivated owner's person and group shares are stopped, not deleted (root
     `AGENTS.md`), so they still count.
   - Deactivation does not revoke Household links (root `AGENTS.md`: organisation links
     stay), so a revoked one was revoked by its owner and does not count.
-  - Deactivation revokes every guest link, and KyDrive does not record why a link was
-    revoked. So a revoked, unexpired guest link counts. The cost is that a file whose guest
-    link the owner revoked themselves also moves to the account holder instead of being
-    purged. That errs toward keeping the household's files, and is accepted.
+  - Guest links never count (owner decision, 2026-11-20). A file shared only with
+    guests has nobody in the household who keeps it, so it goes to the trash with the
+    unshared files below. This also means the rule never needs to know why a guest link
+    was revoked, which KyDrive does not record.
 - Only the topmost shared item on each path moves, with its whole subtree intact, so
   a folder share still covers everything under it. They all go into one "Handover from
   <owner> <date>" folder in the account holder's My files.
@@ -684,8 +683,9 @@ that member's My files at once, inside the org:
     stops with its creator (`guest.go:155-182`). KyIdentity's user deletion queues
     `user.deleted` directly (KyIdentity `internal/store/store.go:1123`), so a leaver's guest
     links may still be live when it arrives. The new path therefore revokes them in its
-    own transaction, as deactivation would, and never revives one. An item shared only by
-    guest link still moves, and the holder can make a new link.
+    own transaction, as deactivation would, and never revives one. An item that moves for a
+    person, group or Household share loses its guest links too, and the holder can make a
+    new one.
   - The holder sees the folder and can stop any of the shares or links.
 - **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
   later, whatever the drive's trash age. D11 still wins: the 90 days do not run while the
@@ -787,8 +787,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      classification. The purge is killed halfway and rerun. A leaver's shared files go to the
      holder with every person and group share and Household link still working for the
      same people, including access inherited from a shared parent folder, and their guest
-     links still revoked, the rest goes to
-     the trash, and the trash copy is purged at 90 days. An org suspended during those 90
+     links revoked. A file shared only by guest link goes to the trash with the rest, and
+     the trash copy is purged at 90 days. An org suspended during those 90
      days purges nothing until it is active again and past `retention_after`. A member
      deactivated before deletion has the same files moved as one deleted while active. A member
      who drops out of a group list, and a poll that fails or is truncated, move and trash
@@ -847,7 +847,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 11. **Per-workspace retention on the hosted service.** Stays refused (D10). Revisit only if
     households ask.
 12. **A household member's My files after they leave.** Shared files move to the account
-    holder with their person and group shares and Household links kept (guest links are
-    not), and the rest goes to the trash and is purged
-    after 90 days (A member leaves).
+    holder with their person and group shares and Household links kept. Guest links are
+    revoked, and a file shared only with guests counts as unshared. The rest goes to the
+    trash and is purged after 90 days (A member leaves).
     This needs the account holder's `sub` from `/api/suite/orgs`, a new ask of KyIdentity.
