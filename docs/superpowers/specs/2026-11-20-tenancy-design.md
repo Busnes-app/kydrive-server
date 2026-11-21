@@ -573,8 +573,8 @@ fails the build.
   - Residual: workspace names stay plaintext (root `AGENTS.md`), and for suite groups they
     are the household's group names.
 - **Handover** is the one content-moving staff action. It runs only within the selected org
-  and is audited in that org's log. A leaver's files are normally handled automatically (see
-  "A member leaves").
+  and is audited in that org's log. A leaver's shared files move automatically (see "A
+  member leaves"); staff `Handover` remains for the rest, on the account holder's request.
 
 ## Lifecycle
 
@@ -653,13 +653,21 @@ Owner decision (question 12). When KyIdentity deletes a member's account (a `use
 webhook, or the member gone from the suite directory), KyDrive acts on that member's My
 files at once, inside the org:
 
-- **Shared files move to the account holder.** An item is shared if it, or a folder above
-  it, has a live share to a person or group, a Household link or a guest link. Each shared
-  item moves with its subtree into one "Handover from <owner> <date>" folder in the account
-  holder's My files, as `Handover` does today (`handover.go:83-85`). Unverified: whether
-  existing shares and links on a moved item keep working after the move.
-- **Everything else goes to the trash** and is purged 90 days later, whatever the drive's
-  trash age. Until then staff can restore it on request.
+- **Shared files move to the account holder, and stay shared.** An item is shared if it,
+  or a folder above it, has a live share to a person or group, a Household link or a guest
+  link. Each shared item moves with its subtree into one "Handover from <owner> <date>"
+  folder in the account holder's My files.
+  - This is a new store path, not today's `Handover`. `Handover` ends the leaver's shares
+    and revokes their links (`handover.go:147-154`), which would remove the very access the
+    rule keeps.
+  - The new path moves the shares and links with the items and makes the account holder
+    their owner and creator, so the people they were shared with keep their access. It
+    changes no role and widens nothing. Guest links keep their expiry and password.
+  - The holder sees the folder and can stop any of the shares or links.
+- **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
+  later, whatever the drive's trash age. Nobody opens it in the meantime. Staff can still
+  run today's org-class `Handover` on the leaver's workspace when the account holder asks
+  (see Admin surface). That moves the whole tree, trash included, without opening an item.
 - A deactivated (not deleted) member is left alone, since KyIdentity can re-enable them.
 - If the org has no account holder, nothing moves, and the files stay as a leaver's
   workspace (`handover.go:37`), counted in the org's pool, until the org is deleted.
@@ -743,8 +751,9 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      uploads with room for one. `TestSuspendedOrgServesNothing` for every credential type.
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
      entry, staging directory or index ref for the org, which is checked against the
-     classification. The purge is killed halfway and rerun. A leaver's shared and unshared
-     files go to the holder and the trash, and the trash copy is purged at 90 days. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
+     classification. The purge is killed halfway and rerun. A leaver's shared files go to the
+     holder with every share and link still working for the same people, the rest goes to
+     the trash, and the trash copy is purged at 90 days. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
    `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
@@ -798,5 +807,6 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 11. **Per-workspace retention on the hosted service.** Stays refused (D10). Revisit only if
     households ask.
 12. **A household member's My files after they leave.** Shared files move to the account
-    holder, and the rest goes to the trash and is purged after 90 days (A member leaves).
+    holder with their shares and links kept, and the rest goes to the trash and is purged
+    after 90 days (A member leaves).
     This needs the account holder's `sub` from `/api/suite/orgs`, a new ask of KyIdentity.
