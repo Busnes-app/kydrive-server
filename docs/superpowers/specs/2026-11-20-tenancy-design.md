@@ -60,7 +60,7 @@ PR 3 until it does.
 | D8 | Blob storage stays flat (`<data>/blobs/<uuid>`). A trigger on `drive_versions` refuses a version that names a blob already named by a version in another org. | Blob IDs are fresh random UUIDs (`blobs.go:21`), with no content addressing, so there is no dedup across orgs. A blob is only reachable through a version row. The one path that shares a blob, copy (`move.go:131-132`), already needs ranks in both workspaces. A per-org directory would add an org argument to every `BlobPath` call and protect nothing the trigger doesn't. |
 | D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
 | D10 | In multi-tenant mode, shared workspaces exist only as suite group workspaces (`suitegroups.go:57`). Creating, renaming, deleting and re-quotaing a shared workspace through the admin API answers 404. | Customers have no administrator to create workspaces. Suite groups give households shared folders, and staff should not curate customer folders. |
-| D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers a purge. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
+| D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers an org-wide purge. The one other purge, a leaver's unshared files 90 days after a verified `user.deleted` (A member leaves), also pauses while the org is not `active`. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
 | D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. One named exception: the local bootstrap and recovery administrators take the staff org from operator configuration (`KYDRIVE_STAFF_ORG`), since no token exists when they are created. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
 
 ## KyDrive's half of the downstream contract
@@ -659,8 +659,9 @@ that member's My files at once, inside the org:
 
 - **Shared files move to the account holder, and stay shared.** An item is shared if it,
   or a folder above it, has a live share to a person or group, a Household link or a guest
-  link. Each shared item moves with its subtree into one "Handover from <owner> <date>"
-  folder in the account holder's My files.
+  link. Only the topmost shared item on each path moves, with its whole subtree intact, so
+  a folder share still covers everything under it. They all go into one "Handover from
+  <owner> <date>" folder in the account holder's My files.
   - This is a new store path, not today's `Handover`. `Handover` ends the leaver's shares
     and revokes their links (`handover.go:147-154`), which would remove the very access the
     rule keeps.
@@ -765,7 +766,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
      entry, staging directory or index ref for the org, which is checked against the
      classification. The purge is killed halfway and rerun. A leaver's shared files go to the
-     holder with every share and link still working for the same people, the rest goes to
+     holder with every share and link still working for the same people, including
+     access inherited from a shared parent folder, the rest goes to
      the trash, and the trash copy is purged at 90 days. An org suspended during those 90
      days purges nothing until it is active again and past `retention_after`. A member
      who drops out of a group list, and a poll that fails or is truncated, move and trash
