@@ -1,6 +1,6 @@
 # KyDrive tenancy: single-tenant and multi-tenant (SaaS), design
 
-Date: 2026-11-20. Status: proposed design, nothing built. Docs only.
+Date: 2026-11-20. Status: design approved, with the owner's answers to its questions (2026-11-20). Nothing built.
 
 KyDrive today serves one organisation per install. This note adds a second mode to the same
 binary: **multi-tenant**, one shared install for every individual and household on the hosted
@@ -46,21 +46,21 @@ PR 3 until it does.
 | Quota | per workspace (`drive_workspaces.quota`, `store.go:98`) | one pool per org, `storage_bytes` from `/api/suite/orgs` (D7) |
 | Blob layout | `<data>/blobs/<uuid>` (`drive_handlers.go:362`) | unchanged (D8) |
 
-## Decisions this note proposes
+## Decisions
 
 | # | Decision | Why |
 |---|---|---|
 | D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets the multi-only DDL (see Triggers, "Mode-only DDL") be created on empty tables. |
-| D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is open question 6. |
+| D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is question 6. |
 | D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded, retention_after)`, filled from `GET /api/suite/orgs` (T "Suite directory"), with one exception: the staff org's row, seeded from `KYDRIVE_STAFF_ORG` and never overwritten by the poll (Local accounts). Polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
 | D7 | One storage pool per org: the sum of every workspace's version bytes and viewing copies must stay within `quotas.storage_bytes` from `/api/suite/orgs`. It is checked in `fits` (`store.go:682`), the one function every byte-adding path already calls. Per-workspace `quota` is not enforced in multi-tenant mode. A missing or unreadable quota refuses writes. | Household plans are one allowance shared by its people. Every path that adds bytes already ends in `fits` (see Quotas). Failing closed means a polling bug cannot hand out unlimited storage. |
 | D8 | Blob storage stays flat (`<data>/blobs/<uuid>`). A trigger on `drive_versions` refuses a version that names a blob already named by a version in another org. | Blob IDs are fresh random UUIDs (`blobs.go:21`), with no content addressing, so there is no dedup across orgs. A blob is only reachable through a version row. The one path that shares a blob, copy (`move.go:131-132`), already needs ranks in both workspaces. A per-org directory would add an org argument to every `BlobPath` call and protect nothing the trigger doesn't. |
-| D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (open question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
+| D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
 | D10 | In multi-tenant mode, shared workspaces exist only as suite group workspaces (`suitegroups.go:57`). Creating, renaming, deleting and re-quotaing a shared workspace through the admin API answers 404. | Customers have no administrator to create workspaces. Suite groups give households shared folders, and staff should not curate customer folders. |
-| D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers a purge. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
+| D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers an org-wide purge. The one other purge, a leaver's unshared files 90 days after a verified `user.deleted` (A member leaves), also pauses while the org is not `active`. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
 | D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. One named exception: the local bootstrap and recovery administrators take the staff org from operator configuration (`KYDRIVE_STAFF_ORG`), since no token exists when they are created. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
 
 ## KyDrive's half of the downstream contract
@@ -343,20 +343,25 @@ against the step-up token's.
 - Today `/api/sso/kysignon/sync` verifies a hex HMAC of the body (`kysignon.go:76-90`,
   `sso_handlers.go:223-255`) and reads `KySignOnSyncPayload` (`kysignon.go:57-65`), which
   has no org.
-- KyIdentity's suite webhook signs with `syncauth.Sign` (KyIdentity
-  `internal/sync/sync.go:572`), whose headers include `X-KySignOn-Signature`
-  (ky-primitives `syncauth/syncauth.go:33`). Unverified: whether that signature is the
-  plain body HMAC KyDrive checks. KyDrive is documented to pair by SCIM
-  (`docs/PERMISSIONS.md:13`), so this receiver may never have been exercised against
-  KyIdentity's suite webhook.
-- Multi-tenant: the receiver verifies with `syncauth.Verify` and a replay window, as the
-  KyPost routes already do (`kypost.go:286-299`). The payload gains `org_id`, which T
-  authenticates through the signature (T "Outbound sync").
+- Checked on 2026-11-20 (KyIdentity `origin/master` `49e8aa6`): the two sides do not
+  interoperate, so the receiver has never worked against KyIdentity's suite webhook.
+  KyDrive is documented to pair by SCIM (`docs/PERMISSIONS.md:13`).
+  - KyIdentity signs with `syncauth.Sign` (KyIdentity `internal/sync/sync.go:582`): `v1=`
+    and an HMAC over the timestamp, event type, event ID and the body's SHA-256. KyDrive
+    expects a bare hex HMAC of the body.
+  - KyIdentity sends a SCIM user resource (KyIdentity `internal/sync/sync.go:112-125`), with the event type and time
+    in headers. KyDrive parses its own `event`/`timestamp` body.
+  - KyIdentity already adds `org_id` to suite webhook bodies in multi-tenant mode
+    (`internal/sync/sync.go:466-468`). No KyIdentity change is needed.
+- The owner chose to fix this ahead of PR 4, in both modes: #154 makes the receiver verify
+  with `syncauth.Verify`, read the SCIM resource and order events by its `meta.version`
+  revision, as KyMessage's receiver does.
+- Multi-tenant (PR 4) then adds `org_id`, which T authenticates through the signature (T
+  "Outbound sync").
   - No `org_id`: 400.
   - A known `sub` with another org: refused and audited (point 3).
   - `user.created` for an unknown `sub`: creates the account in that org.
-  - Today's ordering by `directory_ts` and the restrictive tie-break stay (`sso`
-    `AGENTS.md`).
+  - Events are ordered by revision, as #154 leaves it (`sso` `AGENTS.md`).
 
 ### Back-channel logout
 
@@ -396,7 +401,7 @@ alert. Logouts are not refused for it, since a logout only takes access away.
   - If a poll reports the staff org as anything but `active`, KyDrive logs an alert and
     changes nothing.
   - The staff org gets no storage pool check (staff hold no customer content).
-  - `KYDRIVE_STAFF_ORG` is recorded at first start and immutable (open question 2). An
+  - `KYDRIVE_STAFF_ORG` is recorded at first start and immutable (question 2). An
     ID token whose `org_id` equals it is a staff account like any other.
   - Startup refuses a `KYDRIVE_STAFF_ORG` that is not a canonical UUID, or that equals the
     default org ID (`00000000-0000-0000-0000-000000000001`). Otherwise the staff row would
@@ -454,8 +459,9 @@ step-up, so a device takes the approving user's org and can never change it.
 | Guest link (`guest.go:51`, public routes `internal/api/guest.go:30-32`) | Anyone with the token, mandatory expiry, optional password | Unchanged: the one deliberate public path. It stops while the creator's org is not `active`. Guest upload counts against the creator's org pool (`guest.go:303-330` publishes through `publishTX`). |
 | KyPost guest link (`guest.go:60-65`) | Per-user switch | Unchanged, same org rules |
 
-UI copy: "organisation link" reads as "anyone in your household" in multi-tenant mode. The
-wording is open question 8.
+UI copy: in multi-tenant mode an organisation link is called a **Household link** (owner,
+question 8). "Shared link" was considered and rejected: guest links are shared links too, so
+it would suggest the link reaches people outside the household.
 
 ### WebDAV, desktop sync and AI agents
 
@@ -534,7 +540,7 @@ wording is open question 8.
   asserts both by source scan, so a new byte-adding path cannot skip the check.
 - **Not counted:** staging chunks of unfinished uploads (bounded by the uploads-in-progress
   cap, `uploads.go:100`, and `KYDRIVE_MAX_FILE_SIZE`, `config.go:328`), thumbnails, text
-  caches and the search index. That is open question 7.
+  caches and the search index. That is question 7.
 - **Downgrade.** Lowering `storage_bytes` below usage deletes nothing. Writes are refused
   until usage drops. Reads, trash, purge, moves and handover keep working. A test lowers
   the pool below usage and expects a move and a handover to succeed and an upload to be
@@ -566,8 +572,9 @@ fails the build.
   and its audit. Never file names or content, because no admin route opens an item.
   - Residual: workspace names stay plaintext (root `AGENTS.md`), and for suite groups they
     are the household's group names.
-- **Handover** is the one content-moving staff action. It runs only within the selected org,
-  on the account holder's request (open question 12), and is audited in that org's log.
+- **Handover** is the one content-moving staff action. It runs only within the selected org
+  and is audited in that org's log. A leaver's shared files move automatically (see "A
+  member leaves"); staff `Handover` remains for the rest, on the account holder's request.
 
 ## Lifecycle
 
@@ -634,25 +641,86 @@ org rows the purge deletes with everything else.
 
 Copies of the org's
 data stay in capsules and Restic snapshots until backup retention drops them (residual risk,
-open question 5).
+question 5).
 
 KyDrive purges on `deleted` from `/api/suite/orgs` only. It does not depend on KyIdentity
 also sending a `user.deleted` webhook per member. Unverified: whether T's `DELETE /orgs/{id}`
 sends those.
 
+### A member leaves
+
+Owner decision (question 12). When KyIdentity deletes a member's account, KyDrive acts on
+that member's My files at once, inside the org:
+
+- **Trigger:** only a `syncauth`-verified `user.deleted` webhook for a known `sub` in the
+  same org. Nothing else starts it. A member missing from any poll or group list, or a
+  poll that fails or comes back truncated, never starts it: the process moves files and
+  starts a purge, so it fails closed like D7 and question 4.
+
+- **Shared files move to the account holder, and stay shared.** An item is shared if it,
+  or a folder above it, has a share to a person or group, an unrevoked Household link, or
+  an unexpired guest link, revoked or not. The test reads the share records, not whether
+  they work right now, so it gives the same answer whether or not KyIdentity deactivated
+  the member first.
+  - A deactivated owner's person and group shares are stopped, not deleted (root
+    `AGENTS.md`), so they still count.
+  - Deactivation does not revoke Household links (root `AGENTS.md`: organisation links
+    stay), so a revoked one was revoked by its owner and does not count.
+  - Deactivation revokes every guest link, and KyDrive does not record why a link was
+    revoked. So a revoked, unexpired guest link counts. The cost is that a file whose guest
+    link the owner revoked themselves also moves to the account holder instead of being
+    purged. That errs toward keeping the household's files, and is accepted.
+- Only the topmost shared item on each path moves, with its whole subtree intact, so
+  a folder share still covers everything under it. They all go into one "Handover from
+  <owner> <date>" folder in the account holder's My files.
+  - This is a new store path, not today's `Handover`. `Handover` ends the leaver's shares
+    and revokes their links (`handover.go:147-154`), which would remove the very access the
+    rule keeps.
+  - The new path moves person and group shares and Household links with the items and
+    makes the account holder their owner and creator, so the household members they were
+    shared with keep their access. It changes no role and widens nothing.
+  - Guest links do not survive. Directory deactivation already revokes every guest link
+    the account made, and reactivation revives none (root `AGENTS.md`). A guest link also
+    stops with its creator (`guest.go:155-182`). KyIdentity's user deletion queues
+    `user.deleted` directly (KyIdentity `internal/store/store.go:1123`), so a leaver's guest
+    links may still be live when it arrives. The new path therefore revokes them in its
+    own transaction, as deactivation would, and never revives one. An item shared only by
+    guest link still moves, and the holder can make a new link.
+  - The holder sees the folder and can stop any of the shares or links.
+- **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
+  later, whatever the drive's trash age. D11 still wins: the 90 days do not run while the
+  org is not `active`, and on resume the clock waits for `retention_after`, like every other
+  purge. Nobody opens the files in the meantime. Staff can still
+  run today's org-class `Handover` on the leaver's workspace when the account holder asks
+  (see Admin surface). That moves the whole tree, trash included, without opening an item.
+- A deactivated (not deleted) member's files do not move, since KyIdentity can re-enable
+  them. Deactivation still revokes their credentials and guest links, as today.
+- If the org has no account holder, nothing moves, and the files stay as a leaver's
+  workspace (`handover.go:37`), counted in the org's pool, until the org is deleted.
+- **Needs KyIdentity:** `/api/suite/orgs` returns no account holder today (T "Suite
+  directory": `id`, `status`, `revision`, `enabled`, `quotas`). KyDrive needs the holder's
+  `sub`. This is a new ask of KyIdentity's step 3. The holder can never be the leaver,
+  because KyIdentity refuses to delete the account holder (T `409 account_holder`).
+
 ### Export
 
-- T gives the account holder an export-only session while deletion is scheduled. That
-  session "issues no codes or tokens and opens no suite or forward session" (T "Views"), so
-  it cannot reach KyDrive.
+- Owner decision (question 1): members export their own files while the org is active. The
+  deletion window is kept short, and KyDrive has no staff export.
 - **While active**, any member downloads what they can read: files, and folders as zips
   (`drive_handlers.go:80`, capped by `KYDRIVE_MAX_ZIP_SIZE`, `config.go:332`). Unverified:
   whether a workspace's root can be zipped in one request.
-- **While `deletion_scheduled`**, staff run an audited CLI on the account holder's request:
-  `kydrive export-org -org <id> -out <path>`. It writes one zip per workspace of the org,
-  holding current versions with their names opened. It is offline and read-only, like the
-  existing capsule CLIs (`config.LoadExisting`, root `AGENTS.md`). This matches T's option
-  (c), and is open question 1.
+- **Once deletion is scheduled**, the org is suspended and KyDrive serves it nothing. T's
+  export-only session "issues no codes or tokens and opens no suite or forward session" (T
+  "Views"), so it cannot reach KyDrive. T's staff export, offered when an account holder
+  cannot sign in, covers KyIdentity's data only.
+- **So the warning must come before scheduling.** A banner shown after scheduling arrives
+  too late, because KyDrive already refuses every credential by then. Deletion is scheduled
+  by the billing service (T `POST /orgs/{id}/schedule-deletion`), so the billing service
+  must warn first. Its cancellation confirmation, and the notice it mails the account
+  holder and members before it schedules deletion, must say to download files from KyDrive
+  first. The billing service is not built yet, so this is a requirement for its design. A
+  suspension for an unpaid bill also blocks downloads, so that notice must say the same
+  thing before it suspends.
 
 ## Threat model
 
@@ -668,10 +736,10 @@ sends those.
 | Holder of a stolen KyPost pair secret, or a buggy KyPost | Act as org B's user for org A, or name a user in the wrong org | Every body carries `org_id`, and `kypostAccount` refuses a mismatch. Peer contexts can do only three narrow things (`access.go:85-103`). A stolen secret still reaches every user whose `sub` and org it can name: residual, as in T. |
 | User of a suspended org | Keep working through WebDAV, the desktop client, an agent or a service token | `activePrincipal` on every credential path. Editor sessions are revoked. Within one poll (about 60 s). |
 | Customer of org A | Fill the shared disk | The org pool in `fits`, failing closed. The resumable upload cap and the file size limit bound staging (`uploads.go:100`, `config.go:328`). |
-| Customer of org A | Slow other orgs down: one SQLite writer, one Euro-Office, one indexer | Existing per-user and per-IP rate limits only. Residual (open question 6). |
+| Customer of org A | Slow other orgs down: one SQLite writer, one Euro-Office, one indexer | Existing per-user and per-IP rate limits only. Residual (question 6). |
 | Staff, or a stolen staff account | Read customer content | No admin route opens an item, and administration grants no rank (`access.go:16`). Handover stays within one org and is audited in that org's log. Staff do see the org directory and workspace names (residual, as in T). |
 | Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`). Residual, unchanged. |
-| Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, and rebuilds the vocabulary. Backups keep copies until their retention ends (residual, open question 5). |
+| Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, and rebuilds the vocabulary. Backups keep copies until their retention ends (residual, question 5). |
 
 ## Phased build plan
 
@@ -696,7 +764,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      existing suite unchanged.
 4. **Identity binding** (needs KyIdentity step 3).
    - `org_id` from the ID token, the step-up token and the logout token.
-   - The `syncauth` webhook receiver with `org_id`.
+   - `org_id` in the `syncauth` webhook receiver, which #154 already moved to `syncauth`
+     and SCIM bodies.
    - The `/api/suite/orgs` poller, through a `ky-primitives/suitedir` `Orgs` method (T
      PR 3).
    - Suite groups per org. Inbound SCIM off in multi-tenant mode. Forced auto-provisioning.
@@ -708,12 +777,22 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.
    - Status enforcement, the retention pause, the editor revocation at suspension, the
-     purge job and the `export-org` CLI.
+     purge job, and the leaver rule (shared files to the account holder, the rest to the
+     trash for 90 days).
+   - The capacity measurement (question 6), before PR 6 can enable the mode.
    - Tests: the quota on every path in the Quotas table, plus the source scan. Two parallel
      uploads with room for one. `TestSuspendedOrgServesNothing` for every credential type.
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
      entry, staging directory or index ref for the org, which is checked against the
-     classification. The purge is killed halfway and rerun. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
+     classification. The purge is killed halfway and rerun. A leaver's shared files go to the
+     holder with every person and group share and Household link still working for the
+     same people, including access inherited from a shared parent folder, and their guest
+     links still revoked, the rest goes to
+     the trash, and the trash copy is purged at 90 days. An org suspended during those 90
+     days purges nothing until it is active again and past `retention_after`. A member
+     deactivated before deletion has the same files moved as one deleted while active. A member
+     who drops out of a group list, and a poll that fails or is truncated, move and trash
+     nothing. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
    `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
@@ -725,14 +804,17 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 ## Residual risks (accepted)
 
 - **One writer, one disk, one editor for every org.** A busy org slows every other org's
-  writes, editor sessions and indexing. Capacity is unmeasured (open question 6).
-- **A capsule restore rolls back every org.** There is no per-org restore. The `export-org`
-  CLI is read-only.
+  writes, editor sessions and indexing. Capacity is unmeasured (question 6).
+- **A capsule restore rolls back every org.** There is no per-org restore.
+- **No export after deletion is scheduled.** A member who did not download their files
+  before then cannot get them (question 1). The only warning is the billing service's,
+  before it schedules deletion (Export).
 - **Backups outlive deletion.** A deleted org's blobs and rows stay in capsules and Restic
   snapshots until backup retention drops them. Restic bulk pruning is opt-in and off by
   default (root `AGENTS.md`).
 - **Stale status.** If `/api/suite/orgs` cannot be read, KyDrive keeps the last status it
-  saw. A suspension is then late until the next successful poll (open question 4).
+  saw, and alerts the operator after 10 minutes. A suspension is then late until the next
+  successful poll (question 4).
 - **Shared pair secret.** A stolen KyPost pair secret reaches every org's users whose
   subjects it can name, though only the three peer actions.
 - **Staff see directories and workspace names**, never file names or content.
@@ -740,51 +822,32 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
   whoever reads it, as it does across users today (root `AGENTS.md`).
 - **Euro-Office and the server read plaintext**, as today.
 
-## Open questions, with recommendations
+## Questions, settled by the owner on 2026-11-20
 
-1. **Export while deletion is scheduled.**
-   - (a) A staff-run `export-org` CLI on the account holder's request.
-   - (b) KyIdentity widens the export-only session so it can open a read-only KyDrive
-     session.
-   - (c) Self-service only, while the org is active.
-   - Recommend (a) with (c) for v1. (b) needs a KyIdentity change, and widens the one
-     place T kept narrow.
-2. **How KyDrive knows the staff org.**
-   - (a) `KYDRIVE_STAFF_ORG`, recorded at first start and immutable like the mode.
-   - (b) KyIdentity adds `kind` to `/api/suite/orgs`.
-   - Recommend (a): no KyIdentity change, and a wrong value only stops staff from
-     administering, since customer orgs never hold the role.
-3. **Linked computers when an org is deleted.**
-   - (a) Revoke without wipe: the customer keeps their own copy.
-   - (b) Revoke with wipe.
-   - Recommend (a). The files are the customer's, and deletion follows a grace period.
-4. **`/api/suite/orgs` unreachable.**
-   - (a) Keep the last status, and alert after 10 minutes.
-   - (b) After N minutes, refuse every long-lived credential in every org.
-   - Recommend (a): (b) turns a KyIdentity outage into a KyDrive outage for every customer.
-5. **Deleted orgs in backups.**
-   - (a) Accept, and require bulk retention on the hosted install so copies age out.
-   - (b) Per-org data keys, destroyed at purge, so backup copies become unreadable
-     (crypto-shredding).
-   - Recommend (a) for v1, with (b) as a later design. Today's sealing derives every key
-     from one deployment key (`sealed.go:247`).
-6. **Capacity.** Set a measured target (orgs, stored bytes, writes a minute, concurrent
-   editor sessions) before launch? Recommend yes. Revisit D2 only if the measurement fails.
-7. **Staging bytes outside the quota.** Accept, given the bounds above? Recommend yes.
-8. **What "organisation link" is called on the hosted service.** For example "Anyone in
-   your household". Recommend settling it in PR 6's UI pass, with the owner.
-9. **Webhook compatibility.** Confirm with KyIdentity that its suite webhook payload for
-   KyDrive is T's signed body with `org_id`, and pair KyDrive as `suite_webhook` on the
-   hosted KyIdentity. Recommend doing this before PR 4.
-10. **Suite group poll cost.** One request per org per pass. Ask KyIdentity for
-    `/api/suite/groups?since=` across orgs for the calling app? Recommend measuring first
-    (question 6).
-11. **Per-workspace retention on the hosted service.** It stays refused (D10). Recommend
-    revisiting only if households ask.
-12. **A household member's My files after they leave.** KyIdentity deletes the account, and
-    the files stay as a leaver's workspace (`handover.go:37`), counted in the org's pool.
-    - (a) Staff hand over on the account holder's request.
-    - (b) Purge after the trash age.
-    - (c) Keep until the org is deleted.
-    - Recommend (a), with (c) when nobody asks: deleting a person's files on a timer is the
-      wrong default.
+1. **Export while deletion is scheduled.** Members export their own files while the org is
+   active. The deletion window is short, and there is no staff export (Export).
+2. **How KyDrive knows the staff org.** `KYDRIVE_STAFF_ORG`, recorded at first start and
+   immutable like the mode.
+3. **Linked computers when an org is deleted.** Revoked without a wipe: the customer keeps
+   their own copy.
+4. **`/api/suite/orgs` unreachable.** Keep the last status, and alert the operator after 10
+   minutes. Refusing credentials in every org would turn a KyIdentity outage into a KyDrive
+   outage for every customer.
+5. **Deleted orgs in backups.** Accepted. The hosted install must run bulk retention so
+   copies age out. Per-org keys destroyed at purge (crypto-shredding) stay a later design:
+   today's sealing derives every key from one deployment key (`sealed.go:247`).
+6. **Capacity.** Measure a target (orgs, stored bytes, writes a minute, concurrent editor
+   sessions) before launch. Revisit D2 only if the measurement fails.
+7. **Staging bytes outside the quota.** Accepted, given the bounds in Quotas.
+8. **What an organisation link is called on the hosted service.** "Household link".
+9. **Webhook compatibility.** Checked: the two sides do not interoperate (Signed webhook).
+   Fixed ahead of PR 4 by #154, in both modes.
+10. **Suite group poll cost.** Measure first, as part of question 6, before asking
+    KyIdentity for one request across orgs.
+11. **Per-workspace retention on the hosted service.** Stays refused (D10). Revisit only if
+    households ask.
+12. **A household member's My files after they leave.** Shared files move to the account
+    holder with their person and group shares and Household links kept (guest links are
+    not), and the rest goes to the trash and is purged
+    after 90 days (A member leaves).
+    This needs the account holder's `sub` from `/api/suite/orgs`, a new ask of KyIdentity.
