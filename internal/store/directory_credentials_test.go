@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,8 +66,30 @@ func TestRevokeDirectoryCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ws, err := st.Drive().EnsurePersonalWorkspace(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.Drive().Publish(ctx, u.ID, drive.File{Workspace: ws, Name: "notes.docx"}, drive.Version{Blob: "blob", Size: 4, Digest: strings.Repeat("a", 64), Sealed: true}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	editor, err := st.Drive().EditorSession(ctx, u.ID, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, revision, epoch, err := drive.ParseDocumentKey(editor.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Drive().CallbackActor(ctx, id, revision, epoch); err != nil {
+		t.Fatalf("editor not open: %v", err)
+	}
 	if err := st.Users().RevokeDirectoryCredentials(ctx, u.ID); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := st.Drive().CallbackActor(ctx, id, revision, epoch); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("open editor kept saving: %v", err)
 	}
 	if _, err := st.Sessions().GetSession(ctx, "mfa"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("session kept", err)
