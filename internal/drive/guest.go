@@ -83,7 +83,7 @@ func (s *Store) createGuestLink(ctx context.Context, user, kind, id string, expi
 		if err := liveLogin(ctx, tx); err != nil {
 			return err
 		}
-		workspace, folder, file, trashed, err := resource(ctx, tx, kind, id)
+		workspace, folder, file, trashed, err := resource(ctx, tx, user, kind, id)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func guestRights(ctx context.Context, q queryer, user, workspace, folder, file s
 
 // GuestLinks lists an item's live guest links for those who may share it.
 func (s *Store) GuestLinks(ctx context.Context, user, kind, id string) ([]GuestLink, error) {
-	workspace, folder, file, _, err := resource(ctx, s.db, kind, id)
+	workspace, folder, file, _, err := resource(ctx, s.db, user, kind, id)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (s *Store) guest(ctx context.Context, token, secret string) (guestAccess, e
 	if err != nil {
 		return g, err
 	}
-	_, folder, file, trashed, err := resource(ctx, s.db, g.kind, g.root)
+	_, folder, file, trashed, err := resource(ctx, s.db, g.creator, g.kind, g.root)
 	if err != nil || trashed {
 		return g, ErrNotFound
 	}

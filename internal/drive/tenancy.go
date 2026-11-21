@@ -100,3 +100,32 @@ func asDenied(err error) error {
 	}
 	return err
 }
+
+// activePrincipal is true while user $U is active and their org is active and enabled: the
+// one test every credential and grant reads. $U is a column reference.
+func activePrincipal(user string) string {
+	return `EXISTS(SELECT 1 FROM users apu JOIN drive_orgs apo ON apo.id=apu.org_id WHERE apu.id=` + user + ` AND apu.status='active' AND apo.status='active' AND apo.enabled=1)`
+}
+
+// sameOrg is true when workspace $W is in user $U's org. Both are column references.
+func sameOrg(user, workspace string) string {
+	return `EXISTS(SELECT 1 FROM drive_workspaces sow JOIN users sou ON sou.org_id=sow.org_id WHERE sow.id=` + workspace + ` AND sou.id=` + user + `)`
+}
+
+// userOrg is user $U's org. A user with no row is in the default org on a single-tenant
+// database and in none (NULL, refused by every org-owned table) on a multi-tenant one.
+func userOrg(user string) string {
+	return `COALESCE((SELECT org_id FROM users WHERE id=` + user + `),(SELECT id FROM drive_orgs WHERE id='` + DefaultOrg + `'))`
+}
+
+// workspaceOrg is workspace $W's org.
+func workspaceOrg(workspace string) string {
+	return `(SELECT org_id FROM drive_workspaces WHERE id=` + workspace + `)`
+}
+
+// ActivePrincipal reports whether user is active and in an active, enabled org.
+func (s *Store) ActivePrincipal(ctx context.Context, user string) (bool, error) {
+	var ok bool
+	err := s.db.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&ok)
+	return ok, err
+}

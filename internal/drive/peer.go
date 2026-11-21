@@ -54,7 +54,7 @@ func (s *Store) SetPeerSetting(ctx context.Context, user string, enabled bool) e
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_peer_settings(user_id,enabled) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled`, user, enabled); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_peer_settings(user_id,enabled,org_id) VALUES(?,?,`+userOrg("?")+`) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled`, user, enabled, user); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "kypost.switch_changed", fmt.Sprintf("enabled=%t", enabled))
@@ -93,7 +93,7 @@ func (s *Store) SetPeerGuestSetting(ctx context.Context, user string, enabled bo
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		q := `DELETE FROM drive_peer_guest WHERE user_id=?`
 		if enabled {
-			q = `INSERT INTO drive_peer_guest(user_id) VALUES(?) ON CONFLICT DO NOTHING`
+			q = `INSERT INTO drive_peer_guest(user_id,org_id) VALUES(?1,` + userOrg("?1") + `) ON CONFLICT DO NOTHING`
 		}
 		if _, err := tx.ExecContext(ctx, q, user); err != nil {
 			return err
@@ -152,7 +152,7 @@ func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSiz
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires,pairing) VALUES(?,?,?,?,?,?,?)`, t.ID, tokenHash(token), user, stored, size, t.Expires, t.Pairing); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires,pairing,org_id) VALUES(?,?,?,?,?,?,?,`+userOrg("?")+`)`, t.ID, tokenHash(token), user, stored, size, t.Expires, t.Pairing, user); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "kypost.ticket_issued", t.ID)
@@ -321,7 +321,7 @@ func (s *Store) peerFolder(ctx context.Context, tx *sql.Tx, user string) (worksp
 	if folder == "" {
 		return "", "", fmt.Errorf("%w: no free folder name", ErrConflict)
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_folders(owner,folder) VALUES(?,?) ON CONFLICT(owner) DO UPDATE SET folder=excluded.folder`, user, folder)
+	_, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_folders(owner,folder,org_id) VALUES(?,?,`+userOrg("?")+`) ON CONFLICT(owner) DO UPDATE SET folder=excluded.folder`, user, folder, user)
 	return workspace, folder, err
 }
 
@@ -348,7 +348,7 @@ func (s *Store) RecordPicks(ctx context.Context, user string, ids []string) erro
 			return err
 		}
 		for _, id := range ids {
-			workspace, folder, file, trashed, err := resource(ctx, tx, "file", id)
+			workspace, folder, file, trashed, err := resource(ctx, tx, user, "file", id)
 			if err != nil {
 				return err
 			}
@@ -358,7 +358,7 @@ func (s *Store) RecordPicks(ctx context.Context, user string, ids []string) erro
 			if trashed {
 				return ErrConflict
 			}
-			if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_picks(owner,file,expires) VALUES(?,?,?) ON CONFLICT(owner,file) DO UPDATE SET expires=excluded.expires`, user, id, time.Now().Add(PickLife).Unix()); err != nil {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO drive_peer_picks(owner,file,expires,org_id) VALUES(?,?,?,`+userOrg("?")+`) ON CONFLICT(owner,file) DO UPDATE SET expires=excluded.expires`, user, id, time.Now().Add(PickLife).Unix(), user); err != nil {
 				return err
 			}
 			if err = event(ctx, tx, user, "kypost.file_picked", id); err != nil {

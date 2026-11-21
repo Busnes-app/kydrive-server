@@ -142,7 +142,10 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if user.Status != "active" {
+	if active, err := store.ActivePrincipal(r.Context(), s.store, user); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "Authentication error")
+		return
+	} else if !active {
 		s.writeError(w, 403, "Account is inactive")
 		return
 	}

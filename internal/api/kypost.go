@@ -335,7 +335,9 @@ func (s *Server) kypostAccount(ctx context.Context, who kypostUser) (*store.User
 	if err != nil {
 		return nil, err
 	}
-	if user.Status != "active" {
+	if active, err := store.ActivePrincipal(ctx, s.store, user); err != nil {
+		return nil, err
+	} else if !active {
 		return nil, store.ErrNotFound
 	}
 	dedicated, err := s.store.InstallerAdministrator(ctx, user.ID)

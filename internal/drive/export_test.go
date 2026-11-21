@@ -238,7 +238,13 @@ func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
 
 // OpenAt opens the drive store migrated only to schema version, as an older release left it.
 func OpenAt(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, error) {
-	return open(ctx, db, key, version)
+	return open(ctx, db, key, version, TenancySingle)
+}
+
+// OpenMulti opens db, already holding the main schema, as a multi-tenant drive store: no
+// default org, so every org-owned row must name its org.
+func OpenMulti(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
+	return open(ctx, db, key, len(schema), "multi")
 }
 
 // ExecTx runs q in a store transaction, so its error is reported as the store reports it.
@@ -281,4 +287,9 @@ func AgeViewCopy(s *Store, id string, d time.Duration) error {
 // QueryString scans one text column into out.
 func QueryString(ctx context.Context, s *Store, q string, out *string, args ...any) error {
 	return s.db.QueryRowContext(ctx, q, args...).Scan(out)
+}
+
+// SealName is name sealed for table's row id, as the store stores it, and its lookup MAC.
+func SealName(s *Store, table, id, name string) (string, string, error) {
+	return s.names.seal(table, id, name)
 }

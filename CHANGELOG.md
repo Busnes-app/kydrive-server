@@ -4,6 +4,16 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Access is scoped by org (tenancy groundwork).** Every grant now requires the account and
+  the workspace to be in the same org, and an account acts only while its org is active and
+  enabled. That covers browser sessions, password and KyIdentity sign-in, WebDAV passwords,
+  agent, device and service tokens, guest and organisation links, and KyPost viewing copies.
+  The people picker, share recipients, group grants, handover targets and organisation links
+  stay inside the caller's org, and shared workspace names need only be unique within one
+  org. A cross-org ID is refused exactly like one that never existed. A single-tenant install
+  has one org that is always active, so its behaviour is unchanged; granting a group ID that
+  does not exist is now a 400 instead of a database error.
+
 - **Every row now belongs to an org (tenancy groundwork).** Drive schema 27 adds the org
   registry `drive_orgs` and an `org_id` column on every org-owned table. Upgraded rows go to
   the one default org (`00000000-0000-0000-0000-000000000001`), and SQLite triggers refuse a

@@ -126,3 +126,15 @@ func DirectorySubject(ctx context.Context, users UserStore, subject string) (*Us
 	}
 	return user, err
 }
+
+// ActivePrincipal reports whether u may act: active, and in an active, enabled org. A store
+// without a drive (PostgreSQL) has no orgs.
+func ActivePrincipal(ctx context.Context, st Store, u *User) (bool, error) {
+	if u.Status != "active" {
+		return false, nil
+	}
+	if st.Drive() == nil {
+		return true, nil
+	}
+	return st.Drive().ActivePrincipal(ctx, u.ID)
+}

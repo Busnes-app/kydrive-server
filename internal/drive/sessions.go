@@ -136,7 +136,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 			return err
 		}
 		// A key closed without saves (status 4) names unchanged content and opens again.
-		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET closed=false WHERE current_revision=base_revision`, e.Key, id, e.Revision, e.Revision)
+		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision,org_id) VALUES(?,?,?,?,(SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=?)) ON CONFLICT(key) DO UPDATE SET closed=false WHERE current_revision=base_revision`, e.Key, id, e.Revision, e.Revision, id)
 		return err
 	})
 	return e, err
@@ -319,7 +319,7 @@ func (s *Store) PublishEditor(ctx context.Context, user string, f File, v Versio
 		if _, err = tx.ExecContext(ctx, `UPDATE drive_editor_documents SET current_revision=?,closed=? WHERE key=?`, v.Revision, final, key); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_saves(key,digest,revision) VALUES(?,?,?) ON CONFLICT(key,digest) DO UPDATE SET revision=excluded.revision`, key, v.Digest, v.Revision)
+		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_saves(key,digest,revision,org_id) VALUES(?,?,?,(SELECT org_id FROM drive_editor_documents WHERE key=?)) ON CONFLICT(key,digest) DO UPDATE SET revision=excluded.revision`, key, v.Digest, v.Revision, key)
 		return err
 	})
 	return duplicate, err

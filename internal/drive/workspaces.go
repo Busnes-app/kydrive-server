@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-// nameFree refuses a shared workspace name already used by another shared workspace, ignoring
-// case, deleted ones included until purged so a restore cannot collide; except is the workspace
-// being renamed. Every My files shares one name and is exempt, and no shared workspace may take it:
+// nameFree refuses a shared workspace name already used by another shared workspace of org,
+// ignoring case, deleted ones included until purged so a restore cannot collide; except is the
+// workspace being renamed. Every My files shares one name and is exempt, and no shared workspace may take it:
 // WebDAV, MCP and agent folder limits name each user's own as /My files.
-func nameFree(ctx context.Context, tx *sql.Tx, name, except string) error {
+func nameFree(ctx context.Context, tx *sql.Tx, org, name, except string) error {
 	if strings.EqualFold(strings.TrimSpace(name), "My files") {
 		return fmt.Errorf("%w: My files is the name of each person's own files", ErrConflict)
 	}
 	var taken, deleted int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(w.deleted_at!=''),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND lower(w.name)=lower(?) AND w.id!=?`, name, except).Scan(&taken, &deleted); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(w.deleted_at!=''),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND w.org_id=? AND lower(w.name)=lower(?) AND w.id!=?`, org, name, except).Scan(&taken, &deleted); err != nil {
 		return err
 	}
 	if taken > deleted {
@@ -43,7 +43,11 @@ func (s *Store) RenameWorkspace(ctx context.Context, user, workspace, name strin
 		if err := sharedWorkspace(ctx, tx, workspace); err != nil {
 			return err
 		}
-		if err := nameFree(ctx, tx, name, workspace); err != nil {
+		var org string
+		if err := tx.QueryRowContext(ctx, `SELECT org_id FROM drive_workspaces WHERE id=?`, workspace).Scan(&org); err != nil {
+			return err
+		}
+		if err := nameFree(ctx, tx, org, name, workspace); err != nil {
 			return err
 		}
 		var old string

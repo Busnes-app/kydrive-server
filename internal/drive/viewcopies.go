@@ -102,7 +102,7 @@ func (s *Store) IssueViewTicket(ctx context.Context, user, name string, size, ma
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_view_copies(id,user_id,workspace,name,size,pairing,token_hash,ticket_expires,expires) VALUES(?,?,?,?,?,?,?,?,?)`, c.ID, user, ws, stored, size, c.Pairing, tokenHash(token), at.Add(TicketLife).Unix(), c.Expires); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO drive_view_copies(id,user_id,workspace,name,size,pairing,token_hash,ticket_expires,expires,org_id) VALUES(?,?,?,?,?,?,?,?,?,`+workspaceOrg("?")+`)`, c.ID, user, ws, stored, size, c.Pairing, tokenHash(token), at.Add(TicketLife).Unix(), c.Expires, ws); err != nil {
 			return err
 		}
 		return event(ctx, tx, user, "kypost.view_ticket_issued", "view:"+c.ID)
@@ -116,10 +116,11 @@ func (s *Store) ViewTicket(ctx context.Context, token string) (ViewCopy, error) 
 	return s.viewCopy(ctx, `token_hash=? AND blob='' AND ticket_expires>? AND expires>?`, tokenHash(token), now, now)
 }
 
+// viewCopy finds a live copy, matched by where, whose owner is an active principal.
 func (s *Store) viewCopy(ctx context.Context, where string, args ...any) (ViewCopy, error) {
 	var c ViewCopy
 	var stored string
-	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,name,blob,pairing,size,expires FROM drive_view_copies WHERE revoked=0 AND `+where, args...).Scan(&c.ID, &c.Owner, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
+	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,name,blob,pairing,size,expires FROM drive_view_copies WHERE revoked=0 AND `+activePrincipal("user_id")+` AND `+where, args...).Scan(&c.ID, &c.Owner, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}

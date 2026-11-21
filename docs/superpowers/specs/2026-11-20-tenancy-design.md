@@ -235,7 +235,10 @@ organisation links. `authorize`, `authorizeItem`, `itemRank`, `mayShare` and
    For such a path, "exists but denied" and "no such row" can give different answers. In
    multi-tenant mode each of these loads joins the row's workspace and requires the
    caller's org, so another org's row is "no rows" and takes the same branch as a random
-   ID.
+   ID. As built (step 3a), `resource`, `File` and `MoveFolder` do this, since each returns
+   or branches on what it loaded. The file loads in `moveFile` and `CopyFile` do not:
+   `MoveFile` loads through `File` first, and rank refuses the next statement with the same
+   error and nothing returned, so an org filter there could not change any answer.
 
 A cross-org ID then fails at the same point, and for the same reason, as a random one.
 Today a missing item is usually `ErrDenied`, which is 403 (`move.go:38-39`,
@@ -293,9 +296,12 @@ name-clash triggers map to `ErrConflict` (`schema.go:97-106`).
 - `TestOrgOwnedTablesHaveOrgID` requires `org_id NOT NULL` and both triggers on every **O**
   table. `nullableOrgID = {"audit_records", "drive_events"}` are the only exceptions.
 - `TestOrgSQLNamesOrgID` is a go/ast scan of SQL string literals in `internal/drive`,
-  `internal/store` and `internal/api`. A literal that names an **O** or **D** table must
-  also name `org_id`, call `rankSQL`, `itemRankSQL` or `activePrincipal`, or be on an
-  allowlist (pre-org lookups by token hash, platform workers) with a reason.
+  `internal/store` and `internal/api`. A literal that names an **O** table must also name
+  `org_id`, call `rankSQL`, `itemRankSQL`, `activePrincipal`, `sameOrg`, `userOrg` or
+  `workspaceOrg`, or have its declaration on an allowlist with a reason (as KyIdentity's
+  scan does). **D** tables are left out: they reach their org through a parent the caller
+  was ranked on, and scanning them would flag nearly 400 by-ID statements, which would make
+  the allowlist meaningless.
 - `TestCrossOrgMatrix`, differential, in the style of the route-table tests in
   `internal/api`:
   - Orgs A and B each have two members, a suite group workspace, files, folders, a share,
@@ -756,12 +762,16 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      existing store test passes and the same queries return the same rows.
      `TestEveryTableIsClassified` and `TestOrgOwnedTablesHaveOrgID`. A trigger test per
      same-org rule. The full `go test -race ./...`.
-3. **Scoping.** The org predicate in `rankSQL` and `itemRankSQL`, `activePrincipal`, and the
-   org filter on every lookup in the Isolation table. Organisation links scoped (D6). The
-   admin route classes and `X-Ky-Org`, the staff-org rule for `role='admin'` (D9), and the
-   refused routes. A test-only constructor builds several orgs.
-   - Tests: `TestOrgSQLNamesOrgID` and `TestCrossOrgMatrix`. Single-tenant runs the whole
-     existing suite unchanged.
+3. **Scoping**, in two PRs.
+   - 3a, the store: the org predicate in `rankSQL` and `itemRankSQL`, `activePrincipal` on
+     every credential path, `org_id` on every insert, and the org filter on every member
+     lookup in the Isolation table. Organisation links scoped (D6). A test-only
+     constructor builds several orgs. Tests: `TestOrgSQLNamesOrgID` and store-level
+     cross-org tests, including one with the triggers dropped.
+   - 3b, administration: the admin route classes and `X-Ky-Org`, the staff-org rule for
+     `role='admin'` (D9), the refused routes, and the admin directory, audit, leavers and
+     handover bound to the selected org. Test: `TestCrossOrgMatrix` over every route.
+   - Single-tenant runs the whole existing suite unchanged after each.
 4. **Identity binding** (needs KyIdentity step 3).
    - `org_id` from the ID token, the step-up token and the logout token.
    - `org_id` in the `syncauth` webhook receiver, which #154 already moved to `syncauth`

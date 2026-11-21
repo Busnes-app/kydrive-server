@@ -43,7 +43,7 @@ func (s *Store) CreateLink(ctx context.Context, user, kind, id, role string, exp
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	ctx = peerOp(ctx, peerLink)
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		workspace, folder, file, trashed, err := resource(ctx, tx, kind, id)
+		workspace, folder, file, trashed, err := resource(ctx, tx, user, kind, id)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func (s *Store) CreateLink(ctx context.Context, user, kind, id, role string, exp
 
 // Links lists an item's live organisation links for those who may share it; never their tokens.
 func (s *Store) Links(ctx context.Context, user, kind, id string) ([]Link, error) {
-	workspace, folder, file, _, err := resource(ctx, s.db, kind, id)
+	workspace, folder, file, _, err := resource(ctx, s.db, user, kind, id)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (s *Store) RevokeLink(ctx context.Context, user, id string) error {
 		if err != nil {
 			return err
 		}
-		workspace, folder, file, _, err := resource(ctx, tx, kind, rid)
+		workspace, folder, file, _, err := resource(ctx, tx, user, kind, rid)
 		if err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ func (s *Store) OpenLink(ctx context.Context, user, token string) (SharedItem, e
 		if err != nil {
 			return err
 		}
-		workspace, folder, file, trashed, err := resource(ctx, tx, item.Kind, item.ID)
+		workspace, folder, file, trashed, err := resource(ctx, tx, user, item.Kind, item.ID)
 		if errors.Is(err, ErrDenied) || trashed {
 			return ErrNotFound
 		}
