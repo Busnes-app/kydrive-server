@@ -333,6 +333,14 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// KYDRIVE_TENANCY: the drive store records the mode at first start and refuses another.
+	switch tenancy := getEnv("KYDRIVE_TENANCY", "single"); tenancy {
+	case "single":
+	case "multi":
+		return nil, fmt.Errorf("KYDRIVE_TENANCY=multi is not available in this release")
+	default:
+		return nil, fmt.Errorf("KYDRIVE_TENANCY must be single or multi, not %q", tenancy)
+	}
 	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
 	if fontsDir != "" {
 		if info, err := os.Stat(fontsDir); err != nil || !info.IsDir() {
