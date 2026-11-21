@@ -136,6 +136,9 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 		"drive_devices", "drive_device_codes", "drive_peer_settings", "drive_peer_folders",
 		"drive_peer_tickets", "drive_peer_picks", "drive_peer_guest", "drive_view_copies",
 	}, map[string]bool{"audit_records": true, "drive_events": true}),
+	// Staff administrators (tenancy.go, D9): on a multi-tenant database only the staff org
+	// holds role='admin'.
+	staffAdminSchema,
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.

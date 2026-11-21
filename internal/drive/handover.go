@@ -38,12 +38,21 @@ func (s *Store) Leavers(ctx context.Context, user string) ([]Leaver, error) {
 	if err := admin(ctx, s.db, user); err != nil {
 		return nil, err
 	}
-	return s.OperatorLeavers(ctx)
+	org, err := adminOrg(ctx, s.db, user)
+	if err != nil {
+		return nil, err
+	}
+	return s.leavers(ctx, org)
 }
 
-// OperatorLeavers is Leavers for the server CLI.
+// OperatorLeavers is Leavers for the server CLI, over every org.
 func (s *Store) OperatorLeavers(ctx context.Context) ([]Leaver, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT * FROM (SELECT p.workspace,`+ownerLabel+`,COALESCE(u.status,'deleted'),COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=p.workspace),0),(SELECT COUNT(*) FROM drive_files WHERE workspace=p.workspace)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=p.workspace) AS items FROM drive_personal_workspaces p LEFT JOIN users u ON u.id=p.owner WHERE u.id IS NULL OR u.status!='active') WHERE items>0 ORDER BY 2`)
+	return s.leavers(ctx, "")
+}
+
+// leavers lists the leavers of org, or of every org when org is empty.
+func (s *Store) leavers(ctx context.Context, org string) ([]Leaver, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM (SELECT p.workspace,`+ownerLabel+`,COALESCE(u.status,'deleted'),COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=p.workspace),0),(SELECT COUNT(*) FROM drive_files WHERE workspace=p.workspace)+(SELECT COUNT(*) FROM drive_folders WHERE workspace=p.workspace) AS items FROM drive_personal_workspaces p JOIN drive_workspaces w ON w.id=p.workspace LEFT JOIN users u ON u.id=p.owner WHERE (u.id IS NULL OR u.status!='active') AND (?='' OR w.org_id=?)) WHERE items>0 ORDER BY 2`, org, org)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +73,11 @@ func (s *Store) Colleagues(ctx context.Context, user string) ([]Colleague, error
 	if err := admin(ctx, s.db, user); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,COALESCE(NULLIF(display_name,''),username) FROM users WHERE status='active' ORDER BY 2`)
+	org, err := adminOrg(ctx, s.db, user)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,COALESCE(NULLIF(display_name,''),username) FROM users WHERE status='active' AND org_id=? ORDER BY 2`, org)
 	if err != nil {
 		return nil, err
 	}
@@ -101,13 +114,19 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
 			return ErrDenied
 		}
+		org := "" // the operator CLI reaches every org
 		if !operator {
 			if err := admin(ctx, tx, user); err != nil {
 				return err
 			}
+			acting, err := adminOrg(ctx, tx, user)
+			if err != nil {
+				return err
+			}
+			org = acting
 		}
 		var owner, status string
-		err := tx.QueryRowContext(ctx, `SELECT `+ownerLabel+`,COALESCE(u.status,'deleted') FROM drive_personal_workspaces p LEFT JOIN users u ON u.id=p.owner WHERE p.workspace=?`, source).Scan(&owner, &status)
+		err := tx.QueryRowContext(ctx, `SELECT `+ownerLabel+`,COALESCE(u.status,'deleted') FROM drive_personal_workspaces p JOIN drive_workspaces w ON w.id=p.workspace LEFT JOIN users u ON u.id=p.owner WHERE p.workspace=? AND (?='' OR w.org_id=?)`, source, org, org).Scan(&owner, &status)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrInvalid
 		}

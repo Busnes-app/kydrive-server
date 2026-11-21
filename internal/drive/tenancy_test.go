@@ -243,7 +243,7 @@ func TestTenancyTriggersKeepRowsInOneOrg(t *testing.T) {
 // before tenancy, two directory accounts sharing a KySignOn subject among them.
 func fillOldSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
-	d, err := drive.OpenAt(ctx, db, testdb.Key, drive.SchemaVersion-1)
+	d, err := drive.OpenAt(ctx, db, testdb.Key, drive.TenancySchemaVersion-1)
 	if err != nil {
 		t.Fatal(err)
 	}

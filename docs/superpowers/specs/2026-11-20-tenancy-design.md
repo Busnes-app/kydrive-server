@@ -771,6 +771,12 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
    - 3b, administration: the admin route classes and `X-Ky-Org`, the staff-org rule for
      `role='admin'` (D9), the refused routes, and the admin directory, audit, leavers and
      handover bound to the selected org. Test: `TestCrossOrgMatrix` over every route.
+     As built: the matrix covers every `/api/drive` route with an ID in its path, as an
+     org A session and as staff acting in org A. It does not call `/dav`, `/mcp` or the
+     other credential types; those reach the same rank and `activePrincipal` checks that
+     the 3a store tests cover, which is an argument, not a test. `KYDRIVE_STAFF_ORG` is not read yet: configuration still
+     refuses multi-tenant mode, so the staff org reaches the store only from tests until
+     step 6.
    - Single-tenant runs the whole existing suite unchanged after each.
 4. **Identity binding** (needs KyIdentity step 3).
    - `org_id` from the ID token, the step-up token and the logout token.

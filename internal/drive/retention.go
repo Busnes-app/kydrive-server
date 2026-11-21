@@ -13,6 +13,9 @@ import (
 
 // SetRetention configures automatic purging for one workspace; 0 turns a rule off.
 func (s *Store) SetRetention(ctx context.Context, user, workspace string, trashDays, keepVersions int) error {
+	if err := s.singleTenant(); err != nil {
+		return err
+	}
 	if trashDays < 0 || trashDays > 3650 || keepVersions < 0 || keepVersions > maxKeepVersions {
 		return ErrInvalid
 	}

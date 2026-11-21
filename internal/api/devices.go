@@ -35,7 +35,7 @@ func (s *Server) deviceRoutes() {
 	s.mux.HandleFunc("DELETE /api/devices/self", s.handleUnlinkDevice)
 	s.mux.HandleFunc("GET /api/drive/device", s.handleDeviceAccount)
 	s.mux.HandleFunc("GET /api/drive/device-policy", s.requireAuthenticated(s.driveDevicePolicy))
-	s.mux.HandleFunc("PUT /api/drive/device-policy", s.requireAdmin(s.driveSetDevicePolicy))
+	s.mux.HandleFunc("PUT /api/drive/device-policy", s.platformAdmin(s.driveSetDevicePolicy))
 }
 
 func (s *Server) handleApproveDevice(w http.ResponseWriter, r *http.Request) {
