@@ -670,10 +670,11 @@ that member's My files at once, inside the org:
     shared with keep their access. It changes no role and widens nothing.
   - Guest links do not survive. Directory deactivation already revokes every guest link
     the account made, and reactivation revives none (root `AGENTS.md`). A guest link also
-    stops with its creator (`guest.go:155-182`). The new path leaves them revoked: it does
-    not revive a credential, which would breach that contract. An item shared only by
-    guest link still moves, and the holder can make a new link. Unverified: whether
-    KyIdentity always deactivates before it deletes. The rule above holds either way.
+    stops with its creator (`guest.go:155-182`). KyIdentity's user deletion queues
+    `user.deleted` directly (KyIdentity `internal/store/store.go:1123`), so a leaver's guest
+    links may still be live when it arrives. The new path therefore revokes them in its
+    own transaction, as deactivation would, and never revives one. An item shared only by
+    guest link still moves, and the holder can make a new link.
   - The holder sees the folder and can stop any of the shares or links.
 - **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
   later, whatever the drive's trash age. D11 still wins: the 90 days do not run while the
@@ -681,7 +682,8 @@ that member's My files at once, inside the org:
   purge. Nobody opens the files in the meantime. Staff can still
   run today's org-class `Handover` on the leaver's workspace when the account holder asks
   (see Admin surface). That moves the whole tree, trash included, without opening an item.
-- A deactivated (not deleted) member is left alone, since KyIdentity can re-enable them.
+- A deactivated (not deleted) member's files do not move, since KyIdentity can re-enable
+  them. Deactivation still revokes their credentials and guest links, as today.
 - If the org has no account holder, nothing moves, and the files stay as a leaver's
   workspace (`handover.go:37`), counted in the org's pool, until the org is deleted.
 - **Needs KyIdentity:** `/api/suite/orgs` returns no account holder today (T "Suite
