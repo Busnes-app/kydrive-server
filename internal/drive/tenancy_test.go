@@ -223,6 +223,7 @@ func TestTenancyTriggersKeepRowsInOneOrg(t *testing.T) {
 		{"member moved to another org's group", `UPDATE group_members SET group_id='gb' WHERE user_id='ua'`, `UPDATE group_members SET group_id='ga' WHERE user_id='ua'`},
 		{"unknown org", `INSERT INTO users(id,username,created_at,updated_at,org_id) VALUES('ux','ux',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'nope')`, `INSERT INTO users(id,username,created_at,updated_at,org_id) VALUES('ux','ux',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'org-b')`},
 		{"deleted org", `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES('e1','ub','x','y','now','org-gone')`, `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES('e1','ub','x','y','now',NULL)`},
+		{"share moved to another org's user", `UPDATE drive_shares SET principal_id='ub' WHERE id='s-ua2'`, `UPDATE drive_shares SET principal_id='ua2' WHERE id='s-ua2'`},
 		{"org_id changed", `UPDATE users SET org_id='org-b' WHERE id='ua'`, `UPDATE users SET org_id=org_id WHERE id='ua'`},
 	} {
 		if err := drive.ExecTx(ctx, d, c.cross); !refused(err) || !errors.Is(err, drive.ErrDenied) {
@@ -231,6 +232,10 @@ func TestTenancyTriggersKeepRowsInOneOrg(t *testing.T) {
 		if _, err := db.Exec(c.same); err != nil {
 			t.Errorf("%s inside one org: %v", c.name, err)
 		}
+	} // A share whose user is gone has no org to compare, yet its role can still change.
+	mustExec(`DELETE FROM users WHERE id='ua2'`)
+	if err := drive.ExecTx(ctx, d, `UPDATE drive_shares SET role='editor' WHERE id='s-ua2'`); err != nil {
+		t.Fatalf("role change on a share whose user is gone: %v", err)
 	}
 }
 

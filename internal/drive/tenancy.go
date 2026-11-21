@@ -42,18 +42,21 @@ BEGIN SELECT RAISE(ABORT,'%[5]s org_id is immutable'); END;
 	ws := func(id string) string { return `(SELECT org_id FROM drive_workspaces WHERE id=` + id + `)` }
 	user := func(id string) string { return `(SELECT org_id FROM users WHERE id=` + id + `)` }
 	group := func(id string) string { return `(SELECT org_id FROM groups WHERE id=` + id + `)` }
-	// Each pair must name one org; a missing side is NULL and refused too.
-	for _, r := range []struct{ table, when string }{
-		{"group_members", user("NEW.user_id") + ` IS NOT ` + group("NEW.group_id")},
-		{"drive_personal_workspaces", user("NEW.owner") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_grants", group("NEW.group_id") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_suite_groups", group("NEW.grp") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_shares", `NEW.principal_kind IN ('user','group') AND (CASE NEW.principal_kind WHEN 'user' THEN ` + user("NEW.principal_id") + ` ELSE ` + group("NEW.principal_id") + ` END) IS NOT ` + ws("NEW.workspace")},
-		{"drive_link_users", user("NEW.user_id") + ` IS NOT (SELECT w.org_id FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE l.id=NEW.link)`},
+	// Each pair must name one org; a missing side is NULL and refused too. Updates are checked
+	// only when they change a paired column, so a row whose principal is gone stays editable.
+	for _, r := range []struct{ table, cols, when string }{
+		{"group_members", "group_id,user_id", user("NEW.user_id") + ` IS NOT ` + group("NEW.group_id")},
+		{"drive_personal_workspaces", "workspace,owner", user("NEW.owner") + ` IS NOT ` + ws("NEW.workspace")},
+		{"drive_grants", "workspace,group_id", group("NEW.group_id") + ` IS NOT ` + ws("NEW.workspace")},
+		{"drive_suite_groups", "workspace,grp", group("NEW.grp") + ` IS NOT ` + ws("NEW.workspace")},
+		{"drive_shares", "workspace,principal_kind,principal_id", `NEW.principal_kind IN ('user','group') AND (CASE NEW.principal_kind WHEN 'user' THEN ` + user("NEW.principal_id") + ` ELSE ` + group("NEW.principal_id") + ` END) IS NOT ` + ws("NEW.workspace")},
+		{"drive_link_users", "link,user_id", user("NEW.user_id") + ` IS NOT (SELECT w.org_id FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE l.id=NEW.link)`},
 	} {
-		for _, op := range []string{"INSERT", "UPDATE"} {
-			fmt.Fprintf(&b, "CREATE TRIGGER %[1]s_one_org_%[2]s BEFORE %[2]s ON %[1]s WHEN %[3]s\nBEGIN SELECT RAISE(ABORT,'%[4]s rows of two orgs'); END;\n", r.table, strings.ToLower(op), r.when, errOrg)
-		}
+		fmt.Fprintf(&b, `CREATE TRIGGER %[1]s_one_org_insert BEFORE INSERT ON %[1]s WHEN %[3]s
+BEGIN SELECT RAISE(ABORT,'%[4]s rows of two orgs'); END;
+CREATE TRIGGER %[1]s_one_org_update BEFORE UPDATE OF %[2]s ON %[1]s WHEN %[3]s
+BEGIN SELECT RAISE(ABORT,'%[4]s rows of two orgs'); END;
+`, r.table, r.cols, r.when, errOrg)
 	}
 	// A blob belongs to one org (blobs are named by random IDs, so only a copy reuses one), and
 	// files and folders move only between workspaces of one org.
@@ -70,7 +73,7 @@ BEGIN SELECT RAISE(ABORT,'%[2]s blob of another org'); END;
 }
 
 // recordTenancy records the tenancy mode at first start and refuses a database recorded with
-// another, before the drive schema runs: schema 26 seeds the default org from the record.
+// another, before the drive schema runs: schema 27 seeds the default org from the record.
 func recordTenancy(ctx context.Context, db *sql.DB, mode string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
