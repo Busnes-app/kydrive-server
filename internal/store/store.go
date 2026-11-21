@@ -47,8 +47,8 @@ type UserStore interface {
 	UpdateUser(ctx context.Context, u *User) error
 	// ApplyDirectoryUser is the one directory (SCIM, KySignOn) write path; see DirectoryUser.
 	ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error)
-	// DeleteDirectoryUser deletes a directory account; eventTime orders it like ApplyDirectoryUser.
-	DeleteDirectoryUser(ctx context.Context, id string, eventTime int64) error
+	// DeleteDirectoryUser deletes a directory account; revision orders it like ApplyDirectoryUser.
+	DeleteDirectoryUser(ctx context.Context, id string, revision int64) error
 	ResetAdminPassword(ctx context.Context, userID, newHash string) error
 	RenameLocalAdmin(ctx context.Context, oldName, newName string) error
 	SetDirectoryRole(ctx context.Context, subject, role string) error

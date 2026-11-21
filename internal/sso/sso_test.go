@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
@@ -60,48 +62,72 @@ func webhookClient(t *testing.T) (*sso.KySignOnClient, store.Store) {
 	return sso.NewKySignOnClient(config.SSOConfig{KySignOnHMACSecret: hmacSecret}, st), st
 }
 
-// send signs body with the shared secret. ts 0 means now.
-func send(t *testing.T, c *sso.KySignOnClient, event map[string]any, ts int64) error {
-	t.Helper()
-	if ts == 0 {
-		ts = time.Now().Unix()
+// scimUser is a suite webhook body as KyIdentity sends it, at revision rev.
+func scimUser(id, username string, active bool, rev int64) map[string]any {
+	return map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:User"}, "id": id, "externalId": id,
+		"userName": username, "active": active, "roles": []any{}, "meta": map[string]any{"resourceType": "User", "version": fmt.Sprintf(`W/"%d"`, rev)},
 	}
-	event["timestamp"] = ts
-	body, _ := json.Marshal(event)
-	return c.HandleSyncWebhook(context.Background(), body, crypto.ComputeHMACSHA256(body, hmacSecret))
+}
+
+// deliver signs body with syncauth as KyIdentity does, at time at.
+func deliver(t *testing.T, c *sso.KySignOnClient, secret, eventType string, body []byte, at time.Time) error {
+	t.Helper()
+	h, err := syncauth.Sign([]byte(secret), at, eventType, "evt-"+crypto.RandomHex(4), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.HandleSyncWebhook(context.Background(), h, body)
+}
+
+func send(t *testing.T, c *sso.KySignOnClient, eventType string, user map[string]any) error {
+	t.Helper()
+	body, _ := json.Marshal(user)
+	return deliver(t, c, hmacSecret, eventType, body, time.Now())
 }
 
 func TestKySignOnWebhookSync(t *testing.T) {
 	client, st := webhookClient(t)
-	now := time.Now().Unix()
-	if err := send(t, client, map[string]any{"event": "user.created", "id": "ext-usr-456", "username": "bob", "email": "bob@busnes.app", "display_name": "Bob Engineer"}, now-10); err != nil {
+	bob := scimUser("ext-usr-456", "bob", true, 1)
+	bob["displayName"] = "Bob Engineer"
+	bob["emails"] = []map[string]any{{"value": "old@busnes.app"}, {"value": "bob@busnes.app", "primary": true}}
+	if err := send(t, client, "user.created", bob); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	created, err := st.Users().GetUserBySSO(context.Background(), "kysignon", "ext-usr-456")
-	if err != nil || created.Username != "bob" || created.DisplayName != "Bob Engineer" || created.Status != "active" {
+	if err != nil || created.Username != "bob" || created.DisplayName != "Bob Engineer" || created.Email != "bob@busnes.app" || created.Status != "active" {
 		t.Fatalf("unexpected created user: %+v %v", created, err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.deactivated", "id": "ext-usr-456"}, now-5); err != nil {
+	// KyIdentity deactivates with user.updated and active false.
+	if err := send(t, client, "user.updated", scimUser("ext-usr-456", "bob", false, 2)); err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
 	updated, _ := st.Users().GetUserBySSO(context.Background(), "kysignon", "ext-usr-456")
 	if updated.Status != "inactive" || updated.Username != "bob" {
 		t.Errorf("deactivation: %+v", updated)
 	}
+	if err := send(t, client, "user.deleted", scimUser("ext-usr-456", "bob", false, 3)); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := st.Users().GetUserByID(context.Background(), created.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("delete kept the account: %v", err)
+	}
 }
 
 func TestKySignOnWebhookNeverSetsTheApplicationRole(t *testing.T) {
 	client, st := webhookClient(t)
 	ctx := context.Background()
-	now := time.Now().Unix()
-	if err := send(t, client, map[string]any{"event": "user.created", "id": "sub-1", "username": "mallory", "role": "admin"}, now-20); err != nil {
+	mallory := scimUser("sub-1", "mallory", true, 1)
+	mallory["roles"] = []map[string]any{{"value": "admin", "primary": true}}
+	if err := send(t, client, "user.created", mallory); err != nil {
 		t.Fatal(err)
 	}
 	u, err := st.Users().GetUserBySSO(ctx, "kysignon", "sub-1")
 	if err != nil || u.Role != "user" {
 		t.Fatalf("directory payload chose the role: %+v %v", u, err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.updated", "id": "sub-1", "username": "mallory", "role": "admin"}, now-15); err != nil {
+	mallory["meta"] = map[string]any{"version": `W/"2"`}
+	if err := send(t, client, "user.updated", mallory); err != nil {
 		t.Fatal(err)
 	}
 	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Role != "user" {
@@ -110,7 +136,7 @@ func TestKySignOnWebhookNeverSetsTheApplicationRole(t *testing.T) {
 	if err := st.Users().SetDirectoryRole(ctx, "sub-1", "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.updated", "id": "sub-1", "username": "mallory2"}, now-10); err != nil {
+	if err := send(t, client, "user.updated", scimUser("sub-1", "mallory2", true, 3)); err != nil {
 		t.Fatal(err)
 	}
 	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Role != "admin" || u.Username != "mallory2" {
@@ -118,77 +144,106 @@ func TestKySignOnWebhookNeverSetsTheApplicationRole(t *testing.T) {
 	}
 }
 
-func TestKySignOnWebhookRejectsForgedAndStaleRequests(t *testing.T) {
+func TestKySignOnWebhookRejectsForgedStaleAndMalformedRequests(t *testing.T) {
 	client, st := webhookClient(t)
-	body, _ := json.Marshal(map[string]any{"event": "user.created", "id": "sub-x", "username": "eve", "timestamp": time.Now().Unix()})
-	if err := client.HandleSyncWebhook(context.Background(), body, crypto.ComputeHMACSHA256(body, "wrong-secret")); !errors.Is(err, sso.ErrWebhookUnauthorized) {
-		t.Fatalf("bad signature: %v", err)
+	body, _ := json.Marshal(scimUser("sub-x", "eve", true, 1))
+	for name, err := range map[string]error{
+		"bad signature":     deliver(t, client, "wrong-secret-16-bytes", "user.created", body, time.Now()),
+		"expired timestamp": deliver(t, client, hmacSecret, "user.created", body, time.Now().Add(-10*time.Minute)),
+		"future timestamp":  deliver(t, client, hmacSecret, "user.created", body, time.Now().Add(10*time.Minute)),
+		// The pre-syncauth format: a bare hex HMAC of the body.
+		"legacy signature": client.HandleSyncWebhook(context.Background(), syncauth.Headers{Signature: crypto.ComputeHMACSHA256(body, hmacSecret)}, body),
+	} {
+		if !errors.Is(err, sso.ErrWebhookUnauthorized) {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
-	if err := send(t, client, map[string]any{"event": "user.created", "id": "sub-x", "username": "eve"}, time.Now().Add(-10*time.Minute).Unix()); !errors.Is(err, sso.ErrWebhookUnauthorized) {
-		t.Fatalf("expired timestamp: %v", err)
+	// A signed body changed in flight.
+	h, _ := syncauth.Sign([]byte(hmacSecret), time.Now(), "user.created", "evt-1", body)
+	tampered, _ := json.Marshal(scimUser("sub-x", "eve-admin", true, 1))
+	if err := client.HandleSyncWebhook(context.Background(), h, tampered); !errors.Is(err, sso.ErrWebhookUnauthorized) {
+		t.Errorf("tampered body: %v", err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.created", "id": "sub-x", "username": "bad name"}, 0); !errors.Is(err, sso.ErrWebhookMalformed) {
-		t.Fatalf("invalid username: %v", err)
+	noMeta := scimUser("sub-x", "eve", true, 1)
+	delete(noMeta, "meta")
+	for name, user := range map[string]map[string]any{
+		"invalid username": scimUser("sub-x", "bad name", true, 1),
+		"no id":            scimUser("", "eve", true, 1),
+		"no revision":      noMeta,
+		"revision zero":    scimUser("sub-x", "eve", true, 0),
+		"negative":         scimUser("sub-x", "eve", true, -1),
+	} {
+		if err := send(t, client, "user.created", user); !errors.Is(err, sso.ErrWebhookMalformed) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if err := deliver(t, client, hmacSecret, "user.created", []byte("not json"), time.Now()); !errors.Is(err, sso.ErrWebhookMalformed) {
+		t.Errorf("not json: %v", err)
 	}
 	if _, err := st.Users().GetUserBySSO(context.Background(), "kysignon", "sub-x"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("rejected webhook created a user", err)
 	}
 }
 
-func TestKySignOnWebhookAppliesOnlyNewerEvents(t *testing.T) {
+func TestKySignOnWebhookAppliesOnlyNewerRevisions(t *testing.T) {
 	client, st := webhookClient(t)
 	ctx := context.Background()
-	now := time.Now().Unix()
-	created := map[string]any{"event": "user.created", "id": "sub-2", "username": "carol"}
-	if err := send(t, client, created, now-30); err != nil {
+	if err := send(t, client, "user.created", scimUser("sub-2", "carol", true, 3)); err != nil {
 		t.Fatal(err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.deactivated", "id": "sub-2"}, now-10); err != nil {
+	if err := send(t, client, "user.updated", scimUser("sub-2", "carol", false, 5)); err != nil {
 		t.Fatal(err)
 	}
-	// An older "active" update delivered late must not reactivate the account.
-	if err := send(t, client, map[string]any{"event": "user.updated", "id": "sub-2", "username": "carol", "status": "active"}, now-20); err != nil {
+	// An older "active" update delivered late, or retried with a fresh timestamp, must not
+	// reactivate the account.
+	if err := send(t, client, "user.updated", scimUser("sub-2", "carol", true, 4)); err != nil {
 		t.Fatalf("stale event should be acknowledged: %v", err)
 	}
 	u, _ := st.Users().GetUserBySSO(ctx, "kysignon", "sub-2")
 	if u.Status != "inactive" {
 		t.Fatal("out-of-order event reactivated the account")
 	}
-	// An exact replay of the deactivation's timestamp is acknowledged but not reapplied.
-	if err := send(t, client, map[string]any{"event": "user.updated", "id": "sub-2", "username": "carol-replay", "status": "active"}, now-10); err != nil {
+	// The deactivation's own revision, activating, is acknowledged but not applied.
+	if err := send(t, client, "user.updated", scimUser("sub-2", "carol-replay", true, 5)); err != nil {
 		t.Fatal(err)
 	}
 	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Status != "inactive" || u.Username != "carol" {
-		t.Fatalf("replayed timestamp applied: %+v", u)
+		t.Fatalf("replayed revision applied: %+v", u)
 	}
-	if err := send(t, client, map[string]any{"event": "user.deleted", "id": "sub-2"}, now-15); err != nil {
+	if err := send(t, client, "user.deleted", scimUser("sub-2", "carol", false, 4)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.Users().GetUserByID(ctx, u.ID); err != nil {
 		t.Fatal("stale delete removed the account", err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.updated", "id": "sub-2", "username": "carol", "status": "active"}, now-5); err != nil {
+	if err := send(t, client, "user.updated", scimUser("sub-2", "carol", true, 6)); err != nil {
 		t.Fatal(err)
 	}
 	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Status != "active" {
 		t.Fatal("newer event not applied")
+	}
+	// Events this version does not consume are acknowledged.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-2", "carol", true, 7)); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestKySignOnWebhookUpdatesTheSCIMAccount(t *testing.T) {
 	client, st := webhookClient(t)
 	ctx := context.Background()
-	scimUser, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "scim", Subject: "sub-3", Username: "dave", Active: true})
+	scimRow, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "scim", Subject: "sub-3", Username: "dave", Active: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := send(t, client, map[string]any{"event": "user.created", "id": "sub-3", "username": "dave", "display_name": "Dave"}, 0); err != nil {
+	dave := scimUser("sub-3", "dave", true, 1)
+	dave["name"] = map[string]any{"formatted": "Dave"}
+	if err := send(t, client, "user.created", dave); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.Users().GetUserBySSO(ctx, "kysignon", "sub-3"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("webhook duplicated the SCIM account")
 	}
-	if u, _ := st.Users().GetUserByID(ctx, scimUser.ID); u.DisplayName != "Dave" {
+	if u, _ := st.Users().GetUserByID(ctx, scimRow.ID); u.DisplayName != "Dave" {
 		t.Fatalf("SCIM account not updated: %+v", u)
 	}
 }

@@ -100,31 +100,31 @@ func TestCleanExpiredRows(t *testing.T) {
 	}
 }
 
-func TestDirectoryTimestampTieFavoursTheRestrictiveEvent(t *testing.T) {
+func TestDirectoryRevisionTieFavoursTheRestrictiveEvent(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	const at = 1_800_000_000
-	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s", Username: "tie", Active: true, EventTime: at - 1})
+	const at = 7
+	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s", Username: "tie", Active: true, Revision: at - 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, EventTime: at}); err != nil {
+	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, Revision: at}); err != nil {
 		t.Fatal(err)
 	}
 	if err = st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "tie", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
 		t.Fatal(err)
 	}
-	if u, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: false, EventTime: at}); err != nil || u.Status != "inactive" {
-		t.Fatalf("same-second deactivation: %+v %v", u, err)
+	if u, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: false, Revision: at}); err != nil || u.Status != "inactive" {
+		t.Fatalf("same-revision deactivation: %+v %v", u, err)
 	}
 	if _, err = st.Sessions().GetSession(ctx, "tie"); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("same-second deactivation kept the session", err)
+		t.Fatal("same-revision deactivation kept the session", err)
 	}
-	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, EventTime: at}); !errors.Is(err, store.ErrStale) {
-		t.Fatalf("same-second reactivation applied: %v", err)
+	if _, err = st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: u.ID, Username: "tie", Active: true, Revision: at}); !errors.Is(err, store.ErrStale) {
+		t.Fatalf("same-revision reactivation applied: %v", err)
 	}
 	if err = st.Users().DeleteDirectoryUser(ctx, u.ID, at); err != nil {
-		t.Fatalf("same-second delete: %v", err)
+		t.Fatalf("same-revision delete: %v", err)
 	}
 }
 

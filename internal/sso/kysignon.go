@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
+	"regexp"
+	"strconv"
 
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -52,17 +54,28 @@ func (k *KySignOnClient) VerifyLogoutToken(ctx context.Context, raw string) (*Lo
 	return k.flow.verifyLogout(ctx, raw)
 }
 
-// KySignOnSyncPayload defines the schema received during automatic directory replication
-// webhooks. A role field, if sent, is ignored: application administration is an operator grant.
-type KySignOnSyncPayload struct {
-	Event       string `json:"event"` // "user.created", "user.updated", "user.deactivated", "user.deleted"
+// directoryUser is the SCIM user resource KyIdentity's suite webhook sends. Its roles, if
+// any, are ignored: application administration is an operator grant.
+type directoryUser struct {
 	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	Status      string `json:"status"`
-	Timestamp   int64  `json:"timestamp"`
+	UserName    string `json:"userName"`
+	DisplayName string `json:"displayName"`
+	Name        *struct {
+		Formatted string `json:"formatted"`
+	} `json:"name"`
+	Emails []struct {
+		Value   string `json:"value"`
+		Primary bool   `json:"primary"`
+	} `json:"emails"`
+	Active bool `json:"active"`
+	Meta   *struct {
+		Version string `json:"version"`
+	} `json:"meta"`
 }
+
+// revisionPattern is the weak ETag carrying KyIdentity's per-account revision. Zero would turn
+// ordering off in the store, so only positive revisions are accepted.
+var revisionPattern = regexp.MustCompile(`^W/"([1-9][0-9]{0,17})"$`)
 
 // ErrWebhookUnauthorized is a missing secret, bad signature or out-of-window timestamp.
 var ErrWebhookUnauthorized = errors.New("webhook signature or timestamp rejected")
@@ -70,47 +83,51 @@ var ErrWebhookUnauthorized = errors.New("webhook signature or timestamp rejected
 // ErrWebhookMalformed is a signed body that is not a usable event.
 var ErrWebhookMalformed = errors.New("malformed webhook payload")
 
-// HandleSyncWebhook processes inbound HMAC-SHA256 signed user updates from KySignOn server.
-// Events apply only when newer than the account's last applied event; a replay or an
-// out-of-order older event is acknowledged without effect.
-func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, body []byte, signature string) error {
-	if len(k.config.KySignOnHMACSecret) < crypto.MinHMACKeyBytes || !crypto.VerifyHMACSHA256(body, k.config.KySignOnHMACSecret, signature) {
+// HandleSyncWebhook applies one syncauth-signed user event from KyIdentity's suite webhook.
+// Events apply only when their revision is newer than the account's last applied one; a
+// redelivery or an out-of-order older event is acknowledged without effect.
+func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth.Headers, body []byte) error {
+	if len(k.config.KySignOnHMACSecret) < crypto.MinHMACKeyBytes {
 		return ErrWebhookUnauthorized
 	}
+	event, err := syncauth.Verify([]byte(k.config.KySignOnHMACSecret), headers, body, syncauth.Options{})
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrWebhookUnauthorized, err)
+	}
 
-	var payload KySignOnSyncPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
+	var user directoryUser
+	if err := json.Unmarshal(body, &user); err != nil {
 		return fmt.Errorf("%w: %v", ErrWebhookMalformed, err)
 	}
-	if payload.Timestamp <= 0 || time.Since(time.Unix(payload.Timestamp, 0)).Abs() > 5*time.Minute {
-		return ErrWebhookUnauthorized
-	}
-	if payload.ID == "" {
+	if user.ID == "" || user.Meta == nil {
 		return ErrWebhookMalformed
 	}
+	match := revisionPattern.FindStringSubmatch(user.Meta.Version)
+	if match == nil {
+		return ErrWebhookMalformed
+	}
+	revision, _ := strconv.ParseInt(match[1], 10, 64)
 
-	existing, err := store.DirectorySubject(ctx, k.store.Users(), payload.ID)
+	existing, err := store.DirectorySubject(ctx, k.store.Users(), user.ID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
-	switch payload.Event {
-	case "user.created", "user.updated", "user.deactivated":
-		d := &store.DirectoryUser{Provider: "kysignon", Subject: payload.ID, Username: payload.Username, Email: payload.Email, DisplayName: payload.DisplayName,
-			Active: payload.Event != "user.deactivated" && (payload.Status == "" || payload.Status == "active"), EventTime: payload.Timestamp}
+	switch event.Type {
+	case "user.created", "user.updated":
+		if existing == nil && !user.Active {
+			return nil // nothing local to disable
+		}
+		d := &store.DirectoryUser{Provider: "kysignon", Subject: user.ID, Username: user.UserName, Email: user.email(),
+			DisplayName: user.displayName(), Active: user.Active, Revision: revision}
 		if existing != nil {
 			d.ID = existing.ID
-			if payload.Event == "user.deactivated" {
-				d.Username, d.Email, d.DisplayName = existing.Username, existing.Email, existing.DisplayName
-			}
-		} else if payload.Event == "user.deactivated" {
-			return nil // nothing local to disable
 		}
 		_, err = k.store.Users().ApplyDirectoryUser(ctx, d)
 	case "user.deleted":
 		if existing == nil {
 			return nil
 		}
-		err = k.store.Users().DeleteDirectoryUser(ctx, existing.ID, payload.Timestamp)
+		err = k.store.Users().DeleteDirectoryUser(ctx, existing.ID, revision)
 	default:
 		return nil // acknowledge events this version does not consume
 	}
@@ -121,4 +138,24 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, body []byte, sig
 		return fmt.Errorf("%w: %v", ErrWebhookMalformed, err)
 	}
 	return err
+}
+
+// email is the primary address, else the first.
+func (u directoryUser) email() string {
+	for _, e := range u.Emails {
+		if e.Primary {
+			return e.Value
+		}
+	}
+	if len(u.Emails) > 0 {
+		return u.Emails[0].Value
+	}
+	return ""
+}
+
+func (u directoryUser) displayName() string {
+	if u.DisplayName == "" && u.Name != nil {
+		return u.Name.Formatted
+	}
+	return u.DisplayName
 }
