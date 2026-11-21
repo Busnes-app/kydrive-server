@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Every row now belongs to an org (tenancy groundwork).** Drive schema 27 adds the org
+  registry `drive_orgs` and an `org_id` column on every org-owned table. Upgraded rows go to
+  the one default org (`00000000-0000-0000-0000-000000000001`), and SQLite triggers refuse a
+  row in an unknown or deleted org, a changed `org_id`, and a row joining two orgs. The first
+  start records `tenancy_mode=single` in `server_settings`. `KYDRIVE_TENANCY` accepts only
+  `single` (the default); `multi` fails startup until multi-tenant mode ships. Single-tenant
+  behaviour is unchanged, and no operator action is needed.
+
 - **A KyIdentity MFA reset signs the account out.** The directory webhook's `user.mfa_reset`
   now ends the account's sessions, open editors and every credential it issued (WebDAV
   passwords, agent and service tokens, linked computers, guest links), audited as

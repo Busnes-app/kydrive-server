@@ -128,6 +128,14 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// Device signing keys (devices.go): the P-256 SPKI DER, std base64, a device enrolled when it
 	// linked. Empty for a device linked before signing.
 	`ALTER TABLE drive_devices ADD COLUMN pubkey TEXT NOT NULL DEFAULT '';`,
+	// Tenancy (tenancy.go): the org registry, org_id on every org-owned table, and triggers.
+	tenancySchema([]string{
+		"users", "groups", "audit_records",
+		"drive_workspaces", "drive_events", "drive_service_tokens", "drive_editor_documents",
+		"drive_editor_saves", "drive_app_passwords", "drive_changes", "drive_change_floor",
+		"drive_devices", "drive_device_codes", "drive_peer_settings", "drive_peer_folders",
+		"drive_peer_tickets", "drive_peer_picks", "drive_peer_guest", "drive_view_copies",
+	}, map[string]bool{"audit_records": true, "drive_events": true}),
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
@@ -239,11 +247,13 @@ func clashName(name string, n int) string {
 	}
 }
 
-func (s *Store) migrate(ctx context.Context) error {
+func (s *Store) migrate(ctx context.Context) error { return s.migrateTo(ctx, len(schema)) }
+
+func (s *Store) migrateTo(ctx context.Context, version int) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
 		return err
 	}
-	for i, ddl := range schema {
+	for i, ddl := range schema[:version] {
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
 			var done int
 			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema WHERE version=?`, i+1).Scan(&done); err != nil || done == 1 {

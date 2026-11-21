@@ -236,6 +236,19 @@ func CommitUpgrade(ctx context.Context, s *Store, root, id, tmp string) error {
 // Migrate reruns every schema step not recorded in drive_schema.
 func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
 
+// OpenAt opens the drive store migrated only to schema version, as an older release left it.
+func OpenAt(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, error) {
+	return open(ctx, db, key, version)
+}
+
+// ExecTx runs q in a store transaction, so its error is reported as the store reports it.
+func ExecTx(ctx context.Context, s *Store, q string, args ...any) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, q, args...)
+		return err
+	})
+}
+
 // CheckStaged is the decrypt check a staged rewrite must pass before it replaces its blob.
 func CheckStaged(tmp string, key []byte, id string, size int64, digest string) error {
 	return checkStaged(tmp, key, id, size, digest)
