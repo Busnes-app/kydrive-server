@@ -4,6 +4,15 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Directory webhook speaks KyIdentity's suite webhook.** `/api/sso/kysignon/sync` now
+  verifies `syncauth` headers (`X-KySignOn-Signature: v1=…` over timestamp, event type, event
+  ID and body hash, plus `X-KySignOn-Timestamp`, `-Event-Type` and `-Event-ID`) and reads a
+  SCIM user resource. A bare body HMAC in `X-KySignOn-Signature` or `X-Signature-SHA256`, and
+  the old `{event, id, username, …, timestamp}` body, now get 401. Pair KyDrive in KyIdentity
+  as a `suite_webhook` system with `KY_KYSIGNON_HMAC_SECRET` as its signing secret before
+  upgrading if you use this route. Events apply in `meta.version` revision order; migration 11
+  renames `users.directory_ts` to `directory_rev` and zeroes it, with no operator action.
+
 - Keep SQLite `v1.62.0` with its upstream-required libc `v1.80.1` and memory `v1.12.1`; defer independent updates of those runtime dependencies.
 
 - Full Go checks use a fresh run and a 20-minute per-package timeout in CI and local Makefile targets. The real-password API suite can exceed Go's ten-minute default under race/FIPS instrumentation. Test assertions and cryptographic settings are unchanged; no production behavior or data migration changes.

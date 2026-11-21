@@ -60,8 +60,9 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
    so an interceptor holding a certificate the device trusts cannot take over the pin. `/mcp` refuses any request carrying an `Origin` header, so a web page cannot use it
    (`internal/api/mcp.go`).
 3. **KyIdentity → KyDrive.** OIDC sign-in with PKCE `S256` and verified ID tokens; SCIM with a
-   bearer token; a directory webhook that must carry a valid HMAC-SHA256 signature and a timestamp
-   within five minutes before anything is parsed further; back-channel logout tokens verified
+   bearer token; a directory webhook that must carry a valid `syncauth` HMAC-SHA256 signature
+   over its timestamp, event type, event ID and body, with the timestamp within five minutes,
+   before anything is parsed further, and that applies an event only when its revision is newer; back-channel logout tokens verified
    like ID tokens plus the logout-token claims (`internal/sso`, `internal/scim`).
    Outbound, the app rail asks KyIdentity `/api/suite/apps` with the KyDrive client credentials
    (`ky-primitives/suitedir`: HTTPS or loopback issuer, redirects refused, body capped); entries need an HTTPS
@@ -119,7 +120,7 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 | Path traversal | Disk paths are generated blob IDs, never user filenames | `internal/drive` |
 | SQL injection | `database/sql` with parameters; the only formatted statement is the PostgreSQL migration lock, built from a constant | `internal/store/migrations/migrations.go` |
 | Session outliving its identity-provider login | Back-channel logout token verified (signature, issuer, audience, expiry, `iat`, logout event, no nonce, `logout+jwt` when typed) before ending every session of its `sid`, or of its subject issued before it; the `sid` or the subject's cutoff is fenced so an in-flight callback cannot revive it; editor sessions record the login that opened them and are revoked with it even after its browser session expired; SSO sessions, MFA challenges and editor sessions from before the upgrade, which carry no such binding, are ended once by the migration | `internal/sso/backchannel.go`, `internal/store/sqlstore.go`, `internal/drive/sessions.go`, `TestVerifyLogoutToken`, `TestBackchannelLogoutEndsTheSSOLogin`, `TestBackchannelLogoutRevokesEditorsOfPrunedSessions`, `TestBackchannelMigrationEndsUnboundSSOLogins`, `TestLoginSchemaRevokesUnboundDirectoryEditors` |
-| Forged directory events | HMAC-SHA256 checked in constant time before parsing; five-minute window; older events ignored; payload `role` ignored | `internal/sso/kysignon.go`, `internal/crypto/crypto.go` |
+| Forged directory events | `syncauth` HMAC-SHA256 over timestamp, event type, event ID and body, checked in constant time before parsing; five-minute window; events no newer than the account's revision ignored; payload roles ignored | `internal/sso/kysignon.go`, ky-primitives `syncauth` |
 | Forged editor callbacks, SSRF through the editor | Signed JWT callbacks; output fetched only from the editor origin with redirects refused | `internal/editor` |
 | SSRF through the recovery URL | `recoveryclient.ValidateURL` refuses private destinations unless explicitly allowed | `internal/api/backup_handlers.go` |
 | Secrets and files at rest | Blobs: age v1 streaming encryption (random file key, 64 KiB authenticated chunks) with the file key wrapped under HKDF of the deployment key, bound to the blob ID (KYB2; KYB1 read until migrated); names AES-GCM with the row as AAD | `internal/drive/sealed.go`, `internal/drive/names.go` |

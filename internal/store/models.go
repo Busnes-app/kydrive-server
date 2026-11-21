@@ -28,8 +28,8 @@ type User struct {
 // DirectoryUser is what a directory may assert about an account. It has no role: new accounts
 // are "user" and application administration is an operator grant (SetDirectoryRole).
 // ID empty creates a Provider ("scim" or "kysignon") account; otherwise it updates that
-// directory account. A nonzero EventTime (unix seconds) applies only when strictly newer than
-// the account's last applied event, else ErrStale.
+// directory account. A nonzero Revision (the directory's per-account version) applies only when
+// newer than the account's last applied one, else ErrStale.
 type DirectoryUser struct {
 	ID          string
 	Provider    string
@@ -38,7 +38,7 @@ type DirectoryUser struct {
 	Email       string
 	DisplayName string
 	Active      bool
-	EventTime   int64
+	Revision    int64
 }
 
 // Session represents an active authenticated user session.

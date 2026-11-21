@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -226,11 +227,6 @@ func (s *Server) handleKySignOnSyncWebhook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sig := r.Header.Get("X-KySignOn-Signature")
-	if sig == "" {
-		sig = r.Header.Get("X-Signature-SHA256")
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.writeError(w, http.StatusBadRequest, "Failed to read request body")
@@ -238,7 +234,7 @@ func (s *Server) handleKySignOnSyncWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	// 401 only for authentication, so the sender retries outages (500) but not bad input (400).
-	if err := s.kysignon.HandleSyncWebhook(r.Context(), body, sig); err != nil {
+	if err := s.kysignon.HandleSyncWebhook(r.Context(), syncauth.FromRequest(r), body); err != nil {
 		switch {
 		case errors.Is(err, sso.ErrWebhookUnauthorized):
 			s.writeError(w, http.StatusUnauthorized, "Invalid webhook signature or timestamp")

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/password"
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
@@ -255,27 +256,38 @@ func TestSSOErrorsDoNotLeakDetail(t *testing.T) {
 
 func TestDirectoryWebhookStatusCodes(t *testing.T) {
 	_, st, cfg := setupTestServer(t)
-	cfg.SSO.KySignOnHMACSecret = "hook-secret-16-bytes"
+	const secret = "hook-secret-16-bytes"
+	cfg.SSO.KySignOnHMACSecret = secret
 	srv := api.NewServer(cfg, st)
-	call := func(body []byte, secret string) *httptest.ResponseRecorder {
+	call := func(body []byte, key string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/api/sso/kysignon/sync", bytes.NewReader(body))
-		req.Header.Set("X-KySignOn-Signature", crypto.ComputeHMACSHA256(body, secret))
+		h, err := syncauth.Sign([]byte(key), time.Now(), "user.created", "evt-"+crypto.RandomHex(4), body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.Apply(req)
+		req.Header.Set("Content-Type", "application/scim+json")
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 		return w
 	}
-	good := []byte(fmt.Sprintf(`{"event":"user.created","id":"s1","username":"web","timestamp":%d}`, time.Now().Unix()))
-	if w := call(good, "wrong"); w.Code != http.StatusUnauthorized || w.Body.String() != `{"error":"Invalid webhook signature or timestamp"}`+"\n" {
+	user := func(id, name string) []byte {
+		return []byte(fmt.Sprintf(`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"id":%q,"userName":%q,"active":true,"roles":[],"meta":{"resourceType":"User","version":"W/\"1\""}}`, id, name))
+	}
+	if w := call(user("s1", "web"), "wrong-secret-16-bytes"); w.Code != http.StatusUnauthorized || w.Body.String() != `{"error":"Invalid webhook signature or timestamp"}`+"\n" {
 		t.Fatalf("bad signature: %d %s", w.Code, w.Body)
 	}
-	if w := call([]byte(`not json`), "hook-secret-16-bytes"); w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"Malformed webhook payload"}`+"\n" {
+	if w := call([]byte(`not json`), secret); w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"Malformed webhook payload"}`+"\n" {
 		t.Fatalf("malformed: %d %s", w.Code, w.Body)
 	}
-	if w := call(good, "hook-secret-16-bytes"); w.Code != http.StatusOK {
+	if w := call(user("s1", "web"), secret); w.Code != http.StatusOK {
 		t.Fatalf("valid: %d %s", w.Code, w.Body)
 	}
+	if u, err := st.Users().GetUserBySSO(context.Background(), "kysignon", "s1"); err != nil || u.Username != "web" {
+		t.Fatalf("valid delivery not applied: %+v %v", u, err)
+	}
 	st.Close() // an outage is a 500 so the sender retries
-	if w := call([]byte(fmt.Sprintf(`{"event":"user.created","id":"s2","username":"web2","timestamp":%d}`, time.Now().Unix())), "hook-secret-16-bytes"); w.Code != http.StatusInternalServerError {
+	if w := call(user("s2", "web2"), secret); w.Code != http.StatusInternalServerError {
 		t.Fatalf("store outage: %d %s", w.Code, w.Body)
 	}
 }

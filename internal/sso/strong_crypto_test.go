@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
@@ -34,8 +35,9 @@ func TestWebhookKeyFloorBeforeMutation(t *testing.T) {
 	_, st := webhookClient(t)
 	secret := strings.Repeat("s", crypto.MinHMACKeyBytes-1)
 	client := sso.NewKySignOnClient(config.SSOConfig{KySignOnHMACSecret: secret}, st)
-	body, _ := json.Marshal(map[string]any{"event": "user.created", "id": "short-key", "username": "short-key-user", "timestamp": time.Now().Unix()})
-	if err := client.HandleSyncWebhook(context.Background(), body, crypto.ComputeHMACSHA256(body, secret)); !errors.Is(err, sso.ErrWebhookUnauthorized) {
+	// syncauth cannot sign with a short key, so the sender's key is one byte longer.
+	body, _ := json.Marshal(scimUser("short-key", "short-key-user", true, 1))
+	if err := deliver(t, client, strings.Repeat("s", syncauth.MinKeyBytes), "user.created", body, time.Now()); !errors.Is(err, sso.ErrWebhookUnauthorized) {
 		t.Fatalf("short-key webhook: %v", err)
 	}
 	if _, err := st.Users().GetUserBySSO(context.Background(), "kysignon", "short-key"); err == nil {

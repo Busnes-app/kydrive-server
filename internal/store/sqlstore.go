@@ -413,8 +413,8 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 		if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
 			return nil, err
 		}
-		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_ts, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
-			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.EventTime, now, now)
+		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_rev, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
+			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.Revision, now, now)
 	} else {
 		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
 		if d.Active {
@@ -426,17 +426,17 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 			set, args = "status = ?", []any{status}
 		}
 		set, args = set+", updated_at = ?", append(args, now)
-		if d.EventTime != 0 {
-			set, args = set+", directory_ts = ?", append(args, d.EventTime)
+		if d.Revision != 0 {
+			set, args = set+", directory_rev = ?", append(args, d.Revision)
 		}
 		q := "UPDATE users SET " + set + " WHERE id = ? AND sso_provider IN ('scim', 'kysignon')"
 		args = append(args, id)
-		if d.EventTime != 0 {
-			q, args = q+" AND directory_ts "+newerThan(d.Active)+" ?", append(args, d.EventTime)
+		if d.Revision != 0 {
+			q, args = q+" AND directory_rev "+newerThan(d.Active)+" ?", append(args, d.Revision)
 		}
 		var res sql.Result
 		if res, err = tx.ExecContext(ctx, u.store.rebind(q), args...); err == nil {
-			err = u.directoryRowMissing(ctx, tx, res, id, d.EventTime)
+			err = u.directoryRowMissing(ctx, tx, res, id, d.Revision)
 		}
 	}
 	if err != nil {
@@ -461,21 +461,21 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 	return u.GetUserByID(ctx, id)
 }
 
-func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, eventTime int64) error {
+func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision int64) error {
 	tx, err := u.store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	q, args := `DELETE FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`, []any{id}
-	if eventTime != 0 {
-		q, args = q+" AND directory_ts "+newerThan(false)+" ?", append(args, eventTime)
+	if revision != 0 {
+		q, args = q+" AND directory_rev "+newerThan(false)+" ?", append(args, revision)
 	}
 	res, err := tx.ExecContext(ctx, u.store.rebind(q), args...)
 	if err != nil {
 		return err
 	}
-	if err := u.directoryRowMissing(ctx, tx, res, id, eventTime); err != nil {
+	if err := u.directoryRowMissing(ctx, tx, res, id, revision); err != nil {
 		return err
 	}
 	if err := u.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
@@ -484,8 +484,8 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, eventTim
 	return tx.Commit()
 }
 
-// newerThan compares an event's timestamp to the account's last one. Same-second events cannot
-// be ordered, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
+// newerThan compares an event's revision to the account's last one. An equal revision is a
+// redelivery, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
 func newerThan(enables bool) string {
 	if enables {
 		return "<"
@@ -494,7 +494,7 @@ func newerThan(enables bool) string {
 }
 
 // directoryRowMissing explains a directory write that touched no row: stale or absent.
-func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql.Result, id string, eventTime int64) error {
+func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql.Result, id string, revision int64) error {
 	n, err := res.RowsAffected()
 	if err != nil || n == 1 {
 		return err
@@ -503,7 +503,7 @@ func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql
 	if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(1) FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&exists); err != nil {
 		return err
 	}
-	if exists == 1 && eventTime != 0 {
+	if exists == 1 && revision != 0 {
 		return ErrStale
 	}
 	return ErrNotFound

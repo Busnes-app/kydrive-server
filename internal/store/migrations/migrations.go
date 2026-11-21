@@ -295,6 +295,16 @@ CREATE TABLE IF NOT EXISTS sso_subject_logouts (
 		SQLite:   `ALTER TABLE sessions ADD COLUMN step_up_at DATETIME;`,
 		Postgres: `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS step_up_at TIMESTAMPTZ;`,
 	},
+	{
+		// The directory webhook now orders events by KyIdentity's per-account revision, not by
+		// unix seconds. Old values came from a body format no longer accepted, so they restart.
+		Version: 11,
+		Name:    "directory_revision",
+		SQLite: `ALTER TABLE users RENAME COLUMN directory_ts TO directory_rev;
+UPDATE users SET directory_rev = 0;`,
+		Postgres: `ALTER TABLE users RENAME COLUMN directory_ts TO directory_rev;
+UPDATE users SET directory_rev = 0;`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of
