@@ -649,9 +649,13 @@ sends those.
 
 ### A member leaves
 
-Owner decision (question 12). When KyIdentity deletes a member's account (a `user.deleted`
-webhook, or the member gone from the suite directory), KyDrive acts on that member's My
-files at once, inside the org:
+Owner decision (question 12). When KyIdentity deletes a member's account, KyDrive acts on
+that member's My files at once, inside the org:
+
+- **Trigger:** only a `syncauth`-verified `user.deleted` webhook for a known `sub` in the
+  same org. Nothing else starts it. A member missing from any poll or group list, or a
+  poll that fails or comes back truncated, never starts it: the process moves files and
+  starts a purge, so it fails closed like D7 and question 4.
 
 - **Shared files move to the account holder, and stay shared.** An item is shared if it,
   or a folder above it, has a live share to a person or group, a Household link or a guest
@@ -763,7 +767,9 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      classification. The purge is killed halfway and rerun. A leaver's shared files go to the
      holder with every share and link still working for the same people, the rest goes to
      the trash, and the trash copy is purged at 90 days. An org suspended during those 90
-     days purges nothing until it is active again and past `retention_after`. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
+     days purges nothing until it is active again and past `retention_after`. A member
+     who drops out of a group list, and a poll that fails or is truncated, move and trash
+     nothing. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
    `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
