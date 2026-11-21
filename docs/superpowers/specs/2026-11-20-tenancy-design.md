@@ -658,8 +658,19 @@ that member's My files at once, inside the org:
   starts a purge, so it fails closed like D7 and question 4.
 
 - **Shared files move to the account holder, and stay shared.** An item is shared if it,
-  or a folder above it, has a live share to a person or group, a Household link or a guest
-  link. Only the topmost shared item on each path moves, with its whole subtree intact, so
+  or a folder above it, has a share to a person or group, an unrevoked Household link, or
+  an unexpired guest link, revoked or not. The test reads the share records, not whether
+  they work right now, so it gives the same answer whether or not KyIdentity deactivated
+  the member first.
+  - A deactivated owner's person and group shares are stopped, not deleted (root
+    `AGENTS.md`), so they still count.
+  - Deactivation does not revoke Household links (root `AGENTS.md`: organisation links
+    stay), so a revoked one was revoked by its owner and does not count.
+  - Deactivation revokes every guest link, and KyDrive does not record why a link was
+    revoked. So a revoked, unexpired guest link counts. The cost is that a file whose guest
+    link the owner revoked themselves also moves to the account holder instead of being
+    purged. That errs toward keeping the household's files, and is accepted.
+- Only the topmost shared item on each path moves, with its whole subtree intact, so
   a folder share still covers everything under it. They all go into one "Handover from
   <owner> <date>" folder in the account holder's My files.
   - This is a new store path, not today's `Handover`. `Handover` ends the leaver's shares
@@ -779,6 +790,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      links still revoked, the rest goes to
      the trash, and the trash copy is purged at 90 days. An org suspended during those 90
      days purges nothing until it is active again and past `retention_after`. A member
+     deactivated before deletion has the same files moved as one deleted while active. A member
      who drops out of a group list, and a poll that fails or is truncated, move and trash
      nothing. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
