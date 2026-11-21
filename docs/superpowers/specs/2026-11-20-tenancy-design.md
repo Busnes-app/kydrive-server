@@ -665,7 +665,9 @@ files at once, inside the org:
     changes no role and widens nothing. Guest links keep their expiry and password.
   - The holder sees the folder and can stop any of the shares or links.
 - **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
-  later, whatever the drive's trash age. Nobody opens it in the meantime. Staff can still
+  later, whatever the drive's trash age. D11 still wins: the 90 days do not run while the
+  org is not `active`, and on resume the clock waits for `retention_after`, like every other
+  purge. Nobody opens the files in the meantime. Staff can still
   run today's org-class `Handover` on the leaver's workspace when the account holder asks
   (see Admin surface). That moves the whole tree, trash included, without opening an item.
 - A deactivated (not deleted) member is left alone, since KyIdentity can re-enable them.
@@ -686,8 +688,15 @@ files at once, inside the org:
 - **Once deletion is scheduled**, the org is suspended and KyDrive serves it nothing. T's
   export-only session "issues no codes or tokens and opens no suite or forward session" (T
   "Views"), so it cannot reach KyDrive. T's staff export, offered when an account holder
-  cannot sign in, covers KyIdentity's data only. The deletion banner and notices must say
-  files have to be downloaded before deletion is scheduled.
+  cannot sign in, covers KyIdentity's data only.
+- **So the warning must come before scheduling.** A banner shown after scheduling arrives
+  too late, because KyDrive already refuses every credential by then. Deletion is scheduled
+  by the billing service (T `POST /orgs/{id}/schedule-deletion`), so the billing service
+  must warn first. Its cancellation confirmation, and the notice it mails the account
+  holder and members before it schedules deletion, must say to download files from KyDrive
+  first. The billing service is not built yet, so this is a requirement for its design. A
+  suspension for an unpaid bill also blocks downloads, so that notice must say the same
+  thing before it suspends.
 
 ## Threat model
 
@@ -753,7 +762,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      entry, staging directory or index ref for the org, which is checked against the
      classification. The purge is killed halfway and rerun. A leaver's shared files go to the
      holder with every share and link still working for the same people, the rest goes to
-     the trash, and the trash copy is purged at 90 days. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
+     the trash, and the trash copy is purged at 90 days. An org suspended during those 90
+     days purges nothing until it is active again and past `retention_after`. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
    `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
@@ -768,7 +778,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
   writes, editor sessions and indexing. Capacity is unmeasured (question 6).
 - **A capsule restore rolls back every org.** There is no per-org restore.
 - **No export after deletion is scheduled.** A member who did not download their files
-  before then cannot get them (question 1).
+  before then cannot get them (question 1). The only warning is the billing service's,
+  before it schedules deletion (Export).
 - **Backups outlive deletion.** A deleted org's blobs and rows stay in capsules and Restic
   snapshots until backup retention drops them. Restic bulk pruning is opt-in and off by
   default (root `AGENTS.md`).
