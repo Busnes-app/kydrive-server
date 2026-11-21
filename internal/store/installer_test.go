@@ -73,6 +73,7 @@ func TestInstallerCollisionRollsBackAllAccountsAndOwnership(t *testing.T) {
 		t.Fatal("partial audit survived")
 	}
 	settings, err := st.Settings().GetAllSettings(ctx)
+	delete(settings, "tenancy_mode") // recorded at open, not by the installer
 	if err != nil || len(settings) != 0 {
 		t.Fatal("partial ownership survived", settings, err)
 	}

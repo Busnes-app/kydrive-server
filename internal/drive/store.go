@@ -87,6 +87,11 @@ type Event struct {
 
 // New opens the drive store. key is the deployment key; names are sealed under keys derived from it.
 func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
+	return open(ctx, db, key, len(schema))
+}
+
+// open migrates to schema version, which only upgrade tests set below the latest.
+func open(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, error) {
 	n, err := newNames(key)
 	if err != nil {
 		return nil, err
@@ -114,8 +119,11 @@ func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
 	if err = checkKey(ctx, db, key); err != nil {
 		return nil, err
 	}
+	if err = recordTenancy(ctx, db, TenancySingle); err != nil {
+		return nil, err
+	}
 	s := &Store{db: db, names: n}
-	if err = s.migrate(ctx); err != nil {
+	if err = s.migrateTo(ctx, version); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -193,7 +201,7 @@ func admin(ctx context.Context, q queryer, user string) error {
 	return nil
 }
 func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events VALUES(?,?,?,?,?)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano))
+	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created) VALUES(?,?,?,?,?)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano))
 	return err
 }
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
@@ -203,7 +211,7 @@ func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
 	}
 	defer tx.Rollback()
 	if err = f(tx); err != nil {
-		return err
+		return asDenied(err)
 	}
 	return tx.Commit()
 }

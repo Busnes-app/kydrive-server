@@ -360,3 +360,20 @@ func TestRateLimitExemptNetworksAreValidatedAtStartup(t *testing.T) {
 		}
 	}
 }
+
+// Multi-tenant mode is refused until it is built; anything else but single is a typo.
+func TestTenancyMode(t *testing.T) {
+	t.Setenv("KY_DATA_DIR", t.TempDir())
+	for _, ok := range []string{"", "single"} {
+		t.Setenv("KYDRIVE_TENANCY", ok)
+		if _, err := config.LoadFromEnv(); err != nil {
+			t.Fatalf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"multi", "Single", "saas"} {
+		t.Setenv("KYDRIVE_TENANCY", bad)
+		if _, err := config.LoadFromEnv(); err == nil || !strings.Contains(err.Error(), "KYDRIVE_TENANCY") {
+			t.Errorf("%q: want KYDRIVE_TENANCY error, got %v", bad, err)
+		}
+	}
+}
