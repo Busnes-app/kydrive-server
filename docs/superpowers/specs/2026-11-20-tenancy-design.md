@@ -665,9 +665,15 @@ that member's My files at once, inside the org:
   - This is a new store path, not today's `Handover`. `Handover` ends the leaver's shares
     and revokes their links (`handover.go:147-154`), which would remove the very access the
     rule keeps.
-  - The new path moves the shares and links with the items and makes the account holder
-    their owner and creator, so the people they were shared with keep their access. It
-    changes no role and widens nothing. Guest links keep their expiry and password.
+  - The new path moves person and group shares and Household links with the items and
+    makes the account holder their owner and creator, so the household members they were
+    shared with keep their access. It changes no role and widens nothing.
+  - Guest links do not survive. Directory deactivation already revokes every guest link
+    the account made, and reactivation revives none (root `AGENTS.md`). A guest link also
+    stops with its creator (`guest.go:155-182`). The new path leaves them revoked: it does
+    not revive a credential, which would breach that contract. An item shared only by
+    guest link still moves, and the holder can make a new link. Unverified: whether
+    KyIdentity always deactivates before it deletes. The rule above holds either way.
   - The holder sees the folder and can stop any of the shares or links.
 - **Everything else goes to the trash** of the leaver's workspace and is purged 90 days
   later, whatever the drive's trash age. D11 still wins: the 90 days do not run while the
@@ -766,8 +772,9 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
      entry, staging directory or index ref for the org, which is checked against the
      classification. The purge is killed halfway and rerun. A leaver's shared files go to the
-     holder with every share and link still working for the same people, including
-     access inherited from a shared parent folder, the rest goes to
+     holder with every person and group share and Household link still working for the
+     same people, including access inherited from a shared parent folder, and their guest
+     links still revoked, the rest goes to
      the trash, and the trash copy is purged at 90 days. An org suspended during those 90
      days purges nothing until it is active again and past `retention_after`. A member
      who drops out of a group list, and a poll that fails or is truncated, move and trash
@@ -826,6 +833,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 11. **Per-workspace retention on the hosted service.** Stays refused (D10). Revisit only if
     households ask.
 12. **A household member's My files after they leave.** Shared files move to the account
-    holder with their shares and links kept, and the rest goes to the trash and is purged
+    holder with their person and group shares and Household links kept (guest links are
+    not), and the rest goes to the trash and is purged
     after 90 days (A member leaves).
     This needs the account holder's `sub` from `/api/suite/orgs`, a new ask of KyIdentity.
