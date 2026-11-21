@@ -223,7 +223,7 @@ func TestKySignOnWebhookAppliesOnlyNewerRevisions(t *testing.T) {
 		t.Fatal("newer event not applied")
 	}
 	// Events this version does not consume are acknowledged.
-	if err := send(t, client, "user.mfa_reset", scimUser("sub-2", "carol", true, 7)); err != nil {
+	if err := send(t, client, "group.updated", scimUser("sub-2", "carol", true, 7)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -245,5 +245,42 @@ func TestKySignOnWebhookUpdatesTheSCIMAccount(t *testing.T) {
 	}
 	if u, _ := st.Users().GetUserByID(ctx, scimRow.ID); u.DisplayName != "Dave" {
 		t.Fatalf("SCIM account not updated: %+v", u)
+	}
+}
+
+func TestKySignOnWebhookMFAResetSignsOut(t *testing.T) {
+	client, st := webhookClient(t)
+	ctx := context.Background()
+	if err := send(t, client, "user.created", scimUser("sub-4", "erin", true, 2)); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := st.Users().GetUserBySSO(ctx, "kysignon", "sub-4")
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "erin", UserID: u.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	// Any revision, older ones included: revoking is never stale.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-4", "erin", true, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Sessions().GetSession(ctx, "erin"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("MFA reset kept the session", err)
+	}
+	if u, _ = st.Users().GetUserByID(ctx, u.ID); u.Status != "active" {
+		t.Fatalf("MFA reset disabled the account: %+v", u)
+	}
+	// A subject with no account yet is fenced: a first login still holding a pre-reset ID
+	// token cannot finish, while a login after the reset can.
+	if err := send(t, client, "user.mfa_reset", scimUser("sub-new", "frank", true, 1)); err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "sub-new", Username: "frank", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "frank-old", UserID: f.ID, CreatedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Hour)}, "", false); !errors.Is(err, store.ErrSSOSessionEnded) {
+		t.Fatalf("pre-reset first login: %v", err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "frank-new", UserID: f.ID, CreatedAt: time.Now().Add(2 * time.Second), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatalf("post-reset login: %v", err)
 	}
 }

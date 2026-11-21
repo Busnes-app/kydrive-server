@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -128,6 +129,16 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 			return nil
 		}
 		err = k.store.Users().DeleteDirectoryUser(ctx, existing.ID, revision)
+	case "user.mfa_reset":
+		// The person's second factor may have been lost or taken. Whatever was signed in or
+		// minted with it ends, whatever the revision: revoking is restrictive and repeatable.
+		if existing == nil {
+			// No account yet, but a first login may be in flight with a pre-reset ID token.
+			// Fence the subject so it cannot finish, as a back-channel logout does.
+			now := time.Now()
+			return k.store.Sessions().EndSSOSubject(ctx, "kysignon", user.ID, now.Add(time.Second), now.Add(store.SSOLogoutFence))
+		}
+		err = k.store.Users().RevokeDirectoryCredentials(ctx, existing.ID)
 	default:
 		return nil // acknowledge events this version does not consume
 	}

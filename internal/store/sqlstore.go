@@ -484,6 +484,40 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision
 	return tx.Commit()
 }
 
+func (u *userStore) RevokeDirectoryCredentials(ctx context.Context, id string) error {
+	var subject string
+	err := u.store.db.QueryRowContext(ctx, u.store.rebind(`SELECT COALESCE(sso_subject, '') FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&subject)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	// A callback holding a pre-reset ID token must not sign in after this. iat has whole-second
+	// precision, so the cutoff rounds up, as a back-channel logout's does.
+	now := time.Now()
+	if subject != "" {
+		if err := u.store.fenceSSOSubject(ctx, "kysignon", subject, now.Add(time.Second), now.Add(SSOLogoutFence)); err != nil {
+			return err
+		}
+	}
+	tx, err := u.store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // newerThan compares an event's revision to the account's last one. An equal revision is a
 // redelivery, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
 func newerThan(enables bool) string {
@@ -738,6 +772,10 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 	return nil
 }
 
+// SSOLogoutFence outlives the 5-minute login callback window, so a logout or MFA reset that
+// lands while the browser is still finishing a login also ends it.
+const SSOLogoutFence = 10 * time.Minute
+
 // ssoSubjectUser joins a subject fence f to the accounts u its subject signs in as. Like
 // DirectorySubject, a KySignOn subject also names the SCIM account with that subject.
 const ssoSubjectUser = `u.sso_subject = f.subject AND (u.sso_provider = f.provider OR (f.provider = 'kysignon' AND u.sso_provider = 'scim'))`
@@ -755,13 +793,20 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil
 	}, `sso_sid = ?`, sid)
 }
 
-func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
-	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_subject_logouts WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
+// fenceSSOSubject commits a fence refusing the subject's logins issued before cutoff until
+// fenceUntil. Callers commit it before deleting sessions; see CreateSession.
+func (s *SQLStore) fenceSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
+	if _, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM sso_subject_logouts WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
 		return err
 	}
 	// Keyed by subject, not user, so it also fences a first login that is still provisioning.
-	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_subject_logouts (provider, subject, cutoff, expires_at) VALUES (?, ?, ?, ?)
-ON CONFLICT (provider, subject) DO UPDATE SET cutoff = excluded.cutoff, expires_at = excluded.expires_at WHERE sso_subject_logouts.cutoff < excluded.cutoff`), provider, subject, cutoff.UTC(), fenceUntil.UTC()); err != nil {
+	_, err := s.db.ExecContext(ctx, s.rebind(`INSERT INTO sso_subject_logouts (provider, subject, cutoff, expires_at) VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, subject) DO UPDATE SET cutoff = excluded.cutoff, expires_at = excluded.expires_at WHERE sso_subject_logouts.cutoff < excluded.cutoff`), provider, subject, cutoff.UTC(), fenceUntil.UTC())
+	return err
+}
+
+func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
+	if err := s.store.fenceSSOSubject(ctx, provider, subject, cutoff, fenceUntil); err != nil {
 		return err
 	}
 	subjectUsers := `SELECT u.id FROM users u, sso_subject_logouts f WHERE f.provider = ? AND f.subject = ? AND ` + ssoSubjectUser

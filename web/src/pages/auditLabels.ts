@@ -43,6 +43,7 @@ const labels: Record<string, string> = {
   'link.revoked': 'Link revoked',
   'share.removed': 'Share removed',
   'share.saved': 'Shared',
+  'sso.mfa_reset': 'Second factor reset in KyIdentity; signed out',
   'upload.cancelled': 'Upload cancelled',
   'upload.started': 'Upload started',
   'user.created': 'Account created',
