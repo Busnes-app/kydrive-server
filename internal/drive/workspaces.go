@@ -19,7 +19,7 @@ func nameFree(ctx context.Context, tx *sql.Tx, org, name, except string) error {
 		return fmt.Errorf("%w: My files is the name of each person's own files", ErrConflict)
 	}
 	var taken, deleted int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(w.deleted_at!=''),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND w.org_id=? AND lower(w.name)=lower(?) AND w.id!=?`, org, name, except).Scan(&taken, &deleted); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN w.deleted_at!='' THEN 1 ELSE 0 END),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND w.org_id=? AND lower(w.name)=lower(?) AND w.id!=?`, org, name, except).Scan(&taken, &deleted); err != nil {
 		return err
 	}
 	if taken > deleted {

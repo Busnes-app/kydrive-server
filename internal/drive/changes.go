@@ -150,7 +150,7 @@ func (s *Store) PruneChanges(ctx context.Context, before time.Time) error {
 	const old = `created<? AND seq NOT IN (SELECT MAX(seq) FROM drive_changes GROUP BY workspace)`
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		cutoff := before.Unix()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_change_floor(workspace,seq,org_id) SELECT workspace,MAX(seq),MIN(org_id) FROM drive_changes WHERE `+old+` GROUP BY workspace ON CONFLICT(workspace) DO UPDATE SET seq=MAX(seq,excluded.seq)`, cutoff); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_change_floor(workspace,seq,org_id) SELECT workspace,MAX(seq),MIN(org_id) FROM drive_changes WHERE `+old+` GROUP BY workspace ON CONFLICT(workspace) DO UPDATE SET seq=MAX(drive_change_floor.seq,excluded.seq)`, cutoff); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM drive_changes WHERE `+old, cutoff)

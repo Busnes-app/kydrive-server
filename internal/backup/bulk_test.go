@@ -45,10 +45,8 @@ func newBulkFixture(t *testing.T) *bulkFixture {
 	f := &bulkFixture{dir: t.TempDir(), repo: filepath.Join(t.TempDir(), "independent-repo"), key: make([]byte, 32)}
 	t.Setenv("KYDRIVE_BULK_BACKUP_REPOSITORY", f.repo)
 	f.key[0] = 12
+	testdb.SQLiteOnly(t, "a backup is SQLite-only until R3")
 	dbCfg := testdb.Config(t)
-	if dbCfg.Driver != "sqlite" {
-		t.Skip("drive SQLite-only")
-	}
 	dbCfg.DataDir = f.dir
 	st, err := store.Open(ctx, dbCfg, f.key)
 	if err != nil {

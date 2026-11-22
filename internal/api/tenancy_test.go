@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,20 +9,15 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 // A suspended org ends its members' browser sessions and refuses their password sign-in, as
 // for an inactive account; on resume they sign in again.
 func TestSuspendedOrgEndsSessionsAndSignIn(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("orgs live in the SQLite drive store")
-	}
 	cookie := loginAs(t, srv, st, "member", "user")
-	db, err := sql.Open("sqlite", cfg.Database.DSN)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t, cfg.Database)
 	defer db.Close()
 	setStatus := func(status string) {
 		t.Helper()
@@ -55,19 +49,13 @@ func TestSuspendedOrgEndsSessionsAndSignIn(t *testing.T) {
 // A suspended org refuses its members' KyIdentity sign-in, as for an inactive account.
 func TestSuspendedOrgRefusesSSOSignIn(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("orgs live in the SQLite drive store")
-	}
 	f := newFakeKySignOn(t)
 	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
 	srv = api.NewServer(cfg, st)
 	if sessionCookie(ssoLogin(t, srv, f, "alice", "sid-1")) == nil {
 		t.Fatal("SSO login did not issue a session")
 	}
-	db, err := sql.Open("sqlite", cfg.Database.DSN)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t, cfg.Database)
 	defer db.Close()
 	if _, err := db.Exec(`UPDATE drive_orgs SET status='suspended' WHERE id=?`, drive.DefaultOrg); err != nil {
 		t.Fatal(err)

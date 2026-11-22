@@ -103,9 +103,6 @@ func TestOfficeThumbnailsThroughTheDocumentServer(t *testing.T) {
 	t.Setenv("KYDRIVE_EDITOR_DRIVE_URL", drive)
 	t.Setenv("KYDRIVE_EDITOR_SECRET", string(ds.secret))
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	live := httptest.NewUnstartedServer(srv)
 	live.Listener.Close()
 	live.Listener = ln

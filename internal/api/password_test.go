@@ -182,9 +182,6 @@ func TestRestrictedSessionCannotInheritClearedFlag(t *testing.T) {
 // their own password); every session and credential goes with the old one.
 func TestLocalAccountChangesItsOwnPassword(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "rotator", "admin")
 	other := loginAs(t, srv, st, "bystander", "user")
 	_, secret, err := st.Drive().CreateAppPassword(context.Background(), "usr_rotator", "Laptop")

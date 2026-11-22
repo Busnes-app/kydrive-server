@@ -39,7 +39,7 @@ func itemRankSQL(user, workspace, folder, file string) string {
    AND ((s.principal_kind='user' AND s.principal_id=$U) OR (s.principal_kind='group' AND EXISTS(SELECT 1 FROM group_members sm WHERE sm.group_id=s.principal_id AND sm.user_id=$U)))
   UNION ALL
   SELECT l.resource_kind,l.resource_id,l.role FROM drive_links l JOIN drive_link_users lu ON lu.link=l.id WHERE l.workspace=$W AND lu.user_id=$U
-   AND l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>CAST(strftime('%s','now') AS INTEGER))
+   AND l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>unixepoch())
  ) x
  WHERE ((x.kind='file' AND x.rid=$F)
   OR (x.kind='folder' AND x.rid IN (WITH RECURSIVE up(id) AS (SELECT $D WHERE $D!='' UNION SELECT f.parent FROM drive_folders f JOIN up ON f.id=up.id WHERE f.parent!='') SELECT id FROM up)))
@@ -76,7 +76,7 @@ func authorizeItem(ctx context.Context, q queryer, user, workspace, folder, file
 
 func itemRank(ctx context.Context, q queryer, user, workspace, folder, file string) (int, error) {
 	var rank int
-	err := q.QueryRowContext(ctx, `SELECT `+itemRankSQL("q.u", "q.w", "q.d", "q.f")+` FROM (SELECT ? AS u, ? AS w, ? AS d, ? AS f) q`, user, workspace, folder, file).Scan(&rank)
+	err := q.QueryRowContext(ctx, `SELECT `+itemRankSQL("q.u", "q.w", "q.d", "q.f")+` FROM (SELECT CAST(? AS TEXT) AS u, CAST(? AS TEXT) AS w, CAST(? AS TEXT) AS d, CAST(? AS TEXT) AS f) q`, user, workspace, folder, file).Scan(&rank)
 	return rank, err
 }
 
@@ -169,7 +169,7 @@ func peerAllows(ctx context.Context, q queryer, user, workspace, folder, file st
 		item = `EXISTS(SELECT 1 FROM drive_files f WHERE f.id=q.f AND f.workspace=q.w AND f.parent=q.d AND f.trashed=false)`
 	}
 	var ok int
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT ? AS u, ? AS w, ? AS d, ? AS f) q
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT CAST(? AS TEXT) AS u, CAST(? AS TEXT) AS w, CAST(? AS TEXT) AS d, CAST(? AS TEXT) AS f) q
  JOIN drive_personal_workspaces pw ON pw.workspace=q.w AND pw.owner=q.u
  JOIN drive_workspaces w ON w.id=q.w AND w.deleted_at=''
  JOIN drive_peer_folders pf ON pf.owner=q.u AND pf.folder=q.d

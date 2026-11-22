@@ -225,9 +225,6 @@ func TestExemptNetworkKeepsTheStepUpAccountWindow(t *testing.T) {
 func TestExemptNetworkWebDAV(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	loginAs(t, srv, st, "hal", "user")
 	_, secret, err := st.Drive().CreateAppPassword(context.Background(), "usr_hal", "Laptop")
 	if err != nil {
@@ -441,10 +438,7 @@ func TestOfficeBudgetFallsBackToThePerIPLimit(t *testing.T) {
 // the per-client window; a second office address keeps its own window.
 func TestOfficeDAVBudgetFallsBackToThePerIPLimit(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
-	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
+	srv, _, _ := setupTestServer(t)
 	n := api.OfficeBudgetForTest + 20
 	for i := 1; i <= n; i++ {
 		if code := davBasic(srv, officePeer, fmt.Sprintf("stale%d", i), "wrong"); code != http.StatusUnauthorized {
@@ -464,9 +458,6 @@ func TestOfficeDAVBudgetFallsBackToThePerIPLimit(t *testing.T) {
 func TestOfficeAccountChurnKeepsLiveLoginWindows(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	createLocalUser(t, st, "carol", "SuperSecretPass123!")
 	try := func(pass string) int {
 		return exemptCall(t, srv, "POST", "/api/auth/login", `{"username":"carol","password":"`+pass+`"}`, officePeer, "", nil).Code
@@ -492,9 +483,6 @@ func TestOfficeAccountChurnKeepsLiveLoginWindows(t *testing.T) {
 func TestRefundedOfficeDAVLookupsLeaveNoKeys(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	createLocalUser(t, st, "carol", "SuperSecretPass123!")
 	try := func(pass string) int {
 		return exemptCall(t, srv, "POST", "/api/auth/login", `{"username":"carol","password":"`+pass+`"}`, officePeer, "", nil).Code
@@ -521,10 +509,7 @@ func TestRefundedOfficeDAVLookupsLeaveNoKeys(t *testing.T) {
 // window before the lookup: no more than ten reach verification, however they interleave.
 func TestConcurrentOfficeDAVGuessesCannotOutrunTheAccountWindow(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
-	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
+	srv, _, _ := setupTestServer(t)
 	var checks atomic.Int64
 	api.SetAppPasswordCheckForTest(srv, func(context.Context, string, string) (string, error) {
 		checks.Add(1)

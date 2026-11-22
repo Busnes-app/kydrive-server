@@ -136,7 +136,7 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 			return err
 		}
 		// A key closed without saves (status 4) names unchanged content and opens again.
-		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision,org_id) VALUES(?,?,?,?,(SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=?)) ON CONFLICT(key) DO UPDATE SET closed=false WHERE current_revision=base_revision`, e.Key, id, e.Revision, e.Revision, id)
+		_, err = tx.ExecContext(ctx, `INSERT INTO drive_editor_documents(key,file_id,base_revision,current_revision,org_id) VALUES(?,?,?,?,(SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=?)) ON CONFLICT(key) DO UPDATE SET closed=false WHERE drive_editor_documents.current_revision=drive_editor_documents.base_revision`, e.Key, id, e.Revision, e.Revision, id)
 		return err
 	})
 	return e, err
@@ -277,7 +277,7 @@ func (s *Store) MarkDropped(ctx context.Context, id string) error {
 // DeferRevocation backs a failed drop off exponentially, 2s doubling up to an hour, so drops
 // that keep failing queue behind newer ones.
 func (s *Store) DeferRevocation(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET attempts=attempts+1,next_attempt=?+MIN(3600,2<<MIN(attempts,11)) WHERE id=? AND revoked=true AND drop_done=false`, time.Now().Unix(), id)
+	_, err := s.db.ExecContext(ctx, `UPDATE drive_editor_sessions SET attempts=attempts+1,next_attempt=?+MIN(3600,2<<CAST(MIN(attempts,11) AS INTEGER)) WHERE id=? AND revoked=true AND drop_done=false`, time.Now().Unix(), id)
 	return err
 }
 

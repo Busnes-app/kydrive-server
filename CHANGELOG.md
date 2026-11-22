@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **The drive store opens on PostgreSQL (tenancy R1a).** Before, a PostgreSQL install had no
+  drive. Now it gets the full drive schema at first start, with the same triggers as SQLite.
+  Every test runs on both backends in CI, apart from content search and backups, which stay
+  SQLite only until steps R2 and R3. Single-tenant only: multi-tenant mode still cannot be
+  enabled. A SQLite install is unchanged.
+
 - **Suite groups and KyPost requests are bound to their org (tenancy groundwork).** On a
   multi-tenant install KyDrive reads suite groups once per active, enabled org, and each
   group's workspace, local group and members stay in that org: a member from another org is

@@ -50,9 +50,6 @@ func setupMultiServer(t *testing.T) *multiAPI {
 	t.Setenv("KY_DATA_DIR", dir)
 	cfg, _ := config.LoadFromEnv()
 	db := testdb.Config(t)
-	if db.Driver != "sqlite" {
-		t.Skip("orgs live in the SQLite drive store")
-	}
 	db.DataDir = cfg.Database.DataDir
 	db.Tenancy, db.StaffOrg = drive.TenancyMulti, testStaffOrg
 	cfg.Database = db
@@ -63,11 +60,7 @@ func setupMultiServer(t *testing.T) *multiAPI {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	raw, err := sql.Open("sqlite", filepath.Clean(cfg.Database.DSN)+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { raw.Close() })
+	raw := testdb.Open(t, cfg.Database)
 	m := &multiAPI{srv: api.NewServer(cfg, st), cfg: cfg, st: st, db: raw, session: map[string]*http.Cookie{}, ids: map[string]map[string]string{}}
 	exec := func(q string, args ...any) {
 		t.Helper()
@@ -338,7 +331,11 @@ func TestAdminSurfaceIsBoundToOneOrg(t *testing.T) {
 func TestPlantedCustomerAdminIsRefused(t *testing.T) {
 	m := setupMultiServer(t)
 	for _, name := range []string{"users_admin_is_staff_insert", "users_admin_is_staff_update"} {
-		if _, err := m.db.Exec(`DROP TRIGGER ` + name); err != nil {
+		q := `DROP TRIGGER ` + name
+		if testdb.Postgres() {
+			q += ` ON users`
+		}
+		if _, err := m.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -3,7 +3,6 @@ package api_test
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 const linkVerifier = "M25iVXpKU3puUjFaYWg3T1NDTDQtcW1ROUY5YXlwalNoc0hhakxifmZHag"
@@ -64,21 +64,15 @@ func linkDevice(t *testing.T, srv *api.Server, cookie *http.Cookie) string {
 
 func rawDB(t *testing.T, cfg *config.Config, q string, args ...any) {
 	t.Helper()
-	db, err := sql.Open("sqlite", cfg.Database.DSN)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t, cfg.Database)
 	defer db.Close()
-	if _, err = db.Exec(q, args...); err != nil {
+	if _, err := db.Exec(q, args...); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDeviceLink(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "linker", "user")
 	expect := func(got *httptest.ResponseRecorder, code int, what string) {
 		t.Helper()
@@ -137,9 +131,6 @@ func TestDeviceLink(t *testing.T) {
 
 func TestDeviceToken(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	admin := loginAs(t, srv, st, "devadmin", "admin")
 	user := loginAs(t, srv, st, "devuser", "user")
@@ -270,9 +261,6 @@ func TestDeviceTokenCreatesNoAccess(t *testing.T) {
 	t.Setenv("KYDRIVE_EDITOR_DRIVE_URL", "http://drive.test")
 	t.Setenv("KYDRIVE_EDITOR_SECRET", strings.Repeat("s", 32))
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	admin := loginAs(t, srv, st, "accadmin", "admin")
 	user := loginAs(t, srv, st, "accuser", "user")
@@ -318,9 +306,6 @@ func TestDeviceTokenCreatesNoAccess(t *testing.T) {
 
 func TestDeviceSelfUnlink(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "unlinker", "user")
 	expect := func(got *httptest.ResponseRecorder, code int, what string) {
 		t.Helper()
@@ -369,9 +354,6 @@ func TestDeviceSelfUnlink(t *testing.T) {
 // ID, and GET /api/drive/device tells a device token, and only a device token, whose it is.
 func TestDeviceAccount(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "acct", "user")
 	type account struct {
 		UserID      string `json:"user_id"`
@@ -407,9 +389,6 @@ func TestDeviceAccount(t *testing.T) {
 
 func TestPhoneQRLink(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "phoner", "user")
 	expect := func(got *httptest.ResponseRecorder, code int, what string) {
 		t.Helper()

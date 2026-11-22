@@ -17,9 +17,6 @@ import (
 func TestSuiteGroupsWorkerChangesNothingOnFailure(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
 	ctx := context.Background()
-	if st.Drive() == nil {
-		t.Skip("drive is SQLite-only")
-	}
 	if err := st.Users().CreateUser(ctx, &store.User{ID: "alice", Username: "alice", Email: "alice@local.test", Role: "user", Status: "active", SSOProvider: "kysignon", SSOSubject: "sub-alice"}); err != nil {
 		t.Fatal(err)
 	}

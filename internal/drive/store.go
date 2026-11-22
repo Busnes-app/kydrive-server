@@ -6,10 +6,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/Busnes-app/kydrive-server/internal/qmark"
 	"github.com/google/uuid"
 )
 
@@ -26,6 +28,7 @@ var (
 
 type Store struct {
 	db      *sql.DB
+	pg      bool // opened by qmark: PostgreSQL
 	names   names
 	tenancy Tenancy
 }
@@ -106,7 +109,12 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if err != nil {
 		return nil, err
 	}
-	_, err = db.ExecContext(ctx, `
+	pg := qmark.Is(db)
+	if pg && version != len(schema) {
+		return nil, errors.New("drive: a PostgreSQL drive starts at the latest schema")
+	}
+	if !pg {
+		_, err = db.ExecContext(ctx, `
  CREATE UNIQUE INDEX IF NOT EXISTS drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';
  CREATE UNIQUE INDEX IF NOT EXISTS drive_group_external ON groups(external_id) WHERE external_id!='';
  CREATE TABLE IF NOT EXISTS drive_service_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires BIGINT NOT NULL,revoked BOOLEAN NOT NULL DEFAULT false);
@@ -123,6 +131,7 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
  CREATE TABLE IF NOT EXISTS drive_editor_saves(key TEXT NOT NULL,digest TEXT NOT NULL,revision BIGINT NOT NULL,PRIMARY KEY(key,digest));
  CREATE INDEX IF NOT EXISTS drive_editor_expiry ON drive_editor_sessions(expires);
  `)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +141,7 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if err = recordTenancy(ctx, db, t); err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, names: n, tenancy: t}
+	s := &Store{db: db, pg: pg, names: n, tenancy: t}
 	if err = s.migrateTo(ctx, version); err != nil {
 		return nil, err
 	}
@@ -190,7 +199,7 @@ func authorize(ctx context.Context, q queryer, user, workspace string, need int)
 		return ErrDenied
 	}
 	var rank int
-	err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "q.w")+` FROM (SELECT ? AS u, ? AS w) q`, user, workspace).Scan(&rank)
+	err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "q.w")+` FROM (SELECT CAST(? AS TEXT) AS u, CAST(? AS TEXT) AS w) q`, user, workspace).Scan(&rank)
 	if err != nil {
 		return err
 	}
@@ -220,8 +229,58 @@ func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error
 	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES(?,?,?,?,?,COALESCE(NULLIF(?,''),`+userOrg("?")+`))`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano), org, user)
 	return err
 }
+
+// transaction runs f in one transaction. SQLite has one writer; on PostgreSQL the transaction is
+// serializable, so f sees the same guarantee, and a serialization failure or deadlock runs f
+// again after a random pause, which f must allow: it only reads and writes the database.
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	for attempt := 1; ; attempt++ {
+		err := s.transactionOnce(ctx, f)
+		if !s.pg || attempt == maxAttempts || !retryable(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond)))):
+		}
+	}
+}
+
+// attempt runs f, a step tx goes on from if it fails (to try another name). PostgreSQL ends a
+// transaction at its first error, so there f runs inside a savepoint; SQLite undoes just the
+// failed statement.
+func (s *Store) attempt(ctx context.Context, tx *sql.Tx, f func() error) error {
+	if !s.pg {
+		return f()
+	}
+	if _, err := tx.ExecContext(ctx, `SAVEPOINT attempt`); err != nil {
+		return err
+	}
+	if err := f(); err != nil {
+		if _, rerr := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT attempt`); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `RELEASE SAVEPOINT attempt`)
+	return err
+}
+
+// maxAttempts bounds the runs of one transaction: enough for dozens of writers to one workspace.
+const maxAttempts = 50
+
+func retryable(err error) bool {
+	msg := fmt.Sprint(err)
+	return strings.Contains(msg, "(SQLSTATE 40001)") || strings.Contains(msg, "(SQLSTATE 40P01)")
+}
+
+func (s *Store) transactionOnce(ctx context.Context, f func(*sql.Tx) error) error {
+	var opts *sql.TxOptions
+	if s.pg {
+		opts = &sql.TxOptions{Isolation: sql.LevelSerializable}
+	}
+	tx, err := s.db.BeginTx(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -248,7 +307,7 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND w.org_id=? AND `+activePrincipal("q.u")+` ORDER BY w.name`, user, org)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT CAST(? AS TEXT) AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND w.org_id=? AND `+activePrincipal("q.u")+` ORDER BY w.name`, user, org)
 	if err != nil {
 		return nil, err
 	}
@@ -507,7 +566,7 @@ func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
 	return f, err
 }
 func (s *Store) File(ctx context.Context, user, id string, need int) (File, error) {
-	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM (SELECT ? AS u) q JOIN drive_files f ON f.id=? JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+sameOrg("q.u", "f.workspace"), user, id))
+	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_files f ON f.id=? JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+sameOrg("q.u", "f.workspace"), user, id))
 	if err != nil {
 		return f, err
 	}
@@ -740,5 +799,5 @@ func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
 }
 
 func uniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	return err != nil && (strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "(SQLSTATE 23505)"))
 }

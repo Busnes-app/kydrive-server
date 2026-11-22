@@ -250,9 +250,7 @@ func TestHandoverFolderNameIsNumberedWhenTaken(t *testing.T) {
 func TestSchemaBackfillsOwnerNames(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
+	testdb.SQLiteOnly(t, "upgrades an older SQLite schema")
 	st, err := store.Open(ctx, cfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)

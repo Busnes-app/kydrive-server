@@ -17,9 +17,6 @@ import (
 
 func TestFolderZipRoute(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "zipadmin", "admin")
 	user := loginAs(t, srv, st, "zipper", "user")

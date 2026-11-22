@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 // kyb1Files publishes files whose versions are KYB1 blobs and queues them as the schema step
@@ -46,11 +47,15 @@ func kyb1Files(t *testing.T, d *drive.Store, w drive.Workspace, root string) ([]
 		t.Fatal(err)
 	}
 	files, blobs = append(files, c.ID), append(blobs, v.Blob)
-	// Rerun the schema step that fills the queue, as on an upgraded database.
-	if err = drive.ExecSQL(ctx, d, `DROP TABLE drive_blob_kyb1; DELETE FROM drive_schema WHERE version=?`, drive.KYB1SchemaVersion); err != nil {
-		t.Fatal(err)
+	// Rerun the schema step that fills the queue, as on an upgraded database. PostgreSQL
+	// starts at the latest schema, so there the step's INSERT runs alone, as migrate-postgres
+	// brings the queue over.
+	if testdb.Postgres() {
+		err = drive.ExecSQL(ctx, d, `INSERT INTO drive_blob_kyb1(blob) SELECT DISTINCT blob FROM drive_versions WHERE sealed=1 ON CONFLICT DO NOTHING`)
+	} else if err = drive.ExecSQL(ctx, d, `DROP TABLE drive_blob_kyb1; DELETE FROM drive_schema WHERE version=?`, drive.KYB1SchemaVersion); err == nil {
+		err = drive.Migrate(ctx, d)
 	}
-	if err = drive.Migrate(ctx, d); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
 	if n := count(t, d, `SELECT COUNT(*) FROM drive_blob_kyb1`); n != len(blobs) {

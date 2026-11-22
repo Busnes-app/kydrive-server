@@ -19,9 +19,6 @@ import (
 
 func TestPreviewServesOnlyTheAllowlist(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	owner := loginAs(t, srv, st, "viewer", "user")
 	outsider := loginAs(t, srv, st, "outsider", "user")

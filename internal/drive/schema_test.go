@@ -16,9 +16,7 @@ import (
 func TestSchemaUpgradesLegacyDatabase(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
+	testdb.SQLiteOnly(t, "upgrades an older SQLite schema")
 	legacy, err := sql.Open("sqlite", cfg.DSN)
 	if err != nil {
 		t.Fatal(err)

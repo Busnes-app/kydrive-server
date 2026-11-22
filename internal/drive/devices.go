@@ -186,11 +186,12 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 
 // deviceSlot requires an active principal with fewer than 20 live devices.
 func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
-	var active, count int
+	var active bool
+	var count int
 	if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {
 		return err
 	}
-	if active != 1 {
+	if !active {
 		return ErrDenied
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_devices WHERE user_id=? AND revoked_at=0`, user).Scan(&count); err != nil {

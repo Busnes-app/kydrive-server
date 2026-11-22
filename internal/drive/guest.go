@@ -317,7 +317,7 @@ func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v V
 	v.FileID, v.Revision, v.Created = f.ID, 1, now()
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		for n := 2; ; n++ {
-			err := s.publishTX(ctx, tx, g.creator, f, v, 0)
+			err := s.attempt(ctx, tx, func() error { return s.publishTX(ctx, tx, g.creator, f, v, 0) })
 			if err == nil {
 				break
 			}

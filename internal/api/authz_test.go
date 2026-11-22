@@ -152,9 +152,6 @@ func TestPrivilegedEndpointsRequireAdmin(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			srv, st, _ := setupTestServer(t)
-			if strings.HasPrefix(tc.path, "/api/drive/") && st.Drive() == nil {
-				t.Skip("drive routes are SQLite-only")
-			}
 
 			if got := do(t, srv, tc.method, tc.path, nil).Code; got != http.StatusUnauthorized {
 				t.Errorf("anonymous: got %d, want 401", got)

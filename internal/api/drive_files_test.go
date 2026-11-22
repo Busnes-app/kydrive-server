@@ -32,9 +32,6 @@ func send(t *testing.T, srv *api.Server, method, path, body string, cookie *http
 
 func TestFileManagementRoutes(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	boss := loginAs(t, srv, st, "boss", "admin")
 	mover := loginAs(t, srv, st, "mover", "user")

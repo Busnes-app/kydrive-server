@@ -51,52 +51,47 @@ const errOrg = "tenancy:"
 // (frozen there, as a shipped entry must be) and the triggers that keep each row inside one
 // org. The default org row exists only on a database recorded single-tenant (recordTenancy
 // runs first). An org-owned table added later needs its own entry.
-func tenancySchema(owned []string, nullable map[string]bool) string {
+func tenancySchema(d dialect, owned []string, nullable map[string]bool) string {
 	var b strings.Builder
 	b.WriteString(`CREATE TABLE drive_orgs(id TEXT PRIMARY KEY,status TEXT NOT NULL CHECK(status IN ('active','suspended','deletion_scheduled','deleted')),revision INTEGER NOT NULL DEFAULT 0,enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),storage_bytes INTEGER CHECK(storage_bytes>0),purged INTEGER NOT NULL DEFAULT 0 CHECK(purged IN (0,1)),seeded INTEGER NOT NULL DEFAULT 0 CHECK(seeded IN (0,1)),retention_after TEXT NOT NULL DEFAULT '');
 INSERT INTO drive_orgs(id,status) SELECT '` + DefaultOrg + `','active' WHERE (SELECT value FROM server_settings WHERE key='tenancy_mode')='single';
 `)
 	for _, t := range owned {
-		column, known := "TEXT NOT NULL DEFAULT", "true"
+		column, known := "TEXT NOT NULL DEFAULT '"+DefaultOrg+"'", "true"
 		if nullable[t] {
-			column, known = "TEXT DEFAULT", "NEW.org_id IS NOT NULL"
+			column, known = "TEXT DEFAULT '"+DefaultOrg+"'", "NEW.org_id IS NOT NULL"
 		}
-		fmt.Fprintf(&b, `ALTER TABLE %[1]s ADD COLUMN org_id %[2]s '%[3]s';
-CREATE TRIGGER %[1]s_org_exists BEFORE INSERT ON %[1]s WHEN %[4]s AND NOT EXISTS(SELECT 1 FROM drive_orgs WHERE id=NEW.org_id AND status!='deleted')
-BEGIN SELECT RAISE(ABORT,'%[5]s no such org'); END;
-CREATE TRIGGER %[1]s_org_fixed BEFORE UPDATE OF org_id ON %[1]s WHEN NEW.org_id IS NOT OLD.org_id
-BEGIN SELECT RAISE(ABORT,'%[5]s org_id is immutable'); END;
-`, t, column, DefaultOrg, known, errOrg)
+		if d.pg {
+			column += " REFERENCES drive_orgs(id)"
+		}
+		fmt.Fprintf(&b, "ALTER TABLE %s ADD COLUMN org_id %s;\n", t, column)
+		b.WriteString(d.trigger(t+"_org_exists", "INSERT", t, known+" AND NOT EXISTS(SELECT 1 FROM drive_orgs WHERE id=NEW.org_id AND status!='deleted')", errOrg+" no such org"))
+		b.WriteString(d.trigger(t+"_org_fixed", "UPDATE OF org_id", t, "NEW.org_id"+d.isNot()+"OLD.org_id", errOrg+" org_id is immutable"))
 	}
 	ws := func(id string) string { return `(SELECT org_id FROM drive_workspaces WHERE id=` + id + `)` }
 	user := func(id string) string { return `(SELECT org_id FROM users WHERE id=` + id + `)` }
 	group := func(id string) string { return `(SELECT org_id FROM groups WHERE id=` + id + `)` }
 	// Each pair must name one org; a missing side is NULL and refused too. Updates are checked
 	// only when they change a paired column, so a row whose principal is gone stays editable.
+	ne := d.isNot()
 	for _, r := range []struct{ table, cols, when string }{
-		{"group_members", "group_id,user_id", user("NEW.user_id") + ` IS NOT ` + group("NEW.group_id")},
-		{"drive_personal_workspaces", "workspace,owner", user("NEW.owner") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_grants", "workspace,group_id", group("NEW.group_id") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_suite_groups", "workspace,grp", group("NEW.grp") + ` IS NOT ` + ws("NEW.workspace")},
-		{"drive_shares", "workspace,principal_kind,principal_id", `NEW.principal_kind IN ('user','group') AND (CASE NEW.principal_kind WHEN 'user' THEN ` + user("NEW.principal_id") + ` ELSE ` + group("NEW.principal_id") + ` END) IS NOT ` + ws("NEW.workspace")},
-		{"drive_link_users", "link,user_id", user("NEW.user_id") + ` IS NOT (SELECT w.org_id FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE l.id=NEW.link)`},
+		{"group_members", "group_id,user_id", user("NEW.user_id") + ne + group("NEW.group_id")},
+		{"drive_personal_workspaces", "workspace,owner", user("NEW.owner") + ne + ws("NEW.workspace")},
+		{"drive_grants", "workspace,group_id", group("NEW.group_id") + ne + ws("NEW.workspace")},
+		{"drive_suite_groups", "workspace,grp", group("NEW.grp") + ne + ws("NEW.workspace")},
+		{"drive_shares", "workspace,principal_kind,principal_id", `NEW.principal_kind IN ('user','group') AND (CASE NEW.principal_kind WHEN 'user' THEN ` + user("NEW.principal_id") + ` ELSE ` + group("NEW.principal_id") + ` END)` + ne + ws("NEW.workspace")},
+		{"drive_link_users", "link,user_id", user("NEW.user_id") + ne + `(SELECT w.org_id FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE l.id=NEW.link)`},
 	} {
-		fmt.Fprintf(&b, `CREATE TRIGGER %[1]s_one_org_insert BEFORE INSERT ON %[1]s WHEN %[3]s
-BEGIN SELECT RAISE(ABORT,'%[4]s rows of two orgs'); END;
-CREATE TRIGGER %[1]s_one_org_update BEFORE UPDATE OF %[2]s ON %[1]s WHEN %[3]s
-BEGIN SELECT RAISE(ABORT,'%[4]s rows of two orgs'); END;
-`, r.table, r.cols, r.when, errOrg)
+		b.WriteString(d.trigger(r.table+"_one_org_insert", "INSERT", r.table, r.when, errOrg+" rows of two orgs"))
+		b.WriteString(d.trigger(r.table+"_one_org_update", "UPDATE OF "+r.cols, r.table, r.when, errOrg+" rows of two orgs"))
 	}
 	// A blob belongs to one org (blobs are named by random IDs, so only a copy reuses one), and
 	// files and folders move only between workspaces of one org.
-	blobOrgs := `EXISTS(SELECT 1 FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE v.blob=NEW.blob AND w.org_id IS NOT (SELECT w2.org_id FROM drive_files f2 JOIN drive_workspaces w2 ON w2.id=f2.workspace WHERE f2.id=NEW.file_id))`
-	fmt.Fprintf(&b, `CREATE TRIGGER drive_versions_one_org_insert BEFORE INSERT ON drive_versions WHEN %[1]s
-BEGIN SELECT RAISE(ABORT,'%[2]s blob of another org'); END;
-CREATE TRIGGER drive_versions_one_org_update BEFORE UPDATE OF blob,file_id ON drive_versions WHEN %[1]s
-BEGIN SELECT RAISE(ABORT,'%[2]s blob of another org'); END;
-`, blobOrgs, errOrg)
+	blobOrgs := `EXISTS(SELECT 1 FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE v.blob=NEW.blob AND w.org_id` + ne + `(SELECT w2.org_id FROM drive_files f2 JOIN drive_workspaces w2 ON w2.id=f2.workspace WHERE f2.id=NEW.file_id))`
+	b.WriteString(d.trigger("drive_versions_one_org_insert", "INSERT", "drive_versions", blobOrgs, errOrg+" blob of another org"))
+	b.WriteString(d.trigger("drive_versions_one_org_update", "UPDATE OF blob,file_id", "drive_versions", blobOrgs, errOrg+" blob of another org"))
 	for _, t := range []string{"drive_files", "drive_folders"} {
-		fmt.Fprintf(&b, "CREATE TRIGGER %[1]s_one_org_move BEFORE UPDATE OF workspace ON %[1]s WHEN %[2]s IS NOT %[3]s\nBEGIN SELECT RAISE(ABORT,'%[4]s move to another org'); END;\n", t, ws("NEW.workspace"), ws("OLD.workspace"), errOrg)
+		b.WriteString(d.trigger(t+"_one_org_move", "UPDATE OF workspace", t, ws("NEW.workspace")+ne+ws("OLD.workspace"), errOrg+" move to another org"))
 	}
 	return b.String()
 }
@@ -111,10 +106,23 @@ func staffSQL(user string) string {
 
 // staffAdminSchema is drive schema 28: a multi-tenant database refuses role='admin' outside
 // the staff org.
-var staffAdminSchema = `CREATE TRIGGER users_admin_is_staff_insert BEFORE INSERT ON users WHEN NEW.role='admin' AND ` + multiTenantSQL + ` AND NEW.org_id IS NOT (SELECT value FROM server_settings WHERE key='staff_org')
-BEGIN SELECT RAISE(ABORT,'` + errOrg + ` administrators are staff'); END;
-CREATE TRIGGER users_admin_is_staff_update BEFORE UPDATE OF role ON users WHEN NEW.role='admin' AND ` + multiTenantSQL + ` AND NEW.org_id IS NOT (SELECT value FROM server_settings WHERE key='staff_org')
-BEGIN SELECT RAISE(ABORT,'` + errOrg + ` administrators are staff'); END;`
+func staffAdminSchema(d dialect) string {
+	cond := `NEW.role='admin' AND ` + multiTenantSQL + ` AND NEW.org_id` + d.isNot() + `(SELECT value FROM server_settings WHERE key='staff_org')`
+	return strings.TrimSuffix(d.trigger("users_admin_is_staff_insert", "INSERT", "users", cond, errOrg+" administrators are staff")+
+		d.trigger("users_admin_is_staff_update", "UPDATE OF role", "users", cond, errOrg+" administrators are staff"), "\n")
+}
+
+// orgOwned are the tables schema 27 gives org_id; orgNullable may hold NULL there.
+var (
+	orgOwned = []string{
+		"users", "groups", "audit_records",
+		"drive_workspaces", "drive_events", "drive_service_tokens", "drive_editor_documents",
+		"drive_editor_saves", "drive_app_passwords", "drive_changes", "drive_change_floor",
+		"drive_devices", "drive_device_codes", "drive_peer_settings", "drive_peer_folders",
+		"drive_peer_tickets", "drive_peer_picks", "drive_peer_guest", "drive_view_copies",
+	}
+	orgNullable = map[string]bool{"audit_records": true, "drive_events": true}
+)
 
 // recordTenancy records the tenancy mode, and a multi-tenant database's staff org, at first
 // start and refuses a database recorded otherwise, before the drive schema runs: schema 27

@@ -128,9 +128,6 @@ func linkSigned(t *testing.T, srv *api.Server, cookie *http.Cookie, origin strin
 
 func TestSignedDeviceRequests(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "sigadmin", "admin")
 	user := loginAs(t, srv, st, "siguser", "user")
@@ -232,9 +229,6 @@ func TestSignedDeviceRequests(t *testing.T) {
 
 func TestDeviceKeyMustBeP256(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "keyuser", "user")
 	out := send(t, srv, "POST", "/api/devices/phone-code", `{}`, user, "")
 	var qr struct{ Link string }
@@ -256,9 +250,6 @@ func TestDeviceKeyMustBeP256(t *testing.T) {
 
 func TestKeylessDevicesMustLinkAgain(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "oldphone", "user")
 	out := send(t, srv, "POST", "/api/devices/phone-code", `{}`, user, "")
 	var qr struct{ Link string }

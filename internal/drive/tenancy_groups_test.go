@@ -2,6 +2,7 @@ package drive_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
@@ -21,9 +22,10 @@ func TestSuiteGroupsStayInTheirOrg(t *testing.T) {
 		_, err := o.d.ReconcileSuiteGroups(o.ctx, org, []suitedir.Group{g})
 		return err
 	}
-	row := func(kyid string) (s string) {
-		_ = o.db.QueryRow(`SELECT w.org_id||' '||w.name||' '||w.deleted_at||'|'||g.org_id||' '||IFNULL((SELECT group_concat(user_id) FROM group_members WHERE group_id=s.grp),'') FROM drive_suite_groups s JOIN drive_workspaces w ON w.id=s.workspace JOIN groups g ON g.id=s.grp WHERE s.kyid=?`, kyid).Scan(&s)
-		return s
+	row := func(kyid string) string {
+		var s, grp string
+		_ = o.db.QueryRow(`SELECT w.org_id||' '||w.name||' '||w.deleted_at||'|'||g.org_id||' ',s.grp FROM drive_suite_groups s JOIN drive_workspaces w ON w.id=s.workspace JOIN groups g ON g.id=s.grp WHERE s.kyid=?`, kyid).Scan(&s, &grp)
+		return s + strings.Join(strs(t, o.db, `SELECT user_id FROM group_members WHERE group_id=? ORDER BY user_id`, grp), ",")
 	}
 	mismatches := func(org string) (n int) {
 		_ = o.db.QueryRow(`SELECT COUNT(*) FROM drive_events WHERE action='tenancy.org_mismatch' AND org_id=?`, org).Scan(&n)

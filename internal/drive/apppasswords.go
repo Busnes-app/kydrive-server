@@ -97,11 +97,12 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 		if err := liveLogin(ctx, tx); err != nil {
 			return err
 		}
-		var active, count int
+		var active bool
+		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {
 			return err
 		}
-		if active != 1 {
+		if !active {
 			return ErrDenied
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_app_passwords WHERE user_id=?`, user).Scan(&count); err != nil {

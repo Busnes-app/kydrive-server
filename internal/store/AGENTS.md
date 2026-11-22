@@ -13,9 +13,10 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 - `SetDirectoryRole` is an explicit operator grant to exactly one active SCIM/KyIdentity subject. It accepts only admin/user, preserves directory identity, revokes sessions/MFA challenges and records the role change atomically. Local and inactive accounts are excluded.
 - `RenameLocalAdmin` atomically renames only a local administrator and records an audit row. Identity, credentials and privileges stay intact; it cannot rename directory accounts or replace another account.
 - `OpenInNewTab`/`SetOpenInNewTab` read and write `users.open_in_new_tab` (migration 5, default true) outside `User`, so profile, SCIM and directory updates never reset it.
-- `store.Open(ctx, cfg, key)` initializes and auto-migrates the configured database backend. `key` is the deployment key (`cfg.Security.EncryptionKey`); the SQLite drive store refuses to open without a 32-byte key.
+- `store.Open(ctx, cfg, key)` initializes and auto-migrates the configured database backend and opens the drive store on it, in `cfg.Tenancy`. `key` is the deployment key (`cfg.Security.EncryptionKey`); the drive store refuses to open without a 32-byte key.
 - SQLite runs in WAL mode with foreign keys enabled.
-- PostgreSQL queries are rebound dynamically from standard positional parameters.
+- PostgreSQL opens through `qmark.Open`, which rebinds `?` and `?NNN` as pgx needs, so the drive store's SQL runs unchanged; the main store's own `rebind` output has no `?` left and passes through.
+- `auditSQL` records each row's org (the named account's, or NULL) on both backends.
 - Local MFA is removed (two-factor sign-in is KyIdentity's). Its schema stays and no migration drops it: `users.totp_secret_enc`, `totp_enabled`, `totp_last_counter`, `recovery_codes_hash` and the `mfa_challenges` table keep their data, unused. `CreateMFAChallenge`/`ConsumeMFAChallenge` (single successful use) remain only so tests can seed and check the challenge rows that revocation paths still delete.
 - `migrations.Run` applies each migration in one transaction that first excludes concurrent runners (SQLite: a no-op write takes the write lock; Postgres: `pg_advisory_xact_lock`), then checks `schema_migrations`, so processes starting together apply each version once.
 - Migrations are append-only: add a version, never edit a shipped one, and give both SQLite and PostgreSQL DDL. Migration 6 drops the inherited `device_pairings` table and `users.push_device_id`.

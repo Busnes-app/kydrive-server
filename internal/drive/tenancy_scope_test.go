@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -37,13 +36,9 @@ type orgs struct {
 func multiTenant(t *testing.T) *orgs {
 	t.Helper()
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "ky.db")+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
-	if err = migrations.Run(ctx, db, "sqlite"); err != nil {
+	cfg := testdb.Config(t)
+	db := testdb.Open(t, cfg)
+	if err := migrations.Run(ctx, db, cfg.Driver); err != nil {
 		t.Fatal(err)
 	}
 	d, err := drive.OpenMulti(ctx, db, testdb.Key)
@@ -273,22 +268,22 @@ func TestWritesNameTheirOrg(t *testing.T) {
 		case "users", "groups", "drive_workspaces", "audit_records", "drive_events", "drive_orgs":
 			continue
 		case "drive_changes", "drive_change_floor", "drive_service_tokens", "drive_view_copies":
-			check = `org_id IS NOT (SELECT org_id FROM drive_workspaces WHERE id=workspace)`
+			check = `org_id IS DISTINCT FROM (SELECT org_id FROM drive_workspaces WHERE id=workspace)`
 		case "drive_editor_documents":
-			check = `org_id IS NOT (SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=file_id)`
+			check = `org_id IS DISTINCT FROM (SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=file_id)`
 		case "drive_editor_saves":
-			check = `org_id IS NOT (SELECT org_id FROM drive_editor_documents d WHERE d.key=drive_editor_saves.key)`
+			check = `org_id IS DISTINCT FROM (SELECT org_id FROM drive_editor_documents d WHERE d.key=drive_editor_saves.key)`
 		case "drive_peer_tickets", "drive_peer_folders", "drive_peer_picks":
-			check = `org_id IS NOT (SELECT org_id FROM users WHERE id=owner)`
+			check = `org_id IS DISTINCT FROM (SELECT org_id FROM users WHERE id=owner)`
 		default:
-			check = `org_id IS NOT (SELECT org_id FROM users WHERE id=user_id)`
+			check = `org_id IS DISTINCT FROM (SELECT org_id FROM users WHERE id=user_id)`
 		}
 		if err := o.db.QueryRow(`SELECT COUNT(*) FROM ` + table + ` WHERE ` + check).Scan(&wrong); err != nil || wrong != 0 {
 			t.Errorf("%s: %d rows outside their owner's org: %v", table, wrong, err)
 		}
 	}
 	var lost int
-	if err := o.db.QueryRow(`SELECT COUNT(*) FROM drive_events e WHERE e.org_id IS NOT (SELECT org_id FROM users WHERE id=e.user_id)`).Scan(&lost); err != nil || lost != 0 {
+	if err := o.db.QueryRow(`SELECT COUNT(*) FROM drive_events e WHERE e.org_id IS DISTINCT FROM (SELECT org_id FROM users WHERE id=e.user_id)`).Scan(&lost); err != nil || lost != 0 {
 		t.Errorf("%d events outside their actor's org: %v", lost, err)
 	}
 }
@@ -335,14 +330,12 @@ func TestInactiveOrgStopsItsMembers(t *testing.T) {
 func TestScopingHoldsWithoutTriggers(t *testing.T) {
 	o := multiTenant(t)
 	ctx, d := o.ctx, o.d
-	triggers := strs(t, o.db, `SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE '%one_org%')`)
-	if len(triggers) == 0 {
+	oneOrg := triggers(t, o.db, "", "%one_org%")
+	if len(oneOrg) == 0 {
 		t.Fatal("no same-org triggers to drop")
 	}
-	for _, name := range triggers {
-		if _, err := o.db.Exec(`DROP TRIGGER ` + name); err != nil {
-			t.Fatal(err)
-		}
+	for _, name := range oneOrg {
+		dropTrigger(t, o.db, name)
 	}
 	var link string
 	if err := o.db.QueryRow(`SELECT id FROM drive_links WHERE scope='org' AND workspace=?`, o.teamB.ID).Scan(&link); err != nil {
@@ -399,10 +392,8 @@ func TestOnlyStaffAdminister(t *testing.T) {
 	if _, err := o.db.Exec(`INSERT INTO users(id,username,role,status,created_at,updated_at,org_id) VALUES('staff2','staff2','admin','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)`, drive.TestStaffOrg); err != nil {
 		t.Fatalf("a second staff administrator: %v", err)
 	}
-	for _, name := range strs(t, o.db, `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'users_admin_is_staff%'`) {
-		if _, err := o.db.Exec(`DROP TRIGGER ` + name); err != nil {
-			t.Fatal(err)
-		}
+	for _, name := range triggers(t, o.db, "users", "users_admin_is_staff%") {
+		dropTrigger(t, o.db, name)
 	}
 	if _, err := o.db.Exec(`UPDATE users SET role='admin' WHERE id='a1'`); err != nil {
 		t.Fatal(err)

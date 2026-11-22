@@ -35,9 +35,6 @@ func davRequest(srv *api.Server, method, target, user, secret string, body io.Re
 
 func TestDAVAuthentication(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "davadmin", "admin")
 	cookie := loginAs(t, srv, st, "davuser", "user")
@@ -133,9 +130,6 @@ func TestDAVAuthentication(t *testing.T) {
 // not get through once the limit is reached, and good requests never count.
 func TestDAVSignInLimit(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "limited", "user")
 	_, secret, err := st.Drive().CreateAppPassword(ctx, "usr_limited", "Laptop")
@@ -171,9 +165,6 @@ func TestDAVSignInLimit(t *testing.T) {
 // is published; its 201 must arrive too, or the client reports a failure and retries.
 func TestDAVPutAnswersAfterASlowBody(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "slowdavadmin", "admin")
 	cookie := loginAs(t, srv, st, "slowdav", "user")

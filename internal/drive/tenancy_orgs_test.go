@@ -15,7 +15,7 @@ func TestApplyOrgsMirrorsTheDirectory(t *testing.T) {
 		return suitedir.Org{ID: id, Status: status, Revision: rev, Enabled: true, Quotas: json.RawMessage(quotas)}
 	}
 	row := func(id string) (s string) {
-		_ = o.db.QueryRow(`SELECT status||' '||revision||' '||enabled||' '||IFNULL(storage_bytes,'none')||' '||seeded FROM drive_orgs WHERE id=?`, id).Scan(&s)
+		_ = o.db.QueryRow(`SELECT status||' '||revision||' '||enabled||' '||COALESCE(CAST(storage_bytes AS TEXT),'none')||' '||seeded FROM drive_orgs WHERE id=?`, id).Scan(&s)
 		return s
 	}
 	staff, err := o.d.ApplyOrgs(o.ctx, []suitedir.Org{

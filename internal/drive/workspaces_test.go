@@ -187,7 +187,7 @@ func TestDeleteWorkspace(t *testing.T) {
 	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_link_users`); err != nil || n != 0 {
 		t.Errorf("drive_link_users keeps %d rows (%v)", n, err)
 	}
-	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM pragma_foreign_key_check`); err != nil || n != 0 {
+	if n, err := drive.DanglingRefs(ctx, d); err != nil || n != 0 {
 		t.Errorf("%d dangling references (%v)", n, err)
 	}
 
@@ -251,7 +251,7 @@ func TestDeleteWorkspaceRacesUploads(t *testing.T) {
 			t.Fatalf("%d files for %d publishes", files, landed)
 		}
 	}
-	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM pragma_foreign_key_check`); err != nil || n != 0 {
+	if n, err := drive.DanglingRefs(ctx, d); err != nil || n != 0 {
 		t.Fatalf("%d dangling references (%v)", n, err)
 	}
 }

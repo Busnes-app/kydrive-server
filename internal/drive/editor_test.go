@@ -11,6 +11,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 func revoked(t *testing.T, d *drive.Store, id string) bool {
@@ -304,6 +305,7 @@ func TestSweepOrphansKeepsReferencedAndFreshFiles(t *testing.T) {
 }
 
 func TestQuotaUsageUsesWorkspaceIndex(t *testing.T) {
+	testdb.SQLiteOnly(t, "EXPLAIN QUERY PLAN")
 	st, w, _ := fixture(t)
 	plan, err := drive.QueryPlan(context.Background(), st.Drive(), drive.UsedQuery, w.ID)
 	if err != nil {
@@ -438,6 +440,7 @@ func TestEditorSessionNeedsALiveLogin(t *testing.T) {
 // Drive schema 17 revokes, once, the open editor sessions of directory accounts from before
 // editor sessions recorded their sign-in; a local account's stay open.
 func TestLoginSchemaRevokesUnboundDirectoryEditors(t *testing.T) {
+	testdb.SQLiteOnly(t, "reruns a schema step")
 	st, w, root := fixture(t)
 	ctx := context.Background()
 	d := st.Drive()
@@ -482,6 +485,7 @@ func TestLoginSchemaRevokesUnboundDirectoryEditors(t *testing.T) {
 // Service-token editor sessions opened before schema 19 carry no token, so the upgrade revokes
 // them once; sessions bound to a browser sign-in stay.
 func TestServiceTokenSchemaRevokesUnboundSessions(t *testing.T) {
+	testdb.SQLiteOnly(t, "reruns a schema step")
 	st, w, root := fixture(t)
 	ctx := context.Background()
 	d := st.Drive()

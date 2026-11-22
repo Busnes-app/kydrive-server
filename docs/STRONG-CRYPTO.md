@@ -100,7 +100,9 @@ with their own key and TLS policy. This guide makes no claim about them:
   `GODEBUG`, but its behavior under it is Restic's.
 - **Reverse proxies** in front of KyDrive and Euro-Office, and their certificates.
 - **Browsers, WebDAV clients and the desktop client.**
-- **PostgreSQL**: not a supported KyDrive deployment; SQLite is.
+- **PostgreSQL**: the drive opens on it (single-tenant, no backups or content search yet). The
+  DSN's `sslmode` sets its TLS; use `verify-full` for a server on another host. SQLite is the
+  default.
 - **KyIdentity, KyRecovery** and other suite services: each has its own guide.
 
 ## Verification

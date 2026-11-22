@@ -209,9 +209,6 @@ func TestMultiTenantWebhookBindsTheOrg(t *testing.T) {
 // A single-tenant install ignores org_id wherever KyIdentity sends it.
 func TestSingleTenantIgnoresOrgClaims(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("orgs live in the SQLite drive store")
-	}
 	f := newFakeKySignOn(t)
 	f.org = "org-x"
 	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision, cfg.SSO.KySignOnHMACSecret = f.issuer, "client", true, webhookSecret

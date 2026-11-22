@@ -21,9 +21,6 @@ import (
 // Uploads land sealed on disk; downloads and every Range across chunk boundaries return plaintext.
 func TestSealedUploadDownloadRanges(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "sealadmin", "admin")
 	user := loginAs(t, srv, st, "sealer", "user")
@@ -106,9 +103,6 @@ func TestSealedUploadDownloadRanges(t *testing.T) {
 // A download that keeps moving outlasts KY_WRITE_TIMEOUT; only a stalled one is cut off.
 func TestSlowDownloadOutlastsWriteTimeout(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "slowadmin", "admin")
 	user := loginAs(t, srv, st, "slowuser", "user")

@@ -15,9 +15,6 @@ import (
 func TestDirectoryDisableEndsCredentials(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "scim", Subject: "s-cred", Username: "bob@example.com", Active: true})
 	if err != nil {
 		t.Fatal(err)
@@ -48,9 +45,6 @@ func TestDirectoryDisableEndsCredentials(t *testing.T) {
 func TestRevokeDirectoryCredentials(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s-mfa", Username: "carol@example.com", Active: true})
 	if err != nil {
 		t.Fatal(err)
@@ -116,9 +110,6 @@ func TestRevokeDirectoryCredentials(t *testing.T) {
 func TestRevokeDirectoryCredentialsFencesPendingLogins(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	u, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{Provider: "kysignon", Subject: "s-fence", Username: "dave@example.com", Active: true})
 	if err != nil {
 		t.Fatal(err)

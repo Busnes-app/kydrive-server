@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
@@ -54,7 +55,7 @@ func TestTicketIssueRefusals(t *testing.T) {
 		"inactive user":   {"gone", "a.txt", 1, 10, drive.ErrDenied},
 		"name too long n": {"worker", strings.Repeat("a", 252) + ".x", 1, 10, drive.ErrInvalid},
 	}
-	if err := drive.ExecSQL(e.ctx, d, `INSERT INTO users(id,username,email,role,status,sso_provider,password_hash,created_at,updated_at) VALUES('gone','gone','gone@local.test','user','inactive','scim','',datetime('now'),datetime('now'))`); err != nil {
+	if err := drive.ExecSQL(e.ctx, d, `INSERT INTO users(id,username,email,role,status,sso_provider,password_hash,created_at,updated_at) VALUES('gone','gone','gone@local.test','user','inactive','scim','',?,?)`, time.Now().UTC(), time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	for what, c := range cases {

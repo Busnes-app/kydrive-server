@@ -13,7 +13,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/Busnes-app/kydrive-server/internal/qmark"
 	_ "modernc.org/sqlite"
 )
 
@@ -25,7 +25,7 @@ func Open(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, er
 	case "sqlite", "sqlite3", "":
 		return openSQLite(ctx, cfg, key)
 	case "postgres", "postgresql", "pgx":
-		return openPostgres(ctx, cfg.DSN, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
+		return openPostgres(ctx, cfg, key)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %q (supported: sqlite, postgres)", cfg.Driver)
 	}
@@ -69,8 +69,9 @@ func openSQLite(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Sto
 	return newSQLStore(ctx, db, "sqlite", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
 }
 
-func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLifetime time.Duration) (Store, error) {
-	db, err := sql.Open("pgx", dsn)
+func openPostgres(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, error) {
+	maxOpen, maxIdle, maxLifetime := cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime
+	db, err := qmark.Open(cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres database: %w", err)
 	}
@@ -93,5 +94,5 @@ func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLife
 		return nil, errors.Join(fmt.Errorf("failed to ping postgres database: %w", err), db.Close())
 	}
 
-	return newSQLStore(ctx, db, "postgres", nil, drive.Tenancy{})
+	return newSQLStore(ctx, db, "postgres", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
 }

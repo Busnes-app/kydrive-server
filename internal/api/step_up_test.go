@@ -31,9 +31,6 @@ func stepUpCode(w *httptest.ResponseRecorder) string {
 // re-proving the user.
 func TestStepUpGuardsSessionOutlivingCredentials(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	start := time.Now()
 	at := func(d time.Duration) { api.SetClockForTest(srv, func() time.Time { return start.Add(d) }) }
@@ -106,9 +103,6 @@ func stepUpAge() time.Duration { return 5*time.Minute + time.Second }
 // session's own subject, and a window dated from auth_time.
 func TestSSOStepUp(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	f := newFakeKySignOn(t)
 	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
 	srv = api.NewServer(cfg, st)

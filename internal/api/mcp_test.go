@@ -41,9 +41,6 @@ type mcpWorld struct {
 func newMCPWorld(t *testing.T) *mcpWorld {
 	t.Helper()
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "boss", "admin")
 	w := &mcpWorld{srv: srv, st: st, cfg: cfg, alice: loginAs(t, srv, st, "alice", "user")}

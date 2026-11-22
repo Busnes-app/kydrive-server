@@ -11,9 +11,6 @@ import (
 
 func TestWorkspaceRenameAndDeleteRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	boss := loginAs(t, srv, st, "boss", "admin")
 	bob := loginAs(t, srv, st, "bob", "user")
@@ -92,9 +89,6 @@ func TestWorkspaceRenameAndDeleteRoutes(t *testing.T) {
 // under deleted workspaces and restorable.
 func TestRecoverableWorkspaceDeleteRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	boss := loginAs(t, srv, st, "boss", "admin")
 	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "crew", DisplayName: "Crew", ExternalID: "x-crew", Members: []string{"usr_boss"}}, true); err != nil {

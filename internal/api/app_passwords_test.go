@@ -11,9 +11,6 @@ import (
 
 func TestAppPasswordRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "apadmin", "admin")
 	user := loginAs(t, srv, st, "appuser", "user")

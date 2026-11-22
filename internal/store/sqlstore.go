@@ -51,12 +51,9 @@ func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte, ten
 	s.audit = &auditStore{store: s}
 	s.settings = &settingsStore{store: s}
 
-	if driver == "sqlite" {
-		var err error
-		s.drive, err = drive.Open(ctx, db, key, tenancy)
-		if err != nil {
-			return nil, err
-		}
+	var err error
+	if s.drive, err = drive.Open(ctx, db, key, tenancy); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -1419,11 +1416,9 @@ func (g *groupStore) GetGroupByExternalID(ctx context.Context, id string) (*Grou
 	return g.GetGroupByID(ctx, groupID)
 }
 
-// auditSQL inserts one audit row (user_id, action, resource, details, ip_address, created_at).
-// On SQLite it also records the org of the account it names, or none for a platform row.
+// auditSQL inserts one audit row (user_id, action, resource, details, ip_address, created_at)
+// in the org of the account it names, or none for a platform row.
 func (s *SQLStore) auditSQL() string {
-	if s.driver == "sqlite" {
-		return `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at,org_id) VALUES(?1,?2,?3,?4,?5,?6,` + drive.UserOrgSQL("?1") + `)`
-	}
-	return s.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`)
+	// ?1 is cast so PostgreSQL deduces one type for its two uses.
+	return `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at,org_id) VALUES(CAST(?1 AS TEXT),?2,?3,?4,?5,?6,` + drive.UserOrgSQL("CAST(?1 AS TEXT)") + `)`
 }

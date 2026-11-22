@@ -15,30 +15,16 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
-// tenancyDB opens a fully migrated store and a second handle on the same SQLite file.
+// tenancyDB opens a fully migrated store and a second handle on the same database.
 func tenancyDB(t *testing.T) (store.Store, *sql.DB) {
 	t.Helper()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
 	st, err := store.Open(context.Background(), cfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return st, rawDB(t, cfg.DSN)
-}
-
-func rawDB(t *testing.T, dsn string) *sql.DB {
-	t.Helper()
-	db, err := sql.Open("sqlite", dsn+"?_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
-	return db
+	return st, testdb.Open(t, cfg)
 }
 
 func strs(t *testing.T, db *sql.DB, q string, args ...any) []string {
@@ -62,10 +48,6 @@ func strs(t *testing.T, db *sql.DB, q string, args ...any) []string {
 	return out
 }
 
-func columns(t *testing.T, db *sql.DB, table string) []string {
-	return strs(t, db, `SELECT name FROM pragma_table_info(?) ORDER BY cid`, table)
-}
-
 func refused(err error) bool { return err != nil && strings.Contains(err.Error(), "tenancy:") }
 
 func TestEveryTableIsClassified(t *testing.T) {
@@ -86,7 +68,7 @@ func TestEveryTableIsClassified(t *testing.T) {
 	for _, n := range drive.PlatformTables {
 		add(n, "platform")
 	}
-	tables := strs(t, db, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+	tables := tables(t, db)
 	present := map[string]bool{}
 	for _, n := range tables {
 		present[n] = true
@@ -100,7 +82,7 @@ func TestEveryTableIsClassified(t *testing.T) {
 		}
 	}
 	for child, parent := range drive.DerivedTables {
-		if len(strs(t, db, `SELECT "table" FROM pragma_foreign_key_list(?) WHERE "table"=?`, child, parent)) == 0 {
+		if !references(t, db, child, parent) {
 			t.Errorf("derived table %s has no foreign key to %s", child, parent)
 		}
 	}
@@ -109,20 +91,19 @@ func TestEveryTableIsClassified(t *testing.T) {
 func TestOrgOwnedTablesHaveOrgID(t *testing.T) {
 	_, db := tenancyDB(t)
 	for _, table := range drive.OrgOwnedTables {
-		var notNull int
-		var def sql.NullString
-		if err := db.QueryRow(`SELECT "notnull",dflt_value FROM pragma_table_info(?) WHERE name='org_id'`, table).Scan(&notNull, &def); err != nil {
+		notNull, def, err := orgIDColumn(db, table)
+		if err != nil {
 			t.Errorf("%s: no org_id: %v", table, err)
 			continue
 		}
-		if want := !drive.NullableOrgID[table]; (notNull == 1) != want {
-			t.Errorf("%s: org_id NOT NULL is %v, want %v", table, notNull == 1, want)
+		if want := !drive.NullableOrgID[table]; notNull != want {
+			t.Errorf("%s: org_id NOT NULL is %v, want %v", table, notNull, want)
 		}
-		if def.String != "'"+drive.DefaultOrg+"'" {
-			t.Errorf("%s: org_id default %q", table, def.String)
+		if def != "'"+drive.DefaultOrg+"'" {
+			t.Errorf("%s: org_id default %q", table, def)
 		}
 		for _, trigger := range []string{table + "_org_exists", table + "_org_fixed"} {
-			if len(strs(t, db, `SELECT name FROM sqlite_master WHERE type='trigger' AND name=? AND tbl_name=?`, trigger, table)) != 1 {
+			if len(triggers(t, db, table, trigger)) != 1 {
 				t.Errorf("%s: no trigger %s", table, trigger)
 			}
 		}
@@ -150,17 +131,14 @@ func TestMultiTenantRefusesDefaultOrg(t *testing.T) {
 func TestTenancyModeIsRecorded(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
 	st, err := store.Open(ctx, cfg, testdb.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	st.Close()
-	db := rawDB(t, cfg.DSN)
+	db := testdb.Open(t, cfg)
 	var mode, org string
-	if err := db.QueryRow(`SELECT (SELECT value FROM server_settings WHERE key='tenancy_mode'),(SELECT group_concat(id||' '||status||' '||enabled||' '||IFNULL(storage_bytes,'none')) FROM drive_orgs)`).Scan(&mode, &org); err != nil || mode != "single" || org != drive.DefaultOrg+" active 1 none" {
+	if err := db.QueryRow(`SELECT (SELECT value FROM server_settings WHERE key='tenancy_mode'),(SELECT id||' '||status||' '||enabled||' '||COALESCE(CAST(storage_bytes AS TEXT),'none') FROM drive_orgs)`).Scan(&mode, &org); err != nil || mode != "single" || org != drive.DefaultOrg+" active 1 none" {
 		t.Fatalf("mode %q, orgs %q, %v", mode, org, err)
 	}
 	if _, err := db.Exec(`UPDATE server_settings SET value='multi' WHERE key='tenancy_mode'`); err != nil {
@@ -232,7 +210,12 @@ func TestTenancyTriggersKeepRowsInOneOrg(t *testing.T) {
 		if _, err := db.Exec(c.same); err != nil {
 			t.Errorf("%s inside one org: %v", c.name, err)
 		}
-	} // A share whose user is gone has no org to compare, yet its role can still change.
+	}
+	// A new share naming no account has no org to compare: refused, not let through as NULL.
+	if err := drive.ExecTx(ctx, d, share("user", "nobody")); !refused(err) {
+		t.Errorf("share to a missing account: %v", err)
+	}
+	// A share whose user is gone has no org to compare, yet its role can still change.
 	mustExec(`DELETE FROM users WHERE id='ua2'`)
 	if err := drive.ExecTx(ctx, d, `UPDATE drive_shares SET role='editor' WHERE id='s-ua2'`); err != nil {
 		t.Fatalf("role change on a share whose user is gone: %v", err)
@@ -326,10 +309,8 @@ func snapshot(t *testing.T, db *sql.DB, cols map[string][]string) map[string]str
 func TestTenancyUpgradeKeepsEveryRow(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
-	db := rawDB(t, cfg.DSN)
+	testdb.SQLiteOnly(t, "upgrades an older SQLite schema")
+	db := testdb.Open(t, cfg)
 	if err := migrations.Run(ctx, db, "sqlite"); err != nil {
 		t.Fatal(err)
 	}
@@ -395,10 +376,8 @@ func TestTenancyUpgradeKeepsEveryRow(t *testing.T) {
 func TestUpgradeRenamesAClashBeforeTenancy(t *testing.T) {
 	ctx := context.Background()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
-	db := rawDB(t, cfg.DSN)
+	testdb.SQLiteOnly(t, "upgrades an older SQLite schema")
+	db := testdb.Open(t, cfg)
 	if err := migrations.Run(ctx, db, "sqlite"); err != nil {
 		t.Fatal(err)
 	}
