@@ -50,10 +50,10 @@ func resource(ctx context.Context, q queryer, user, kind, id string) (workspace,
 	switch kind {
 	case "folder":
 		folder = id
-		err = q.QueryRowContext(ctx, `SELECT d.workspace,d.trashed FROM (SELECT ? AS u) q JOIN drive_folders d ON d.id=? WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&workspace, &trashed)
+		err = q.QueryRowContext(ctx, `SELECT d.workspace,d.trashed FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_folders d ON d.id=? WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&workspace, &trashed)
 	case "file":
 		file = id
-		err = q.QueryRowContext(ctx, `SELECT f.workspace,f.parent,f.trashed FROM (SELECT ? AS u) q JOIN drive_files f ON f.id=? WHERE `+sameOrg("q.u", "f.workspace"), user, id).Scan(&workspace, &folder, &trashed)
+		err = q.QueryRowContext(ctx, `SELECT f.workspace,f.parent,f.trashed FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_files f ON f.id=? WHERE `+sameOrg("q.u", "f.workspace"), user, id).Scan(&workspace, &folder, &trashed)
 	default:
 		return "", "", "", false, ErrInvalid
 	}
@@ -81,7 +81,7 @@ func mayShare(ctx context.Context, q queryer, user, workspace, folder, file, rol
 	// pass the item on.
 	var member int
 	var editorsShare bool
-	if err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "w.id")+`,w.editors_share FROM (SELECT ? AS u) q, drive_workspaces w WHERE w.id=?`, user, workspace).Scan(&member, &editorsShare); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT `+rankSQL("q.u", "w.id")+`,w.editors_share FROM (SELECT CAST(? AS TEXT) AS u) q, drive_workspaces w WHERE w.id=?`, user, workspace).Scan(&member, &editorsShare); err != nil {
 		return err
 	}
 	if member >= 3 {
@@ -125,7 +125,9 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 	if Rank(role) == 0 {
 		return sh, ErrInvalid
 	}
+	sh0 := sh
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		sh = sh0
 		workspace, folder, file, trashed, err := resource(ctx, tx, user, kind, id)
 		if err != nil {
 			return err
@@ -223,10 +225,10 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 	// g: every grant reaching the user, by share or by an opened live organisation link.
 	rows, err := s.db.QueryContext(ctx, `SELECT g.kind,g.rid,g.workspace,g.role,COALESCE(f.name,d.name),COALESCE(f.parent,d.parent),
  CASE WHEN p.workspace IS NULL THEN w.name ELSE COALESCE((SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=p.owner),p.owner_name) END
- FROM (SELECT ? AS u) q
+ FROM (SELECT CAST(? AS TEXT) AS u) q
  JOIN (SELECT s.resource_kind AS kind,s.resource_id AS rid,s.workspace,s.role,s.principal_kind AS pk,s.principal_id AS pid,'' AS link FROM drive_shares s WHERE s.principal_kind!='link'
   UNION ALL
-  SELECT l.resource_kind,l.resource_id,l.workspace,l.role,'link','',l.id FROM drive_links l WHERE l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>CAST(strftime('%s','now') AS INTEGER))) g
+  SELECT l.resource_kind,l.resource_id,l.workspace,l.role,'link','',l.id FROM drive_links l WHERE l.scope='org' AND l.revoked=0 AND (l.expires=0 OR l.expires>unixepoch())) g
   ON (g.pk='user' AND g.pid=q.u) OR (g.pk='group' AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.pid AND m.user_id=q.u)) OR (g.pk='link' AND EXISTS(SELECT 1 FROM drive_link_users lu WHERE lu.link=g.link AND lu.user_id=q.u))
  JOIN drive_workspaces w ON w.id=g.workspace AND w.deleted_at=''
  LEFT JOIN drive_personal_workspaces p ON p.workspace=g.workspace
@@ -279,7 +281,7 @@ func (s *Store) People(ctx context.Context, user, q string) ([]Person, error) {
 		return nil, ErrInvalid
 	}
 	like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
-	rows, err := s.db.QueryContext(ctx, `SELECT u.id,COALESCE(NULLIF(u.display_name,''),u.username),u.username FROM (SELECT ? AS u) q JOIN users u ON u.status='active' AND u.id!=q.u AND u.org_id=(SELECT org_id FROM users WHERE id=q.u) WHERE (lower(u.username) LIKE ? ESCAPE '\' OR lower(u.display_name) LIKE ? ESCAPE '\') AND `+activePrincipal("q.u")+` ORDER BY 2 LIMIT 20`, user, like, like)
+	rows, err := s.db.QueryContext(ctx, `SELECT u.id,COALESCE(NULLIF(u.display_name,''),u.username),u.username FROM (SELECT CAST(? AS TEXT) AS u) q JOIN users u ON u.status='active' AND u.id!=q.u AND u.org_id=(SELECT org_id FROM users WHERE id=q.u) WHERE (lower(u.username) LIKE ? ESCAPE '\' OR lower(u.display_name) LIKE ? ESCAPE '\') AND `+activePrincipal("q.u")+` ORDER BY 2 LIMIT 20`, user, like, like)
 	if err != nil {
 		return nil, err
 	}

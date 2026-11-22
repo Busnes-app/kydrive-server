@@ -13,9 +13,6 @@ import (
 
 func TestDriveServiceAPIScopeAndStreamingUpload(t *testing.T) {
 	s, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	if err := st.Users().CreateUser(ctx, &store.User{ID: "drive-service", Username: "drive-service", Role: "admin", Status: "active"}); err != nil {
 		t.Fatal(err)
@@ -80,9 +77,6 @@ func TestDriveServiceAPIScopeAndStreamingUpload(t *testing.T) {
 
 func TestNewDocumentsUseWorkspacePermissions(t *testing.T) {
 	s, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	if err := st.Users().CreateUser(ctx, &store.User{ID: "documents", Username: "documents", Role: "admin", Status: "active"}); err != nil {
 		t.Fatal(err)

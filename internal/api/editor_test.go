@@ -28,9 +28,6 @@ func editorFixture(t *testing.T) (*editor.Client, string) {
 func TestEditorDownloadNeedsEuroOfficeSignature(t *testing.T) {
 	signer, origin := editorFixture(t)
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "boss", "admin")
 	writer := loginAs(t, srv, st, "writer", "user")
@@ -102,9 +99,6 @@ func TestEditorDownloadNeedsEuroOfficeSignature(t *testing.T) {
 
 func TestTrashRetentionSetting(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	admin := loginAs(t, srv, st, "boss", "admin")
 	member := loginAs(t, srv, st, "bob", "user")
 	if out := send(t, srv, "GET", "/api/drive/trash-retention", "", admin, ""); out.Code != 200 || !strings.Contains(out.Body.String(), `"trash_days":90`) {

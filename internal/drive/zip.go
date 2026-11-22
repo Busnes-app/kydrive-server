@@ -25,6 +25,8 @@ func (s *Store) FolderTree(ctx context.Context, user, folder string) (string, []
 	var name string
 	var entries []ZipEntry
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		name = ""
+		entries = nil
 		var workspace, stored string
 		err := tx.QueryRowContext(ctx, `SELECT workspace,name FROM drive_folders WHERE id=? AND trashed=false`, folder).Scan(&workspace, &stored)
 		if errors.Is(err, sql.ErrNoRows) {

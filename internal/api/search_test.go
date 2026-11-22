@@ -28,6 +28,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/search"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 type searchWorld struct {
@@ -44,10 +45,8 @@ type searchWorld struct {
 // newSearchWorld: alice manages Team through the staff group; bob has only his My files.
 func newSearchWorld(t *testing.T) *searchWorld {
 	t.Helper()
+	testdb.SQLiteOnly(t, "content search is SQLite-only until R2")
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	w := &searchWorld{srv: srv, st: st, cfg: cfg, boss: loginAs(t, srv, st, "boss", "admin"), alice: loginAs(t, srv, st, "alice", "user"), bob: loginAs(t, srv, st, "bob", "user")}
 	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "staff", DisplayName: "Staff", Members: []string{"usr_alice"}}, true); err != nil {

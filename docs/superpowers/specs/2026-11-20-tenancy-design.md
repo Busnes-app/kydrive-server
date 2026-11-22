@@ -886,6 +886,27 @@ the release before. No R step starts before the owner approves this amendment.
     table list (`migrationTables`), in foreign-key order, for migration and the backup
     snapshot; sequences advanced; a restore drill that inserts into every table afterwards.
   - Multi mode stays refused.
+  - R1 ships in two PRs: R1a, the drive store on PostgreSQL, then R1b, `migrate-postgres`.
+  - R1a as built:
+    - `internal/qmark` opens PostgreSQL through pgx, renumbering `?` and `?NNN` and binding a
+      Go bool to an integer parameter as 1 or 0. The 312 statements are unchanged.
+    - The PostgreSQL schema is created whole at version 28 (`schema_postgres.go`). The
+      triggers come from the same generator as SQLite's. A few SQLite functions
+      (`julianday`, `unixepoch()`, two-argument `max` and `min`, `printf('%020d')`) are
+      PostgreSQL functions there.
+    - Departure from the Quotas section: `fits` takes no row lock. Every PostgreSQL transaction
+      and statement is serializable (`default_transaction_isolation`, set by `qmark.Open`),
+      the main store's included. Every drive and main-store transaction reruns on a
+      serialization failure (`qmark.Retry`). This covers the quota check, a credential created
+      while a password change or logout commits, and every other read-then-write the one
+      SQLite writer protected. A single statement outside a transaction is not rerun.
+    - A PostgreSQL start holds a database-wide advisory lock while it migrates and opens the
+      store, so processes starting together create the schema once. Step 6 still owns the
+      bootstrap administrator and its password file, which are written after the store opens.
+    - A name retry inside a transaction runs in a savepoint. Change rows take their seq under a
+      per-workspace transaction lock, so a cursor never passes a row that commits later.
+    - Not ported until their own steps: content search (R2) and backups (R3) stay SQLite only,
+      and their tests skip on PostgreSQL.
 - **R2. Shared file storage and search.**
   - One storage root outside the data directory for `blobs/`, `staging/`, `view/`, `thumbs/`
     and `text/`. Object storage or a written shared-volume contract is question 13. Either way

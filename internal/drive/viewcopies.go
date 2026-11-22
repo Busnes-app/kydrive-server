@@ -302,6 +302,7 @@ func (s *Store) dropView(ctx context.Context, where, action string, args ...any)
 func (s *Store) ExpireViewCopies(ctx context.Context) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		blobs = nil
 		now := time.Now().Unix()
 		ended, err := s.viewRows(ctx, tx, `SELECT id,user_id,blob FROM drive_view_copies WHERE expires<=? AND login_at>0 AND revoked=0`, now)
 		if err != nil {

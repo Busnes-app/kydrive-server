@@ -2,7 +2,6 @@ package dav_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"io"
 	"net/http/httptest"
@@ -38,9 +37,6 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	if st.Drive() == nil {
-		t.Skip("drive is SQLite-only")
-	}
 	for _, u := range []*store.User{{ID: "admin", Username: "admin", Email: "admin@local.test", Role: "admin", Status: "active", SSOProvider: "local"}, {ID: "worker", Username: "worker", Email: "worker@local.test", Role: "user", Status: "active", SSOProvider: "scim"}, {ID: "reader", Username: "reader", Email: "reader@local.test", Role: "user", Status: "active", SSOProvider: "scim"}} {
 		if err = st.Users().CreateUser(ctx, u); err != nil {
 			t.Fatal(err)
@@ -58,10 +54,7 @@ func setup(t *testing.T) *env {
 		}
 	}
 	// New names are unique now; installs from before that can still hold duplicates.
-	raw, err := sql.Open("sqlite", cfg.DSN)
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := testdb.Open(t, cfg)
 	_, err = raw.ExecContext(ctx, `UPDATE drive_workspaces SET name='Organization' WHERE id=?`, e.shared.ID)
 	if err = errors.Join(err, raw.Close()); err != nil {
 		t.Fatal(err)

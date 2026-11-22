@@ -120,7 +120,9 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 	if !ValidName(to.Name) {
 		return out, ErrInvalid
 	}
+	out0 := out
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		out = out0
 		src, err := s.scanFile(tx.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND f.trashed=false`, id))
 		if err != nil {
 			return err
@@ -142,7 +144,7 @@ func (s *Store) MoveFolder(ctx context.Context, user, id, parent, name string) (
 	}
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		var from string
-		err := tx.QueryRowContext(ctx, `SELECT d.workspace,d.parent FROM (SELECT ? AS u) q JOIN drive_folders d ON d.id=? AND d.trashed=false WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&f.Workspace, &from)
+		err := tx.QueryRowContext(ctx, `SELECT d.workspace,d.parent FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_folders d ON d.id=? AND d.trashed=false WHERE `+sameOrg("q.u", "d.workspace"), user, id).Scan(&f.Workspace, &from)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrDenied
 		}

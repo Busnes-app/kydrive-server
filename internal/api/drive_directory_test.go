@@ -12,9 +12,6 @@ import (
 // The group picker lists every group, not just the first page.
 func TestDirectoryListsEveryGroup(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	boss := loginAs(t, srv, st, "boss", "admin")
 	for i := range 450 {

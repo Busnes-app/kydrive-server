@@ -14,9 +14,6 @@ import (
 
 func TestUploadMtime(t *testing.T) {
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "mtadmin", "admin")
 	user := loginAs(t, srv, st, "mtuser", "user")

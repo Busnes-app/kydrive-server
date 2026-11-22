@@ -11,9 +11,6 @@ import (
 
 func TestShareRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "shareadmin", "admin")
 	owner := loginAs(t, srv, st, "owner", "user")

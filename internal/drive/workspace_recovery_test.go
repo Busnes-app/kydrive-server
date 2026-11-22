@@ -233,7 +233,7 @@ func TestPurgeDeletedWorkspaces(t *testing.T) {
 	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_versions WHERE file_id IN (?,?)`, f.ID, solo.ID); err != nil || n != 0 {
 		t.Errorf("versions kept: %d %v", n, err)
 	}
-	if n, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM pragma_foreign_key_check`); err != nil || n != 0 {
+	if n, err := drive.DanglingRefs(ctx, d); err != nil || n != 0 {
 		t.Errorf("%d dangling references (%v)", n, err)
 	}
 	if gone, err := d.DeletedWorkspaces(ctx, "admin"); err != nil || len(gone) != 0 {
@@ -268,7 +268,7 @@ func TestFailedWorkspacePurgeKeepsBlobs(t *testing.T) {
 	must(drive.ExecSQL(ctx, d, `UPDATE drive_workspaces SET deleted_at=? WHERE id=?`, at.Add(-91*24*time.Hour).UTC().Format(time.RFC3339Nano), w.ID))
 	// A deferred foreign key fails only at COMMIT, after the purge statements all succeeded.
 	must(drive.ExecSQL(ctx, d, `CREATE TABLE fail_commit(ref TEXT REFERENCES drive_workspaces(id) DEFERRABLE INITIALLY DEFERRED)`))
-	must(drive.ExecSQL(ctx, d, `CREATE TRIGGER fail_purge AFTER DELETE ON drive_workspaces BEGIN INSERT INTO fail_commit VALUES(OLD.id); END`))
+	must(drive.ExecSQL(ctx, d, drive.AfterDeleteSQL(d, "fail_purge", "drive_workspaces", "INSERT INTO fail_commit VALUES(OLD.id)")))
 	purged, err := d.PurgeDeletedWorkspaces(ctx, at, 90)
 	if err == nil || len(purged) != 0 {
 		t.Fatalf("failed purge returned blobs %v, err %v", purged, err)

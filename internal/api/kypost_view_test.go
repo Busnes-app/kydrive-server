@@ -27,9 +27,6 @@ func newViewWorld(t *testing.T) *viewWorld {
 	t.Helper()
 	signer, origin := editorFixture(t)
 	w := &viewWorld{kypostWorld: newKyPostWorld(t, "kyidentity"), signer: signer, driveOrigin: origin}
-	if w.st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	for _, name := range []string{"ann", "ben"} {
 		c := loginAs(t, w.srv, w.st, name, "user")
 		u, err := w.st.Users().GetUserByID(context.Background(), "usr_"+name)

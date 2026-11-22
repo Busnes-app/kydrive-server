@@ -9,9 +9,6 @@ import (
 
 func TestLeaverHandoverRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	boss := loginAs(t, srv, st, "boss", "admin")
 	leaver := loginAs(t, srv, st, "leaver", "user")

@@ -143,7 +143,7 @@ func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, org string,
 		}
 	}
 	// The ordinary member role, never manager; an administrator's change is put back.
-	res, err := tx.ExecContext(ctx, `INSERT INTO drive_grants(workspace,group_id,role) VALUES(?,?,'editor') ON CONFLICT(workspace,group_id) DO UPDATE SET role='editor' WHERE role!='editor'`, workspace, grp)
+	res, err := tx.ExecContext(ctx, `INSERT INTO drive_grants(workspace,group_id,role) VALUES(?,?,'editor') ON CONFLICT(workspace,group_id) DO UPDATE SET role='editor' WHERE drive_grants.role!='editor'`, workspace, grp)
 	if err != nil {
 		return err
 	}

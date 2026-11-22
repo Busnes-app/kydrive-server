@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,6 +21,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 // fakeKySignOn is a TLS identity provider whose token endpoint returns the next ID token.
@@ -260,9 +260,6 @@ func TestBackchannelLogoutEndsTheSSOLogin(t *testing.T) {
 func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
 	editorFixture(t)
 	srv, st, cfg := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	f := newFakeKySignOn(t)
 	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
@@ -272,10 +269,7 @@ func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", cfg.Database.DSN)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t, cfg.Database)
 	defer db.Close()
 	for i, logout := range []func() string{
 		func() string { return f.logoutToken(t, "alice", "sid-e0") },

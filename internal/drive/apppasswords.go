@@ -82,6 +82,10 @@ func (s *Store) CreateAgentToken(ctx context.Context, user, name, scope, workspa
 	return p, AgentTokenPrefix + secret, err
 }
 
+// afterLiveLogin runs in createCredential between the sign-in check and the insert; tests
+// pause there.
+var afterLiveLogin = func() {}
+
 func (s *Store) createCredential(ctx context.Context, user, name, scope, workspace, folder, secret string) (AppPassword, error) {
 	if narrowed(ctx) {
 		return AppPassword{}, ErrDenied
@@ -97,11 +101,13 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 		if err := liveLogin(ctx, tx); err != nil {
 			return err
 		}
-		var active, count int
+		afterLiveLogin()
+		var active bool
+		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {
 			return err
 		}
-		if active != 1 {
+		if !active {
 			return ErrDenied
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_app_passwords WHERE user_id=?`, user).Scan(&count); err != nil {
@@ -280,6 +286,7 @@ func (s *Store) ExpireAgentTokens(ctx context.Context, at time.Time) (int, error
 func (s *Store) expireAgentTokens(ctx context.Context, at time.Time, id string) (int, error) {
 	n := 0
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		n = 0
 		rows, err := tx.QueryContext(ctx, `SELECT id,user_id,created,last_used,scope FROM drive_app_passwords WHERE scope IN ('mcp:read','mcp:write') AND (?='' OR id=?)`, id, id)
 		if err != nil {
 			return err

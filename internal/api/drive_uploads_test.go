@@ -29,9 +29,6 @@ func putChunk(t *testing.T, srv *api.Server, cookie *http.Cookie, id, contentRan
 
 func TestResumableUploadRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "upadmin", "admin")
 	user := loginAs(t, srv, st, "uploader", "user")
@@ -149,9 +146,6 @@ func TestResumableUploadRoutes(t *testing.T) {
 // arrive after the server's write timeout, or the client retries a file already published.
 func TestCompletionOutlastsServerTimeouts(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "slowupadmin", "admin")
 	user := loginAs(t, srv, st, "slowuploader", "user")
@@ -199,9 +193,6 @@ func TestCompletionOutlastsServerTimeouts(t *testing.T) {
 // closes (WaitDetached); the tracked wrapper on its route is what makes it visible (pass 4 O-R1).
 func TestDetachedTrackingCoversACompletionInFlight(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	user := loginAs(t, srv, st, "inflight", "user")
 	var mine struct{ ID string }
 	if out := send(t, srv, "POST", "/api/drive/personal-workspace", "{}", user, ""); json.Unmarshal(out.Body.Bytes(), &mine) != nil || mine.ID == "" {

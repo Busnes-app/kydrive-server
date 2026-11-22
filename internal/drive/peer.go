@@ -309,7 +309,7 @@ func (s *Store) peerFolder(ctx context.Context, tx *sql.Tx, user string) (worksp
 		if errors.Is(err, sql.ErrNoRows) {
 			f := Folder{ID: uuid.NewString(), Workspace: workspace, Name: name}
 			// A file holding the name is a conflict: try the next number.
-			if err = s.addFolder(ctx, tx, user, f); err == nil {
+			if err = s.attempt(ctx, tx, func() error { return s.addFolder(ctx, tx, user, f) }); err == nil {
 				folder = f.ID
 			} else if !errors.Is(err, ErrConflict) {
 				return "", "", err

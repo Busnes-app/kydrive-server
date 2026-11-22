@@ -105,6 +105,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 	each := func(file, action, resource string, purge func(*sql.Tx) ([]string, error)) error {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
+			b = nil
 			in, err := inOrgOf(ctx, tx, fileOrg, file)
 			if err != nil {
 				return err
@@ -166,7 +167,9 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 	for deleted := 1; deleted > 0; {
 		deleted = 0
 		err = pages(`SELECT d.trashed_at,d.id FROM (`+expiredFolders+`) d2 JOIN drive_folders d ON d.id=d2.id WHERE (d.trashed_at>? OR (d.trashed_at=? AND d.id>?)) ORDER BY d.trashed_at,d.id LIMIT 500`, []any{stamp, trashDays}, func(_, id string) error {
-			return s.transaction(ctx, func(tx *sql.Tx) error {
+			purged := false
+			err := s.transaction(ctx, func(tx *sql.Tx) error {
+				purged = false
 				in, err := inOrgOf(ctx, tx, `SELECT w.org_id FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE d.id=?`, id)
 				if err != nil {
 					return err
@@ -180,12 +183,19 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 					return err
 				}
 				if n == 0 {
-					skipped++
 					return nil
 				}
-				deleted++
+				purged = true
 				return event(in, tx, "system", "folder.retention_purged", id)
 			})
+			switch {
+			case err != nil:
+			case purged:
+				deleted++
+			default:
+				skipped++
+			}
+			return err
 		})
 		if err != nil {
 			return blobs, err

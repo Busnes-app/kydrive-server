@@ -86,6 +86,7 @@ func (s *Store) sealCopy(ctx context.Context, root string, key []byte, id string
 func (s *Store) swapBlob(ctx context.Context, root, old string, v Version) error {
 	swapped := false
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		swapped = false
 		res, err := tx.ExecContext(ctx, `UPDATE drive_versions SET blob=?,sealed=1 WHERE blob=?`, v.Blob, old)
 		if err != nil {
 			return err

@@ -41,9 +41,6 @@ func decode(t *testing.T, code int, body []byte, out any) {
 // reveals where a file went.
 func TestChangesAuthorize(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	admin := loginAs(t, srv, st, "feedadmin", "admin")
 	member := loginAs(t, srv, st, "member", "user")
@@ -115,9 +112,6 @@ func TestChangesAuthorize(t *testing.T) {
 
 func TestChangeRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	loginAs(t, srv, st, "feedadmin", "admin")
 	user := loginAs(t, srv, st, "syncer", "user")
@@ -206,9 +200,6 @@ func TestChangeRoutes(t *testing.T) {
 // subtree changed since; without head it trashes as before.
 func TestFolderTrashHead(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	user := loginAs(t, srv, st, "trasher", "user")
 	d := st.Drive()

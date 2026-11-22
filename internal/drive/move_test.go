@@ -8,6 +8,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 func TestMoveFileRenamesAndRelocates(t *testing.T) {
@@ -355,6 +356,7 @@ func TestFileAndFolderNeverShareAName(t *testing.T) {
 // that keeps its extension and fits 255 bytes, so a handover or restore that moves both never
 // trips the triggers. A live file beside a trashed folder of its name is left alone.
 func TestClashSchemaRenamesExistingClashes(t *testing.T) {
+	testdb.SQLiteOnly(t, "reruns a schema step")
 	st, w, root := fixture(t)
 	ctx := context.Background()
 	d := st.Drive()

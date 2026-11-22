@@ -19,9 +19,6 @@ func TestHandoverCommand(t *testing.T) {
 	}
 	t.Cleanup(func() { st.Close() })
 	d := st.Drive()
-	if d == nil {
-		t.Skip("drive is SQLite-only")
-	}
 	for _, u := range []*store.User{
 		{ID: "leaver", Username: "leaver", DisplayName: "Lee Ver", Email: "l@local.test", Role: "user", Status: "active", SSOProvider: "scim", SSOSubject: "sub-leaver"},
 		{ID: "heir", Username: "heir", Email: "h@local.test", Role: "user", Status: "active", SSOProvider: "scim", SSOSubject: "sub-heir"},

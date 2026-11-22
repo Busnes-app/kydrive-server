@@ -22,9 +22,7 @@ var legacyNames = []string{"reports-plain", "Zeta-plain", "a-plain.txt", "B-plai
 func legacyDB(t *testing.T) config.DatabaseConfig {
 	t.Helper()
 	cfg := testdb.Config(t)
-	if cfg.Driver != "sqlite" {
-		t.Skip("drive is SQLite-only")
-	}
+	testdb.SQLiteOnly(t, "writes a database from before drive_schema")
 	db, err := sql.Open("sqlite", cfg.DSN)
 	if err != nil {
 		t.Fatal(err)

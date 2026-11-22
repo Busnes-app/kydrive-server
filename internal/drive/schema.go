@@ -98,14 +98,7 @@ UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (SELECT file_id F
 UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND login_at=0;`,
 	// A live file and a live folder never share a name in one parent: WebDAV and the desktop
 	// client could reach only one. The message makes uniqueViolation report ErrConflict.
-	`CREATE TRIGGER drive_file_name_free_insert BEFORE INSERT ON drive_files WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
-BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
-CREATE TRIGGER drive_file_name_free_update BEFORE UPDATE ON drive_files WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_folders d WHERE d.workspace=NEW.workspace AND d.parent=NEW.parent AND d.name_hmac=NEW.name_hmac AND d.trashed=false)
-BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a folder has this name'); END;
-CREATE TRIGGER drive_folder_name_free_insert BEFORE INSERT ON drive_folders WHEN NEW.trashed=false AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
-BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;
-CREATE TRIGGER drive_folder_name_free_update BEFORE UPDATE ON drive_folders WHEN NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND EXISTS(SELECT 1 FROM drive_files f WHERE f.workspace=NEW.workspace AND f.parent=NEW.parent AND f.name_hmac=NEW.name_hmac AND f.trashed=false)
-BEGIN SELECT RAISE(ABORT,'UNIQUE constraint failed: a file has this name'); END;`,
+	nameFreeSchema(sqlite),
 	// KyPost (peer.go): each user's choice of the per-user switch, their Mail attachments
 	// folder and the upload tickets KyPost holds (token hashes only; names sealed; pairing is
 	// the issuing pairing's keyed fingerprint).
@@ -131,16 +124,25 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// linked. Empty for a device linked before signing.
 	`ALTER TABLE drive_devices ADD COLUMN pubkey TEXT NOT NULL DEFAULT '';`,
 	// Tenancy (tenancy.go): the org registry, org_id on every org-owned table, and triggers.
-	tenancySchema([]string{
-		"users", "groups", "audit_records",
-		"drive_workspaces", "drive_events", "drive_service_tokens", "drive_editor_documents",
-		"drive_editor_saves", "drive_app_passwords", "drive_changes", "drive_change_floor",
-		"drive_devices", "drive_device_codes", "drive_peer_settings", "drive_peer_folders",
-		"drive_peer_tickets", "drive_peer_picks", "drive_peer_guest", "drive_view_copies",
-	}, map[string]bool{"audit_records": true, "drive_events": true}),
+	tenancySchema(sqlite, orgOwned, orgNullable),
 	// Staff administrators (tenancy.go, D9): on a multi-tenant database only the staff org
 	// holds role='admin'.
-	staffAdminSchema,
+	staffAdminSchema(sqlite),
+}
+
+// nameFreeSchema is drive schema 20's triggers.
+func nameFreeSchema(d dialect) string {
+	var b strings.Builder
+	for _, t := range []struct{ table, other, alias, holder string }{
+		{"drive_files", "drive_folders", "d", "folder"}, {"drive_folders", "drive_files", "f", "file"},
+	} {
+		name := strings.TrimSuffix(strings.TrimPrefix(t.table, "drive_"), "s")
+		clash := fmt.Sprintf("EXISTS(SELECT 1 FROM %[1]s %[2]s WHERE %[2]s.workspace=NEW.workspace AND %[2]s.parent=NEW.parent AND %[2]s.name_hmac=NEW.name_hmac AND %[2]s.trashed=false)", t.other, t.alias)
+		msg := "UNIQUE constraint failed: a " + t.holder + " has this name"
+		b.WriteString(d.trigger("drive_"+name+"_name_free_insert", "INSERT", t.table, "NEW.trashed=false AND "+clash, msg))
+		b.WriteString(d.trigger("drive_"+name+"_name_free_update", "UPDATE", t.table, "NEW.trashed=false AND (OLD.trashed!=NEW.trashed OR OLD.workspace!=NEW.workspace OR OLD.parent!=NEW.parent OR OLD.name_hmac!=NEW.name_hmac) AND "+clash, msg))
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // nameVersion is the schema version whose transaction encrypts existing names.
@@ -257,6 +259,9 @@ func clashName(name string, n int) string {
 func (s *Store) migrate(ctx context.Context) error { return s.migrateTo(ctx, len(schema)) }
 
 func (s *Store) migrateTo(ctx context.Context, version int) error {
+	if s.pg {
+		return s.createPostgres(ctx)
+	}
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
 		return err
 	}

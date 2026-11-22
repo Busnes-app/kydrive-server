@@ -30,6 +30,9 @@ func PurgeFileUnauthorized(ctx context.Context, s *Store, id string) ([]string, 
 // SchemaVersion is the version a fully migrated database records.
 var SchemaVersion = len(schema)
 
+// PostgresVersion is the schema version a PostgreSQL drive is created at.
+const PostgresVersion = postgresVersion
+
 // KYB1SchemaVersion queues KYB1 blobs; LoginSchemaVersion binds editor sessions to sign-ins.
 const KYB1SchemaVersion, LoginSchemaVersion = 16, 17
 
@@ -95,6 +98,48 @@ func ChangesAfter(ctx context.Context, s *Store, seq int64) ([]string, error) {
 // events were inserted, which is commit order under the one writer.
 func ChangeSeqs(ctx context.Context, s *Store) ([]string, error) {
 	return column(ctx, s.db, `SELECT printf('%020d',c.seq) FROM drive_events e JOIN drive_changes c ON c.item=e.resource WHERE e.action='file.version_created' ORDER BY e.rowid`)
+}
+
+// RefuseSQL is DDL for a trigger refusing every row of table before event, with msg.
+func RefuseSQL(s *Store, name, event, table, msg string) string {
+	return dialect{s.pg}.trigger(name, event, table, "true", msg)
+}
+
+// AfterDeleteSQL is DDL for a trigger running statement (which may read OLD) after each
+// row of table is deleted.
+func AfterDeleteSQL(s *Store, name, table, statement string) string {
+	if !s.pg {
+		return `CREATE TRIGGER ` + name + ` AFTER DELETE ON ` + table + ` BEGIN ` + statement + `; END`
+	}
+	return `CREATE FUNCTION ` + name + `() RETURNS trigger LANGUAGE plpgsql AS $t$BEGIN ` + statement + `; RETURN OLD; END$t$;
+CREATE TRIGGER ` + name + ` AFTER DELETE ON ` + table + ` FOR EACH ROW EXECUTE FUNCTION ` + name + `()`
+}
+
+// PauseCredential makes credential creation call f after its sign-in check; the returned
+// function restores the default.
+func PauseCredential(f func()) (restore func()) {
+	afterLiveLogin = f
+	return func() { afterLiveLogin = func() {} }
+}
+
+// DB is the store's database handle.
+func DB(s *Store) *sql.DB { return s.db }
+
+// TxIsolation is the isolation level a store transaction runs at on PostgreSQL.
+func TxIsolation(ctx context.Context, s *Store) (level string, err error) {
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `SHOW transaction_isolation`).Scan(&level)
+	})
+	return level, err
+}
+
+// DanglingRefs counts rows whose foreign keys name no row. PostgreSQL refuses such a row
+// at commit, so there it is 0.
+func DanglingRefs(ctx context.Context, s *Store) (int, error) {
+	if s.pg {
+		return 0, nil
+	}
+	return QueryInt(ctx, s, `SELECT COUNT(*) FROM pragma_foreign_key_check`)
 }
 
 func ExecSQL(ctx context.Context, s *Store, q string, args ...any) error {

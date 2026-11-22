@@ -19,7 +19,7 @@ func nameFree(ctx context.Context, tx *sql.Tx, org, name, except string) error {
 		return fmt.Errorf("%w: My files is the name of each person's own files", ErrConflict)
 	}
 	var taken, deleted int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(w.deleted_at!=''),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND w.org_id=? AND lower(w.name)=lower(?) AND w.id!=?`, org, name, except).Scan(&taken, &deleted); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN w.deleted_at!='' THEN 1 ELSE 0 END),0) FROM drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE p.workspace IS NULL AND w.org_id=? AND lower(w.name)=lower(?) AND w.id!=?`, org, name, except).Scan(&taken, &deleted); err != nil {
 		return err
 	}
 	if taken > deleted {
@@ -89,6 +89,7 @@ func (s *Store) DeleteWorkspace(ctx context.Context, user, workspace, confirm st
 		return false, err
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		recoverable = false
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
@@ -242,6 +243,7 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 	for _, id := range ids {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
+			b = nil
 			var name, org string
 			err := tx.QueryRowContext(ctx, `SELECT name,org_id FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name, &org)
 			if errors.Is(err, sql.ErrNoRows) {

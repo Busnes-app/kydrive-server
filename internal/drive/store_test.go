@@ -21,9 +21,6 @@ func fixture(t *testing.T) (store.Store, drive.Workspace, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	if st.Drive() == nil {
-		t.Skip("drive is SQLite-only")
-	}
 	for _, u := range []*store.User{{ID: "admin", Username: "admin", Email: "admin@local.test", Role: "admin", Status: "active", SSOProvider: "local"}, {ID: "worker", Username: "worker", Email: "worker@local.test", Role: "user", Status: "active", SSOProvider: "scim"}, {ID: "stranger", Username: "stranger", Email: "stranger@local.test", Role: "user", Status: "active", SSOProvider: "scim"}} {
 		if err = st.Users().CreateUser(ctx, u); err != nil {
 			t.Fatal(err)

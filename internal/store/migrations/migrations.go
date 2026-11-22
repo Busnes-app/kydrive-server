@@ -422,7 +422,9 @@ func apply(ctx context.Context, db *sql.DB, driver string, m Migration) (err err
 		record = "INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, $3)"
 		ddl = m.Postgres
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	// READ COMMITTED: the check after the lock must see what another runner committed while
+	// this one waited, and a serializable snapshot would date from the lock statement.
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return fmt.Errorf("failed to begin migration tx for v%d: %w", m.Version, err)
 	}

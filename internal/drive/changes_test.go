@@ -13,6 +13,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 type changeEnv struct {
@@ -443,7 +444,7 @@ func TestEveryMutatorWritesAChange(t *testing.T) {
 // The change row commits with its mutation or not at all.
 func TestRolledBackMutationLeavesNoChange(t *testing.T) {
 	e := newChangeEnv(t)
-	if err := drive.ExecSQL(e.ctx, e.d, `CREATE TRIGGER fail_events BEFORE INSERT ON drive_events BEGIN SELECT RAISE(ABORT,'boom'); END`); err != nil {
+	if err := drive.ExecSQL(e.ctx, e.d, drive.RefuseSQL(e.d, "fail_events", "INSERT", "drive_events", "boom")); err != nil {
 		t.Fatal(err)
 	}
 	mark := lastChange(t, e.d)
@@ -474,6 +475,9 @@ func TestChangeSeqIncreasesAcrossConcurrentMutations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if testdb.Postgres() {
+		return // no insertion order to compare; TestChangeCursorMissesNoConcurrentCommit covers it
+	}
 	seqs, err := drive.ChangeSeqs(e.ctx, e.d)
 	if err != nil || len(seqs) != n {
 		t.Fatalf("seqs %v %v", seqs, err)
@@ -482,6 +486,128 @@ func TestChangeSeqIncreasesAcrossConcurrentMutations(t *testing.T) {
 		if seqs[i] <= seqs[i-1] {
 			t.Fatalf("seq not strictly increasing in commit order: %v", seqs)
 		}
+	}
+}
+
+// A cursor read while mutations commit never passes a row that commits after the read.
+func TestChangeCursorMissesNoConcurrentCommit(t *testing.T) {
+	e := newChangeEnv(t)
+	_, cursor, _, err := e.d.Changes(e.ctx, "worker", e.w, 0, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	read := func() error {
+		for {
+			cs, next, more, err := e.d.Changes(e.ctx, "worker", e.w, cursor, 50)
+			if err != nil {
+				return err
+			}
+			for _, c := range cs {
+				seen[c.ID] = true
+			}
+			if cursor = next; !more {
+				return nil
+			}
+		}
+	}
+	const n = 40
+	ids := make(chan string, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		v := blob(t, e.blobs, fmt.Sprint(i))
+		wg.Go(func() {
+			f, err := e.d.Publish(e.ctx, "worker", drive.File{Workspace: e.w, Name: fmt.Sprintf("%d.txt", i)}, v, 0)
+			if err != nil {
+				t.Error(err)
+			}
+			ids <- f.ID
+		})
+	}
+	reading := make(chan error)
+	go func() {
+		for len(ids) < n {
+			if err := read(); err != nil {
+				reading <- err
+				return
+			}
+		}
+		reading <- nil
+	}()
+	wg.Wait()
+	if err := <-reading; err != nil {
+		t.Fatal(err)
+	}
+	if err := read(); err != nil {
+		t.Fatal(err)
+	}
+	close(ids)
+	for id := range ids {
+		if !seen[id] {
+			t.Fatalf("cursor passed file %s's change", id)
+		}
+	}
+}
+
+// On PostgreSQL a change row takes its seq only once the workspace's earlier change rows have
+// committed, so a cursor read in between cannot pass one. Another workspace's row goes ahead.
+func TestChangeRowsCommitInSeqOrder(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("SQLite has one writer")
+	}
+	e := newChangeEnv(t)
+	db := drive.DB(e.d)
+	insert := `INSERT INTO drive_changes(workspace,kind,item,created,org_id) SELECT id,'file',?,0,org_id FROM drive_workspaces WHERE id=? RETURNING seq`
+	a, err := db.BeginTx(e.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Rollback()
+	var seqA, seqC int64
+	if err = a.QueryRowContext(e.ctx, insert, "a", e.w).Scan(&seqA); err != nil {
+		t.Fatal(err)
+	}
+	b := make(chan int64, 1)
+	go func() {
+		var seq int64
+		if err := db.QueryRowContext(e.ctx, insert, "b", e.w).Scan(&seq); err != nil {
+			t.Error(err)
+		}
+		b <- seq
+	}()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		// The waiter on this workspace's key only: pg_locks is the whole server's, and other
+		// packages' tests take advisory locks too. A bigint key is classid (high) and objid (low).
+		waiting, err := drive.QueryInt(e.ctx, e.d, `SELECT COUNT(*) FROM pg_locks, (SELECT hashtextextended('kydrive changes '||?,0) AS k) q WHERE locktype='advisory' AND NOT granted AND objsubid=1 AND classid::bigint=((q.k>>32)&4294967295) AND objid::bigint=(q.k&4294967295)`, e.w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if waiting == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a second change row in the workspace did not wait for the first")
+		}
+	}
+	if err = db.QueryRowContext(e.ctx, insert, "c", e.other).Scan(&seqC); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if seqB := <-b; seqA >= seqC || seqC >= seqB {
+		t.Fatalf("seqs a %d, c %d, b %d: b took its seq before a committed", seqA, seqC, seqB)
+	}
+}
+
+// Store transactions on PostgreSQL are serializable, the guarantee SQLite's one writer gives.
+func TestTransactionsAreSerializable(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("SQLite has one writer")
+	}
+	e := newChangeEnv(t)
+	if level, err := drive.TxIsolation(e.ctx, e.d); err != nil || level != "serializable" {
+		t.Fatalf("isolation %q, %v", level, err)
 	}
 }
 

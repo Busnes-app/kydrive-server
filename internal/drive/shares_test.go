@@ -238,7 +238,7 @@ func TestShareRevocationRevokesEditor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if editable, err := drive.QueryInt(ctx, d, `SELECT editable FROM drive_editor_sessions WHERE id=?`, e.ID); err != nil || editable != 1 {
+	if editable, err := drive.QueryInt(ctx, d, `SELECT CASE WHEN editable THEN 1 ELSE 0 END FROM drive_editor_sessions WHERE id=?`, e.ID); err != nil || editable != 1 {
 		t.Fatalf("editor through a folder share not editable: %d %v", editable, err)
 	}
 	if _, err = d.PendingRevocations(ctx); err != nil || revoked(t, d, e.ID) {

@@ -32,9 +32,6 @@ func guestUploadReq(srv *api.Server, token, name, body string) *httptest.Respons
 
 func TestGuestLinkRoutes(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	admin := loginAs(t, srv, st, "guestadmin", "admin")
 	owner := loginAs(t, srv, st, "guestowner", "user")
@@ -156,9 +153,6 @@ func TestGuestLinkRoutes(t *testing.T) {
 // Guesses sent at once must not all slip past a limit that is still under five.
 func TestGuestPasswordLimitHoldsInParallel(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
-	if st.Drive() == nil {
-		t.Skip("SQLite drive")
-	}
 	ctx := context.Background()
 	admin := loginAs(t, srv, st, "guestadmin", "admin")
 	owner := loginAs(t, srv, st, "guestowner", "user")
