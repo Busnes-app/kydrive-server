@@ -4,6 +4,16 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Sign-in, step-up, logout and the directory webhook bind accounts to their org (tenancy
+  groundwork).** On a multi-tenant install, KyIdentity's `org_id` claim and webhook field are
+  required. A sign-in for an unknown org polls KyIdentity's org list once, and an org that is
+  not active and enabled signs nobody in or up. An account is created at first sign-in in the
+  token's org, whatever `KY_SSO_AUTO_PROVISION` says, and a known account arriving with
+  another org is refused and audited as `tenancy.org_mismatch`. KyDrive mirrors KyIdentity's
+  orgs every 60 seconds, including each org's `storage_bytes` quota. A KyIdentity subject is
+  one account there, the installer channel is refused, and suite groups are not read until
+  they can be read per org. A single-tenant install ignores the claim, and nothing changes
+  for it. Multi-tenant mode still cannot be enabled.
 - **Fix: upgrading a database older than drive schema 20 that holds a file and a folder of
   the same name no longer fails at startup.** Since the org groundwork, schema 20's clash
   rename wrote `org_id`, which that schema does not have yet; it now writes the columns of its

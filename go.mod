@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	filippo.io/age v1.3.2
-	github.com/Busnes-app/ky-primitives v0.10.2-0.20261116015712-875f57b13976
+	github.com/Busnes-app/ky-primitives v0.10.2-0.20261120212828-9deb28884264
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/elimity-com/scim v0.0.0-20261113092633-5fffe914c211
 	github.com/go-jose/go-jose/v4 v4.1.9

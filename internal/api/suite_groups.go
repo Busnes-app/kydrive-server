@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
@@ -28,14 +27,14 @@ func (s *Server) RunSuiteGroups(ctx context.Context) {
 	}
 }
 
-// syncSuiteGroups is one pass. Without KySignOn it does nothing; when the list cannot be read
+// syncSuiteGroups is one pass. Without KySignOn, or multi-tenant, it does nothing; when the list cannot be read
 // it changes nothing, so a failed or refused call never archives anything.
 func (s *Server) syncSuiteGroups(ctx context.Context) {
-	sso := s.config.SSO
-	if !sso.Enabled || sso.KySignOnIssuer == "" || sso.KySignOnClientID == "" || sso.KySignOnSecret == "" {
+	client, ok := s.suiteClient()
+	// A multi-tenant KyIdentity lists suite groups per org, which this version does not ask for yet.
+	if !ok || s.multi() {
 		return
 	}
-	client := suitedir.Client{Issuer: sso.KySignOnIssuer, ClientID: sso.KySignOnClientID, ClientSecret: sso.KySignOnSecret}
 	groups, err := client.Groups(ctx)
 	if err != nil {
 		// suitedir errors carry neither the secret nor any member subject.

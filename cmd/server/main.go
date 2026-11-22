@@ -246,6 +246,8 @@ func runServer() {
 	go func() { defer close(retentionDone); srv.RunRetention(ctx) }()
 	suiteGroupsDone := make(chan struct{})
 	go func() { defer close(suiteGroupsDone); srv.RunSuiteGroups(ctx) }()
+	suiteOrgsDone := make(chan struct{})
+	go func() { defer close(suiteOrgsDone); srv.RunSuiteOrgs(ctx) }()
 	sealingDone := make(chan struct{})
 	go func() { defer close(sealingDone); srv.RunBlobSealing(ctx) }()
 	cleanupDone := make(chan struct{})
@@ -320,6 +322,11 @@ func runServer() {
 	case <-suiteGroupsDone:
 	case <-waitCtx.Done():
 		log.Print("Suite group shutdown timed out")
+	}
+	select {
+	case <-suiteOrgsDone:
+	case <-waitCtx.Done():
+		log.Print("Suite org shutdown timed out")
 	}
 	select {
 	case <-sealingDone:

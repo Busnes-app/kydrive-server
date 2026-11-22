@@ -117,3 +117,6 @@ func PickTypeForTest(name string) string { return pickType(name) }
 
 // SyncSuiteGroupsForTest runs one suite group pass.
 func SyncSuiteGroupsForTest(s *Server, ctx context.Context) { s.syncSuiteGroups(ctx) }
+
+// PollOrgsForTest runs one /api/suite/orgs poll.
+func PollOrgsForTest(s *Server, ctx context.Context) error { return s.pollOrgs(ctx) }

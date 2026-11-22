@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"github.com/Busnes-app/ky-primitives/applysetup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -12,6 +13,9 @@ import (
 // ApplyInstaller compares desired configuration with the server's immutable
 // startup snapshot. A committed configuration awaiting restart stays pending.
 func (s *Server) ApplyInstaller(ctx context.Context, raw []byte, check bool) (applysetup.Report, error) {
+	if s.multi() {
+		return applysetup.Report{}, errors.New("the installer channel is single-tenant")
+	}
 	var b applysetup.Common
 	if err := applysetup.DecodeRaw(raw, &b); err != nil {
 		return applysetup.Report{}, err
