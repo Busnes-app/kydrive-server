@@ -264,7 +264,7 @@ legend { font-size: .82rem; font-weight: 600; color: var(--ink-strong); margin-b
 
 /* ---------- Menus ---------- */
 .menu-wrap { position: relative; display: inline-flex; }
-.menu-positioner { z-index: 30; outline: 0; }
+.menu-positioner { z-index: 60; outline: 0; } /* above .dialog (50), so a menu inside a dialog shows */
 .menu { min-width: 12rem; display: grid; padding: .35rem; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow-pop); outline: 0; }
 .menu-item { display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 2.25rem; padding: .4rem .65rem; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-strong); font-size: .88rem; font-weight: 500; text-align: left; text-decoration: none; justify-content: flex-start; cursor: pointer; outline: 0; }
 .menu-item[data-highlighted] { background: var(--panel-hover); }
