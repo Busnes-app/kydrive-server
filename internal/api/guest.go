@@ -25,7 +25,7 @@ func (s *Server) guestRoutes() {
 		s.mux.HandleFunc("POST /api/drive/"+kind+"/{id}/guest-links", s.requireAuthenticated(s.requireStepUp(s.driveCreateGuestLink)))
 	}
 	s.mux.HandleFunc("GET /api/drive/guest-links-policy", s.requireAuthenticated(s.driveGuestPolicy))
-	s.mux.HandleFunc("PUT /api/drive/guest-links-policy", s.requireAdmin(s.driveSetGuestPolicy))
+	s.mux.HandleFunc("PUT /api/drive/guest-links-policy", s.platformAdmin(s.driveSetGuestPolicy))
 	// Public: no session. The token rides in the body (or a header for raw uploads), never a URL.
 	s.mux.HandleFunc("POST /api/public/links/view", s.guestView)
 	s.mux.HandleFunc("POST /api/public/links/download", s.guestDownload)

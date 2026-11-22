@@ -66,6 +66,10 @@ type DatabaseConfig struct {
 	MaxOpenConns    int           `json:"max_open_conns"`
 	MaxIdleConns    int           `json:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `json:"conn_max_lifetime"`
+	// Tenancy is the drive's tenancy mode, single unless set; StaffOrg is a multi-tenant
+	// drive's staff org. Configuration offers only single until multi-tenant mode ships.
+	Tenancy  string `json:"-"`
+	StaffOrg string `json:"-"`
 }
 
 // SecurityConfig holds encryption keys, cookie secrets, and session settings.

@@ -30,7 +30,7 @@ type SQLStore struct {
 }
 
 // newSQLStore creates and initializes a SQLStore, running migrations automatically.
-func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte) (*SQLStore, error) {
+func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte, tenancy drive.Tenancy) (*SQLStore, error) {
 	driver = strings.ToLower(driver)
 	if driver == "postgresql" {
 		driver = "postgres"
@@ -53,7 +53,7 @@ func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte) (*S
 
 	if driver == "sqlite" {
 		var err error
-		s.drive, err = drive.New(ctx, db, key)
+		s.drive, err = drive.Open(ctx, db, key, tenancy)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('backup_interval_sec','0',?) ON CONFLICT(key) DO UPDATE SET value='0', updated_at=excluded.updated_at`, now); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`,
+	if _, err := tx.ExecContext(ctx, s.auditSQL(),
 		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked; scheduled deposits turned off", "", now); err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (u *userStore) SetDirectoryRole(ctx context.Context, subject, role string) 
 	if err = u.store.revokeGrants(ctx, tx, id); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
+	if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -205,7 +205,7 @@ func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName strin
 	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET username=?, updated_at=? WHERE id=? AND sso_provider='local' AND role='admin'`), newName, now, id); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), id, "auth.local_admin_renamed", id, oldName+" -> "+newName, "operator-cli", now); err != nil {
+	if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.local_admin_renamed", id, oldName+" -> "+newName, "operator-cli", now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -512,7 +512,7 @@ func (u *userStore) RevokeDirectoryCredentials(ctx context.Context, id string) e
 	if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
+	if _, err := tx.ExecContext(ctx, u.store.auditSQL(), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -927,7 +927,7 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 	if err := u.store.drive.RevokeUserCredentials(ctx, tx, userID); err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)`), userID, "auth.password_changed", "user", details, ip, now)
+	_, err := tx.ExecContext(ctx, u.store.auditSQL(), userID, "auth.password_changed", "user", details, ip, now)
 	return err
 }
 
@@ -1263,10 +1263,7 @@ func (a *auditStore) LogAudit(ctx context.Context, r *AuditRecord) error {
 	if r.CreatedAt.IsZero() {
 		r.CreatedAt = time.Now().UTC()
 	}
-	q := a.store.rebind(`
-INSERT INTO audit_records (user_id, action, resource, details, ip_address, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-`)
+	q := a.store.auditSQL()
 	_, err := a.store.db.ExecContext(ctx, q, r.UserID, r.Action, r.Resource, r.Details, r.IPAddress, r.CreatedAt)
 	return err
 }
@@ -1402,7 +1399,7 @@ func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, g.store.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), "scim", "scim.group.replaced", group.ID, "membership applied atomically", "", now); err != nil {
+	if _, err = tx.ExecContext(ctx, g.store.auditSQL(), "scim", "scim.group.replaced", group.ID, "membership applied atomically", "", now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -1417,4 +1414,13 @@ func (g *groupStore) GetGroupByExternalID(ctx context.Context, id string) (*Grou
 		return nil, err
 	}
 	return g.GetGroupByID(ctx, groupID)
+}
+
+// auditSQL inserts one audit row (user_id, action, resource, details, ip_address, created_at).
+// On SQLite it also records the org of the account it names, or none for a platform row.
+func (s *SQLStore) auditSQL() string {
+	if s.driver == "sqlite" {
+		return `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at,org_id) VALUES(?1,?2,?3,?4,?5,?6,` + drive.UserOrgSQL("?1") + `)`
+	}
+	return s.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`)
 }

@@ -37,6 +37,9 @@ const KYB1SchemaVersion, LoginSchemaVersion = 16, 17
 // ClashSchemaVersion forbids a file and a folder sharing a name.
 const ServiceTokenSchemaVersion, ClashSchemaVersion = 19, clashVersion
 
+// TenancySchemaVersion adds the org registry and org_id.
+const TenancySchemaVersion = 27
+
 func Scrub(ctx context.Context, s *Store) error { return scrub(ctx, s.db) }
 
 // MoveFileFrom is MoveFile with the file as the caller loaded it, possibly before another move:
@@ -238,13 +241,16 @@ func Migrate(ctx context.Context, s *Store) error { return s.migrate(ctx) }
 
 // OpenAt opens the drive store migrated only to schema version, as an older release left it.
 func OpenAt(ctx context.Context, db *sql.DB, key []byte, version int) (*Store, error) {
-	return open(ctx, db, key, version, TenancySingle)
+	return open(ctx, db, key, version, Tenancy{Mode: TenancySingle})
 }
+
+// TestStaffOrg is the staff org of OpenMulti's stores.
+const TestStaffOrg = "5ea1f000-0000-4000-8000-000000000001"
 
 // OpenMulti opens db, already holding the main schema, as a multi-tenant drive store: no
 // default org, so every org-owned row must name its org.
 func OpenMulti(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
-	return open(ctx, db, key, len(schema), "multi")
+	return Open(ctx, db, key, Tenancy{Mode: TenancyMulti, StaffOrg: TestStaffOrg})
 }
 
 // ExecTx runs q in a store transaction, so its error is reported as the store reports it.
@@ -292,4 +298,14 @@ func QueryString(ctx context.Context, s *Store, q string, out *string, args ...a
 // SealName is name sealed for table's row id, as the store stores it, and its lookup MAC.
 func SealName(s *Store, table, id, name string) (string, string, error) {
 	return s.names.seal(table, id, name)
+}
+
+// NameFree is nameFree for a new shared workspace called name in org.
+func NameFree(ctx context.Context, s *Store, org, name string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return nameFree(ctx, tx, org, name, "") })
+}
+
+// RecordEvent records an action as event does, in its own transaction.
+func RecordEvent(ctx context.Context, s *Store, user, action, resource string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return event(ctx, tx, user, action, resource) })
 }

@@ -45,7 +45,7 @@ func (s *SQLStore) ApplyInstaller(ctx context.Context, b applysetup.Common, chec
 		if _, err := tx.ExecContext(ctx, s.rebind(`INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?)`), key, value, now); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, s.rebind(`INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at) VALUES(?,?,?,?,?,?)`), "", action, resource, b.SetupID, "installer-local", now)
+		_, err := tx.ExecContext(ctx, s.auditSQL(), "", action, resource, b.SetupID, "installer-local", now)
 		return err
 	}
 	// Configuration records hold target-side file references, never credentials.

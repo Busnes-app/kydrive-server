@@ -7,13 +7,39 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // DefaultOrg is a single-tenant install's one org, the fixed ID KyIdentity uses for it.
 const DefaultOrg = "00000000-0000-0000-0000-000000000001"
 
-// TenancySingle is the only tenancy mode this release opens; multi-tenant mode arrives later.
-const TenancySingle = "single"
+// The tenancy modes. Configuration offers only single until multi-tenant mode ships; tests
+// open multi-tenant stores directly.
+const (
+	TenancySingle = "single"
+	TenancyMulti  = "multi"
+)
+
+// Tenancy is how a database is shared. StaffOrg is the org of KyDrive's own staff, the only
+// accounts that may administer a multi-tenant install (D9); single-tenant leaves it empty.
+type Tenancy struct{ Mode, StaffOrg string }
+
+func (t Tenancy) check() error {
+	switch t.Mode {
+	case TenancySingle:
+		if t.StaffOrg != "" {
+			return errors.New("a single-tenant drive has no staff org")
+		}
+	case TenancyMulti:
+		if id, err := uuid.Parse(t.StaffOrg); err != nil || id.String() != t.StaffOrg || t.StaffOrg == DefaultOrg {
+			return fmt.Errorf("staff org %q is not a canonical UUID other than the default org", t.StaffOrg)
+		}
+	default:
+		return fmt.Errorf("unknown tenancy mode %q", t.Mode)
+	}
+	return nil
+}
 
 // errOrg prefixes every tenancy trigger's message; transaction reports it as ErrDenied.
 const errOrg = "tenancy:"
@@ -72,25 +98,60 @@ BEGIN SELECT RAISE(ABORT,'%[2]s blob of another org'); END;
 	return b.String()
 }
 
-// recordTenancy records the tenancy mode at first start and refuses a database recorded with
-// another, before the drive schema runs: schema 27 seeds the default org from the record.
-func recordTenancy(ctx context.Context, db *sql.DB, mode string) error {
+// multiTenantSQL is true on a database recorded multi-tenant.
+const multiTenantSQL = `COALESCE((SELECT value FROM server_settings WHERE key='tenancy_mode'),'')='multi'`
+
+// staffSQL is true unless the database is multi-tenant and account $U is outside the staff org.
+func staffSQL(user string) string {
+	return `(NOT ` + multiTenantSQL + ` OR (SELECT org_id FROM users WHERE id=` + user + `)=(SELECT value FROM server_settings WHERE key='staff_org'))`
+}
+
+// staffAdminSchema is drive schema 28: a multi-tenant database refuses role='admin' outside
+// the staff org.
+var staffAdminSchema = `CREATE TRIGGER users_admin_is_staff_insert BEFORE INSERT ON users WHEN NEW.role='admin' AND ` + multiTenantSQL + ` AND NEW.org_id IS NOT (SELECT value FROM server_settings WHERE key='staff_org')
+BEGIN SELECT RAISE(ABORT,'` + errOrg + ` administrators are staff'); END;
+CREATE TRIGGER users_admin_is_staff_update BEFORE UPDATE OF role ON users WHEN NEW.role='admin' AND ` + multiTenantSQL + ` AND NEW.org_id IS NOT (SELECT value FROM server_settings WHERE key='staff_org')
+BEGIN SELECT RAISE(ABORT,'` + errOrg + ` administrators are staff'); END;`
+
+// recordTenancy records the tenancy mode, and a multi-tenant database's staff org, at first
+// start and refuses a database recorded otherwise, before the drive schema runs: schema 27
+// seeds the default org from the record.
+func recordTenancy(ctx context.Context, db *sql.DB, t Tenancy) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('tenancy_mode',?,?) ON CONFLICT(key) DO NOTHING`, mode, time.Now().UTC()); err != nil {
-		return err
+	settings := [][2]string{{"tenancy_mode", t.Mode}}
+	if t.Mode == TenancyMulti {
+		settings = append(settings, [2]string{"staff_org", t.StaffOrg})
 	}
-	var recorded string
-	if err = tx.QueryRowContext(ctx, `SELECT value FROM server_settings WHERE key='tenancy_mode'`).Scan(&recorded); err != nil {
-		return err
-	}
-	if recorded != mode {
-		return fmt.Errorf("this database is %s-tenant and this release opens only %s-tenant databases", recorded, mode)
+	for _, kv := range settings {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO NOTHING`, kv[0], kv[1], time.Now().UTC()); err != nil {
+			return err
+		}
+		var recorded string
+		if err = tx.QueryRowContext(ctx, `SELECT value FROM server_settings WHERE key=?`, kv[0]).Scan(&recorded); err != nil {
+			return err
+		}
+		if recorded != kv[1] && kv[0] == "tenancy_mode" {
+			return fmt.Errorf("this database is %s-tenant and this server is configured %s-tenant", recorded, kv[1])
+		}
+		if recorded != kv[1] {
+			return fmt.Errorf("this database's staff org is %s, not %s", recorded, kv[1])
+		}
 	}
 	return tx.Commit()
+}
+
+// seedStaffOrg gives a multi-tenant database its staff org row, active and seeded, which the
+// org poller never changes.
+func seedStaffOrg(ctx context.Context, db *sql.DB, t Tenancy) error {
+	if t.Mode != TenancyMulti {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,seeded) VALUES(?,'active',1) ON CONFLICT(id) DO NOTHING`, t.StaffOrg)
+	return err
 }
 
 // asDenied reports a tenancy refusal as ErrDenied, the answer to any other cross-org access.
@@ -129,3 +190,104 @@ func (s *Store) ActivePrincipal(ctx context.Context, user string) (bool, error) 
 	err := s.db.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&ok)
 	return ok, err
 }
+
+type orgKey struct{}
+
+// WithOrg names the org an administrator acts in, as staff select it (X-Ky-Org). Without it
+// an administrator acts in their own org.
+func WithOrg(ctx context.Context, org string) context.Context {
+	return context.WithValue(ctx, orgKey{}, org)
+}
+
+// adminOrg is the org administrator user acts in.
+func adminOrg(ctx context.Context, q queryer, user string) (string, error) {
+	if org, _ := ctx.Value(orgKey{}).(string); org != "" {
+		return org, nil
+	}
+	var org sql.NullString
+	err := q.QueryRowContext(ctx, `SELECT `+userOrg("?"), user).Scan(&org)
+	return org.String, err
+}
+
+// adminIn is admin, for workspace in the org the administrator acts in; a workspace in any
+// other org is ErrDenied, as for a non-administrator.
+func adminIn(ctx context.Context, q queryer, user, workspace string) error {
+	if err := admin(ctx, q, user); err != nil {
+		return err
+	}
+	org, err := adminOrg(ctx, q, user)
+	if err != nil {
+		return err
+	}
+	var in int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces WHERE id=? AND org_id=?`, workspace, org).Scan(&in); err != nil {
+		return err
+	}
+	if in != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+
+// singleTenant refuses, on a multi-tenant store, what customers have no administrator for:
+// creating, renaming, deleting, re-quotaing and per-workspace retention of shared workspaces
+// (D10). Suite groups own shared workspaces there.
+func (s *Store) singleTenant() error {
+	if s.tenancy.Mode == TenancyMulti {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Multi reports whether the store is multi-tenant.
+func (s *Store) Multi() bool { return s.tenancy.Mode == TenancyMulti }
+
+// Staff reports whether user may hold role='admin': always on a single-tenant store, only
+// in the staff org on a multi-tenant one.
+func (s *Store) Staff(ctx context.Context, user string) (bool, error) {
+	var ok bool
+	err := s.db.QueryRowContext(ctx, `SELECT `+staffSQL("?"), user).Scan(&ok)
+	return ok, err
+}
+
+// OrgSelectable reports whether staff may select org: a registered org that is not deleted.
+func (s *Store) OrgSelectable(ctx context.Context, org string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_orgs WHERE id=? AND status!='deleted'`, org).Scan(&n)
+	return n == 1, err
+}
+
+// StaffRead records in the org staff act in (WithOrg) that user read what names.
+func (s *Store) StaffRead(ctx context.Context, user, what string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return event(ctx, tx, user, "staff.read", what) })
+}
+
+// OrgGroups is the set of groups in the org staff act in (WithOrg).
+func (s *Store) OrgGroups(ctx context.Context) (map[string]bool, error) {
+	org, _ := ctx.Value(orgKey{}).(string)
+	ids, err := column(ctx, s.db, `SELECT id FROM groups WHERE org_id=?`, org)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
+// inOrgOf is ctx acting in the org query (one row, one column) finds, so a worker's event lands
+// in the org of the row it is about to change.
+func inOrgOf(ctx context.Context, q queryer, query string, args ...any) (context.Context, error) {
+	var org sql.NullString
+	if err := q.QueryRowContext(ctx, query, args...).Scan(&org); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return ctx, err
+	}
+	return WithOrg(ctx, org.String), nil
+}
+
+const fileOrg = `SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=?`
+
+// UserOrgSQL is userOrg for SQL built outside the drive store; user is a column reference or
+// placeholder.
+func UserOrgSQL(user string) string { return userOrg(user) }

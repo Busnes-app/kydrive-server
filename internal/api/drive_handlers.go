@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ import (
 const uploadLimit int64 = 128 << 20
 
 func (s *Server) driveRoutes() {
-	s.mux.HandleFunc("GET /api/drive/status", s.requireAdmin(s.driveStatus))
+	s.mux.HandleFunc("GET /api/drive/status", s.platformAdmin(s.driveStatus))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/directory", s.requireAuthenticated(s.driveWorkspaceDirectory))
 	s.mux.HandleFunc("GET /editor.html", s.requireAuthenticated(s.editorPage))
 	s.mux.HandleFunc("GET /editor-bootstrap.js", s.editorScript)
@@ -38,16 +39,16 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("PUT /api/drive/kypost", s.requireAuthenticated(s.handleKyPostSetting))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/documents", s.requireAuthenticated(s.driveNewDocument))
 	s.mux.HandleFunc("GET /api/drive/workspaces", s.requireAuthenticated(s.driveWorkspaces))
-	s.mux.HandleFunc("POST /api/drive/workspaces", s.requireAdmin(s.driveCreateWorkspace))
-	s.mux.HandleFunc("GET /api/drive/directory", s.requireAdmin(s.driveDirectory))
-	s.mux.HandleFunc("GET /api/drive/audit", s.requireAdmin(s.driveAudit))
+	s.mux.HandleFunc("POST /api/drive/workspaces", s.singleTenantAdmin(s.driveCreateWorkspace))
+	s.mux.HandleFunc("GET /api/drive/directory", s.orgAdmin(s.driveDirectory))
+	s.mux.HandleFunc("GET /api/drive/audit", s.orgAdmin(s.driveAudit))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/grants", s.requireAuthenticated(s.driveGrants))
 	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/grants/{group}", s.requireAuthenticated(s.driveGrant))
-	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/quota", s.requireAdmin(s.driveQuota))
-	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/name", s.requireAdmin(s.driveRenameWorkspace))
-	s.mux.HandleFunc("DELETE /api/drive/workspaces/{id}", s.requireAdmin(s.driveDeleteWorkspace))
-	s.mux.HandleFunc("GET /api/drive/deleted-workspaces", s.requireAdmin(s.driveDeletedWorkspaces))
-	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/restore", s.requireAdmin(s.driveRestoreWorkspace))
+	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/quota", s.singleTenantAdmin(s.driveQuota))
+	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/name", s.singleTenantAdmin(s.driveRenameWorkspace))
+	s.mux.HandleFunc("DELETE /api/drive/workspaces/{id}", s.singleTenantAdmin(s.driveDeleteWorkspace))
+	s.mux.HandleFunc("GET /api/drive/deleted-workspaces", s.orgAdmin(s.driveDeletedWorkspaces))
+	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/restore", s.orgAdmin(s.driveRestoreWorkspace))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveFolders))
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/folders", s.requireAuthenticated(s.driveAddFolder))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/files", s.requireAuthenticated(s.driveFiles))
@@ -79,11 +80,11 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("PUT /api/drive/folders/{id}/trash", s.requireAuthenticated(s.driveFolderTrash))
 	s.mux.HandleFunc("GET /api/drive/folders/{id}/zip", s.requireAuthenticated(s.driveFolderZip))
 	s.mux.HandleFunc("DELETE /api/drive/folders/{id}", s.requireAuthenticated(s.drivePurgeFolder))
-	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.requireAdmin(s.driveRetention))
-	s.mux.HandleFunc("GET /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
-	s.mux.HandleFunc("PUT /api/drive/trash-retention", s.requireAdmin(s.driveTrashRetention))
-	s.mux.HandleFunc("GET /api/drive/leavers", s.requireAdmin(s.driveLeavers))
-	s.mux.HandleFunc("POST /api/drive/leavers/{workspace}/handover", s.requireAdmin(s.driveHandover))
+	s.mux.HandleFunc("PUT /api/drive/workspaces/{id}/retention", s.singleTenantAdmin(s.driveRetention))
+	s.mux.HandleFunc("GET /api/drive/trash-retention", s.platformAdmin(s.driveTrashRetention))
+	s.mux.HandleFunc("PUT /api/drive/trash-retention", s.platformAdmin(s.driveTrashRetention))
+	s.mux.HandleFunc("GET /api/drive/leavers", s.orgAdmin(s.driveLeavers))
+	s.mux.HandleFunc("POST /api/drive/leavers/{workspace}/handover", s.orgAdmin(s.driveHandover))
 	s.mux.HandleFunc("POST /api/drive/files/{id}/editor", s.requireAuthenticated(s.driveEditor))
 	// Only editor-scoped credentials reach these routes; browser sessions grant no access here.
 	s.mux.HandleFunc("GET /api/editor/download/{id}", s.editorDownload)
@@ -189,6 +190,14 @@ func (s *Server) driveDirectory(w http.ResponseWriter, r *http.Request) {
 		if len(page) == 0 || len(groups) >= total {
 			break
 		}
+	}
+	if d := s.store.Drive(); d != nil && d.Multi() {
+		in, err := d.OrgGroups(r.Context()) // the org orgAdmin bound
+		if err != nil {
+			s.driveError(w, err)
+			return
+		}
+		groups = slices.DeleteFunc(groups, func(g *store.Group) bool { return !in[g.ID] })
 	}
 	s.writeJSON(w, 200, map[string]any{"groups": groups, "identity_url": identityURL(), "authority": "KyIdentity"})
 }

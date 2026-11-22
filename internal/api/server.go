@@ -341,7 +341,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/suite/kypost/status", s.kypostSigned(kypostEventStatus, 120, s.kypostStatusRoute))
 	s.mux.HandleFunc("POST /api/suite/kypost/fetch", s.kypostSigned(kypostEventFetch, 60, s.kypostFetchRoute))
 	s.mux.HandleFunc("POST /api/suite/kypost/view-tickets", s.kypostSigned(kypostEventView, 60, s.kypostViewTicket))
-	s.mux.HandleFunc("GET /api/settings/kypost", s.requireAdmin(s.handleKyPostStatus))
+	s.mux.HandleFunc("GET /api/settings/kypost", s.platformAdmin(s.handleKyPostStatus))
 	s.mux.HandleFunc("GET /api/auth/app-passwords", s.requireAuthenticated(s.handleAppPasswords))
 	s.mux.HandleFunc("POST /api/auth/step-up", s.requireAuthenticated(s.handleStepUp))
 	s.mux.HandleFunc("POST /api/auth/app-passwords", s.requireAuthenticated(s.requireStepUp(s.handleCreateAppPassword)))
@@ -359,24 +359,29 @@ func (s *Server) routes() {
 	// Feature 0 KyBackup & Restore Drills. Capsules carry site data and keys: admins only.
 	// Method patterns: only the declared method reaches a handler. Export is a POST so the
 	// CSRF check covers a download that carries the whole instance.
-	s.mux.HandleFunc("POST /api/backup/drill", s.requireAdmin(s.handleBackupDrill))
-	s.mux.HandleFunc("POST /api/backup/export-capsule", s.requireAdmin(s.handleExportCapsule))
-	s.mux.HandleFunc("POST /api/backup/pair-remote", s.tracked(s.requireAdmin(s.handlePairRemoteRecovery)))
-	s.mux.HandleFunc("POST /api/backup/deposit", s.tracked(s.requireAdmin(s.handleRunBackup)))
-	s.mux.HandleFunc("DELETE /api/backup/pairing", s.requireAdmin(s.handleUnpair))
-	s.mux.HandleFunc("POST /api/backup/pin-key", s.tracked(s.requireAdmin(s.handlePinKey)))
-	s.mux.HandleFunc("PUT /api/backup/schedule", s.requireAdmin(s.handleSetSchedule))
-	s.mux.HandleFunc("PUT /api/backup/bulk-retention", s.requireAdmin(s.handleSetBulkRetention))
-	s.mux.HandleFunc("GET /api/backup/status", s.requireAdmin(s.handleBackupStatus))
+	s.mux.HandleFunc("POST /api/backup/drill", s.platformAdmin(s.handleBackupDrill))
+	s.mux.HandleFunc("POST /api/backup/export-capsule", s.platformAdmin(s.handleExportCapsule))
+	s.mux.HandleFunc("POST /api/backup/pair-remote", s.tracked(s.platformAdmin(s.handlePairRemoteRecovery)))
+	s.mux.HandleFunc("POST /api/backup/deposit", s.tracked(s.platformAdmin(s.handleRunBackup)))
+	s.mux.HandleFunc("DELETE /api/backup/pairing", s.platformAdmin(s.handleUnpair))
+	s.mux.HandleFunc("POST /api/backup/pin-key", s.tracked(s.platformAdmin(s.handlePinKey)))
+	s.mux.HandleFunc("PUT /api/backup/schedule", s.platformAdmin(s.handleSetSchedule))
+	s.mux.HandleFunc("PUT /api/backup/bulk-retention", s.platformAdmin(s.handleSetBulkRetention))
+	s.mux.HandleFunc("GET /api/backup/status", s.platformAdmin(s.handleBackupStatus))
 
 	// Settings & Theme. The read endpoint tiers its own payload by role.
 	s.mux.HandleFunc("/api/settings", s.handleGetSettings)
-	s.mux.HandleFunc("/api/settings/theme", s.requireAdmin(s.handleSetTheme))
-	s.mux.HandleFunc("GET /api/settings/rate-limit-networks", s.requireAdmin(s.handleGetExemptNetworks))
-	s.mux.HandleFunc("PUT /api/settings/rate-limit-networks", s.requireAdmin(s.handleSetExemptNetworks))
+	s.mux.HandleFunc("/api/settings/theme", s.platformAdmin(s.handleSetTheme))
+	s.mux.HandleFunc("GET /api/settings/rate-limit-networks", s.platformAdmin(s.handleGetExemptNetworks))
+	s.mux.HandleFunc("PUT /api/settings/rate-limit-networks", s.platformAdmin(s.handleSetExemptNetworks))
 
 	// SCIM 2.0 routes
-	s.scim.RegisterRoutes(s.mux)
+	if d := s.store.Drive(); d != nil && d.Multi() {
+		// Inbound SCIM is single-tenant: KyIdentity's signed webhooks carry each org's directory.
+		s.mux.HandleFunc("/scim/", func(w http.ResponseWriter, r *http.Request) { s.writeError(w, http.StatusNotFound, "Not found") })
+	} else {
+		s.scim.RegisterRoutes(s.mux)
+	}
 
 	// CJK whiteboard fonts (13 MB) stay out of the binary; without a directory they are absent.
 	fonts := http.NotFoundHandler()
@@ -412,11 +417,64 @@ func (s *Server) requireAdmin(h http.HandlerFunc) http.HandlerFunc {
 			}
 			return
 		}
-		if user.Role != "admin" {
+		if ok, err := store.Administrator(r.Context(), s.store, user); err != nil {
+			s.writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		} else if !ok {
 			s.writeError(w, http.StatusForbidden, "Administrator role required")
 			return
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), driveUserKey{}, user)))
+	}
+}
+
+// Every administrator route has one class (tenancy design, Admin surface). requireAdmin itself
+// is for these three only.
+
+// platformAdmin is an install-wide setting or operation: one for every org.
+func (s *Server) platformAdmin(h http.HandlerFunc) http.HandlerFunc { return s.requireAdmin(h) }
+
+// orgAdmin binds the request to one org. On a multi-tenant install staff select it with
+// X-Ky-Org (400 org_required without one it may select) and each read is audited in that
+// org; a single-tenant install ignores the header and binds its one org.
+func (s *Server) orgAdmin(h http.HandlerFunc) http.HandlerFunc {
+	return s.requireAdmin(func(w http.ResponseWriter, r *http.Request) {
+		d := s.store.Drive()
+		if d == nil || !d.Multi() {
+			h(w, r)
+			return
+		}
+		org := r.Header.Get("X-Ky-Org")
+		ok, err := d.OrgSelectable(r.Context(), org)
+		if err != nil {
+			s.writeError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		if !ok {
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Select an organisation with X-Ky-Org", "code": "org_required"})
+			return
+		}
+		ctx := drive.WithOrg(r.Context(), org)
+		if r.Method == http.MethodGet {
+			if err := d.StaffRead(ctx, s.driveUser(r).ID, r.URL.Path); err != nil {
+				s.writeError(w, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+		}
+		h(w, r.WithContext(ctx))
+	})
+}
+
+// singleTenantAdmin is shared workspace administration, which a multi-tenant install leaves
+// to suite groups and billing (D5, D7, D10): 404 there.
+func (s *Server) singleTenantAdmin(h http.HandlerFunc) http.HandlerFunc {
+	admin := s.requireAdmin(h)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d := s.store.Drive(); d != nil && d.Multi() {
+			s.writeError(w, http.StatusNotFound, "Not found")
+			return
+		}
+		admin(w, r)
 	}
 }
 
@@ -574,8 +632,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 	}
 
-	// SCIM middleware
-	if strings.HasPrefix(r.URL.Path, "/scim/v2") {
+	// SCIM middleware; a multi-tenant install has no inbound SCIM, so its mux answers 404.
+	if d := s.store.Drive(); strings.HasPrefix(r.URL.Path, "/scim/v2") && (d == nil || !d.Multi()) {
 		s.scim.AuthMiddleware(s.mux).ServeHTTP(w, r)
 		return
 	}

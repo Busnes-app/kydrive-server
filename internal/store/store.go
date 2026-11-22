@@ -138,3 +138,18 @@ func ActivePrincipal(ctx context.Context, st Store, u *User) (bool, error) {
 	}
 	return st.Drive().ActivePrincipal(ctx, u.ID)
 }
+
+// Administrator reports whether u may administer: role admin, an active principal, and on a
+// multi-tenant drive in the staff org (D9).
+func Administrator(ctx context.Context, st Store, u *User) (bool, error) {
+	if u.Role != "admin" {
+		return false, nil
+	}
+	if ok, err := ActivePrincipal(ctx, st, u); err != nil || !ok {
+		return false, err
+	}
+	if st.Drive() == nil {
+		return true, nil
+	}
+	return st.Drive().Staff(ctx, u.ID)
+}

@@ -33,6 +33,9 @@ func nameFree(ctx context.Context, tx *sql.Tx, org, name, except string) error {
 
 // RenameWorkspace renames a shared workspace. Admin only; My files cannot be renamed.
 func (s *Store) RenameWorkspace(ctx context.Context, user, workspace, name string) error {
+	if err := s.singleTenant(); err != nil {
+		return err
+	}
 	if !ValidName(name) {
 		return ErrInvalid
 	}
@@ -82,6 +85,9 @@ type DeletedWorkspace struct {
 //     service tokens, AI agent tokens limited to it and editor sessions are revoked for good.
 //     Its files stay until RestoreWorkspace or PurgeDeletedWorkspaces.
 func (s *Store) DeleteWorkspace(ctx context.Context, user, workspace, confirm string) (recoverable bool, err error) {
+	if err := s.singleTenant(); err != nil {
+		return false, err
+	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		if err := admin(ctx, tx, user); err != nil {
 			return err
@@ -139,7 +145,12 @@ func (s *Store) DeleteWorkspace(ctx context.Context, user, workspace, confirm st
 // revoked. Its name was kept reserved (nameFree), so it cannot collide.
 func (s *Store) RestoreWorkspace(ctx context.Context, user, workspace string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := admin(ctx, tx, user); err != nil {
+		if err := adminIn(ctx, tx, user, workspace); errors.Is(err, ErrDenied) {
+			if admin(ctx, tx, user) == nil {
+				return ErrNotFound // another org's workspace answers like an unknown one
+			}
+			return err
+		} else if err != nil {
 			return err
 		}
 		name, err := restoreWorkspace(ctx, tx, workspace)
@@ -189,10 +200,14 @@ func (s *Store) DeletedWorkspaces(ctx context.Context, user string) ([]DeletedWo
 	if err := admin(ctx, s.db, user); err != nil {
 		return nil, err
 	}
+	org, err := adminOrg(ctx, s.db, user)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.deleted_at,COALESCE((SELECT COALESCE(NULLIF(display_name,''),username) FROM users WHERE id=w.deleted_by),'a removed account'),
  COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0),
  (SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id)
- FROM drive_workspaces w WHERE w.deleted_at!='' ORDER BY w.deleted_at DESC,w.id`)
+ FROM drive_workspaces w WHERE w.deleted_at!='' AND w.org_id=? ORDER BY w.deleted_at DESC,w.id`, org)
 	if err != nil {
 		return nil, err
 	}
@@ -227,8 +242,8 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 	for _, id := range ids {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
-			var name string
-			err := tx.QueryRowContext(ctx, `SELECT name FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name)
+			var name, org string
+			err := tx.QueryRowContext(ctx, `SELECT name,org_id FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name, &org)
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // restored meanwhile
 			}
@@ -265,7 +280,7 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 			if b, err = unreferenced(ctx, tx, candidates); err != nil {
 				return err
 			}
-			return event(ctx, tx, "system", "workspace.purged", fmt.Sprintf("%s name=%q", id, name)+counts+rest)
+			return event(WithOrg(ctx, org), tx, "system", "workspace.purged", fmt.Sprintf("%s name=%q", id, name)+counts+rest)
 		})
 		if err != nil {
 			return blobs, err // a rolled-back purge still references b

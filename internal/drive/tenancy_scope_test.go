@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,8 +17,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// orgs is a multi-tenant drive store holding orgs A and B, each with an administrator, two
-// members in one group, a shared workspace called "Team" that group manages, and a file
+// orgs is a multi-tenant drive store holding a staff administrator and orgs A and B, each
+// with two members in one group, a shared workspace called "Team" that group manages, and a file
 // in it. A also has a leaver whose My files holds a file.
 type orgs struct {
 	ctx            context.Context
@@ -37,16 +39,16 @@ func multiTenant(t *testing.T) *orgs {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "ky.db")+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)")
 	if err != nil {
-		t.Fatal("setup 1:", err)
+		t.Fatal(err)
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	if err = migrations.Run(ctx, db, "sqlite"); err != nil {
-		t.Fatal("setup 2:", err)
+		t.Fatal(err)
 	}
 	d, err := drive.OpenMulti(ctx, db, testdb.Key)
 	if err != nil {
-		t.Fatal("setup 3:", err)
+		t.Fatal(err)
 	}
 	o := &orgs{ctx: ctx, d: d, db: db, root: t.TempDir(), groupA: "group-a", groupB: "group-b"}
 	exec := func(q string, args ...any) {
@@ -57,8 +59,9 @@ func multiTenant(t *testing.T) *orgs {
 	}
 	exec(`INSERT INTO drive_orgs(id,status) VALUES('org-a','active'),('org-b','active')`)
 	for _, u := range [][4]string{
-		{"a-admin", "admin", "active", "org-a"}, {"a1", "user", "active", "org-a"}, {"a2", "user", "active", "org-a"}, {"a-gone", "user", "inactive", "org-a"},
-		{"b-admin", "admin", "active", "org-b"}, {"b1", "user", "active", "org-b"}, {"b2", "user", "active", "org-b"},
+		{"staff", "admin", "active", drive.TestStaffOrg},
+		{"a1", "user", "active", "org-a"}, {"a2", "user", "active", "org-a"}, {"a-gone", "user", "inactive", "org-a"},
+		{"b1", "user", "active", "org-b"}, {"b2", "user", "active", "org-b"},
 	} {
 		exec(`INSERT INTO users(id,username,email,display_name,role,status,sso_provider,created_at,updated_at,org_id) VALUES(?,?,?,?,?,?,'scim',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)`, u[0], u[0], u[0]+"@local.test", "Person "+u[0], u[1], u[2], u[3])
 	}
@@ -68,42 +71,39 @@ func multiTenant(t *testing.T) *orgs {
 			exec(`INSERT INTO group_members(group_id,user_id) VALUES(?,?)`, g[0], m)
 		}
 	}
-	team := func(admin, group string) (drive.Workspace, drive.File) {
+	// Suite groups own shared workspaces on a multi-tenant store; these stand in for theirs.
+	team := func(org, group string) (drive.Workspace, drive.File) {
 		t.Helper()
-		w, err := d.CreateWorkspace(ctx, admin, "Team", 1<<20)
-		if err != nil {
-			t.Fatal("setup 4:", err)
-		}
-		if err = d.Grant(ctx, admin, w.ID, group, "manager"); err != nil {
-			t.Fatal("setup 5:", err)
-		}
+		w := drive.Workspace{ID: uuid.NewString(), Name: "Team"}
+		exec(`INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,?,?,?)`, w.ID, w.Name, 1<<20, org)
+		exec(`INSERT INTO drive_grants VALUES(?,?,'manager')`, w.ID, group)
 		f, err := d.Publish(ctx, group[len(group)-1:]+"1", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, o.root, "plan"), 0)
 		if err != nil {
-			t.Fatal("setup 6:", err)
+			t.Fatal(err)
 		}
 		return w, f
 	}
-	o.teamA, o.fileA = team("a-admin", o.groupA)
-	o.teamB, o.fileB = team("b-admin", o.groupB)
+	o.teamA, o.fileA = team("org-a", o.groupA)
+	o.teamB, o.fileB = team("org-b", o.groupB)
 	if o.folderB, err = d.AddFolder(ctx, "b1", o.teamB.ID, "", "zebracrossing"); err != nil {
-		t.Fatal("setup 7:", err)
+		t.Fatal(err)
 	}
 	if o.personalB, err = d.EnsurePersonalWorkspace(ctx, "b1"); err != nil {
-		t.Fatal("setup 8:", err)
+		t.Fatal(err)
 	}
 	if _, o.linkB, err = d.CreateLink(ctx, "b1", "file", o.fileB.ID, "reader", 0); err != nil {
-		t.Fatal("setup 9:", err)
+		t.Fatal(err)
 	}
 	if _, o.guestB, err = d.CreateGuestLink(ctx, "b1", "file", o.fileB.ID, time.Now().Add(time.Hour).Unix(), "", false, 24*time.Hour); err != nil {
-		t.Fatal("setup 10:", err)
+		t.Fatal(err)
 	}
 	// a-gone leaves files behind in their My files.
 	exec(`UPDATE users SET status='active' WHERE id='a-gone'`)
 	if o.leaverA, err = d.EnsurePersonalWorkspace(ctx, "a-gone"); err != nil {
-		t.Fatal("setup 11:", err)
+		t.Fatal(err)
 	}
 	if _, err = d.Publish(ctx, "a-gone", drive.File{Workspace: o.leaverA, Name: "notes.txt"}, blob(t, o.root, "notes"), 0); err != nil {
-		t.Fatal("setup 12:", err)
+		t.Fatal(err)
 	}
 	exec(`UPDATE users SET status='inactive' WHERE id='a-gone'`)
 	return o
@@ -146,7 +146,7 @@ func TestCrossOrgStore(t *testing.T) {
 	_, cross = d.Share(ctx, "a1", "file", o.fileA.ID, "group", o.groupB, "reader")
 	_, miss = d.Share(ctx, "a1", "file", o.fileA.ID, "group", missing, "reader")
 	same(t, "Share with another org's group", cross, miss)
-	same(t, "Grant another org's group", d.Grant(ctx, "a-admin", o.teamA.ID, o.groupB, "reader"), d.Grant(ctx, "a-admin", o.teamA.ID, missing, "reader"))
+	same(t, "Grant another org's group", d.Grant(ctx, "a1", o.teamA.ID, o.groupB, "reader"), d.Grant(ctx, "a1", o.teamA.ID, missing, "reader"))
 	_, cross = d.MoveFile(ctx, "a1", o.fileA.ID, 1, drive.Location{Workspace: o.teamB.ID, Name: "plan.txt"})
 	_, miss = d.MoveFile(ctx, "a1", o.fileA.ID, 1, drive.Location{Workspace: missing, Name: "plan.txt"})
 	same(t, "Move into another org", cross, miss)
@@ -165,11 +165,11 @@ func TestCrossOrgStore(t *testing.T) {
 	_, cross = d.CopyFile(ctx, "a1", o.fileA.ID, drive.Location{Workspace: o.teamB.ID, Name: "copy.txt"})
 	_, miss = d.CopyFile(ctx, "a1", o.fileA.ID, drive.Location{Workspace: missing, Name: "copy.txt"})
 	same(t, "Copy into another org", cross, miss)
-	_, cross = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{Workspace: o.teamB.ID})
-	_, miss = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{Workspace: missing})
+	_, cross = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{Workspace: o.teamB.ID})
+	_, miss = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{Workspace: missing})
 	same(t, "Handover into another org's workspace", cross, miss)
-	_, cross = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{User: "b1"})
-	_, miss = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{User: missing})
+	_, cross = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{User: "b1"})
+	_, miss = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{User: missing})
 	same(t, "Handover to another org's member", cross, miss)
 	_, _, cross = d.CreateLink(ctx, "a1", "file", o.fileB.ID, "reader", 0)
 	_, _, miss = d.CreateLink(ctx, "a1", "file", missing, "reader", 0)
@@ -216,13 +216,16 @@ func TestCrossOrgStore(t *testing.T) {
 	}
 }
 
-// Two orgs may each have a shared workspace of the same name.
+// Two orgs may each have a shared workspace of the same name; one org may not have two.
 func TestWorkspaceNamesArePerOrg(t *testing.T) {
 	o := multiTenant(t)
-	if o.teamA.Name != "Team" || o.teamB.Name != "Team" {
-		t.Fatalf("names %q and %q", o.teamA.Name, o.teamB.Name)
+	if err := drive.NameFree(o.ctx, o.d, "org-b", "Team (2)"); err != nil {
+		t.Fatalf("a free name refused: %v", err)
 	}
-	if _, err := o.d.CreateWorkspace(o.ctx, "a-admin", "team", 1<<20); !errors.Is(err, drive.ErrConflict) {
+	if err := drive.NameFree(o.ctx, o.d, "org-c", "Team"); err != nil {
+		t.Fatalf("Team taken in an org that has none: %v", err)
+	}
+	if err := drive.NameFree(o.ctx, o.d, "org-a", "team"); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("a second Team in one org: %v", err)
 	}
 }
@@ -366,18 +369,188 @@ func TestScopingHoldsWithoutTriggers(t *testing.T) {
 	if err != nil || len(shared) != 0 {
 		t.Errorf("shared with me lists planted grants: %v %v", shared, err)
 	}
-	same(t, "Grant another org's group", d.Grant(ctx, "a-admin", o.teamA.ID, o.groupB, "reader"), d.Grant(ctx, "a-admin", o.teamA.ID, missing, "reader"))
+	same(t, "Grant another org's group", d.Grant(ctx, "a1", o.teamA.ID, o.groupB, "reader"), d.Grant(ctx, "a1", o.teamA.ID, missing, "reader"))
 	_, cross = d.MoveFile(ctx, "a1", o.fileA.ID, 1, drive.Location{Workspace: o.teamB.ID, Name: "plan.txt"})
 	_, miss = d.MoveFile(ctx, "a1", o.fileA.ID, 1, drive.Location{Workspace: missing, Name: "plan.txt"})
 	same(t, "Move into another org", cross, miss)
 	_, cross = d.CopyFile(ctx, "a1", o.fileB.ID, drive.Location{Workspace: o.teamA.ID, Name: "copy.txt"})
 	_, miss = d.CopyFile(ctx, "a1", missing, drive.Location{Workspace: o.teamA.ID, Name: "copy.txt"})
 	same(t, "Copy from another org", cross, miss)
-	_, cross = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{Workspace: o.teamB.ID})
-	_, miss = d.Handover(ctx, "a-admin", o.leaverA, drive.Target{Workspace: missing})
+	_, cross = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{Workspace: o.teamB.ID})
+	_, miss = d.Handover(drive.WithOrg(ctx, "org-a"), "staff", o.leaverA, drive.Target{Workspace: missing})
 	same(t, "Handover into another org", cross, miss)
 	var moved int
 	if err := o.db.QueryRow(`SELECT COUNT(*) FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace JOIN drive_versions v ON v.file_id=f.id WHERE w.org_id='org-b' AND v.blob IN (SELECT v2.blob FROM drive_versions v2 JOIN drive_files f2 ON f2.id=v2.file_id JOIN drive_workspaces w2 ON w2.id=f2.workspace WHERE w2.org_id='org-a')`).Scan(&moved); err != nil || moved != 0 {
 		t.Errorf("%d of org A's blobs reached org B: %v", moved, err)
+	}
+}
+
+// On a multi-tenant store only the staff org holds role='admin': the database refuses it
+// elsewhere, and the store refuses an administrator planted outside it.
+func TestOnlyStaffAdminister(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	if _, err := o.db.Exec(`UPDATE users SET role='admin' WHERE id='a1'`); !refused(err) {
+		t.Fatalf("a customer made administrator: %v", err)
+	}
+	if _, err := o.db.Exec(`INSERT INTO users(id,username,role,status,created_at,updated_at,org_id) VALUES('boss','boss','admin','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'org-a')`); !refused(err) {
+		t.Fatalf("a customer administrator created: %v", err)
+	}
+	if _, err := o.db.Exec(`INSERT INTO users(id,username,role,status,created_at,updated_at,org_id) VALUES('staff2','staff2','admin','active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)`, drive.TestStaffOrg); err != nil {
+		t.Fatalf("a second staff administrator: %v", err)
+	}
+	for _, name := range strs(t, o.db, `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'users_admin_is_staff%'`) {
+		if _, err := o.db.Exec(`DROP TRIGGER ` + name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := o.db.Exec(`UPDATE users SET role='admin' WHERE id='a1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Leavers(ctx, "a1"); !errors.Is(err, drive.ErrDenied) {
+		t.Fatalf("a planted customer administrator lists leavers: %v", err)
+	}
+	if _, err := d.Leavers(ctx, "staff"); err != nil {
+		t.Fatalf("staff: %v", err)
+	}
+}
+
+// Staff act in the org they select, and another org's objects answer as unknown ones there.
+func TestStaffActInTheSelectedOrg(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	inA, inB := drive.WithOrg(ctx, "org-a"), drive.WithOrg(ctx, "org-b")
+	if _, err := o.db.Exec(`UPDATE drive_workspaces SET deleted_at='2026-11-01T00:00:00Z',deleted_by='b1' WHERE id=?`, o.teamB.ID); err != nil {
+		t.Fatal(err)
+	}
+	leavers, err := d.Leavers(inA, "staff")
+	if err != nil || len(leavers) != 1 || leavers[0].Workspace != o.leaverA {
+		t.Fatalf("A's leavers: %+v %v", leavers, err)
+	}
+	if leavers, err = d.Leavers(inB, "staff"); err != nil || len(leavers) != 0 {
+		t.Fatalf("B's leavers: %+v %v", leavers, err)
+	}
+	deleted, err := d.DeletedWorkspaces(inA, "staff")
+	if err != nil || len(deleted) != 0 {
+		t.Fatalf("A lists B's deleted workspace: %+v %v", deleted, err)
+	}
+	if deleted, err = d.DeletedWorkspaces(inB, "staff"); err != nil || len(deleted) != 1 {
+		t.Fatalf("B's deleted workspaces: %+v %v", deleted, err)
+	}
+	missing := uuid.NewString()
+	same(t, "Restore another org's workspace", d.RestoreWorkspace(inA, "staff", o.teamB.ID), d.RestoreWorkspace(inA, "staff", missing))
+	_, cross := d.Handover(inB, "staff", o.leaverA, drive.Target{Workspace: o.teamA.ID})
+	_, miss := d.Handover(inB, "staff", missing, drive.Target{Workspace: o.teamA.ID})
+	same(t, "Handover another org's leaver", cross, miss)
+	colleagues, err := d.Colleagues(inA, "staff")
+	if err != nil || len(colleagues) == 0 {
+		t.Fatalf("A's colleagues: %v %v", colleagues, err)
+	}
+	for _, c := range colleagues {
+		if c.ID[0] != 'a' {
+			t.Errorf("A's colleagues include %s", c.ID)
+		}
+	}
+	events, err := d.Events(inB, "staff")
+	if err != nil || len(events) == 0 {
+		t.Fatalf("B's audit: %v %v", events, err)
+	}
+	for _, e := range events {
+		if e.User[0] != 'b' {
+			t.Errorf("B's audit holds %s's %s", e.User, e.Action)
+		}
+	}
+	if err := d.RestoreWorkspace(inB, "staff", o.teamB.ID); err != nil {
+		t.Fatalf("restore in its own org: %v", err)
+	}
+	if _, err := d.Handover(inA, "staff", o.leaverA, drive.Target{Workspace: o.teamA.ID}); err != nil {
+		t.Fatalf("handover in its own org: %v", err)
+	}
+	logged := strs(t, o.db, `SELECT action||' '||org_id FROM drive_events WHERE user_id='staff' ORDER BY created`)
+	if want := []string{"workspace.restored org-b", "workspace.handed_over org-a"}; !slices.Equal(logged, want) {
+		t.Errorf("staff actions logged as %v, want %v", logged, want)
+	}
+}
+
+// What customers have no administrator for is refused on a multi-tenant store (D10).
+func TestSharedWorkspaceAdministrationIsSingleTenant(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := drive.WithOrg(o.ctx, "org-a"), o.d
+	_, createErr := d.CreateWorkspace(ctx, "staff", "New", 1<<20)
+	_, deleteErr := d.DeleteWorkspace(ctx, "staff", o.teamA.ID, "Team")
+	for what, err := range map[string]error{
+		"create":    createErr,
+		"delete":    deleteErr,
+		"rename":    d.RenameWorkspace(ctx, "staff", o.teamA.ID, "Renamed"),
+		"quota":     d.Quota(ctx, "staff", o.teamA.ID, 1<<30),
+		"retention": d.SetRetention(ctx, "staff", o.teamA.ID, 7, 3),
+	} {
+		if !errors.Is(err, drive.ErrNotFound) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+}
+
+// A multi-tenant store records its staff org and seeds its row; it refuses a staff org that
+// is not a canonical UUID or is the default org, and a database recorded with another.
+func TestStaffOrgIsRecorded(t *testing.T) {
+	o := multiTenant(t)
+	var status string
+	var seeded int
+	if err := o.db.QueryRow(`SELECT status,seeded FROM drive_orgs WHERE id=?`, drive.TestStaffOrg).Scan(&status, &seeded); err != nil || status != "active" || seeded != 1 {
+		t.Fatalf("staff org row: %s %d %v", status, seeded, err)
+	}
+	for _, staff := range []string{"", "not-a-uuid", strings.ToUpper(drive.TestStaffOrg), drive.DefaultOrg, uuid.NewString()} {
+		if _, err := drive.Open(o.ctx, o.db, testdb.Key, drive.Tenancy{Mode: drive.TenancyMulti, StaffOrg: staff}); err == nil {
+			t.Errorf("opened with staff org %q", staff)
+		}
+	}
+	if _, err := drive.Open(o.ctx, o.db, testdb.Key, drive.Tenancy{Mode: drive.TenancyMulti, StaffOrg: drive.TestStaffOrg}); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+}
+
+// A single-tenant install's audit still lists what actors without an account record (the
+// system, a guest link): they land in its one org.
+func TestSingleTenantAuditKeepsSystemEvents(t *testing.T) {
+	st, _, _ := fixture(t)
+	ctx, d := context.Background(), st.Drive()
+	for _, actor := range []string{"system", "guest-link:x", "removed-account"} {
+		if err := drive.RecordEvent(ctx, d, actor, "test.recorded", actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, err := d.Events(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, e := range events {
+		seen[e.User] = true
+	}
+	for _, actor := range []string{"system", "guest-link:x", "removed-account"} {
+		if !seen[actor] {
+			t.Errorf("audit lost the event of %s", actor)
+		}
+	}
+}
+
+// On a multi-tenant store, a guest download and a retention purge are audited in the org of
+// the workspace they touched, not as platform rows.
+func TestWorkerAndGuestEventsLandInTheirOrg(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	if _, err := d.GuestFile(ctx, o.guestB, "", o.fileB.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetTrash(ctx, "a1", o.fileA.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ApplyRetention(ctx, time.Now().Add(40*24*time.Hour), 30); err != nil {
+		t.Fatal(err)
+	}
+	got := strs(t, o.db, `SELECT action||' '||COALESCE(org_id,'none') FROM drive_events WHERE action IN ('guest_link.downloaded','file.retention_purged') ORDER BY action`)
+	if want := []string{"file.retention_purged org-a", "guest_link.downloaded org-b"}; !slices.Equal(got, want) {
+		t.Fatalf("events %v, want %v", got, want)
 	}
 }

@@ -4,6 +4,23 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Fix: upgrading a database older than drive schema 20 that holds a file and a folder of
+  the same name no longer fails at startup.** Since the org groundwork, schema 20's clash
+  rename wrote `org_id`, which that schema does not have yet; it now writes the columns of its
+  own schema, and the upgrade's later default places the rows in the default org.
+- **Audit rows of guests and background workers name their workspace's org.** Guest-link
+  downloads and uploads, trash and version retention, and workspace purges are recorded in
+  the org of the workspace they touched. A single-tenant install, with one org, is unchanged.
+
+- **Administration is bound to one org (tenancy groundwork).** Every administrator route now
+  has a class: install-wide (`platform`), one org (`org`: the admin directory, audit, leavers,
+  handover, deleted workspaces and restore), or single-tenant only (creating, renaming,
+  deleting, re-quotaing and per-workspace retention of shared workspaces). Drive schema 28
+  refuses the administrator role outside the staff org of a multi-tenant database. On a
+  multi-tenant install, staff select the org with `X-Ky-Org`, see only that org, and every
+  read is audited there; single-tenant ignores the header. The main store's audit rows now
+  carry the account's org. Single-tenant behaviour is unchanged.
+
 - **Access is scoped by org (tenancy groundwork).** Every grant now requires the account and
   the workspace to be in the same org, and an account acts only while its org is active and
   enabled. That covers browser sessions, password and KyIdentity sign-in, WebDAV passwords,

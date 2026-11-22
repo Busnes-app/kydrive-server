@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
@@ -21,7 +23,7 @@ func Open(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, er
 	driver := strings.ToLower(cfg.Driver)
 	switch driver {
 	case "sqlite", "sqlite3", "":
-		return openSQLite(ctx, cfg.DSN, key)
+		return openSQLite(ctx, cfg, key)
 	case "postgres", "postgresql", "pgx":
 		return openPostgres(ctx, cfg.DSN, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
 	default:
@@ -29,7 +31,8 @@ func Open(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, er
 	}
 }
 
-func openSQLite(ctx context.Context, dsn string, key []byte) (Store, error) {
+func openSQLite(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, error) {
+	dsn := cfg.DSN
 	filePath := dsn
 	if idx := strings.Index(dsn, "?"); idx != -1 {
 		filePath = dsn[:idx]
@@ -63,7 +66,7 @@ func openSQLite(ctx context.Context, dsn string, key []byte) (Store, error) {
 	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=FULL"); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return newSQLStore(ctx, db, "sqlite", key)
+	return newSQLStore(ctx, db, "sqlite", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
 }
 
 func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLifetime time.Duration) (Store, error) {
@@ -90,5 +93,5 @@ func openPostgres(ctx context.Context, dsn string, maxOpen, maxIdle int, maxLife
 		return nil, errors.Join(fmt.Errorf("failed to ping postgres database: %w", err), db.Close())
 	}
 
-	return newSQLStore(ctx, db, "postgres", nil)
+	return newSQLStore(ctx, db, "postgres", nil, drive.Tenancy{})
 }

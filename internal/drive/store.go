@@ -25,8 +25,9 @@ var (
 )
 
 type Store struct {
-	db    *sql.DB
-	names names
+	db      *sql.DB
+	names   names
+	tenancy Tenancy
 }
 type Workspace struct {
 	Kind         string `json:"kind"`
@@ -85,14 +86,22 @@ type Event struct {
 	Created  string `json:"created"`
 }
 
-// New opens the drive store. key is the deployment key; names are sealed under keys derived from it.
+// New opens a single-tenant drive store. key is the deployment key; names are sealed under
+// keys derived from it.
 func New(ctx context.Context, db *sql.DB, key []byte) (*Store, error) {
-	return open(ctx, db, key, len(schema), TenancySingle)
+	return Open(ctx, db, key, Tenancy{Mode: TenancySingle})
 }
 
-// open migrates to schema version, which only upgrade tests set below the latest, in tenancy
-// mode, which only tests set to multi.
-func open(ctx context.Context, db *sql.DB, key []byte, version int, mode string) (*Store, error) {
+// Open is New in tenancy t.
+func Open(ctx context.Context, db *sql.DB, key []byte, t Tenancy) (*Store, error) {
+	return open(ctx, db, key, len(schema), t)
+}
+
+// open migrates to schema version, which only upgrade tests set below the latest.
+func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (*Store, error) {
+	if err := t.check(); err != nil {
+		return nil, err
+	}
 	n, err := newNames(key)
 	if err != nil {
 		return nil, err
@@ -120,11 +129,14 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, mode string)
 	if err = checkKey(ctx, db, key); err != nil {
 		return nil, err
 	}
-	if err = recordTenancy(ctx, db, mode); err != nil {
+	if err = recordTenancy(ctx, db, t); err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, names: n}
+	s := &Store{db: db, names: n, tenancy: t}
 	if err = s.migrateTo(ctx, version); err != nil {
+		return nil, err
+	}
+	if err = seedStaffOrg(ctx, db, t); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -192,7 +204,7 @@ func admin(ctx context.Context, q queryer, user string) error {
 		return ErrDenied
 	}
 	var n int
-	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u WHERE u.id=? AND u.role='admin' AND `+activePrincipal("u.id"), user).Scan(&n)
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u WHERE u.id=? AND u.role='admin' AND `+activePrincipal("u.id")+` AND `+staffSQL("u.id"), user).Scan(&n)
 	if err != nil {
 		return err
 	}
@@ -201,8 +213,11 @@ func admin(ctx context.Context, q queryer, user string) error {
 	}
 	return nil
 }
+
+// event records an action in the actor's org, or in the org staff act in (WithOrg).
 func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES(?,?,?,?,?,`+userOrg("?")+`)`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano), user)
+	org, _ := ctx.Value(orgKey{}).(string)
+	_, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created,org_id) VALUES(?,?,?,?,?,COALESCE(NULLIF(?,''),`+userOrg("?")+`))`, uuid.NewString(), user, action, resource, time.Now().UTC().Format(time.RFC3339Nano), org, user)
 	return err
 }
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
@@ -224,12 +239,16 @@ func (s *Store) Workspaces(ctx context.Context, user string, administration bool
 	if isPeer(ctx) {
 		return nil, ErrDenied
 	}
+	org, err := adminOrg(ctx, s.db, user) // the administrator's selected org, else the user's own
+	if err != nil {
+		return nil, err
+	}
 	if administration {
 		if err := admin(ctx, s.db, user); err != nil {
 			return nil, err
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND w.org_id=(SELECT org_id FROM users WHERE id=q.u) AND `+activePrincipal("q.u")+` ORDER BY w.name`, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id,w.name,w.quota,w.trash_days,w.keep_versions,w.editors_share,CASE WHEN p.workspace IS NULL THEN 'shared' ELSE 'personal' END,COALESCE((SELECT SUM(v.size) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id WHERE f.workspace=w.id),0)+`+viewBytes+`w.id),COALESCE((SELECT MAX(seq) FROM drive_changes c WHERE c.workspace=w.id),0),(SELECT COUNT(*) FROM drive_files f WHERE f.workspace=w.id)+(SELECT COUNT(*) FROM drive_folders d WHERE d.workspace=w.id),`+rankSQL("q.u", "w.id")+` FROM (SELECT ? AS u) q, drive_workspaces w LEFT JOIN drive_personal_workspaces p ON p.workspace=w.id WHERE (p.workspace IS NULL OR p.owner=q.u) AND w.deleted_at='' AND w.org_id=? AND `+activePrincipal("q.u")+` ORDER BY w.name`, user, org)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +312,9 @@ func ensurePersonal(ctx context.Context, tx *sql.Tx, user string) (string, error
 
 func (s *Store) CreateWorkspace(ctx context.Context, user, name string, quota int64) (Workspace, error) {
 	w := Workspace{ID: uuid.NewString(), Name: name, Quota: quota, Kind: "shared"}
+	if err := s.singleTenant(); err != nil {
+		return w, err
+	}
 	if !ValidName(name) || quota < 1 {
 		return w, ErrInvalid
 	}
@@ -339,7 +361,7 @@ func (s *Store) Grants(ctx context.Context, user, workspace string) ([]Grant, er
 	if err := sharedWorkspace(ctx, s.db, workspace); err != nil {
 		return nil, err
 	}
-	if err := admin(ctx, s.db, user); err != nil {
+	if err := adminIn(ctx, s.db, user, workspace); err != nil {
 		if err = authorize(ctx, s.db, user, workspace, 3); err != nil {
 			return nil, err
 		}
@@ -370,7 +392,7 @@ func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) 
 		if err := sharedWorkspace(ctx, tx, workspace); err != nil {
 			return err
 		}
-		if err := admin(ctx, tx, user); err != nil {
+		if err := adminIn(ctx, tx, user, workspace); err != nil {
 			if err = authorize(ctx, tx, user, workspace, 3); err != nil {
 				return err
 			}
@@ -395,6 +417,9 @@ func (s *Store) Grant(ctx context.Context, user, workspace, group, role string) 
 	})
 }
 func (s *Store) Quota(ctx context.Context, user, workspace string, quota int64) error {
+	if err := s.singleTenant(); err != nil {
+		return err
+	}
 	if quota < 1 {
 		return ErrInvalid
 	}
@@ -631,7 +656,11 @@ func (s *Store) Events(ctx context.Context, user string) ([]Event, error) {
 	if err := admin(ctx, s.db, user); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id,action,resource,created FROM drive_events ORDER BY created DESC LIMIT 200`)
+	org, err := adminOrg(ctx, s.db, user)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id,action,resource,created FROM drive_events WHERE org_id=? ORDER BY created DESC LIMIT 200`, org)
 	if err != nil {
 		return nil, err
 	}
