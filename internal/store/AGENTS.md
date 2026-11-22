@@ -16,6 +16,7 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 - `store.Open(ctx, cfg, key)` initializes and auto-migrates the configured database backend and opens the drive store on it, in `cfg.Tenancy`. `key` is the deployment key (`cfg.Security.EncryptionKey`); the drive store refuses to open without a 32-byte key.
 - SQLite runs in WAL mode with foreign keys enabled.
 - PostgreSQL opens through `qmark.Open`, which rebinds `?` and `?NNN` as pgx needs, so the drive store's SQL runs unchanged; the main store's own `rebind` output has no `?` left and passes through.
+- Every transaction runs in `qmark.Retry`, so a PostgreSQL serialization failure reruns it (a no-op on SQLite); its body must only touch the database. A single statement outside a transaction is not retried.
 - `auditSQL` records each row's org (the named account's, or NULL) on both backends.
 - Local MFA is removed (two-factor sign-in is KyIdentity's). Its schema stays and no migration drops it: `users.totp_secret_enc`, `totp_enabled`, `totp_last_counter`, `recovery_codes_hash` and the `mfa_challenges` table keep their data, unused. `CreateMFAChallenge`/`ConsumeMFAChallenge` (single successful use) remain only so tests can seed and check the challenge rows that revocation paths still delete.
 - `migrations.Run` applies each migration in one transaction that first excludes concurrent runners (SQLite: a no-op write takes the write lock; Postgres: `pg_advisory_xact_lock`), then checks `schema_migrations`, so processes starting together apply each version once.

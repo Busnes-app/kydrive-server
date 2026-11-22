@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"strings"
 	"time"
 	"unicode"
@@ -231,21 +230,10 @@ func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error
 }
 
 // transaction runs f in one transaction. SQLite has one writer; on PostgreSQL every transaction
-// is serializable (qmark.Open), so f sees the same guarantee, and a serialization failure or
-// deadlock runs f again after a random pause, which f must allow: it only reads and writes the
-// database.
+// is serializable (qmark.Open), so f sees the same guarantee, and qmark.Retry reruns f on a
+// serialization failure or deadlock, which f must allow: it only reads and writes the database.
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
-	for attempt := 1; ; attempt++ {
-		err := s.transactionOnce(ctx, f)
-		if !s.pg || attempt == maxAttempts || !retryable(err) {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return err
-		case <-time.After(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond)))):
-		}
-	}
+	return qmark.Retry(ctx, func() error { return s.transactionOnce(ctx, f) })
 }
 
 // attempt runs f, a step tx goes on from if it fails (to try another name). PostgreSQL ends a
@@ -266,14 +254,6 @@ func (s *Store) attempt(ctx context.Context, tx *sql.Tx, f func() error) error {
 	}
 	_, err := tx.ExecContext(ctx, `RELEASE SAVEPOINT attempt`)
 	return err
-}
-
-// maxAttempts bounds the runs of one transaction: enough for dozens of writers to one workspace.
-const maxAttempts = 50
-
-func retryable(err error) bool {
-	msg := fmt.Sprint(err)
-	return strings.Contains(msg, "(SQLSTATE 40001)") || strings.Contains(msg, "(SQLSTATE 40P01)")
 }
 
 func (s *Store) transactionOnce(ctx context.Context, f func(*sql.Tx) error) error {

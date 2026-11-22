@@ -896,10 +896,10 @@ the release before. No R step starts before the owner approves this amendment.
       PostgreSQL functions there.
     - Departure from the Quotas section: `fits` takes no row lock. Every PostgreSQL transaction
       and statement is serializable (`default_transaction_isolation`, set by `qmark.Open`),
-      the main store's included. A drive transaction reruns on a serialization failure. This
-      covers the quota check, a credential created while a password change or logout commits,
-      and every other read-then-write the one SQLite writer protected. A main-store write that
-      hits a serialization failure fails its request.
+      the main store's included. Every drive and main-store transaction reruns on a
+      serialization failure (`qmark.Retry`). This covers the quota check, a credential created
+      while a password change or logout commits, and every other read-then-write the one
+      SQLite writer protected. A single statement outside a transaction is not rerun.
     - A name retry inside a transaction runs in a savepoint. Change rows take their seq under a
       per-workspace transaction lock, so a cursor never passes a row that commits later.
     - Not ported until their own steps: content search (R2) and backups (R3) stay SQLite only,

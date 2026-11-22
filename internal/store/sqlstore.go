@@ -13,6 +13,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/qmark"
 
 	"github.com/Busnes-app/kydrive-server/internal/store/migrations"
 )
@@ -30,6 +31,7 @@ type SQLStore struct {
 }
 
 // newSQLStore creates and initializes a SQLStore, running migrations automatically.
+
 func newSQLStore(ctx context.Context, db *sql.DB, driver string, key []byte, tenancy drive.Tenancy) (*SQLStore, error) {
 	driver = strings.ToLower(driver)
 	if driver == "postgresql" {
@@ -73,46 +75,49 @@ func (s *SQLStore) Close() error                   { return s.db.Close() }
 // transaction. Passwords, MFA secrets,
 // directory membership and content remain as backed up; operators reconcile those separately.
 func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
-	if s.drive == nil {
-		return errors.New("restore reset requires a SQLite drive")
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, table := range []string{
-		"sessions", "mfa_challenges", "drive_app_passwords", "drive_devices", "drive_device_codes",
-		"drive_service_tokens", "drive_link_users", "drive_links", "drive_editor_saves",
-		"drive_editor_documents", "drive_editor_sessions", "drive_upload_segments", "drive_upload_sessions",
-	} {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+	return qmark.Retry(ctx, func() error {
+		if s.drive == nil {
+			return errors.New("restore reset requires a SQLite drive")
+		}
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
 			return err
 		}
-	}
-	// A new opener must not reuse a document key held by an editor from before restoration.
-	// A random positive 56-bit epoch also separates repeated restores of the same capsule.
-	epoch, err := strconv.ParseInt(crypto.RandomHex(7), 16, 64)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=?`, epoch+1); err != nil {
-		return err
-	}
-	// A restored copy must not deposit over the history of the server still in service: scheduled
-	// deposits stay off (a stored 0 overrides KY_BACKUP_DEPOSIT_INTERVAL) until an admin turns them on.
-	now := time.Now().UTC()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('backup_interval_sec','0',?) ON CONFLICT(key) DO UPDATE SET value='0', updated_at=excluded.updated_at`, now); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, s.auditSQL(),
-		"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked; scheduled deposits turned off", "", now); err != nil {
-		return err
-	}
-	return tx.Commit()
+		defer tx.Rollback()
+		for _, table := range []string{
+			"sessions", "mfa_challenges", "drive_app_passwords", "drive_devices", "drive_device_codes",
+			"drive_service_tokens", "drive_link_users", "drive_links", "drive_editor_saves",
+			"drive_editor_documents", "drive_editor_sessions", "drive_upload_segments", "drive_upload_sessions",
+		} {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+				return err
+			}
+		}
+		// A new opener must not reuse a document key held by an editor from before restoration.
+		// A random positive 56-bit epoch also separates repeated restores of the same capsule.
+		epoch, err := strconv.ParseInt(crypto.RandomHex(7), 16, 64)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET editor_epoch=?`, epoch+1); err != nil {
+			return err
+		}
+		// A restored copy must not deposit over the history of the server still in service: scheduled
+		// deposits stay off (a stored 0 overrides KY_BACKUP_DEPOSIT_INTERVAL) until an admin turns them on.
+		now := time.Now().UTC()
+		if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES('backup_interval_sec','0',?) ON CONFLICT(key) DO UPDATE SET value='0', updated_at=excluded.updated_at`, now); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, s.auditSQL(),
+			"system", "system.restore_reset", "store", "sessions, MFA challenges, DAV and agent passwords, desktop devices, service tokens, sharing links, editor sessions and unfinished uploads revoked; scheduled deposits turned off", "", now); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 // rebind converts '?' placeholders to '$1, $2, ...' for Postgres
+
 func (s *SQLStore) rebind(query string) string {
 	if s.driver != "postgres" {
 		return query
@@ -144,68 +149,72 @@ type userStore struct {
 
 // SetDirectoryRole is an explicit operator grant, never inferred from a directory role.
 func (u *userStore) SetDirectoryRole(ctx context.Context, subject, role string) error {
-	if subject == "" || len(subject) > 512 || strings.TrimSpace(subject) != subject || (role != "admin" && role != "user") {
-		return fmt.Errorf("exact directory subject and role admin or user required")
-	}
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	var count int
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(*) FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&count); err != nil {
-		return err
-	}
-	if count != 1 {
-		return fmt.Errorf("expected exactly one active directory account; found %d", count)
-	}
-	var id, oldRole string
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id,role FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&id, &oldRole); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET role=?,updated_at=? WHERE id=?`), role, now, id); err != nil {
-		return err
-	}
-	if err = u.store.revokeGrants(ctx, tx, id); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return qmark.Retry(ctx, func() error {
+		if subject == "" || len(subject) > 512 || strings.TrimSpace(subject) != subject || (role != "admin" && role != "user") {
+			return fmt.Errorf("exact directory subject and role admin or user required")
+		}
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		var count int
+		if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT COUNT(*) FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&count); err != nil {
+			return err
+		}
+		if count != 1 {
+			return fmt.Errorf("expected exactly one active directory account; found %d", count)
+		}
+		var id, oldRole string
+		if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id,role FROM users WHERE sso_subject=? AND sso_provider IN ('scim','kysignon') AND status='active'`), subject).Scan(&id, &oldRole); err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET role=?,updated_at=? WHERE id=?`), role, now, id); err != nil {
+			return err
+		}
+		if err = u.store.revokeGrants(ctx, tx, id); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.directory_role_changed", id, oldRole+" -> "+role+"; sessions revoked", "operator-cli", now); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 // RenameLocalAdmin frees a directory username without linking or elevating identities.
 func (u *userStore) RenameLocalAdmin(ctx context.Context, oldName, newName string) error {
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	var exists bool
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username)=LOWER(?))`), newName).Scan(&exists); err != nil {
-		return err
-	}
-	if exists {
-		return ErrAlreadyExists
-	}
-	var id string
-	// While case-only clashes remain, the exact spelling picks the account, never chance.
-	if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin' ORDER BY username = ? DESC, id LIMIT 1`), oldName, oldName).Scan(&id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+	return qmark.Retry(ctx, func() error {
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
 		}
-		return err
-	}
-	now := time.Now().UTC()
-	if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET username=?, updated_at=? WHERE id=? AND sso_provider='local' AND role='admin'`), newName, now, id); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.local_admin_renamed", id, oldName+" -> "+newName, "operator-cli", now); err != nil {
-		return err
-	}
-	return tx.Commit()
+		defer tx.Rollback()
+		var exists bool
+		if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username)=LOWER(?))`), newName).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return ErrAlreadyExists
+		}
+		var id string
+		// While case-only clashes remain, the exact spelling picks the account, never chance.
+		if err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id FROM users WHERE LOWER(username)=LOWER(?) AND sso_provider='local' AND role='admin' ORDER BY username = ? DESC, id LIMIT 1`), oldName, oldName).Scan(&id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		now := time.Now().UTC()
+		if _, err = tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET username=?, updated_at=? WHERE id=? AND sso_provider='local' AND role='admin'`), newName, now, id); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, u.store.auditSQL(), id, "auth.local_admin_renamed", id, oldName+" -> "+newName, "operator-cli", now); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 // caseVariantFree is true when account $ID may hold username $NAME: no other account holds it in
@@ -216,6 +225,7 @@ const caseVariantFree = `NOT (EXISTS(SELECT 1 FROM users v WHERE LOWER(v.usernam
 // caseVariantTaken refuses giving account id a username another account holds in a different
 // case, unless id already holds it that way. Until existing case-only clashes are renamed the
 // unique index is absent (migration 8), so this keeps new ones out; nothing is renamed.
+
 func caseVariantTaken(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, rebind func(string) string, name, id string) error {
@@ -386,140 +396,152 @@ WHERE id = ? AND ` + caseVariantFree)
 
 var directoryUsername = regexp.MustCompile(`^[A-Za-z0-9._@+\-]{1,128}$`)
 
-func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error) {
-	// Disabling an existing account changes only its status, so it works whatever its username.
-	if (d.ID == "" || d.Active) && !directoryUsername.MatchString(d.Username) {
-		return nil, ErrInvalidUsername
-	}
-	status := "inactive"
-	if d.Active {
-		status = "active"
-	}
-	now := time.Now().UTC()
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	id := d.ID
-	if id == "" {
-		if d.Provider != "scim" && d.Provider != "kysignon" {
-			return nil, fmt.Errorf("unknown directory provider %q", d.Provider)
-		}
-		id = "usr_" + crypto.RandomHex(12)
-		if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
-			return nil, err
-		}
-		cols, vals, args := "", "", []any{id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.Revision, now, now}
-		if d.OrgID != "" {
-			cols, vals, args = ", org_id", ", ?", append(args, d.OrgID)
-		}
-		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_rev, created_at, updated_at`+cols+`) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?`+vals+`)`), args...)
-	} else {
-		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
-		if d.Active {
-			if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (applied *User, err error) {
+	err = qmark.Retry(ctx, func() error {
+		var e error
+		applied, e = func() (*User, error) {
+			// Disabling an existing account changes only its status, so it works whatever its username.
+			if (d.ID == "" || d.Active) && !directoryUsername.MatchString(d.Username) {
+				return nil, ErrInvalidUsername
+			}
+			status := "inactive"
+			if d.Active {
+				status = "active"
+			}
+			now := time.Now().UTC()
+			tx, err := u.store.db.BeginTx(ctx, nil)
+			if err != nil {
 				return nil, err
 			}
-		}
-		if !d.Active {
-			set, args = "status = ?", []any{status}
-		}
-		set, args = set+", updated_at = ?", append(args, now)
-		if d.Revision != 0 {
-			set, args = set+", directory_rev = ?", append(args, d.Revision)
-		}
-		q := "UPDATE users SET " + set + " WHERE id = ? AND sso_provider IN ('scim', 'kysignon')"
-		args = append(args, id)
-		if d.Revision != 0 {
-			q, args = q+" AND directory_rev "+newerThan(d.Active)+" ?", append(args, d.Revision)
-		}
-		var res sql.Result
-		if res, err = tx.ExecContext(ctx, u.store.rebind(q), args...); err == nil {
-			err = u.directoryRowMissing(ctx, tx, res, id, d.Revision)
-		}
-	}
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate key") {
-			return nil, ErrAlreadyExists
-		}
-		return nil, err
-	}
-	// Disabling ends every credential, not just sessions: re-enabling must not revive a WebDAV
-	// password, agent or service token or linked computer minted before (by an intruder, say).
-	if !d.Active {
-		if err := u.store.revokeGrants(ctx, tx, id); err != nil {
-			return nil, err
-		}
-		if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
-			return nil, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return u.GetUserByID(ctx, id)
+			defer tx.Rollback()
+			id := d.ID
+			if id == "" {
+				if d.Provider != "scim" && d.Provider != "kysignon" {
+					return nil, fmt.Errorf("unknown directory provider %q", d.Provider)
+				}
+				id = "usr_" + crypto.RandomHex(12)
+				if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+					return nil, err
+				}
+				cols, vals, args := "", "", []any{id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.Revision, now, now}
+				if d.OrgID != "" {
+					cols, vals, args = ", org_id", ", ?", append(args, d.OrgID)
+				}
+				_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_rev, created_at, updated_at`+cols+`) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?`+vals+`)`), args...)
+			} else {
+				set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
+				if d.Active {
+					if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
+						return nil, err
+					}
+				}
+				if !d.Active {
+					set, args = "status = ?", []any{status}
+				}
+				set, args = set+", updated_at = ?", append(args, now)
+				if d.Revision != 0 {
+					set, args = set+", directory_rev = ?", append(args, d.Revision)
+				}
+				q := "UPDATE users SET " + set + " WHERE id = ? AND sso_provider IN ('scim', 'kysignon')"
+				args = append(args, id)
+				if d.Revision != 0 {
+					q, args = q+" AND directory_rev "+newerThan(d.Active)+" ?", append(args, d.Revision)
+				}
+				var res sql.Result
+				if res, err = tx.ExecContext(ctx, u.store.rebind(q), args...); err == nil {
+					err = u.directoryRowMissing(ctx, tx, res, id, d.Revision)
+				}
+			}
+			if err != nil {
+				if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate key") {
+					return nil, ErrAlreadyExists
+				}
+				return nil, err
+			}
+			// Disabling ends every credential, not just sessions: re-enabling must not revive a WebDAV
+			// password, agent or service token or linked computer minted before (by an intruder, say).
+			if !d.Active {
+				if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+					return nil, err
+				}
+				if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
+					return nil, err
+				}
+			}
+			if err := tx.Commit(); err != nil {
+				return nil, err
+			}
+			return u.GetUserByID(ctx, id)
+		}()
+		return e
+	})
+	return applied, err
 }
 
 func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision int64) error {
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	q, args := `DELETE FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`, []any{id}
-	if revision != 0 {
-		q, args = q+" AND directory_rev "+newerThan(false)+" ?", append(args, revision)
-	}
-	res, err := tx.ExecContext(ctx, u.store.rebind(q), args...)
-	if err != nil {
-		return err
-	}
-	if err := u.directoryRowMissing(ctx, tx, res, id, revision); err != nil {
-		return err
-	}
-	if err := u.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return qmark.Retry(ctx, func() error {
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		q, args := `DELETE FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`, []any{id}
+		if revision != 0 {
+			q, args = q+" AND directory_rev "+newerThan(false)+" ?", append(args, revision)
+		}
+		res, err := tx.ExecContext(ctx, u.store.rebind(q), args...)
+		if err != nil {
+			return err
+		}
+		if err := u.directoryRowMissing(ctx, tx, res, id, revision); err != nil {
+			return err
+		}
+		if err := u.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 func (u *userStore) RevokeDirectoryCredentials(ctx context.Context, id string) error {
-	var subject string
-	err := u.store.db.QueryRowContext(ctx, u.store.rebind(`SELECT COALESCE(sso_subject, '') FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&subject)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-	// A callback holding a pre-reset ID token must not sign in after this. iat has whole-second
-	// precision, so the cutoff rounds up, as a back-channel logout's does.
-	now := time.Now()
-	if subject != "" {
-		if err := u.store.fenceSSOSubject(ctx, "kysignon", subject, now.Add(time.Second), now.Add(SSOLogoutFence)); err != nil {
+	return qmark.Retry(ctx, func() error {
+		var subject string
+		err := u.store.db.QueryRowContext(ctx, u.store.rebind(`SELECT COALESCE(sso_subject, '') FROM users WHERE id = ? AND sso_provider IN ('scim', 'kysignon')`), id).Scan(&subject)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
 			return err
 		}
-	}
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := u.store.revokeGrants(ctx, tx, id); err != nil {
-		return err
-	}
-	if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, u.store.auditSQL(), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
-		return err
-	}
-	return tx.Commit()
+		// A callback holding a pre-reset ID token must not sign in after this. iat has whole-second
+		// precision, so the cutoff rounds up, as a back-channel logout's does.
+		now := time.Now()
+		if subject != "" {
+			if err := u.store.fenceSSOSubject(ctx, "kysignon", subject, now.Add(time.Second), now.Add(SSOLogoutFence)); err != nil {
+				return err
+			}
+		}
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, u.store.auditSQL(), id, "sso.mfa_reset", "user", "directory MFA reset; sessions and credentials revoked", "", time.Now().UTC()); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 // newerThan compares an event's revision to the account's last one. An equal revision is a
 // redelivery, so a tie goes to the restrictive event: disabling or deleting applies, enabling does not.
+
 func newerThan(enables bool) string {
 	if enables {
 		return "<"
@@ -528,6 +550,7 @@ func newerThan(enables bool) string {
 }
 
 // directoryRowMissing explains a directory write that touched no row: stale or absent.
+
 func (u *userStore) directoryRowMissing(ctx context.Context, tx *sql.Tx, res sql.Result, id string, revision int64) error {
 	n, err := res.RowsAffected()
 	if err != nil || n == 1 {
@@ -689,42 +712,47 @@ type sessionStore struct {
 // withPassword serializes credential-derived grants with password replacement.
 // Updating the same user row takes a write lock on both supported databases.
 func (s *SQLStore) withPassword(ctx context.Context, userID, expectedHash string, apply func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, s.rebind("UPDATE users SET id = id WHERE id = ? AND password_hash = ? AND status = 'active'"), userID, expectedHash)
-	if err != nil {
-		return err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n != 1 {
-		return ErrNotFound
-	}
-	if err := apply(tx); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return qmark.Retry(ctx, func() error {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		result, err := tx.ExecContext(ctx, s.rebind("UPDATE users SET id = id WHERE id = ? AND password_hash = ? AND status = 'active'"), userID, expectedHash)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrNotFound
+		}
+		if err := apply(tx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 func (s *SQLStore) inTx(ctx context.Context, apply func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := apply(tx); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return qmark.Retry(ctx, func() error {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if err := apply(tx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 // revokeGrants ends every credential-derived grant of an account: sessions, MFA challenges
 // and editor sessions.
+
 func (s *SQLStore) revokeGrants(ctx context.Context, tx *sql.Tx, userID string) error {
 	for _, table := range []string{"sessions", "mfa_challenges"} {
 		if _, err := tx.ExecContext(ctx, s.rebind("DELETE FROM "+table+" WHERE user_id = ?"), userID); err != nil {
@@ -795,6 +823,7 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil
 
 // fenceSSOSubject commits a fence refusing the subject's logins issued before cutoff until
 // fenceUntil. Callers commit it before deleting sessions; see CreateSession.
+
 func (s *SQLStore) fenceSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
 	if _, err := s.db.ExecContext(ctx, s.rebind(`DELETE FROM sso_subject_logouts WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
 		return err
@@ -839,6 +868,7 @@ func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject stri
 // deleteSessions deletes the sessions matching where and, in the same transaction, the
 // editor sessions of their accounts. revokeLogin also revokes, in that transaction, the
 // editor sessions bound to the logged-out login, which outlive its expired browser sessions.
+
 func (s *sessionStore) deleteSessions(ctx context.Context, revokeLogin func(*sql.Tx) error, where string, args ...any) error {
 	return s.store.inTx(ctx, func(tx *sql.Tx) error {
 		if err := revokeLogin(tx); err != nil {
@@ -897,27 +927,29 @@ func (u *userStore) CompletePasswordChange(ctx context.Context, userID, oldHash,
 
 // ResetAdminPassword is the operator recovery path, including disabled local accounts.
 func (u *userStore) ResetAdminPassword(ctx context.Context, userID, newHash string) error {
-	tx, err := u.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	now := time.Now().UTC()
-	result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, status = 'active', role = 'admin', updated_at = ? WHERE id = ? AND sso_provider = 'local'`), newHash, true, now, userID)
-	if err != nil {
-		return err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n != 1 {
-		return ErrNotFound
-	}
-	if err := u.revokePasswordGrants(ctx, tx, userID, "operator reset; sessions and credentials revoked", "", now); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return qmark.Retry(ctx, func() error {
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		now := time.Now().UTC()
+		result, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET password_hash = ?, must_change_password = ?, status = 'active', role = 'admin', updated_at = ? WHERE id = ? AND sso_provider = 'local'`), newHash, true, now, userID)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrNotFound
+		}
+		if err := u.revokePasswordGrants(ctx, tx, userID, "operator reset; sessions and credentials revoked", "", now); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 
 func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID, details, ip string, now time.Time) error {
@@ -974,6 +1006,7 @@ func (s *sessionStore) DeleteSession(ctx context.Context, tokenHash string) erro
 }
 
 // EndSession is sign-out: it deletes the session and revokes the account's editor sessions.
+
 func (s *sessionStore) EndSession(ctx context.Context, tokenHash string) error {
 	return s.store.inTx(ctx, func(tx *sql.Tx) error {
 		var userID string
@@ -1018,37 +1051,44 @@ func (s *sessionStore) CreateMFAChallenge(ctx context.Context, challenge *MFACha
 	})
 }
 
-func (s *sessionStore) ConsumeMFAChallenge(ctx context.Context, tokenHash string) (string, string, error) {
-	tx, err := s.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", "", err
-	}
-	defer tx.Rollback()
-	q := s.store.rebind("SELECT user_id, expires_at, password_hash FROM mfa_challenges WHERE token_hash = ?")
-	var userID, passwordHash string
-	var expiresAt time.Time
-	if err := tx.QueryRowContext(ctx, q, tokenHash).Scan(&userID, &expiresAt, &passwordHash); err != nil {
-		if errorsIs(err, sql.ErrNoRows) {
-			return "", "", ErrNotFound
-		}
-		return "", "", err
-	}
-	if !time.Now().UTC().Before(expiresAt) {
-		return "", "", ErrSessionExpired
-	}
-	deleteQ := s.store.rebind("DELETE FROM mfa_challenges WHERE token_hash = ?")
-	res, err := tx.ExecContext(ctx, deleteQ, tokenHash)
-	if err != nil {
-		return "", "", err
-	}
-	rows, err := res.RowsAffected()
-	if err != nil || rows != 1 {
-		return "", "", ErrNotFound
-	}
-	if err := tx.Commit(); err != nil {
-		return "", "", err
-	}
-	return userID, passwordHash, nil
+func (s *sessionStore) ConsumeMFAChallenge(ctx context.Context, tokenHash string) (user, hash string, err error) {
+	err = qmark.Retry(ctx, func() error {
+		var e error
+		user, hash, e = func() (string, string, error) {
+			tx, err := s.store.db.BeginTx(ctx, nil)
+			if err != nil {
+				return "", "", err
+			}
+			defer tx.Rollback()
+			q := s.store.rebind("SELECT user_id, expires_at, password_hash FROM mfa_challenges WHERE token_hash = ?")
+			var userID, passwordHash string
+			var expiresAt time.Time
+			if err := tx.QueryRowContext(ctx, q, tokenHash).Scan(&userID, &expiresAt, &passwordHash); err != nil {
+				if errorsIs(err, sql.ErrNoRows) {
+					return "", "", ErrNotFound
+				}
+				return "", "", err
+			}
+			if !time.Now().UTC().Before(expiresAt) {
+				return "", "", ErrSessionExpired
+			}
+			deleteQ := s.store.rebind("DELETE FROM mfa_challenges WHERE token_hash = ?")
+			res, err := tx.ExecContext(ctx, deleteQ, tokenHash)
+			if err != nil {
+				return "", "", err
+			}
+			rows, err := res.RowsAffected()
+			if err != nil || rows != 1 {
+				return "", "", ErrNotFound
+			}
+			if err := tx.Commit(); err != nil {
+				return "", "", err
+			}
+			return userID, passwordHash, nil
+		}()
+		return e
+	})
+	return user, hash, err
 }
 
 // ---------------------------------------------------------------------
@@ -1368,41 +1408,43 @@ func errorsIs(err, target error) bool {
 
 // ReplaceGroup applies directory attributes and the entire membership set atomically.
 func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool) error {
-	tx, err := g.store.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	now := time.Now().UTC()
-	if create {
-		group.CreatedAt = now
-		_, err = tx.ExecContext(ctx, g.store.rebind("INSERT INTO groups(id,display_name,external_id,created_at,updated_at) VALUES(?,?,?,?,?)"), group.ID, group.DisplayName, group.ExternalID, now, now)
-	} else {
-		var res sql.Result
-		res, err = tx.ExecContext(ctx, g.store.rebind("UPDATE groups SET display_name=?,updated_at=? WHERE id=? AND external_id=?"), group.DisplayName, now, group.ID, group.ExternalID)
-		if err == nil {
-			var n int64
-			if n, err = res.RowsAffected(); err == nil && n != 1 {
-				return ErrNotFound
-			}
-		}
-	}
-	if err != nil {
-		return err
-	}
-	group.UpdatedAt = now
-	if _, err = tx.ExecContext(ctx, g.store.rebind("DELETE FROM group_members WHERE group_id=?"), group.ID); err != nil {
-		return err
-	}
-	for _, id := range group.Members {
-		if _, err = tx.ExecContext(ctx, g.store.rebind("INSERT INTO group_members(group_id,user_id) VALUES(?,?) ON CONFLICT DO NOTHING"), group.ID, id); err != nil {
+	return qmark.Retry(ctx, func() error {
+		tx, err := g.store.db.BeginTx(ctx, nil)
+		if err != nil {
 			return err
 		}
-	}
-	if _, err = tx.ExecContext(ctx, g.store.auditSQL(), "scim", "scim.group.replaced", group.ID, "membership applied atomically", "", now); err != nil {
-		return err
-	}
-	return tx.Commit()
+		defer tx.Rollback()
+		now := time.Now().UTC()
+		if create {
+			group.CreatedAt = now
+			_, err = tx.ExecContext(ctx, g.store.rebind("INSERT INTO groups(id,display_name,external_id,created_at,updated_at) VALUES(?,?,?,?,?)"), group.ID, group.DisplayName, group.ExternalID, now, now)
+		} else {
+			var res sql.Result
+			res, err = tx.ExecContext(ctx, g.store.rebind("UPDATE groups SET display_name=?,updated_at=? WHERE id=? AND external_id=?"), group.DisplayName, now, group.ID, group.ExternalID)
+			if err == nil {
+				var n int64
+				if n, err = res.RowsAffected(); err == nil && n != 1 {
+					return ErrNotFound
+				}
+			}
+		}
+		if err != nil {
+			return err
+		}
+		group.UpdatedAt = now
+		if _, err = tx.ExecContext(ctx, g.store.rebind("DELETE FROM group_members WHERE group_id=?"), group.ID); err != nil {
+			return err
+		}
+		for _, id := range group.Members {
+			if _, err = tx.ExecContext(ctx, g.store.rebind("INSERT INTO group_members(group_id,user_id) VALUES(?,?) ON CONFLICT DO NOTHING"), group.ID, id); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.ExecContext(ctx, g.store.auditSQL(), "scim", "scim.group.replaced", group.ID, "membership applied atomically", "", now); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
 }
 func (g *groupStore) GetGroupByExternalID(ctx context.Context, id string) (*Group, error) {
 	var groupID string
@@ -1418,6 +1460,7 @@ func (g *groupStore) GetGroupByExternalID(ctx context.Context, id string) (*Grou
 
 // auditSQL inserts one audit row (user_id, action, resource, details, ip_address, created_at)
 // in the org of the account it names, or none for a platform row.
+
 func (s *SQLStore) auditSQL() string {
 	// ?1 is cast so PostgreSQL deduces one type for its two uses.
 	return `INSERT INTO audit_records(user_id,action,resource,details,ip_address,created_at,org_id) VALUES(CAST(?1 AS TEXT),?2,?3,?4,?5,?6,` + drive.UserOrgSQL("CAST(?1 AS TEXT)") + `)`

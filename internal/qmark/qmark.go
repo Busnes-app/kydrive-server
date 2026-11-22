@@ -6,8 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -50,6 +53,31 @@ func (p boolPlan) Encode(value any, buf []byte) ([]byte, error) {
 		n.Int64 = 1
 	}
 	return p.int.Encode(n, buf)
+}
+
+// Retry runs f, one whole transaction, again after a random pause while it fails with a
+// serialization failure or deadlock, up to MaxAttempts runs; f must only touch the database.
+// On SQLite neither error occurs, so f runs once.
+func Retry(ctx context.Context, f func() error) error {
+	for attempt := 1; ; attempt++ {
+		err := f()
+		if attempt == MaxAttempts || !retryable(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond)))):
+		}
+	}
+}
+
+// MaxAttempts bounds the runs of one transaction: enough for dozens of writers to one row.
+const MaxAttempts = 50
+
+func retryable(err error) bool {
+	msg := fmt.Sprint(err)
+	return strings.Contains(msg, "(SQLSTATE 40001)") || strings.Contains(msg, "(SQLSTATE 40P01)")
 }
 
 // Is reports whether db was opened by Open.
