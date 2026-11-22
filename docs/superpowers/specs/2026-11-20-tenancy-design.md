@@ -900,6 +900,9 @@ the release before. No R step starts before the owner approves this amendment.
       serialization failure (`qmark.Retry`). This covers the quota check, a credential created
       while a password change or logout commits, and every other read-then-write the one
       SQLite writer protected. A single statement outside a transaction is not rerun.
+    - A PostgreSQL start holds a database-wide advisory lock while it migrates and opens the
+      store, so processes starting together create the schema once. Step 6 still owns the
+      bootstrap administrator and its password file, which are written after the store opens.
     - A name retry inside a transaction runs in a savepoint. Change rows take their seq under a
       per-workspace transaction lock, so a cursor never passes a row that commits later.
     - Not ported until their own steps: content search (R2) and backups (R3) stay SQLite only,
