@@ -162,3 +162,28 @@ func TestPostgresSchemaIsCurrent(t *testing.T) {
 		t.Fatalf("PostgreSQL schema is at %d, SQLite at %d: add the new entries to schema_postgres.go", drive.PostgresVersion, drive.SchemaVersion)
 	}
 }
+
+// Processes starting together on an empty PostgreSQL database all open it: one creates the
+// schema while the others wait, then find it done.
+func TestConcurrentFirstStartsOpen(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("SQLite opens one file with one writer")
+	}
+	cfg := testdb.Config(t)
+	const n = 4
+	errs := make(chan error, n)
+	for range n {
+		go func() {
+			st, err := store.Open(context.Background(), cfg, testdb.Key)
+			if err == nil {
+				err = st.Close()
+			}
+			errs <- err
+		}()
+	}
+	for range n {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+}

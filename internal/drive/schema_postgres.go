@@ -82,16 +82,23 @@ CREATE FUNCTION unixepoch() RETURNS BIGINT LANGUAGE sql STABLE AS $$SELECT extra
 `
 
 // createPostgres creates the drive schema on an empty PostgreSQL database and records versions
-// 1 to postgresVersion. Concurrent first starts serialise on the transaction-scoped lock.
+// 1 to postgresVersion. Concurrent first starts serialise on the transaction-scoped lock; the
+// transaction is READ COMMITTED so the count after the lock sees what a first start committed
+// (a serializable snapshot would date from the lock statement, before the wait).
 func (s *Store) createPostgres(ctx context.Context) error {
 	if len(schema) != postgresVersion {
 		return fmt.Errorf("drive: PostgreSQL schema is at %d, SQLite at %d", postgresVersion, len(schema))
 	}
-	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
 		return err
 	}
-	return s.transaction(ctx, func(tx *sql.Tx) error {
+	defer tx.Rollback()
+	if err := func() error {
 		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
 			return err
 		}
 		var done int
@@ -106,7 +113,10 @@ func (s *Store) createPostgres(ctx context.Context) error {
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema SELECT generate_series(1,?)`, postgresVersion)
 		return err
-	})
+	}(); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // postgresSchema is the drive schema at postgresVersion.

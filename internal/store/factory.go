@@ -69,6 +69,9 @@ func openSQLite(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Sto
 	return newSQLStore(ctx, db, "sqlite", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
 }
 
+// startLock is the PostgreSQL advisory lock a starting process holds while it opens the schema.
+const startLock = 0x6b7964737472
+
 func openPostgres(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Store, error) {
 	maxOpen, maxIdle, maxLifetime := cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime
 	db, err := qmark.Open(cfg.DSN)
@@ -86,13 +89,25 @@ func openPostgres(ctx context.Context, cfg config.DatabaseConfig, key []byte) (S
 		maxLifetime = 15 * time.Minute
 	}
 
-	db.SetMaxOpenConns(maxOpen)
+	// One connection more than one: the start lock below holds one while the store opens.
+	db.SetMaxOpenConns(max(maxOpen, 2))
 	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(maxLifetime)
 
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(fmt.Errorf("failed to ping postgres database: %w", err), db.Close())
 	}
+	// One process at a time migrates and opens the schema: another start waits here, on its
+	// own connection, then finds everything done.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock(?)`, startLock); err != nil {
+		return nil, errors.Join(err, db.Close())
+	}
+	defer conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(?)`, startLock)
 
 	return newSQLStore(ctx, db, "postgres", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
 }
