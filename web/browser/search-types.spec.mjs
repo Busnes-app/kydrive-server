@@ -39,11 +39,14 @@ test('filters search results by type from the chips', async ({ page }, testInfo)
   await expect(search.getByRole('button', { name: pdf })).toBeVisible();
   await expect(search.getByRole('button', { name: doc })).toBeVisible();
 
-  // Keyboard: Tab from the box reaches the chips; Space presses one.
+  // Keyboard: Tab from the box reaches the chips, which are one tab stop; arrows move along
+  // them and Space presses one.
   await box.focus();
   await page.keyboard.press('Tab');
   await expect(search.getByRole('button', { name: 'Folders' })).toBeFocused();
-  for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
+  await page.keyboard.press('ArrowLeft');
+  await expect(search.getByRole('button', { name: 'Archives' })).toBeFocused();
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
   const pdfs = search.getByRole('group', { name: 'File type' }).getByRole('button', { name: 'PDFs' });
   await expect(pdfs).toBeFocused();
   await page.keyboard.press('Space');

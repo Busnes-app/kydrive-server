@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Toggle } from '@base-ui/react/toggle';
+import { ToggleGroup } from '@base-ui/react/toggle-group';
 import { Check, Folder, Search as SearchIcon } from 'lucide-react';
 import { record, response } from './client';
 import type { Workspace } from './client';
@@ -114,11 +116,11 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
     <SearchIcon className="drive-search-icon" size={18} aria-hidden="true" />
     <input type="search" aria-label="Search files" value={q} maxLength={100} placeholder="Search names and words in files" onFocus={() => setOpen(true)} onChange={e => setQ(e.target.value)} />
     {open && <div className="drive-search-results">
-      <div className="drive-search-types" role="group" aria-label="File type">
-        {TYPES.map(([v, label]) => <button key={v} type="button" aria-pressed={type === v} onClick={() => choose(type === v ? '' : v)}>
+      <ToggleGroup className="drive-search-types" aria-label="File type" value={type ? [type] : []} onValueChange={v => choose(v[0] ?? '')}>
+        {TYPES.map(([v, label]) => <Toggle key={v} value={v}>
           {type === v && <Check size={14} aria-hidden="true" />}{label}
-        </button>)}
-      </div>
+        </Toggle>)}
+      </ToggleGroup>
       <div aria-live="polite">
       {idle(q, type) && <p className="drive-search-note">Enter at least 2 characters, or choose a type.</p>}
       {error ? <p role="alert">{error}</p> : found && (found.results.length === 0 ? <p>No matches</p> : <ul>{found.results.map(h => {
