@@ -3,11 +3,14 @@ package drive
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/google/uuid"
 )
 
@@ -139,6 +142,13 @@ func recordTenancy(ctx context.Context, db *sql.DB, t Tenancy) error {
 		}
 		if recorded != kv[1] {
 			return fmt.Errorf("this database's staff org is %s, not %s", recorded, kv[1])
+		}
+	}
+	// A KyIdentity subject is one account, so the org comparison at every entry point has one
+	// row to compare with. Multi-tenant only: a single-tenant install may hold duplicates.
+	if t.Mode == TenancyMulti {
+		if _, err = tx.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_kysignon_subject ON users(sso_subject) WHERE sso_provider='kysignon'`); err != nil {
+			return err
 		}
 	}
 	return tx.Commit()
@@ -291,3 +301,72 @@ const fileOrg = `SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w
 // UserOrgSQL is userOrg for SQL built outside the drive store; user is a column reference or
 // placeholder.
 func UserOrgSQL(user string) string { return userOrg(user) }
+
+// UserOrg is user's org, "" for an account with no row.
+func (s *Store) UserOrg(ctx context.Context, user string) (string, error) {
+	var org sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT org_id FROM users WHERE id=?`, user).Scan(&org)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return org.String, err
+}
+
+// OrgActive reports whether org is registered, and whether it is active and enabled.
+func (s *Store) OrgActive(ctx context.Context, org string) (known, active bool, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT 1, status='active' AND enabled=1 FROM drive_orgs WHERE id=?`, org).Scan(&known, &active)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, nil
+	}
+	return known, active, err
+}
+
+// orgsSince is the server_settings key holding the revision the next org poll starts after.
+const orgsSince = "orgs_since"
+
+// OrgsSince is the revision the next /api/suite/orgs poll asks for changes after.
+func (s *Store) OrgsSince(ctx context.Context) (int64, error) {
+	var since int64
+	err := s.db.QueryRowContext(ctx, `SELECT CAST(value AS INTEGER) FROM server_settings WHERE key=?`, orgsSince).Scan(&since)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return since, err
+}
+
+// ApplyOrgs mirrors a page of /api/suite/orgs into the registry and records next, in one
+// transaction. An older revision than the row's changes nothing. The seeded staff org is never
+// changed; staffNotActive reports that the directory listed it as anything but active.
+func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) (staffNotActive bool, err error) {
+	if !s.Multi() {
+		return false, ErrNotFound
+	}
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		for _, o := range orgs {
+			if o.ID == s.tenancy.StaffOrg {
+				staffNotActive = staffNotActive || o.Status != suitedir.OrgActive || !o.Enabled
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,revision,enabled,storage_bytes) VALUES(?,?,?,?,?)
+ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes
+WHERE drive_orgs.seeded=0 AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, orgsSince, strconv.FormatInt(next, 10), time.Now().UTC())
+		return err
+	})
+	return staffNotActive, err
+}
+
+// storageBytes is quotas' storage_bytes, or nil (no pool, so writes are refused) unless it is
+// a positive integer.
+func storageBytes(quotas json.RawMessage) any {
+	var q struct {
+		StorageBytes *int64 `json:"storage_bytes"`
+	}
+	if json.Unmarshal(quotas, &q) != nil || q.StorageBytes == nil || *q.StorageBytes <= 0 {
+		return nil
+	}
+	return *q.StorageBytes
+}

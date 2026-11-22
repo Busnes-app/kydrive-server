@@ -413,8 +413,11 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*
 		if err = caseVariantTaken(ctx, tx, u.store.rebind, d.Username, id); err != nil {
 			return nil, err
 		}
-		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_rev, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?)`),
-			id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.Revision, now, now)
+		cols, vals, args := "", "", []any{id, d.Username, d.Email, d.DisplayName, status, d.Provider, d.Subject, d.Revision, now, now}
+		if d.OrgID != "" {
+			cols, vals, args = ", org_id", ", ?", append(args, d.OrgID)
+		}
+		_, err = tx.ExecContext(ctx, u.store.rebind(`INSERT INTO users (id, username, email, display_name, role, status, sso_provider, sso_subject, recovery_codes_hash, directory_rev, created_at, updated_at`+cols+`) VALUES (?, ?, ?, ?, 'user', ?, ?, ?, '[]', ?, ?, ?`+vals+`)`), args...)
 	} else {
 		set, args := "username = ?, email = ?, display_name = ?, status = ?", []any{d.Username, d.Email, d.DisplayName, status}
 		if d.Active {

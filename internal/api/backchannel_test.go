@@ -29,6 +29,10 @@ type fakeKySignOn struct {
 	key     *rsa.PrivateKey
 	issuer  string
 	idToken string
+	org     string // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
+	orgs    string // the /api/suite/orgs answer
+	polls   int    // /api/suite/orgs calls
+	groups  int    // /api/suite/groups calls
 }
 
 func newFakeKySignOn(t *testing.T) *fakeKySignOn {
@@ -52,6 +56,12 @@ func newFakeKySignOn(t *testing.T) *fakeKySignOn {
 				"kty": "RSA", "alg": "RS256", "kid": "k",
 				"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB",
 			}}})
+		case "/api/suite/groups":
+			f.groups++
+			_, _ = w.Write([]byte(`{"groups":[]}`))
+		case "/api/suite/orgs":
+			f.polls++
+			_, _ = w.Write([]byte(f.orgs))
 		case "/token":
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "a", "token_type": "Bearer", "id_token": f.idToken})
 		default:
@@ -94,6 +104,9 @@ func (f *fakeKySignOn) logoutToken(t *testing.T, sub, sid string) string {
 	if sid != "" {
 		claims["sid"] = sid
 	}
+	if f.org != "" {
+		claims["org_id"] = f.org
+	}
 	return f.sign(t, "logout+jwt", claims)
 }
 
@@ -112,7 +125,11 @@ func ssoLoginAt(t *testing.T, srv *api.Server, f *fakeKySignOn, sub, sid string,
 		t.Fatalf("login redirect: %d %s", w.Code, w.Body.String())
 	}
 	q := loc.Query()
-	f.idToken = f.sign(t, "", map[string]any{"sub": sub, "sid": sid, "nonce": q.Get("nonce"), "preferred_username": sub, "iat": iat.Unix()})
+	claims := map[string]any{"sub": sub, "sid": sid, "nonce": q.Get("nonce"), "preferred_username": sub, "iat": iat.Unix()}
+	if f.org != "" {
+		claims["org_id"] = f.org
+	}
+	f.idToken = f.sign(t, "", claims)
 	req := httptest.NewRequest(http.MethodGet, "/api/sso/kysignon/callback?code=c&state="+q.Get("state"), nil)
 	for _, c := range w.Result().Cookies() {
 		req.AddCookie(c)

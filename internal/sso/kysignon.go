@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"time"
@@ -69,7 +70,9 @@ type directoryUser struct {
 		Primary bool   `json:"primary"`
 	} `json:"emails"`
 	Active bool `json:"active"`
-	Meta   *struct {
+	// OrgID is the account's org, sent by a multi-tenant KyIdentity only.
+	OrgID string `json:"org_id"`
+	Meta  *struct {
 		Version string `json:"version"`
 	} `json:"meta"`
 }
@@ -109,21 +112,42 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 	}
 	revision, _ := strconv.ParseInt(match[1], 10, 64)
 
+	// Multi-tenant: the signed body names the org, and an account never changes org. Single-tenant
+	// ignores the field.
+	d := k.store.Drive()
+	multi := d != nil && d.Multi()
+	org := ""
+	if multi {
+		if org = user.OrgID; org == "" {
+			return ErrWebhookMalformed
+		}
+	}
 	existing, err := store.DirectorySubject(ctx, k.store.Users(), user.ID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
+	}
+	// Revoking credentials only takes access away, so an MFA reset applies whatever the org.
+	if multi && existing != nil && event.Type != "user.mfa_reset" {
+		have, err := d.UserOrg(ctx, existing.ID)
+		if err != nil {
+			return err
+		}
+		if have != org {
+			k.auditMismatch(ctx, existing.ID)
+			return fmt.Errorf("%w: account is in another org", ErrWebhookMalformed)
+		}
 	}
 	switch event.Type {
 	case "user.created", "user.updated":
 		if existing == nil && !user.Active {
 			return nil // nothing local to disable
 		}
-		d := &store.DirectoryUser{Provider: "kysignon", Subject: user.ID, Username: user.UserName, Email: user.email(),
-			DisplayName: user.displayName(), Active: user.Active, Revision: revision}
+		du := &store.DirectoryUser{Provider: "kysignon", Subject: user.ID, Username: user.UserName, Email: user.email(),
+			DisplayName: user.displayName(), Active: user.Active, Revision: revision, OrgID: org}
 		if existing != nil {
-			d.ID = existing.ID
+			du.ID = existing.ID
 		}
-		_, err = k.store.Users().ApplyDirectoryUser(ctx, d)
+		_, err = k.store.Users().ApplyDirectoryUser(ctx, du)
 	case "user.deleted":
 		if existing == nil {
 			return nil
@@ -149,6 +173,13 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 		return fmt.Errorf("%w: %v", ErrWebhookMalformed, err)
 	}
 	return err
+}
+
+// auditMismatch records that the directory named account user in another org.
+func (k *KySignOnClient) auditMismatch(ctx context.Context, user string) {
+	if err := k.store.Audit().LogAudit(ctx, &store.AuditRecord{UserID: user, Action: "tenancy.org_mismatch", Resource: "user", Details: "entry=webhook"}); err != nil {
+		log.Printf("audit tenancy.org_mismatch not recorded: %v", err)
+	}
 }
 
 // email is the primary address, else the first.

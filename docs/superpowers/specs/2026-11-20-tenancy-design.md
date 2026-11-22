@@ -790,6 +790,24 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
    - Tests: every point of the downstream contract, at every entry point, with the claim
      absent and mismatched. Single-tenant golden callback and webhook behaviour is
      unchanged.
+   - As built, in two PRs. 4a: the tokens, the webhook, the org poller, forced
+     provisioning, the unique subject index and the installer refusal. 4b: suite groups per
+     org, which needs a ky-primitives `suitedir.Groups` that takes an org (until then a
+     multi-tenant install does not read suite groups), and KyPost `org_id`. 4a departs from
+     the text above in four places:
+     - A back-channel logout by `sid` ends that login's sessions whatever org the token
+       names. Filtering by org would only let a mismatched token end less, and a logout only
+       takes access away. A subject-wide logout checks the org, logs a mismatch as an alert
+       and still applies, as above.
+     - The unique subject index is created with `IF NOT EXISTS` each time a multi-tenant
+       store opens (`recordTenancy`), not by a versioned `initMultiTenant`. A single-tenant
+       store never runs it.
+     - A webhook from another org answers 400, so KyIdentity does not retry it. A webhook for
+       an org not yet registered answers 500, so it is retried until the poll lists the org.
+       `user.mfa_reset` applies whatever the org.
+     - The poll mirrors status, `enabled` and `storage_bytes`, which `activePrincipal`
+       already enforces. The status transaction's audit row (`tenancy.org_status`) and
+       editor revocation are step 5's.
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.
    - Status enforcement, the retention pause, the editor revocation at suspension, the
