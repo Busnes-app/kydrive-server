@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
@@ -27,27 +28,47 @@ func (s *Server) RunSuiteGroups(ctx context.Context) {
 	}
 }
 
-// syncSuiteGroups is one pass. Without KySignOn, or multi-tenant, it does nothing; when the list cannot be read
-// it changes nothing, so a failed or refused call never archives anything.
+// syncSuiteGroups is one pass. Without KySignOn it does nothing. A multi-tenant install asks
+// per active, enabled org. A list that cannot be read changes nothing in its org, so a failed
+// or refused call never archives anything.
 func (s *Server) syncSuiteGroups(ctx context.Context) {
 	client, ok := s.suiteClient()
-	// A multi-tenant KyIdentity lists suite groups per org, which this version does not ask for yet.
-	if !ok || s.multi() {
+	if !ok {
 		return
 	}
-	groups, err := client.Groups(ctx)
+	d := s.store.Drive()
+	if !s.multi() {
+		s.syncOrgGroups(ctx, drive.DefaultOrg, func() ([]suitedir.Group, error) { return client.Groups(ctx) })
+		return
+	}
+	orgs, err := d.ActiveOrgs(ctx)
+	if err != nil {
+		log.Printf("suite groups: %v", err)
+		return
+	}
+	for _, org := range orgs {
+		if ctx.Err() != nil {
+			return
+		}
+		s.syncOrgGroups(ctx, org, func() ([]suitedir.Group, error) { return client.OrgGroups(ctx, org) })
+	}
+}
+
+// syncOrgGroups reconciles the groups list returns into org.
+func (s *Server) syncOrgGroups(ctx context.Context, org string, list func() ([]suitedir.Group, error)) {
+	groups, err := list()
 	if err != nil {
 		// suitedir errors carry neither the secret nor any member subject.
 		if ctx.Err() == nil {
-			log.Printf("suite groups: %v", err)
+			log.Printf("suite groups: org %s: %v", org, err)
 		}
 		return
 	}
-	r, err := s.store.Drive().ReconcileSuiteGroups(ctx, groups)
+	r, err := s.store.Drive().ReconcileSuiteGroups(ctx, org, groups)
 	if err != nil && ctx.Err() == nil {
-		log.Printf("suite groups: %v", err) // group and resource IDs only
+		log.Printf("suite groups: org %s: %v", org, err) // group and resource IDs only
 	}
 	if r != (drive.SuiteReport{}) {
-		log.Printf("suite groups: created=%d renamed=%d restored=%d archived=%d members_changed=%d", r.Created, r.Renamed, r.Restored, r.Archived, r.MembersChanged)
+		log.Printf("suite groups: org %s: created=%d renamed=%d restored=%d archived=%d members_changed=%d", org, r.Created, r.Renamed, r.Restored, r.Archived, r.MembersChanged)
 	}
 }

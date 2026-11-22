@@ -40,7 +40,7 @@ func archived(id, name string) suitedir.Group {
 
 func reconcile(t *testing.T, d *drive.Store, groups ...suitedir.Group) drive.SuiteReport {
 	t.Helper()
-	r, err := d.ReconcileSuiteGroups(context.Background(), groups)
+	r, err := d.ReconcileSuiteGroups(context.Background(), drive.DefaultOrg, groups)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestSuiteGroupHeals(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `INSERT INTO groups(id,display_name,external_id,created_at,updated_at) VALUES('squat','suite-group:g2','',?,?)`, time.Now(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	r, err := d.ReconcileSuiteGroups(ctx, []suitedir.Group{active("g2", "Taken"), active("g3", "Fine")})
+	r, err := d.ReconcileSuiteGroups(ctx, drive.DefaultOrg, []suitedir.Group{active("g2", "Taken"), active("g3", "Fine")})
 	if err == nil || r.Created != 1 {
 		t.Fatalf("partial pass: %+v %v", r, err)
 	}

@@ -864,9 +864,10 @@ the release before. No R step starts before the owner approves this amendment.
      - The poll mirrors status, `enabled` and `storage_bytes`, which `activePrincipal`
        already enforces. The status transaction's audit row (`tenancy.org_status`) and
        editor revocation are step 5's.
-   - 4b: built on branch `feat/tenancy-groups` (head `366e323`), with suite groups per org through
-     `suitedir.OrgGroups` (ky-primitives #73) and KyPost `org_id`, which KyPost-Server already
-     sends (#687). Held, with no PR opened, by the 2026-11-22 decision.
+   - 4b as built: suite groups per org through `suitedir.OrgGroups` (ky-primitives #73),
+     over `ActiveOrgs`, and KyPost `org_id` (KyPost-Server `docs/KYDRIVE.md` already sends
+     it). One departure: a member from another org is audited on every pass that lists
+     them, not once, since KyIdentity should never list one.
 - **R1. PostgreSQL drive store.**
   - `drive.Open` on both drivers (today SQLite only, `internal/store/sqlstore.go:54-60`).
     The drive store's 312 statements use `?` and need the main store's rebind. Its SQLite-only
@@ -925,7 +926,7 @@ the release before. No R step starts before the owner approves this amendment.
   | 3a (#158) | Schema 27's columns and triggers on PostgreSQL, with the foreign keys (R1). `rankSQL`, `itemRankSQL`, `activePrincipal`, `sameOrg`, `userOrg` and `workspaceOrg` use only `EXISTS`, joins, `CASE` and `COALESCE`, so they should port as they are once rebound; R1's tests on both backends prove it. The cross-org store tests, the one with triggers dropped included, run on both (R1). `TestOrgSQLNamesOrgID` is a source scan and needs nothing. The upgrade test stays SQLite only, since a PostgreSQL multi-tenant database is always new. |
   | 3b (#159) | Schema 28's staff triggers on PostgreSQL (R1). `TestCrossOrgMatrix` on both (R1). |
   | 4a (#160) | `recordTenancy`'s partial unique index on PostgreSQL, and `ApplyOrgs` and `OrgsSince` there (R1). The org poll under the elected worker in place of `orgsMu`, with a monotonic `orgs_since` (R3). The sign-in attempt limits it relies on move to R4. |
-  | 4b (held) | The suite-group reconcile under the elected worker (R3), and its tests on both backends (R1). |
+  | 4b | The suite-group reconcile under the elected worker (R3), and its tests on both backends (R1). |
 
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.

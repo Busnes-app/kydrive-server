@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -233,12 +234,81 @@ func TestMultiTenantRefusesTheInstaller(t *testing.T) {
 	}
 }
 
-// Suite groups are listed per org on a multi-tenant KyIdentity; until KyDrive asks per org it
-// does not ask at all.
-func TestMultiTenantSkipsSuiteGroups(t *testing.T) {
+// A multi-tenant install reads suite groups once per active, enabled org, and each org's
+// answer lands in that org.
+func TestMultiTenantReadsSuiteGroupsPerOrg(t *testing.T) {
 	m, f := multiSSO(t)
+	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,enabled) VALUES('org-off','active',0),('org-s','suspended',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.db.Exec(`UPDATE users SET sso_provider='kysignon',sso_subject='sub-'||id WHERE id IN ('a1','b1')`); err != nil {
+		t.Fatal(err)
+	}
+	family := `{"groups":[{"id":"g-%s","name":"Family","slug":"family","state":"active","members":["sub-a1","sub-b1"]}]}`
+	f.byOrg = map[string]string{"org-a": fmt.Sprintf(family, "a"), "org-b": fmt.Sprintf(family, "b")}
 	api.SyncSuiteGroupsForTest(m.srv, context.Background())
-	if f.groups != 0 {
-		t.Fatal("multi-tenant install listed suite groups without an org")
+	asked := strings.Join(f.orgOf, " ")
+	if !strings.Contains(asked, "org-a org-b") || strings.Contains(asked, "org-off") || strings.Contains(asked, "org-s") || slices.Contains(f.orgOf, "") {
+		t.Fatalf("asked for %q", asked)
+	}
+	for _, c := range [][3]string{{"g-a", "org-a", "a1"}, {"g-b", "org-b", "b1"}} {
+		if n := m.count(t, `SELECT COUNT(*) FROM drive_suite_groups s JOIN drive_workspaces w ON w.id=s.workspace JOIN group_members gm ON gm.group_id=s.grp WHERE s.kyid=? AND w.org_id=?`, c[0], c[1]); n != 1 {
+			t.Fatalf("%s: %d members in %s", c[0], n, c[1])
+		}
+		if n := m.count(t, `SELECT COUNT(*) FROM drive_suite_groups s JOIN group_members gm ON gm.group_id=s.grp WHERE s.kyid=? AND gm.user_id=?`, c[0], c[2]); n != 1 {
+			t.Fatalf("%s lacks %s", c[0], c[2])
+		}
+	}
+}
+
+// A single-tenant install asks once, without an org.
+func TestSingleTenantReadsSuiteGroupsOnce(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	if st.Drive() == nil {
+		t.Skip("suite groups live in the SQLite drive store")
+	}
+	f := newFakeKySignOn(t)
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.KySignOnSecret = f.issuer, "client", "secret"
+	srv = api.NewServer(cfg, st)
+	api.SyncSuiteGroupsForTest(srv, context.Background())
+	if len(f.orgOf) != 1 || f.orgOf[0] != "" {
+		t.Fatalf("asked for %q", f.orgOf)
+	}
+}
+
+// A multi-tenant KyPost names the account's org in every signed body; KyDrive acts only for an
+// account in that org.
+func TestMultiTenantKyPostChecksTheOrg(t *testing.T) {
+	m := setupMultiServer(t)
+	m.cfg.SSO.KySignOnIssuer = kypostIssuer
+	m.srv = api.NewServer(m.cfg, m.st)
+	api.SetKyPostForTest(m.srv, kypostOrigin, kypostSecret, "kyidentity")
+	if _, err := m.db.Exec(`UPDATE users SET sso_provider='kysignon',sso_subject='sub-'||id WHERE id='a1'`); err != nil {
+		t.Fatal(err)
+	}
+	w := &kypostWorld{t: t, srv: m.srv, st: m.st, cfg: m.cfg}
+	status := func(org string) *httptest.ResponseRecorder {
+		body := map[string]any{"sub": "sub-a1", "issuer": kypostIssuer}
+		if org != "" {
+			body["org_id"] = org
+		}
+		return w.signed("/api/suite/kypost/status", "kypost.drive.status", "", body, kypostSecret)
+	}
+	code(t, status(""), 400, "bad_body")
+	code(t, status("org-b"), 404, "no_user")
+	if m.mismatches(t, "kypost") != 1 {
+		t.Fatal("org mismatch not audited")
+	}
+	if rec := status("org-a"); rec.Code != http.StatusOK {
+		t.Fatalf("own org: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// A single-tenant KyDrive ignores org_id in a KyPost body.
+func TestSingleTenantKyPostIgnoresTheOrg(t *testing.T) {
+	w := newKyPostWorld(t, "kyidentity")
+	rec := w.signed("/api/suite/kypost/status", "kypost.drive.status", "", map[string]any{"sub": "sub-alice", "issuer": kypostIssuer, "org_id": "org-x"}, kypostSecret)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status with org_id: %d %s", rec.Code, rec.Body)
 	}
 }
