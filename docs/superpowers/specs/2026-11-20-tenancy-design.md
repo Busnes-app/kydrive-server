@@ -1,6 +1,6 @@
 # KyDrive tenancy: single-tenant and multi-tenant (SaaS), design
 
-Date: 2026-11-20. Status: design approved, with the owner's answers to its questions (2026-11-20). Nothing built.
+Date: 2026-11-20. Status: design approved, with the owner's answers to its questions (2026-11-20). Amended 2026-11-22 by owner decision: multi-tenant requires PostgreSQL and runs as several replicas across hosts (D2, D13, build steps R1 to R4). The amendment awaits the owner's approval; no R step is built.
 
 KyDrive today serves one organisation per install. This note adds a second mode to the same
 binary: **multi-tenant**, one shared install for every individual and household on the hosted
@@ -25,7 +25,8 @@ spec, `docs/superpowers/specs/2026-11-19-tenancy-design.md` at `origin/master` `
 "Unverified" marks a claim this note did not check in code or by running it. A bare file
 name is the only file of that name in the repository, except `store.go`, `devices.go`,
 `guest.go` and `handover.go`, which mean the `internal/drive` file unless a path is given.
-`AGENTS.md` alone is the root one.
+`AGENTS.md` alone is the root one. The 2026-11-22 amendment's references are to `origin/master`
+at `949537b`, and "the replica pattern" is ky-server-base `docs/REPLICAS.md`.
 
 KyIdentity's step 3 (`org_id` in tokens, userinfo and logout tokens, signed webhooks and
 `/api/suite/orgs`, T "Phased build plan") has not landed. Nothing below can be built past
@@ -36,7 +37,8 @@ PR 3 until it does.
 | | Single-tenant (self-hosted, business platforms) | Multi-tenant (hosted SaaS) |
 |---|---|---|
 | Mode | `KYDRIVE_TENANCY=single` (default) | `KYDRIVE_TENANCY=multi`, fresh database only |
-| Database | SQLite, one writer (root `AGENTS.md`, "One SQLite writer") | the same: SQLite, one writer, one instance (D2) |
+| Database | SQLite, one writer (root `AGENTS.md`, "One SQLite writer"), unchanged | PostgreSQL only (D2) |
+| Deployment | one instance | several replicas across hosts: one database, shared file storage, one elected worker (D2, D13) |
 | Orgs | one default org, never named in tokens (T D4) | one per customer, mirrored from `GET /api/suite/orgs` (D3) |
 | Accounts | SCIM from KyIdentity, sign-in links by `sub` (`docs/PERMISSIONS.md:9,13`) | created at first sign-in from the verified token, kept current by the signed webhook (D5) |
 | Administrators | local recovery admin and directory accounts given the role (`docs/PERMISSIONS.md:32`) | staff accounts only (D9) |
@@ -44,24 +46,25 @@ PR 3 until it does.
 | Organisation links | anyone signed in to the install | anyone signed in to **the link's org** (D6) |
 | Guest links | unchanged | unchanged: the only deliberate cross-org path (D6) |
 | Quota | per workspace (`drive_workspaces.quota`, `store.go:98`) | one pool per org, `storage_bytes` from `/api/suite/orgs` (D7) |
-| Blob layout | `<data>/blobs/<uuid>` (`drive_handlers.go:362`) | unchanged (D8) |
+| Blob layout | `<data>/blobs/<uuid>` (`drive_handlers.go:371`) | the same flat names, in shared storage outside every replica's data directory (D8, D13) |
 
 ## Decisions
 
 | # | Decision | Why |
 |---|---|---|
 | D1 | `KYDRIVE_TENANCY=single` (default) or `multi`, recorded in `server_settings` at first start. A later start with the other value refuses to start. `multi` is accepted only on an empty database. Converting a single-tenant install is out of scope. | Install-time, as for KyIdentity (T D1). An empty database avoids rewriting existing rows, and lets the multi-only DDL (see Triggers, "Mode-only DDL") be created on empty tables. |
-| D2 | Multi-tenant stays on SQLite, with one writer and one instance. No PostgreSQL. | KyDrive's production storage is SQLite only (root `AGENTS.md` "One SQLite writer"; `internal/store/AGENTS.md` "Production drive storage is SQLite-only"). Blobs live on one local filesystem. A second backend is a separate project. Capacity is question 6. |
+| D2 | **Multi-tenant requires PostgreSQL and runs as several replicas across hosts** (amended 2026-11-22). SQLite stays single-tenant only, unchanged byte for byte. Startup refuses `KYDRIVE_TENANCY=multi` unless the install is replica-capable (D13). PostgreSQL also serves single-tenant installs, which can move to it with `migrate-postgres` (R1). Multi-tenant still starts only on an empty database (D1). | Owner decisions of 2026-11-22: KyDrive is in scope for distributed hosting, and multi-tenant on one SQLite writer and one instance contradicts that. KyIdentity (T D2), KyCalendar (its D2) and KyPost (K2) already require PostgreSQL for multi-tenant. Today the drive store opens only on SQLite (`internal/store/sqlstore.go:54-60`; root `AGENTS.md:90`), so R1 to R4 are new work. The original D2 (SQLite, one writer, one instance) is withdrawn. |
 | D3 | KyDrive keeps a local org registry, `drive_orgs(id, status, revision, enabled, storage_bytes, purged, seeded, retention_after)`, filled from `GET /api/suite/orgs` (T "Suite directory"), with one exception: the staff org's row, seeded from `KYDRIVE_STAFF_ORG` and never overwritten by the poll (Local accounts). Polled about every 60 s with `since=<revision>`. Single-tenant has one row, the default org, with the fixed ID T uses (`00000000-0000-0000-0000-000000000001`), `active`, unlimited. A multi-tenant database has no default org row (see Triggers). | The org's status and quota must be readable inside the same SQL statement that authorizes a request. The default org gives single-tenant one code path. |
-| D4 | Every org-owned table gets `org_id TEXT NOT NULL`. SQLite triggers make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. KyDrive has one SQL dialect, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
+| D4 | Every org-owned table gets `org_id TEXT NOT NULL`. Triggers with the same names on both backends make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. On PostgreSQL `org_id` is also a real foreign key to `drive_orgs(id)` (R1). Both backends run the same statements, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. A household has nobody to pre-provision accounts by hand. |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
 | D7 | One storage pool per org: the sum of every workspace's version bytes and viewing copies must stay within `quotas.storage_bytes` from `/api/suite/orgs`. It is checked in `fits` (`store.go:682`), the one function every byte-adding path already calls. Per-workspace `quota` is not enforced in multi-tenant mode. A missing or unreadable quota refuses writes. | Household plans are one allowance shared by its people. Every path that adds bytes already ends in `fits` (see Quotas). Failing closed means a polling bug cannot hand out unlimited storage. |
-| D8 | Blob storage stays flat (`<data>/blobs/<uuid>`). A trigger on `drive_versions` refuses a version that names a blob already named by a version in another org. | Blob IDs are fresh random UUIDs (`blobs.go:21`), with no content addressing, so there is no dedup across orgs. A blob is only reachable through a version row. The one path that shares a blob, copy (`move.go:131-132`), already needs ranks in both workspaces. A per-org directory would add an org argument to every `BlobPath` call and protect nothing the trigger doesn't. |
+| D8 | Blob storage stays flat (`blobs/<uuid>`: under `<data>` on SQLite, under the shared storage root in multi-tenant mode, D13). A trigger on `drive_versions` refuses a version that names a blob already named by a version in another org. | Blob IDs are fresh random UUIDs (`blobs.go:21`), with no content addressing, so there is no dedup across orgs. A blob is only reachable through a version row. The one path that shares a blob, copy (`move.go:131-132`), already needs ranks in both workspaces. A per-org directory would add an org argument to every `BlobPath` call and protect nothing the trigger doesn't. |
 | D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
 | D10 | In multi-tenant mode, shared workspaces exist only as suite group workspaces (`suitegroups.go:57`). Creating, renaming, deleting and re-quotaing a shared workspace through the admin API answers 404. | Customers have no administrator to create workspaces. Suite groups give households shared folders, and staff should not curate customer folders. |
 | D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers an org-wide purge. The one other purge, a leaver's unshared files 90 days after a verified `user.deleted` (A member leaves), also pauses while the org is not `active`. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
 | D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. One named exception: the local bootstrap and recovery administrators take the staff org from operator configuration (`KYDRIVE_STAFF_ORG`), since no token exists when they are created. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
+| D13 | A multi-tenant install is replica-capable or it does not start (2026-11-22). Startup in multi mode requires PostgreSQL; shared file storage for blobs and every derived file (R2); the deployment key from `KY_ENCRYPTION_KEY` and the device identity key from `KYDRIVE_IDENTITY_KEY_FILE`, both outside the data directory and never minted there; and the replica plumbing of R3 and R4. The refusal names each missing piece. Each replica keeps its own data directory, never shared. | The replica pattern, "Product rollout contract" (f): state outside the database makes a product not replica-ready until it has a shared-storage contract. Today, without `KY_ENCRYPTION_KEY`, a fresh data directory mints its own key (`config.go:258-271`, `keyfile.LoadOrCreate`), so two replicas would hold two keys and could not read each other's sealed blobs. The identity key is read from the data directory unless `KYDRIVE_IDENTITY_KEY_FILE` names another file (`config.go:182-194`). |
 
 ## KyDrive's half of the downstream contract
 
@@ -163,6 +166,12 @@ Its own SQLite file (`search/index.go:37-40`), never backed up and always rebuil
   rebuild removes a word from it (search `AGENTS.md`, "Vocabulary"). Expansion keeps only
   words present in the caller's refs, so the answer is scoped. But a deleted org's words stay
   in the sealed vocabulary until a rebuild, so an org purge requests one (see Lifecycle).
+- **Multi-tenant (D2, R2).** The index cannot stay a file: SQLite on a network filesystem is
+  not a replication mode (the replica pattern, first section), and each replica's data
+  directory is its own. R2 moves `docs`, `postings`, `queue`, `meta` and the sealed vocabulary
+  into PostgreSQL tables, which the catalogue test classes **X**. Only the elected worker's
+  indexer writes them (R3). `Match` and its caller-scoped refs are unchanged, so the
+  isolation argument above still holds.
 
 ### Filesystem under `<KY_DATA_DIR>`
 
@@ -181,14 +190,37 @@ Its own SQLite file (`search/index.go:37-40`), never backed up and always rebuil
 | `initial-admin-password` | `main.go:351` | P | Bootstrap |
 | Backups: capsules and the Restic bulk repository | `payload.go:251`, `bulk.go:273-294` | P (whole install) | Every org in one capsule and one snapshot, as in T "Replicas, Postgres and backups" |
 
+**Multi-tenant (D13).**
+- `blobs/`, `staging/`, `view/`, `thumbs/` and `text/` move to the shared storage of R2. All
+  five are rooted at the data directory today (`drive_handlers.go:371`, `drive_uploads.go:17`,
+  `kypost_view.go:27`, `drive_preview.go:32`, `document_text.go:35`). Every one of them is
+  sealed under the deployment key, staging segments included (`uploads.go:18-20,193`).
+- `search/` moves into PostgreSQL (Search index, above).
+- `encryption.key` and `identity.key` must not exist in the data directory.
+- `installer/` is refused (4a).
+- `drill/` and `initial-admin-password` stay per replica.
+- Backups have no SQLite-only payload. `payload.go:70-72` refuses any driver but SQLite
+  today. R3 ports the replica pattern's PostgreSQL snapshot (one transaction, under the
+  `backup-run` lease), and the Restic bulk reads blobs from the shared storage.
+
 ### In-memory state
 
-| State | Defined | Class |
-|---|---|---|
-| WebDAV lock table | `dav/locks.go:22-33` | Keyed by workspace ID, not by display name, so two orgs' `/My files/a.txt` never meet |
-| KyPost replay cache | `kypost.go:105` | P, keyed by event ID |
-| Rate-limit buckets, PoW salts | `server.go:304-326`, `internal/auth/AGENTS.md` | P, keyed by IP, account and route |
-| Search vocabulary | `search/vocab.go` | X, above |
+Every row is per process today. On replicas each must be shared, or a request that lands on
+another replica sees none of it. R4 moves each into PostgreSQL, the replica pattern's way
+(atomic upserts and unique keys with indexed expiry, removed by the elected worker). SQLite
+keeps the in-memory versions, as the base does.
+
+| State | Defined | Class | Multi-tenant (R4) |
+|---|---|---|---|
+| WebDAV lock table | `dav/locks.go:22-33` (`webdav.NewMemLS`, and a random token key per process) | Keyed by workspace ID, not by display name, so two orgs' `/My files/a.txt` never meet | A lock table with expiry. Tokens signed under a key derived from the deployment key. |
+| Euro-Office thumbnail tickets | `server.go:58-59` | P, single use | A ticket table, spent with a conditional delete |
+| Sign-in attempt windows | `server.go:57,60,202` | P, keyed by account and route | One atomic upsert per key, with database time setting the window (the replica pattern, "How shared security behaves") |
+| Device-signature nonces | `devicesig.go:92-97` | P, per device | A table unique on (device, nonce), with expiry |
+| Spent CAPTCHA challenges | `internal/auth/pow.go:114` | P, keyed by salt | A table unique on the salt (the base's) |
+| KyPost replay cache | `kypost.go:105` | P, keyed by event ID | A database `syncauth.Replay`, keeping `Forget` for 429 and 5xx |
+| In-process mutexes: the org poll (`orgsMu`) and the editor revocation sweep (`revokeMu`) | `server.go:48-49` | P | The elected worker (R3). `orgActive`'s one synchronous poll may still run on any replica: `ApplyOrgs` applies only a newer revision (`tenancy.go:350-352`), and R3 makes its `orgs_since` write monotonic. |
+| Per-IP buckets | `allowPerIP`, `server.go:309` (the same `attempts` map) | P, keyed by route and IP | Shared with sign-in attempts |
+| Search vocabulary | `search/vocab.go` | X, above | R2 |
 
 ## Isolation
 
@@ -247,7 +279,11 @@ The test below compares the two answers instead of assuming 404.
 
 ### Triggers (second layer)
 
-Created by one drive schema entry (appended to `schema.go:15`, append-only):
+Created by one drive schema entry (appended to `schema.go:15`, append-only). On PostgreSQL
+(R1) every trigger exists under the same name as a PL/pgSQL function. `org_id` is also a
+foreign key to `drive_orgs(id)`, and the existence trigger stays, because a foreign key cannot
+refuse a `deleted` org. Each trigger raises a message that starts `tenancy:`, so `asDenied`
+(`tenancy.go:168`) maps it to `ErrDenied` on both backends.
 
 - `org_id` existence (`BEFORE INSERT`) and immutability (`BEFORE UPDATE OF org_id`) on every
   **O** table. The existence check requires a `drive_orgs` row whose `status` is not
@@ -290,11 +326,16 @@ name-clash triggers map to `ErrConflict` (`schema.go:97-106`).
 
 ### Tests
 
-- `TestEveryTableIsClassified` reads `sqlite_master` and requires each table to appear in
+- `TestEveryTableIsClassified` reads both catalogues (`sqlite_master`, and
+  `information_schema.tables` on PostgreSQL, R1) and requires each table to appear in
   exactly one of `orgOwnedTables`, `derivedTables` (each with its parent FK) or
   `platformTables`. A new table with no class fails the build (as in T).
 - `TestOrgOwnedTablesHaveOrgID` requires `org_id NOT NULL` and both triggers on every **O**
-  table. `nullableOrgID = {"audit_records", "drive_events"}` are the only exceptions.
+  table, and on PostgreSQL the foreign key too. `nullableOrgID = {"audit_records",
+  "drive_events"}` are the only exceptions.
+- `TestBackendsHaveTheSameColumns` (as T's) requires the same drive tables, columns and
+  trigger names on both backends. From R1, every drive, tenancy and cross-org test runs on
+  both.
 - `TestOrgSQLNamesOrgID` is a go/ast scan of SQL string literals in `internal/drive`,
   `internal/store` and `internal/api`. A literal that names an **O** table must also name
   `org_id`, call `rankSQL`, `itemRankSQL`, `activePrincipal`, `sameOrg`, `userOrg` or
@@ -526,8 +567,9 @@ it would suggest the link reaches people outside the household.
   live viewing copies. The org's usage is the same sum over every workspace with that
   `org_id`. Trashed files and old versions count, as today.
 - **Enforcement.** One check in `fits` (`store.go:682-692`), inside the write transaction.
-  SQLite's one writer serialises check and insert, so two uploads cannot both take the last
-  bytes. The org check uses the org's net change, not the bytes written to the target
+  SQLite's one writer serialises check and insert. On PostgreSQL the write transaction first
+  locks the org's `drive_orgs` row (`SELECT … FOR UPDATE`), so two uploads on two replicas
+  cannot both take the last bytes. The org check uses the org's net change, not the bytes written to the target
   workspace. Bytes that move between two workspaces of one org change nothing, so an
   over-quota org can still move files and receive a handover. Every path that adds bytes
   ends there:
@@ -606,7 +648,7 @@ come back (T), but long-lived credentials do.
 
 ### `deleted`
 
-A purge job runs from the hourly retention pass (`drive_retention.go:62`). It is idempotent:
+A purge job runs from the hourly retention pass (`drive_retention.go:62`), on the elected worker (R3). It is idempotent:
 each step deletes what is left, and `drive_orgs.purged` is set only after the last step. A
 crash halfway repeats safely.
 
@@ -742,7 +784,12 @@ that member's My files at once, inside the org:
 | Holder of a stolen KyPost pair secret, or a buggy KyPost | Act as org B's user for org A, or name a user in the wrong org | Every body carries `org_id`, and `kypostAccount` refuses a mismatch. Peer contexts can do only three narrow things (`access.go:85-103`). A stolen secret still reaches every user whose `sub` and org it can name: residual, as in T. |
 | User of a suspended org | Keep working through WebDAV, the desktop client, an agent or a service token | `activePrincipal` on every credential path. Editor sessions are revoked. Within one poll (about 60 s). |
 | Customer of org A | Fill the shared disk | The org pool in `fits`, failing closed. The resumable upload cap and the file size limit bound staging (`uploads.go:100`, `config.go:328`). |
-| Customer of org A | Slow other orgs down: one SQLite writer, one Euro-Office, one indexer | Existing per-user and per-IP rate limits only. Residual (question 6). |
+| Customer of org A | Slow other orgs down: one database, one Euro-Office, one indexer | Per-user and per-IP rate limits, shared across replicas (R4). Replicas spread requests; the database, Euro-Office and the elected indexer stay shared. Residual (question 6). |
+| A replica with other shared settings or another key | Serve with another issuer, another KyPost secret, or a key that cannot read the blobs | The shared-configuration fingerprint refuses its start and names the fields, never the values (R3). Multi mode refuses a key minted in the data directory (D13). |
+| Holder of one replica's data directory | Decrypt customer files | In multi mode the directory holds no key and no blob (D13). |
+| Reader of the shared file storage | Read customer files | Every blob, view copy, thumbnail, text cache and staging segment is sealed under the deployment key and bound to its blob ID (`blobs.go:22`). The key is never stored there. |
+| Anyone replaying to a second replica | Reuse a KyPost event, a device signature, a CAPTCHA or a thumbnail ticket, or reset a sign-in window | Replay and limit state is in PostgreSQL, one unique key or atomic upsert per item (R4). The two-replica test sends each replay to the other replica (step 6). |
+| Two replicas racing a job | Purge twice, or let two indexers write | One elected worker runs every job (R3), and every job is idempotent. The purge already is (Lifecycle, `deleted`). |
 | Staff, or a stolen staff account | Read customer content | No admin route opens an item, and administration grants no rank (`access.go:16`). Handover stays within one org and is audited in that org's log. Staff do see the org directory and workspace names (residual, as in T). |
 | Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`). Residual, unchanged. |
 | Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, and rebuilds the vocabulary. Backups keep copies until their retention ends (residual, question 5). |
@@ -751,6 +798,12 @@ that member's My files at once, inside the org:
 
 Each PR is shippable on its own, with single-tenant behaviour unchanged. `KYDRIVE_TENANCY=multi`
 is refused at startup until PR 6. Multi-tenant code runs only in tests before then.
+
+Amended 2026-11-22 (D2, D13). The build order is 1 to 4b, then R1 to R4, then 5 and 6. Every
+R step is required before 6 can enable multi mode; none is optional. The R steps keep their
+own labels, so the existing references to steps 5 and 6 still hold. SQLite stays unchanged
+byte for byte through every R step: a test compares its schema (`sqlite_master.sql`) with
+the release before. No R step starts before the owner approves this amendment.
 
 1. **This spec.** Docs only.
 2. **Mode, org registry and columns.**
@@ -808,12 +861,74 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      - The poll mirrors status, `enabled` and `storage_bytes`, which `activePrincipal`
        already enforces. The status transaction's audit row (`tenancy.org_status`) and
        editor revocation are step 5's.
+   - 4b: built on branch `feat/tenancy-groups` (head `366e323`), with suite groups per org through
+     `suitedir.OrgGroups` (ky-primitives #73) and KyPost `org_id`, which KyPost-Server already
+     sends (#687). Held, with no PR opened, by the 2026-11-22 decision.
+- **R1. PostgreSQL drive store.**
+  - `drive.Open` on both drivers (today SQLite only, `internal/store/sqlstore.go:54-60`).
+    The drive store's 312 statements use `?` and need the main store's rebind. Its SQLite-only
+    SQL needs porting: `julianday` and `strftime` (3 each), one `INSERT OR`, one `PRAGMA`,
+    and the trigger DDL, whose 18 value comparisons with `IS NOT` (`tenancy.go`) become
+    `IS DISTINCT FROM`.
+  - A PostgreSQL drive schema with every table. `org_id` on every **O** table is a foreign key
+    to `drive_orgs(id)`. Schema 27's and 28's triggers and `recordTenancy`'s unique subject
+    index exist under the same names.
+  - The catalogue tests read both backends (Tests). Every drive, tenancy and cross-org test,
+    `TestCrossOrgMatrix` included, runs on both, against PostgreSQL in CI.
+  - `migrate-postgres` for a single-tenant SQLite install, by the replica pattern: one ordered
+    table list (`migrationTables`), in foreign-key order, for migration and the backup
+    snapshot; sequences advanced; a restore drill that inserts into every table afterwards.
+  - Multi mode stays refused.
+- **R2. Shared file storage and search.**
+  - One storage root outside the data directory for `blobs/`, `staging/`, `view/`, `thumbs/`
+    and `text/`. Object storage or a written shared-volume contract is question 13. Either way
+    it must provide write-once objects named by random UUID, an atomic publish (rename, or a
+    conditional put), read-after-write across hosts, a listing for the orphan sweeps, and
+    deletion only after a committed transaction or by the elected worker.
+  - The search index tables and the sealed vocabulary move to PostgreSQL (Inventory, Search
+    index). Question 14.
+  - A single-tenant SQLite install keeps every path under `<data>`, unchanged.
+  - Tests: one contract suite run against each storage implementation. Two processes write,
+    read and sweep the same root.
+- **R3. Replica plumbing**, porting the replica pattern's "Product rollout contract" (a) to (e).
+  - `/livez`, and `/readyz` (a database ping, cached for one second, 503 while draining), with
+    its drain order on SIGTERM. Today there is `/healthz` (`drive_handlers.go:93`) and a 5 s
+    shutdown (`main.go:157`).
+  - The shared-configuration fingerprint (`replica_config_fingerprint`, `accept-replica-config`)
+    over the base's fields plus KyDrive's own: KySignOn, KyPost, Euro-Office, the storage
+    root, the tenancy mode and the staff org.
+  - Keys from outside the data directory (D13). Multi mode refuses a minted key.
+  - One elected worker (`scheduled-worker`, a session advisory lock) runs every job
+    `cmd/server` starts today (`main.go:244-258`): editor revocations, retention and the purge,
+    suite groups, the org poll, blob sealing, expiry cleanup, the search indexer and the backup
+    schedule. Each replica still resolves the KyPost pairing for itself (`StartKyPost`,
+    `main.go:242`), since every replica needs the secret. `orgs_since` is written
+    monotonically.
+  - The `backup-run` lease for scheduled, manual and CLI runs. The PostgreSQL snapshot backup,
+    restore through `migrate-postgres`, and `prepareRestoredDatabase` dropping KyDrive's
+    session-like tables and the fingerprint.
+- **R4. State in the database**: every row of the in-memory table above (WebDAV locks,
+  Euro-Office thumbnail tickets, sign-in and per-IP attempt windows, device-signature nonces,
+  spent CAPTCHA challenges, the KyPost replay cache), on PostgreSQL only. SQLite keeps the
+  in-memory versions. The expiry sweeps run on the elected worker.
+- **PostgreSQL follow-ups for steps already built.** Each was built and tested on SQLite
+  only, and R1 or R3 picks it up:
+
+  | Step | Needs |
+  |---|---|
+  | 3a (#158) | Schema 27's columns and triggers on PostgreSQL, with the foreign keys (R1). `rankSQL`, `itemRankSQL`, `activePrincipal`, `sameOrg`, `userOrg` and `workspaceOrg` use only `EXISTS`, joins, `CASE` and `COALESCE`, so they should port as they are once rebound; R1's tests on both backends prove it. The cross-org store tests, the one with triggers dropped included, run on both (R1). `TestOrgSQLNamesOrgID` is a source scan and needs nothing. The upgrade test stays SQLite only, since a PostgreSQL multi-tenant database is always new. |
+  | 3b (#159) | Schema 28's staff triggers on PostgreSQL (R1). `TestCrossOrgMatrix` on both (R1). |
+  | 4a (#160) | `recordTenancy`'s partial unique index on PostgreSQL, and `ApplyOrgs` and `OrgsSince` there (R1). The org poll under the elected worker in place of `orgsMu`, with a monotonic `orgs_since` (R3). The sign-in attempt limits it relies on move to R4. |
+  | 4b (held) | The suite-group reconcile under the elected worker (R3), and its tests on both backends (R1). |
+
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.
    - Status enforcement, the retention pause, the editor revocation at suspension, the
      purge job, and the leaver rule (shared files to the account holder, the rest to the
      trash for 90 days).
    - The capacity measurement (question 6), before PR 6 can enable the mode.
+   - Amended 2026-11-22: built after R1 to R4, on both backends. The org pool check locks the
+     org's row on PostgreSQL (Quotas). The purge and the leaver job run on the elected worker.
    - Tests: the quota on every path in the Quotas table, plus the source scan. Two parallel
      uploads with room for one. `TestSuspendedOrgServesNothing` for every credential type.
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text
@@ -828,17 +943,32 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
      who drops out of a group list, and a poll that fails or is truncated, move and trash
      nothing. An org that goes straight from `active` to `deleted` has its editor sessions revoked before any row is deleted. A write into a deleted org is refused by the trigger.
 6. **Enable multi-tenant mode.** Startup accepts `multi` on an empty database with
-   `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). The admin UI gains the org selector and staff audit views. Operator
+   `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). It also
+   requires a replica-capable install (D13): the PostgreSQL driver, the shared storage
+   configured and reachable, both keys outside the data directory, and the R3 and R4
+   mechanisms in place. Otherwise it refuses to start and names each missing piece. The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
    `docs/ASSURANCE-CASE.md`, whose trust boundaries change here.
-   - Tests: the browser flow for staff org selection (`UI-VERIFICATION.md`). An end-to-end
+   - Tests: a **two-replica test**: two server processes, one PostgreSQL database and the
+     shared storage. It signs in on one replica and uses the session on the other, uploads on
+     one and downloads on the other, and checks that a WebDAV lock taken on one refuses a
+     write on the other. A KyPost event, a device signature and a CAPTCHA spent on one
+     replica are each refused on the other, and a sign-in window filled on one holds on the
+     other. When the elected worker is killed, the other takes its jobs within a minute. A
+     replica with another shared setting refuses to start, and SIGTERM drains one replica
+     while the other keeps serving. Also a start refused for each missing piece of D13.
+   - The browser flow for staff org selection (`UI-VERIFICATION.md`). An end-to-end
      run against a KyIdentity in multi-tenant mode (unverified: whether one can run in CI
      before KyIdentity PR 6).
 
 ## Residual risks (accepted)
 
-- **One writer, one disk, one editor for every org.** A busy org slows every other org's
-  writes, editor sessions and indexing. Capacity is unmeasured (question 6).
+- **One database, one Euro-Office and one elected worker for every org.** Replicas spread
+  requests, not database writes, editor sessions or indexing, so a busy org can still slow the
+  others. Capacity is unmeasured (question 6).
+- **Application replicas are not database high availability.** Every replica uses one
+  PostgreSQL database. When it is down, every replica is unready. Its replication and failover
+  are the operator's (the replica pattern).
 - **A capsule restore rolls back every org.** There is no per-org restore.
 - **No export after deletion is scheduled.** A member who did not download their files
   before then cannot get them (question 1). The only warning is the billing service's,
@@ -852,7 +982,7 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
 - **Shared pair secret.** A stolen KyPost pair secret reaches every org's users whose
   subjects it can name, though only the three peer actions.
 - **Staff see directories and workspace names**, never file names or content.
-- **The search index file** shows word-frequency and co-occurrence patterns across orgs to
+- **The search index** (a file on SQLite, tables on PostgreSQL) shows word-frequency and co-occurrence patterns across orgs to
   whoever reads it, as it does across users today (root `AGENTS.md`).
 - **Euro-Office and the server read plaintext**, as today.
 
@@ -871,7 +1001,8 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
    copies age out. Per-org keys destroyed at purge (crypto-shredding) stay a later design:
    today's sealing derives every key from one deployment key (`sealed.go:247`).
 6. **Capacity.** Measure a target (orgs, stored bytes, writes a minute, concurrent editor
-   sessions) before launch. Revisit D2 only if the measurement fails.
+   sessions) before launch. Amended 2026-11-22: measure on the replica deployment of step 6.
+   D2 is no longer the fallback.
 7. **Staging bytes outside the quota.** Accepted, given the bounds in Quotas.
 8. **What an organisation link is called on the hosted service.** "Household link".
 9. **Webhook compatibility.** Checked: the two sides do not interoperate (Signed webhook).
@@ -885,3 +1016,17 @@ is refused at startup until PR 6. Multi-tenant code runs only in tests before th
     revoked, and a file shared only with guests counts as unshared. The rest goes to the
     trash and is purged after 90 days (A member leaves).
     This needs the account holder's `sub` from `/api/suite/orgs`, a new ask of KyIdentity.
+
+## Questions opened by the 2026-11-22 amendment
+
+13. **Shared file storage (R2).** Either object storage (S3-compatible: conditional puts, no
+    rename) or a written shared-volume contract (for example NFS or CephFS: atomic rename
+    within the volume, durable fsync, close-to-open consistency). Recommendation: object
+    storage. A shared volume's guarantees vary by filesystem and mount options, and nothing in
+    KyDrive can check them at startup. Blobs are already write-once, so a put fits. Unverified:
+    the latency of one put per staging segment (one request body, up to 64 MiB,
+    `drive_uploads.go:15`).
+14. **The search index on replicas (R2).** Either PostgreSQL tables written by the elected
+    indexer, or a local index on each replica, rebuilt from the database. Recommendation:
+    PostgreSQL. A local index on each replica indexes every file once per replica, and reports
+    different `pending` counts on different replicas.
