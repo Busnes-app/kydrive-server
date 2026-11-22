@@ -4,6 +4,9 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Server settings and workspace views are keyboard tabs.** Arrow keys move between tabs and
+  Enter or Space opens one (Base UI `Tabs`); each tab now names its panel.
+
 - **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
   focus return and outside-click handling are no longer hand-rolled. A menu now flips or
   shifts to stay inside the window instead of guessing from the row count, and a mouse
