@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
+  focus return and outside-click handling are no longer hand-rolled. A menu now flips or
+  shifts to stay inside the window instead of guessing from the row count, and a mouse
+  click opens it on the menu rather than its first item (Enter, Space and the arrows still
+  start on an item). It adds no `<style>` element, so it needs nothing from the style CSP.
+  The main bundle grows by about 37 KB gzipped.
+
 - **Fix: upgrading a database older than drive schema 20 that holds a file and a folder of
   the same name no longer fails at startup.** Since the org groundwork, schema 20's clash
   rename wrote `org_id`, which that schema does not have yet; it now writes the columns of its

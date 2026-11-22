@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Menu } from './Menu';
 import { AppHeader, StorageBar } from './AppHeader';
 import { auditLabel } from '../pages/auditLabels';
@@ -13,32 +13,38 @@ import { Login } from '../pages/Login';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('Menu', () => {
-  it('closes after an action and runs it', () => {
+  it('closes after an action, runs it and returns focus to the button', async () => {
     const rename = vi.fn();
     render(<Menu label="Actions for a.docx" items={[{ label: 'Rename', onSelect: rename }, { label: 'Version history', onSelect: () => {} }]} />);
     const button = screen.getByRole('button', { name: 'Actions for a.docx' });
     fireEvent.click(button);
     expect(button.getAttribute('aria-expanded')).toBe('true');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
     expect(rename).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('menu')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(button);
   });
 
-  it('closes on Escape and on a click outside, and moves with the arrow keys', () => {
+  it('opens on the first item from the keyboard, moves with the arrows and closes on Escape or a click outside', async () => {
     render(<><Menu label="More" items={[{ label: 'One', onSelect: () => {} }, 'separator', { label: 'Two', href: '/two' }]} /><p>Outside</p></>);
     const button = screen.getByRole('button', { name: 'More' });
-    fireEvent.click(button);
-    expect(document.activeElement?.textContent).toBe('One');
-    fireEvent.keyDown(document, { key: 'ArrowDown' });
-    expect(document.activeElement?.textContent).toBe('Two');
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('menu')).toBeNull();
+    button.focus();
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    expect(screen.getByRole('menu', { name: 'More' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('One'));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Two'));
+    expect(document.activeElement?.getAttribute('href')).toBe('/two');
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(document.activeElement).toBe(button);
     fireEvent.click(button);
+    await screen.findByRole('menu');
     fireEvent.pointerDown(screen.getByText('Outside'));
-    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.mouseDown(screen.getByText('Outside'));
+    fireEvent.click(screen.getByText('Outside'));
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });
 });
 
