@@ -22,6 +22,7 @@ import type { DriveFile, Folder, Grant, Group, Version, Workspace } from './driv
 import { Alert } from '../components/Alert';
 import { Dialog, useConfirm } from '../components/Dialog';
 import { Menu } from '../components/Menu';
+import { Tabs } from '@base-ui/react/tabs';
 import type { MenuEntry } from '../components/Menu';
 import { When } from '../components/When';
 
@@ -345,6 +346,14 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
   const lede = trash ? 'Restore deleted items or delete them permanently.' : view === 'settings' ? 'Group permissions, storage and retention for this workspace.' : current?.kind === 'personal' ? 'Private files for your account' : current ? 'Shared files for your team' : 'Your files and shared workspaces';
   const commands = current?.role && view === 'files' && !trash;
 
+  const filesView = current && <>
+    <div className="drive-commands">
+      <Search workspaces={workspaces} onOpen={openHit} />
+      {current.role && !trash && <button className="btn-ghost" onClick={enterTrash}><Trash2 size={16} aria-hidden="true" />Trash</button>}
+      {current.role && <button className="icon-btn" aria-label="Refresh" title="Refresh" disabled={busy} onClick={() => void run(reload)}><RefreshCw size={16} aria-hidden="true" /></button>}
+    </div>
+    {(current.role ? filesPanel : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>No access to files yet</h3><p>Assign a group permission in Workspace settings to open this workspace's files.</p></div>)}
+  </>;
   return <section className="page drive-page">
     <header className="ky-page-head drive-head">
       <div>
@@ -368,17 +377,14 @@ export function Drive({ admin, workspaces, onWorkspacesChange, selected, onSelec
     </header>
     {message && !newDocument && !newFolderOpen && <div style={{ marginBottom: '1rem' }}><Alert>{message}</Alert></div>}
     {current ? <>
-      {canManage && <div className="tabs" role="tablist" aria-label="Workspace views">
-        <button role="tab" className="tab" aria-selected={view === 'files'} onClick={() => setView('files')}>Files</button>
-        <button role="tab" className="tab" aria-selected={view === 'settings'} onClick={() => setView('settings')}>Workspace settings</button>
-      </div>}
-      {view === 'files' && <div className="drive-commands">
-        <Search workspaces={workspaces} onOpen={openHit} />
-        {current.role && !trash && <button className="btn-ghost" onClick={enterTrash}><Trash2 size={16} aria-hidden="true" />Trash</button>}
-        {current.role && <button className="icon-btn" aria-label="Refresh" title="Refresh" disabled={busy} onClick={() => void run(reload)}><RefreshCw size={16} aria-hidden="true" /></button>}
-      </div>}
-      {view === 'files' && (current.role ? filesPanel : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>No access to files yet</h3><p>Assign a group permission in Workspace settings to open this workspace's files.</p></div>)}
-      {view === 'settings' && settingsPanel}
+      {canManage ? <Tabs.Root value={view} onValueChange={v => setView(v as typeof view)}>
+        <Tabs.List className="tabs" aria-label="Workspace views">
+          <Tabs.Tab value="files" className="tab">Files</Tabs.Tab>
+          <Tabs.Tab value="settings" className="tab">Workspace settings</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="files">{filesView}</Tabs.Panel>
+        <Tabs.Panel value="settings">{settingsPanel}</Tabs.Panel>
+      </Tabs.Root> : view === 'files' ? filesView : settingsPanel}
     </> : <div className="panel drive-empty"><FolderOpen size={32} aria-hidden="true" /><h3>Your shared drive</h3><p>Create a workspace and assign a KyIdentity group to start.</p></div>}
 
     {newDocument && <Dialog title={`New ${documentKinds.find(([k]) => k === newDocument.kind)?.[1].slice(4) ?? newDocument.kind}`} description={`Create in ${current?.name ?? 'this workspace'}`} onClose={() => setNewDocument(null)}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Tabs } from '@base-ui/react/tabs';
 import { Database, Trash2 } from 'lucide-react';
 import { Alert } from '../components/Alert';
 import { change, record, response } from './drive/client';
@@ -81,10 +82,11 @@ interface SettingsProps {
 }
 
 const sections = [['trash', 'Trash'], ['guest', 'Guest links'], ['computers', 'Computers'], ['networks', 'Office networks'], ['system', 'System']] as const;
+type Section = typeof sections[number][0];
 
 export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }) => {
   const driver = typeof settings?.db_driver === 'string' ? settings.db_driver : 'sqlite';
-  const [tab, setTab] = useState<typeof sections[number][0]>('trash');
+  const [tab, setTab] = useState<Section>('trash');
   return (
     <section className="page">
       <header className="ky-page-head">
@@ -93,15 +95,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }
           <p className="ky-page-lede">Drive-wide rules for trash, guest links, linked computers and office networks.</p>
         </div>
       </header>
-      <div className="tabs" role="tablist" aria-label="Settings sections">
-        {sections.map(([id, label]) => <button key={id} id={`settings-tab-${id}`} role="tab" className="tab" aria-selected={tab === id} aria-controls="settings-panel" onClick={() => setTab(id)}>{label}</button>)}
-      </div>
-      <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`} className="settings-panel">
-        {tab === 'trash' && <TrashRetention />}
-        {tab === 'guest' && <GuestLinkSettings />}
-        {tab === 'computers' && <DevicePolicySettings />}
-        {tab === 'networks' && <OfficeNetworks />}
-        {tab === 'system' && <section className="panel" aria-labelledby="system-heading">
+      <Tabs.Root value={tab} onValueChange={v => setTab(v as Section)}>
+        <Tabs.List className="tabs" aria-label="Settings sections">
+          {sections.map(([id, label]) => <Tabs.Tab key={id} value={id} className="tab">{label}</Tabs.Tab>)}
+        </Tabs.List>
+        <Tabs.Panel value="trash" className="settings-panel"><TrashRetention /></Tabs.Panel>
+        <Tabs.Panel value="guest" className="settings-panel"><GuestLinkSettings /></Tabs.Panel>
+        <Tabs.Panel value="computers" className="settings-panel"><DevicePolicySettings /></Tabs.Panel>
+        <Tabs.Panel value="networks" className="settings-panel"><OfficeNetworks /></Tabs.Panel>
+        <Tabs.Panel value="system" className="settings-panel"><section className="panel" aria-labelledby="system-heading">
           <div className="panel-header"><div><Database size={20} aria-hidden="true" /><h2 id="system-heading" className="panel-title" style={{ margin: 0 }}>System</h2></div></div>
           <dl className="settings-facts">
             <dt>Database</dt><dd><span className="badge font-mono">{driver}</span> One SQLite database, one writer</dd>
@@ -109,8 +111,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onOpenAppearance }
             <dt>Theme on this browser</dt><dd><button type="button" className="btn-secondary" onClick={onOpenAppearance}>Open Appearance</button></dd>
           </dl>
           <p className="hint" style={{ marginTop: '.75rem' }}>The theme follows this device until someone picks one; each browser keeps its own choice.</p>
-        </section>}
-      </div>
+        </section></Tabs.Panel>
+      </Tabs.Root>
     </section>
   );
 };

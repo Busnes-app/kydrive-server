@@ -4,6 +4,19 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Menus, dialogs, tabs and search run on Base UI (`@base-ui/react`, pinned, unstyled).**
+  The ky-ui look is unchanged; keyboard and focus handling are no longer hand-rolled. Style CSP
+  needs nothing new. The main bundle grows by about 57 KB gzipped.
+  - Row and New menus flip or shift to stay inside the window. A mouse click opens a menu on
+    the menu rather than its first item; Enter, Space and the arrows still start on an item.
+  - Dialogs focus their `autoFocus` field (before, the close button took focus), return focus
+    to whatever opened them on Escape, and lock the page behind them. A backdrop click still
+    does not close one. Quick look and About remain native dialogs.
+  - Server settings and workspace views are tabs: arrows move between them, Enter or Space
+    opens one, and each panel is labelled by its tab.
+  - The search box is a combobox: Down moves into the results, which are options, and Enter
+    opens the highlighted one. The type chips are one tab stop that the arrows move along.
+
 - **Sign-in, step-up, logout and the directory webhook bind accounts to their org (tenancy
   groundwork).** On a multi-tenant install, KyIdentity's `org_id` claim and webhook field are
   required. A sign-in for an unknown org polls KyIdentity's org list once, and an org that is

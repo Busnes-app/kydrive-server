@@ -1,35 +1,35 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { Dialog as Base } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 
-// Dialog is the suite's modal: a native <dialog> with a titled header, a scrolling body and a
-// footer of actions (secondary first, primary last). Escape and the close button call onClose.
+// Dialog is the suite's modal, on Base UI's Dialog: a titled header, a scrolling body and a
+// footer of actions (secondary first, primary last). Escape and the close button call onClose;
+// a click on the backdrop does not, so a half-filled form survives a stray click.
 export function Dialog({ title, description, children, footer, onClose, onSubmit, wide, className, closeButton = true }: {
   title: ReactNode; description?: ReactNode; children?: ReactNode; footer?: ReactNode; closeButton?: boolean;
   onClose: () => void; onSubmit?: (e: FormEvent<HTMLFormElement>) => void; wide?: boolean; className?: string;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const id = useId();
-  useEffect(() => {
-    const d = ref.current;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    // jsdom lacks showModal; opening by attribute keeps the dialog reachable in unit tests.
-    if (d && !d.open) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
-    return () => { if (d?.open && typeof d.close === 'function') d.close(); opener?.focus(); };
-  }, []);
+  const popup = useRef<HTMLDivElement>(null);
   const inner = <>
     <header className="dialog-header">
-      <div><h2 id={`${id}-title`}>{title}</h2>{description && <p>{description}</p>}</div>
+      <div><Base.Title>{title}</Base.Title>{description && <Base.Description>{description}</Base.Description>}</div>
       {/* Without the icon, the footer's Cancel and Escape close the dialog. */}
       {closeButton && <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={18} aria-hidden="true" /></button>}
     </header>
     <div className="dialog-body">{children}</div>
     {footer && <footer className="dialog-footer">{footer}</footer>}
   </>;
-  return <dialog ref={ref} className={['dialog', wide ? 'dialog-wide' : '', className ?? ''].filter(Boolean).join(' ')} aria-labelledby={`${id}-title`}
-    onCancel={e => { e.preventDefault(); onClose(); }}>
-    {onSubmit ? <form onSubmit={e => { e.preventDefault(); onSubmit(e); }}>{inner}</form> : inner}
-  </dialog>;
+  return <Base.Root open disablePointerDismissal onOpenChange={open => { if (!open) onClose(); }}>
+    <Base.Portal>
+      <Base.Backdrop className="dialog-backdrop" />
+      {/* An autoFocus field inside keeps focus; otherwise Base UI focuses the first control. */}
+      <Base.Popup ref={popup} className={['dialog', wide ? 'dialog-wide' : '', className ?? ''].filter(Boolean).join(' ')}
+        initialFocus={() => popup.current?.contains(document.activeElement) ? document.activeElement as HTMLElement : true}>
+        {onSubmit ? <form onSubmit={e => { e.preventDefault(); onSubmit(e); }}>{inner}</form> : inner}
+      </Base.Popup>
+    </Base.Portal>
+  </Base.Root>;
 }
 
 type Ask = { title: string; body?: ReactNode; confirm: string; danger?: boolean; resolve: (ok: boolean) => void };
