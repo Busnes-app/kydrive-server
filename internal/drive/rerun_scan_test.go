@@ -40,6 +40,9 @@ func TestRerunClosuresResetWhatTheyWrite(t *testing.T) {
 						for _, w := range unresetWrites(lit) {
 							t.Errorf("%s: %s is written by a closure %s may rerun, but not reset at its start", fset.Position(w.Pos()), w.Name, calleeName(call))
 						}
+						if c := callAfterCommit(lit); c != nil {
+							t.Errorf("%s: a call after Commit in a closure %s may rerun: a failure there reruns the committed work", fset.Position(c.Pos()), calleeName(call))
+						}
 					}
 				}
 				return true
@@ -138,6 +141,24 @@ func unresetWrites(lit *ast.FuncLit) []*ast.Ident {
 		})
 	}
 	return out
+}
+
+// callAfterCommit is the first call lit makes after its first Commit call, if any.
+func callAfterCommit(lit *ast.FuncLit) (after *ast.CallExpr) {
+	var commit token.Pos
+	ast.Inspect(lit.Body, func(n ast.Node) bool {
+		c, ok := n.(*ast.CallExpr)
+		if !ok || after != nil {
+			return after == nil
+		}
+		if commit.IsValid() && c.Pos() > commit {
+			after = c
+		} else if !commit.IsValid() && calleeName(c) == "Commit" {
+			commit = c.End()
+		}
+		return true
+	})
+	return after
 }
 
 // rootIdent is the variable an assignment target belongs to: x for x, x.f, x[i] and x.f[i].

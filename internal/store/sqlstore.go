@@ -471,11 +471,15 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (a
 			if err := tx.Commit(); err != nil {
 				return nil, err
 			}
-			return u.GetUserByID(ctx, id)
+			return &User{ID: id}, nil
 		}()
 		return e
 	})
-	return applied, err
+	if err != nil {
+		return nil, err
+	}
+	// Read after the retry: a failed read must not rerun the committed write.
+	return u.GetUserByID(ctx, applied.ID)
 }
 
 func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision int64) error {
