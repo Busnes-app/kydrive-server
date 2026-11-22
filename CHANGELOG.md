@@ -6,6 +6,9 @@ Interface and behaviour changes, newest first.
 
 - **Server settings and workspace views are keyboard tabs.** Arrow keys move between tabs and
   Enter or Space opens one (Base UI `Tabs`); each tab now names its panel.
+- **Dialogs run on Base UI's Dialog.** The page behind a dialog no longer scrolls, and focus
+  returns to whatever opened it. Escape still closes a dialog and a backdrop click still does
+  not. Quick look and About remain native dialogs.
 
 - **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
   focus return and outside-click handling are no longer hand-rolled. A menu now flips or
