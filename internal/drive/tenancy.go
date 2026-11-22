@@ -53,9 +53,13 @@ const errOrg = "tenancy:"
 // runs first). An org-owned table added later needs its own entry.
 func tenancySchema(d dialect, owned []string, nullable map[string]bool) string {
 	var b strings.Builder
-	b.WriteString(`CREATE TABLE drive_orgs(id TEXT PRIMARY KEY,status TEXT NOT NULL CHECK(status IN ('active','suspended','deletion_scheduled','deleted')),revision INTEGER NOT NULL DEFAULT 0,enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),storage_bytes INTEGER CHECK(storage_bytes>0),purged INTEGER NOT NULL DEFAULT 0 CHECK(purged IN (0,1)),seeded INTEGER NOT NULL DEFAULT 0 CHECK(seeded IN (0,1)),retention_after TEXT NOT NULL DEFAULT '');
+	orgs := `CREATE TABLE drive_orgs(id TEXT PRIMARY KEY,status TEXT NOT NULL CHECK(status IN ('active','suspended','deletion_scheduled','deleted')),revision INTEGER NOT NULL DEFAULT 0,enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),storage_bytes INTEGER CHECK(storage_bytes>0),purged INTEGER NOT NULL DEFAULT 0 CHECK(purged IN (0,1)),seeded INTEGER NOT NULL DEFAULT 0 CHECK(seeded IN (0,1)),retention_after TEXT NOT NULL DEFAULT '');
 INSERT INTO drive_orgs(id,status) SELECT '` + DefaultOrg + `','active' WHERE (SELECT value FROM server_settings WHERE key='tenancy_mode')='single';
-`)
+`
+	if d.pg {
+		orgs = strings.ReplaceAll(orgs, "INTEGER", "BIGINT") // SQLite's INTEGER is 64-bit
+	}
+	b.WriteString(orgs)
 	for _, t := range owned {
 		column, known := "TEXT NOT NULL DEFAULT '"+DefaultOrg+"'", "true"
 		if nullable[t] {

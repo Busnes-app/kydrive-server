@@ -230,9 +230,10 @@ func event(ctx context.Context, tx *sql.Tx, user, action, resource string) error
 	return err
 }
 
-// transaction runs f in one transaction. SQLite has one writer; on PostgreSQL the transaction is
-// serializable, so f sees the same guarantee, and a serialization failure or deadlock runs f
-// again after a random pause, which f must allow: it only reads and writes the database.
+// transaction runs f in one transaction. SQLite has one writer; on PostgreSQL every transaction
+// is serializable (qmark.Open), so f sees the same guarantee, and a serialization failure or
+// deadlock runs f again after a random pause, which f must allow: it only reads and writes the
+// database.
 func (s *Store) transaction(ctx context.Context, f func(*sql.Tx) error) error {
 	for attempt := 1; ; attempt++ {
 		err := s.transactionOnce(ctx, f)
@@ -276,11 +277,7 @@ func retryable(err error) bool {
 }
 
 func (s *Store) transactionOnce(ctx context.Context, f func(*sql.Tx) error) error {
-	var opts *sql.TxOptions
-	if s.pg {
-		opts = &sql.TxOptions{Isolation: sql.LevelSerializable}
-	}
-	tx, err := s.db.BeginTx(ctx, opts)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

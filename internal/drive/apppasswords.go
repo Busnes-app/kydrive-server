@@ -82,6 +82,10 @@ func (s *Store) CreateAgentToken(ctx context.Context, user, name, scope, workspa
 	return p, AgentTokenPrefix + secret, err
 }
 
+// afterLiveLogin runs in createCredential between the sign-in check and the insert; tests
+// pause there.
+var afterLiveLogin = func() {}
+
 func (s *Store) createCredential(ctx context.Context, user, name, scope, workspace, folder, secret string) (AppPassword, error) {
 	if narrowed(ctx) {
 		return AppPassword{}, ErrDenied
@@ -97,6 +101,7 @@ func (s *Store) createCredential(ctx context.Context, user, name, scope, workspa
 		if err := liveLogin(ctx, tx); err != nil {
 			return err
 		}
+		afterLiveLogin()
 		var active bool
 		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT `+activePrincipal("?"), user).Scan(&active); err != nil {

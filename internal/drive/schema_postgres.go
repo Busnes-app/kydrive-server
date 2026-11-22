@@ -87,6 +87,9 @@ func (s *Store) createPostgres(ctx context.Context) error {
 	if len(schema) != postgresVersion {
 		return fmt.Errorf("drive: PostgreSQL schema is at %d, SQLite at %d", postgresVersion, len(schema))
 	}
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+		return err
+	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
 			return err

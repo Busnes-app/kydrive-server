@@ -25,6 +25,15 @@ func tables(t *testing.T, db *sql.DB) []string {
 	return strs(t, db, `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
 }
 
+// columnTypes are table's columns as "name type", the type as either backend stores it:
+// int64, int32, text or bool.
+func columnTypes(t *testing.T, db *sql.DB, table string) []string {
+	if qmark.Is(db) {
+		return strs(t, db, `SELECT column_name||' '||CASE data_type WHEN 'bigint' THEN 'int64' WHEN 'integer' THEN 'int32' WHEN 'boolean' THEN 'bool' ELSE data_type END FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=? ORDER BY ordinal_position`, table)
+	}
+	return strs(t, db, `SELECT name||' '||CASE upper(type) WHEN 'INTEGER' THEN 'int64' WHEN 'BIGINT' THEN 'int64' WHEN 'BOOLEAN' THEN 'bool' ELSE lower(type) END FROM pragma_table_info(?) ORDER BY cid`, table)
+}
+
 func columns(t *testing.T, db *sql.DB, table string) []string {
 	if qmark.Is(db) {
 		return strs(t, db, `SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=? ORDER BY ordinal_position`, table)
@@ -92,8 +101,8 @@ func catalogue(t *testing.T, db *sql.DB) map[string][]string {
 			continue
 		}
 		var entry []string
-		for _, c := range columns(t, db, table) {
-			if strings.HasPrefix(table, "drive_") || c == "org_id" {
+		for _, c := range columnTypes(t, db, table) {
+			if strings.HasPrefix(table, "drive_") || strings.HasPrefix(c, "org_id ") {
 				entry = append(entry, "column "+c)
 			}
 		}
@@ -114,8 +123,8 @@ func catalogue(t *testing.T, db *sql.DB) map[string][]string {
 // postgresOnly are the PostgreSQL forms of what SQLite's one writer gives for free.
 var postgresOnly = map[string][]string{"drive_changes": {"trigger drive_changes_in_order"}}
 
-// A PostgreSQL drive has every table, column, index and trigger a SQLite one has, and nothing
-// else but postgresOnly.
+// A PostgreSQL drive has every table, column (of the same type: 64-bit where SQLite's INTEGER
+// is), index and trigger a SQLite one has, and nothing else but postgresOnly.
 func TestBackendsHaveTheSameColumns(t *testing.T) {
 	if !testdb.Postgres() {
 		t.Skip("compares a PostgreSQL drive with SQLite's")

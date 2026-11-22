@@ -115,6 +115,13 @@ func AfterDeleteSQL(s *Store, name, table, statement string) string {
 CREATE TRIGGER ` + name + ` AFTER DELETE ON ` + table + ` FOR EACH ROW EXECUTE FUNCTION ` + name + `()`
 }
 
+// PauseCredential makes credential creation call f after its sign-in check; the returned
+// function restores the default.
+func PauseCredential(f func()) (restore func()) {
+	afterLiveLogin = f
+	return func() { afterLiveLogin = func() {} }
+}
+
 // DB is the store's database handle.
 func DB(s *Store) *sql.DB { return s.db }
 

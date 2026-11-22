@@ -12,6 +12,7 @@ import (
 	"log"
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
+	"github.com/Busnes-app/kydrive-server/internal/qmark"
 )
 
 // names seals file and folder names. The ciphertext is bound to its table and row id;
@@ -41,7 +42,11 @@ func checkKey(ctx context.Context, db *sql.DB, key []byte) error {
 		return err
 	}
 	want := hex.EncodeToString(fp)
-	if _, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_key(id INTEGER PRIMARY KEY CHECK(id=1),fingerprint TEXT NOT NULL)`); err != nil {
+	id := "INTEGER"
+	if qmark.Is(db) {
+		id = "BIGINT"
+	}
+	if _, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_key(id `+id+` PRIMARY KEY CHECK(id=1),fingerprint TEXT NOT NULL)`); err != nil {
 		return err
 	}
 	if _, err = db.ExecContext(ctx, `INSERT INTO drive_key VALUES(1,?) ON CONFLICT DO NOTHING`, want); err != nil {

@@ -20,6 +20,10 @@ func Open(dsn string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Every transaction and statement is serializable, so concurrent writers keep the
+	// guarantee SQLite's one writer gives: a revocation and a grant cannot both act on what the
+	// other has not committed.
+	cfg.RuntimeParams["default_transaction_isolation"] = "serializable"
 	return sql.OpenDB(connector{stdlib.GetConnector(*cfg, stdlib.OptionAfterConnect(func(_ context.Context, c *pgx.Conn) error {
 		c.TypeMap().RegisterType(&pgtype.Type{Name: "int8", OID: pgtype.Int8OID, Codec: intCodec{pgtype.Int8Codec{}}})
 		c.TypeMap().RegisterType(&pgtype.Type{Name: "int4", OID: pgtype.Int4OID, Codec: intCodec{pgtype.Int4Codec{}}})

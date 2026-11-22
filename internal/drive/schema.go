@@ -259,11 +259,11 @@ func clashName(name string, n int) string {
 func (s *Store) migrate(ctx context.Context) error { return s.migrateTo(ctx, len(schema)) }
 
 func (s *Store) migrateTo(ctx context.Context, version int) error {
-	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
-		return err
-	}
 	if s.pg {
 		return s.createPostgres(ctx)
+	}
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version INTEGER PRIMARY KEY)`); err != nil {
+		return err
 	}
 	for i, ddl := range schema[:version] {
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
