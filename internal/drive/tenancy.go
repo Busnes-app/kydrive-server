@@ -321,6 +321,12 @@ func (s *Store) OrgActive(ctx context.Context, org string) (known, active bool, 
 	return known, active, err
 }
 
+// ActiveOrgs lists the registered orgs that are active and enabled, the orgs whose suite groups
+// are read.
+func (s *Store) ActiveOrgs(ctx context.Context) ([]string, error) {
+	return column(ctx, s.db, `SELECT id FROM drive_orgs WHERE status='active' AND enabled=1 ORDER BY id`)
+}
+
 // orgsSince is the server_settings key holding the revision the next org poll starts after.
 const orgsSince = "orgs_since"
 

@@ -22,15 +22,18 @@ type SuiteReport struct {
 	Created, Renamed, Restored, Archived, MembersChanged int
 }
 
-// ReconcileSuiteGroups moves each suite group's workspace towards the state KyIdentity lists
-// (KyIdentity docs/SUITE-DIRECTORY.md), keyed on the group ID only, as actor system, one
-// transaction per group, so a crash halfway repeats safely and one failing group does not stop
-// the rest. A group absent from groups is left alone. Nothing it made is ever deleted.
-func (s *Store) ReconcileSuiteGroups(ctx context.Context, groups []suitedir.Group) (SuiteReport, error) {
+// ReconcileSuiteGroups moves each of org's suite groups' workspaces towards the state
+// KyIdentity lists (KyIdentity docs/SUITE-DIRECTORY.md), keyed on the group ID within org, as
+// actor system, one transaction per group, so a crash halfway repeats safely and one failing
+// group does not stop the rest. A group absent from groups is left alone. Nothing it made is
+// ever deleted. org is DefaultOrg on a single-tenant store, else the org KyIdentity listed
+// groups for.
+func (s *Store) ReconcileSuiteGroups(ctx context.Context, org string, groups []suitedir.Group) (SuiteReport, error) {
 	var total SuiteReport
 	if _, ok := ctx.Value(serviceAccessKey{}).(ServiceAccess); ok || narrowed(ctx) {
 		return total, ErrDenied
 	}
+	ctx = context.WithValue(ctx, orgKey{}, org) // event records each change in org
 	var errs []error
 	for _, g := range groups {
 		if err := ctx.Err(); err != nil {
@@ -39,7 +42,7 @@ func (s *Store) ReconcileSuiteGroups(ctx context.Context, groups []suitedir.Grou
 		var r SuiteReport
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
 			r = SuiteReport{}
-			return s.reconcileSuiteGroup(ctx, tx, g, &r)
+			return s.reconcileSuiteGroup(ctx, tx, org, g, &r)
 		})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("suite group %s: %w", g.ID, err))
@@ -54,26 +57,28 @@ func (s *Store) ReconcileSuiteGroups(ctx context.Context, groups []suitedir.Grou
 	return total, errors.Join(errs...)
 }
 
-func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, g suitedir.Group, r *SuiteReport) error {
+func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, org string, g suitedir.Group, r *SuiteReport) error {
 	if g.State != suitedir.GroupActive && g.State != suitedir.GroupArchived {
 		return nil
 	}
 	var workspace, grp string
-	err := tx.QueryRowContext(ctx, `SELECT workspace,grp FROM drive_suite_groups WHERE kyid=?`, g.ID).Scan(&workspace, &grp)
+	// A group ID KyIdentity listed for another org stays that org's: the insert below then
+	// fails on the kyid key and this group alone is skipped.
+	err := tx.QueryRowContext(ctx, `SELECT s.workspace,s.grp FROM drive_suite_groups s JOIN drive_workspaces w ON w.id=s.workspace WHERE s.kyid=? AND w.org_id=?`, g.ID, org).Scan(&workspace, &grp)
 	if errors.Is(err, sql.ErrNoRows) {
 		if g.State != suitedir.GroupActive {
 			return nil // never had a workspace here
 		}
-		name, err := freeSuiteName(ctx, tx, suiteName(g), "")
+		name, err := freeSuiteName(ctx, tx, org, suiteName(g), "")
 		if err != nil {
 			return err
 		}
 		workspace, grp = uuid.NewString(), uuid.NewString()
 		now := time.Now().UTC()
-		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota) VALUES(?,?,?)`, workspace, name, suiteQuota); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,?,?,?)`, workspace, name, suiteQuota, org); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO groups(id,display_name,external_id,created_at,updated_at) VALUES(?,?,'',?,?)`, grp, "suite-group:"+g.ID, now, now); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO groups(id,display_name,external_id,created_at,updated_at,org_id) VALUES(?,?,'',?,?,?)`, grp, "suite-group:"+g.ID, now, now, org); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_suite_groups(kyid,workspace,grp) VALUES(?,?,?)`, g.ID, workspace, grp); err != nil {
@@ -87,7 +92,7 @@ func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, g suitedir.
 		return err
 	}
 	var current, deletedAt string
-	if err := tx.QueryRowContext(ctx, `SELECT name,deleted_at FROM drive_workspaces WHERE id=?`, workspace).Scan(&current, &deletedAt); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT name,deleted_at FROM drive_workspaces WHERE id=? AND org_id=?`, workspace, org).Scan(&current, &deletedAt); err != nil {
 		return err
 	}
 	resource := fmt.Sprintf("%s group=%s kyid=%s", workspace, grp, g.ID)
@@ -122,13 +127,13 @@ func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, g suitedir.
 		}
 	}
 	if want := suiteName(g); !suiteNameMatches(current, want) {
-		switch name, err := freeSuiteName(ctx, tx, want, workspace); {
+		switch name, err := freeSuiteName(ctx, tx, org, want, workspace); {
 		case errors.Is(err, ErrConflict):
 			log.Printf("suite group %s: workspace %s keeps its name, every numbered name is taken", g.ID, workspace)
 		case err != nil:
 			return err
 		default:
-			if _, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET name=? WHERE id=?`, name, workspace); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE drive_workspaces SET name=? WHERE id=? AND org_id=?`, name, workspace, org); err != nil {
 				return err
 			}
 			r.Renamed++
@@ -149,7 +154,7 @@ func (s *Store) reconcileSuiteGroup(ctx context.Context, tx *sql.Tx, g suitedir.
 			return err
 		}
 	}
-	members, err := suiteMembers(ctx, tx, g.Members)
+	members, err := suiteMembers(ctx, tx, org, resource, g.Members)
 	if err != nil {
 		return err
 	}
@@ -187,15 +192,14 @@ func suiteNameMatches(current, want string) bool {
 	return ok && n != "" && strings.Trim(n, "0123456789") == ""
 }
 
-// freeSuiteName is want, else the first free "want (n)"; ErrConflict when none is free. Suite
-// groups are in the default org until identity binding gives each its own.
-func freeSuiteName(ctx context.Context, tx *sql.Tx, want, except string) (string, error) {
+// freeSuiteName is want, else the first free "want (n)" in org; ErrConflict when none is free.
+func freeSuiteName(ctx context.Context, tx *sql.Tx, org, want, except string) (string, error) {
 	for n := 1; n <= 100; n++ {
 		name := want
 		if n > 1 {
 			name = fmt.Sprintf("%s (%d)", want, n)
 		}
-		err := nameFree(ctx, tx, DefaultOrg, name, except)
+		err := nameFree(ctx, tx, org, name, except)
 		if err == nil {
 			return name, nil
 		}
@@ -207,18 +211,25 @@ func freeSuiteName(ctx context.Context, tx *sql.Tx, want, except string) (string
 }
 
 // suiteMembers maps subjects to local accounts as sign-in does (KySignOn first, then SCIM),
-// keeping only active ordinary users: never an application administrator, never the local
-// recovery administrator. Unknown subjects are skipped; a later pass adds them after sign-in.
-func suiteMembers(ctx context.Context, tx *sql.Tx, subs []string) ([]string, error) {
+// keeping only active ordinary users in org: never an application administrator, never the
+// local recovery administrator. Unknown subjects are skipped; a later pass adds them after
+// sign-in. An account in another org is skipped and audited against resource.
+func suiteMembers(ctx context.Context, tx *sql.Tx, org, resource string, subs []string) ([]string, error) {
 	var out []string
 	for _, sub := range subs {
-		var id, status, role string
-		err := tx.QueryRowContext(ctx, `SELECT id,status,role FROM users WHERE sso_subject=? AND sso_subject!='' AND sso_provider IN ('kysignon','scim') ORDER BY sso_provider='kysignon' DESC LIMIT 1`, sub).Scan(&id, &status, &role)
+		var id, status, role, in string
+		err := tx.QueryRowContext(ctx, `SELECT id,status,role,org_id FROM users WHERE sso_subject=? AND sso_subject!='' AND sso_provider IN ('kysignon','scim') ORDER BY sso_provider='kysignon' DESC LIMIT 1`, sub).Scan(&id, &status, &role, &in)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
 		if err != nil {
 			return nil, err
+		}
+		if in != org {
+			if err := event(ctx, tx, "system", "tenancy.org_mismatch", fmt.Sprintf("entry=suite_group %s user=%s", resource, id)); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		if status == "active" && role == "user" && !slices.Contains(out, id) {
 			out = append(out, id)

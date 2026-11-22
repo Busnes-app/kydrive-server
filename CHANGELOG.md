@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Suite groups and KyPost requests are bound to their org (tenancy groundwork).** On a
+  multi-tenant install KyDrive reads suite groups once per active, enabled org, and each
+  group's workspace, local group and members stay in that org: a member from another org is
+  skipped and audited, and a workspace name is free per org. A signed KyPost request must name
+  the account's `org_id` (else 400 `bad_body`), and an account in another org answers 404
+  `no_user` and is audited. A single-tenant install reads suite groups as before and ignores
+  `org_id` from KyPost. Multi-tenant mode still cannot be enabled.
 - **Menus, dialogs, tabs and search run on Base UI (`@base-ui/react`, pinned, unstyled).**
   The ky-ui look is unchanged; keyboard and focus handling are no longer hand-rolled. Style CSP
   needs nothing new. The main bundle grows by about 57 KB gzipped.

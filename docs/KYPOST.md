@@ -87,8 +87,8 @@ Every request is checked in this order; refusals are `{"error","code"}`:
 | 404 | `kypost_off` | Not paired. |
 | 401 | `bad_signature` | Signature, timestamp (±5 minutes) or event type wrong, or a body over 64 KiB. |
 | 200 | (`{"outcome":"duplicate"}`) | A verified replay of an event ID already accepted: not acted on again. |
-| 400 | `bad_body` | Not JSON, or no `sub`/`issuer`. |
-| 404 | `no_user` | `issuer` is not KyDrive's KyIdentity, or no active account is linked to `sub` (sign-in or SCIM), or it is a dedicated installer administrator. |
+| 400 | `bad_body` | Not JSON, or no `sub`/`issuer`. Multi-tenant: or no `org_id`. |
+| 404 | `no_user` | `issuer` is not KyDrive's KyIdentity, or no active account is linked to `sub` (sign-in or SCIM), or it is a dedicated installer administrator. Multi-tenant: or the account is in another org than `org_id` (also audited as `tenancy.org_mismatch`, `entry=kypost`). |
 | 429 | `rate_limited` | Per user: tickets, links and fetches 60 a minute, status 120. |
 | 409 | `sharing_off` | The person's switch is off (not for status). |
 
@@ -237,6 +237,14 @@ when Euro-Office closes the document, or at 24 hours (access ends then; the hour
 removes the bytes, and the row once any opened copy's Euro-Office drop is delivered or 7 days have passed, and anything in `<data>/view/` older than 25 hours). Audited with IDs
 only: `kypost.view` (`event:<id>`), `kypost.view_stored`, `kypost.view_opened` (`view:<id>`);
 drive events `kypost.view_ticket_issued`, `kypost.view_stored`, `view.closed`, `view.expired`.
+
+## Multi-tenant mode
+
+Only on a multi-tenant KyDrive, which startup still refuses (tenancy design, build plan step 6).
+Every signed body carries the account's top-level `org_id`, as KyPost's `docs/KYDRIVE.md`
+sends it, and KyDrive acts only for an account in that org (table above). The pair secret is
+per pair, not per org, so the check limits a stolen secret to accounts whose subject and org it
+can name together. A single-tenant KyDrive ignores `org_id`.
 
 ## What KyPost can do with the pair secret
 

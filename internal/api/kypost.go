@@ -235,15 +235,18 @@ type kypostReply struct {
 
 func refuse(status int, code string) kypostReply { return kypostReply{status: status, code: code} }
 
-// kypostUser names who a signed request speaks for.
+// kypostUser names who a signed request speaks for. A multi-tenant KyPost adds the account's
+// org (docs/KYPOST.md).
 type kypostUser struct {
 	Sub    string `json:"sub"`
 	Issuer string `json:"issuer"`
+	OrgID  string `json:"org_id"`
 }
 
 // kypostSigned verifies a KyPost request under event and resolves its user before h runs:
 // unpaired 404 kypost_off, a bad signature or another event type 401, a verified replay 200
-// duplicate, a malformed body 400, no active everyday account 404 no_user, then the user's
+// duplicate, a malformed body (multi-tenant: or no org_id) 400, no active everyday account in
+// that org 404 no_user, then the user's
 // rate limit and, except for status, their switch. Success and refusal are audited by IDs only.
 func (s *Server) kypostSigned(event string, limit int, h func(r *http.Request, user *store.User, p *kypostPeer, body []byte) kypostReply) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +300,7 @@ func (s *Server) kypostVerify(r *http.Request, event string, limit int, h func(*
 		return "", "", refuse(401, "bad_signature")
 	}
 	var who kypostUser
-	if json.Unmarshal(body, &who) != nil || who.Sub == "" || who.Issuer == "" {
+	if json.Unmarshal(body, &who) != nil || who.Sub == "" || who.Issuer == "" || s.multi() && who.OrgID == "" {
 		return "", hd.EventID, refuse(400, "bad_body")
 	}
 	user, err := s.kypostAccount(r.Context(), who)
@@ -307,6 +310,9 @@ func (s *Server) kypostVerify(r *http.Request, event string, limit int, h func(*
 		}
 		log.Printf("kypost %s: account lookup: %v", event, err)
 		return "", hd.EventID, refuse(503, "unavailable")
+	}
+	if !s.inOrg(r, user, who.OrgID, "kypost") {
+		return "", hd.EventID, refuse(404, "no_user") // as an unknown subject, and audited
 	}
 	if !s.allowAttempt("kypost:"+event+":"+user.ID, limit, time.Minute) {
 		return user.ID, hd.EventID, refuse(429, "rate_limited")

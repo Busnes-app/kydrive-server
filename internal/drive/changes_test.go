@@ -298,6 +298,7 @@ var noChange = map[string]string{
 	"UserOrg":                 "read",
 	"OrgActive":               "read",
 	"OrgsSince":               "read",
+	"ActiveOrgs":              "the org registry is not items",
 	"ApplyOrgs":               "the org registry is not items",
 	"AgentTokenUser":          "credential bookkeeping",
 	"AppPasswordUser":         "credential bookkeeping",

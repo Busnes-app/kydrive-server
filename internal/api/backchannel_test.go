@@ -29,10 +29,12 @@ type fakeKySignOn struct {
 	key     *rsa.PrivateKey
 	issuer  string
 	idToken string
-	org     string // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
-	orgs    string // the /api/suite/orgs answer
-	polls   int    // /api/suite/orgs calls
-	groups  int    // /api/suite/groups calls
+	org     string            // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
+	orgs    string            // the /api/suite/orgs answer
+	polls   int               // /api/suite/orgs calls
+	groups  int               // /api/suite/groups calls
+	orgOf   []string          // each /api/suite/groups call's org_id
+	byOrg   map[string]string // the /api/suite/groups answer per org_id, else no groups
 }
 
 func newFakeKySignOn(t *testing.T) *fakeKySignOn {
@@ -58,7 +60,13 @@ func newFakeKySignOn(t *testing.T) *fakeKySignOn {
 			}}})
 		case "/api/suite/groups":
 			f.groups++
-			_, _ = w.Write([]byte(`{"groups":[]}`))
+			org := r.URL.Query().Get("org_id")
+			f.orgOf = append(f.orgOf, org)
+			body, ok := f.byOrg[org]
+			if !ok {
+				body = `{"groups":[]}`
+			}
+			_, _ = w.Write([]byte(body))
 		case "/api/suite/orgs":
 			f.polls++
 			_, _ = w.Write([]byte(f.orgs))
