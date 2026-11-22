@@ -47,10 +47,12 @@ func Open(t testing.TB, cfg config.DatabaseConfig) *sql.DB {
 		db, err = qmark.Open(cfg.DSN)
 	} else {
 		db, err = sql.Open("sqlite", cfg.DSN+"?_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)")
-		db.SetMaxOpenConns(1)
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	if cfg.Driver != "postgres" {
+		db.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
