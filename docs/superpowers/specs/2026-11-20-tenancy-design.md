@@ -37,7 +37,7 @@ PR 3 until it does.
 | | Single-tenant (self-hosted, business platforms) | Multi-tenant (hosted SaaS) |
 |---|---|---|
 | Mode | `KYDRIVE_TENANCY=single` (default) | `KYDRIVE_TENANCY=multi`, fresh database only |
-| Database | SQLite, one writer (root `AGENTS.md`, "One SQLite writer"), unchanged | PostgreSQL only (D2) |
+| Database | SQLite (default), one writer (root `AGENTS.md`, "One SQLite writer"), unchanged; or PostgreSQL, moved to with `migrate-postgres` (R1) | PostgreSQL only (D2) |
 | Deployment | one instance | several replicas across hosts: one database, shared file storage, one elected worker (D2, D13) |
 | Orgs | one default org, never named in tokens (T D4) | one per customer, mirrored from `GET /api/suite/orgs` (D3) |
 | Accounts | SCIM from KyIdentity, sign-in links by `sub` (`docs/PERMISSIONS.md:9,13`) | created at first sign-in from the verified token, kept current by the signed webhook (D5) |
@@ -567,9 +567,11 @@ it would suggest the link reaches people outside the household.
   live viewing copies. The org's usage is the same sum over every workspace with that
   `org_id`. Trashed files and old versions count, as today.
 - **Enforcement.** One check in `fits` (`store.go:682-692`), inside the write transaction.
-  SQLite's one writer serialises check and insert. On PostgreSQL the write transaction first
-  locks the org's `drive_orgs` row (`SELECT … FOR UPDATE`), so two uploads on two replicas
-  cannot both take the last bytes. The org check uses the org's net change, not the bytes written to the target
+  SQLite's one writer serialises check and insert. PostgreSQL has no single writer, so `fits`
+  first locks the row its check reads (`SELECT … FOR UPDATE`): the org's `drive_orgs` row for
+  the multi-tenant pool, and the target `drive_workspaces` row for the single-tenant
+  per-workspace quota. Two uploads, on one instance or on two replicas, then cannot both take
+  the last bytes. The org check uses the org's net change, not the bytes written to the target
   workspace. Bytes that move between two workspaces of one org change nothing, so an
   over-quota org can still move files and receive a handover. Every path that adds bytes
   ends there:
@@ -870,6 +872,9 @@ the release before. No R step starts before the owner approves this amendment.
     SQL needs porting: `julianday` and `strftime` (3 each), one `INSERT OR`, one `PRAGMA`,
     and the trigger DDL, whose 18 value comparisons with `IS NOT` (`tenancy.go`) become
     `IS DISTINCT FROM`.
+  - `fits` locks the row its quota check reads (Quotas), since PostgreSQL does not serialise
+    writers. A test runs two concurrent uploads with room for one on PostgreSQL, against
+    the per-workspace quota.
   - A PostgreSQL drive schema with every table. `org_id` on every **O** table is a foreign key
     to `drive_orgs(id)`. Schema 27's and 28's triggers and `recordTenancy`'s unique subject
     index exist under the same names.
