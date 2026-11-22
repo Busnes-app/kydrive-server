@@ -198,7 +198,8 @@ Its own SQLite file (`search/index.go:37-40`), never backed up and always rebuil
 - `search/` moves into PostgreSQL (Search index, above).
 - `encryption.key` and `identity.key` must not exist in the data directory.
 - `installer/` is refused (4a).
-- `drill/` and `initial-admin-password` stay per replica.
+- `drill/` stays per replica. `initial-admin-password` is written once, by the replica that
+  creates the bootstrap administrator (step 6), to its own data directory. The others write none.
 - Backups have no SQLite-only payload. `payload.go:70-72` refuses any driver but SQLite
   today. R3 ports the replica pattern's PostgreSQL snapshot (one transaction, under the
   `backup-run` lease), and the Restic bulk reads blobs from the shared storage.
@@ -951,7 +952,15 @@ the release before. No R step starts before the owner approves this amendment.
    `KYDRIVE_STAFF_ORG`, and seeds that org's row before bootstrap (Local accounts). It also
    requires a replica-capable install (D13): the PostgreSQL driver, the shared storage
    configured and reachable, both keys outside the data directory, and the R3 and R4
-   mechanisms in place. Otherwise it refuses to start and names each missing piece. The admin UI gains the org selector and staff audit views. Operator
+   mechanisms in place. Otherwise it refuses to start and names each missing piece.
+   - First start is serialised. Replicas usually start together on the empty database, so
+     the steps that record `tenancy_mode` and `staff_org`, seed the staff org's row and create
+     the bootstrap administrator run in one transaction under a database-wide advisory lock.
+     The replica pattern already serialises migrations and initial admin creation this way.
+     A replica that gets the lock second finds the records and the account, checks that its
+     own mode and staff org match them (refusing to start if they differ), and writes no
+     password file. The replica that created the account logs that it wrote
+     `initial-admin-password`, so the operator knows which data directory holds it. The admin UI gains the org selector and staff audit views. Operator
    docs: `INSTALL.md`, `docs/DEPLOYMENT.md`, `docs/PERMISSIONS.md`, and
    `docs/ASSURANCE-CASE.md`, whose trust boundaries change here.
    - Tests: a **two-replica test**: two server processes, one PostgreSQL database and the
@@ -961,7 +970,9 @@ the release before. No R step starts before the owner approves this amendment.
      replica are each refused on the other, and a sign-in window filled on one holds on the
      other. When the elected worker is killed, the other takes its jobs within a minute. A
      replica with another shared setting refuses to start, and SIGTERM drains one replica
-     while the other keeps serving. Also a start refused for each missing piece of D13.
+     while the other keeps serving. Also a start refused for each missing piece of D13. The two
+     replicas also start at once on an empty database, and the test expects one mode record, one
+     staff org row, one bootstrap administrator and one password file.
    - The browser flow for staff org selection (`UI-VERIFICATION.md`). An end-to-end
      run against a KyIdentity in multi-tenant mode (unverified: whether one can run in CI
      before KyIdentity PR 6).
