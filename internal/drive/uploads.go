@@ -61,7 +61,9 @@ func (s *Store) startUpload(ctx context.Context, user string, u UploadSession, m
 	if u.Mtime, err = Mtime(u.Mtime); err != nil {
 		return u, err
 	}
+	u0 := u
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		u = u0
 		var stored string
 		var revision int64
 		if u.File != "" {
@@ -378,6 +380,7 @@ func (s *Store) dropUpload(ctx context.Context, staging, id string, check func(*
 func (s *Store) expireUpload(ctx context.Context, staging, id string, now int64) error {
 	gone := false
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		gone = false
 		// Segments reference the session, so they go first; the session delete decides.
 		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_upload_segments WHERE session=? AND session IN (SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?)`, id, now, now-int64(completionClaim/time.Second)); err != nil {
 			return err

@@ -125,7 +125,9 @@ func (s *Store) Share(ctx context.Context, user, kind, id, principalKind, princi
 	if Rank(role) == 0 {
 		return sh, ErrInvalid
 	}
+	sh0 := sh
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		sh = sh0
 		workspace, folder, file, trashed, err := resource(ctx, tx, user, kind, id)
 		if err != nil {
 			return err

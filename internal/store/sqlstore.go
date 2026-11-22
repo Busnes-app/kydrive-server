@@ -1408,15 +1408,15 @@ func errorsIs(err, target error) bool {
 
 // ReplaceGroup applies directory attributes and the entire membership set atomically.
 func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool) error {
-	return qmark.Retry(ctx, func() error {
+	var now time.Time
+	err := qmark.Retry(ctx, func() error {
+		now = time.Now().UTC()
 		tx, err := g.store.db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
 		defer tx.Rollback()
-		now := time.Now().UTC()
 		if create {
-			group.CreatedAt = now
 			_, err = tx.ExecContext(ctx, g.store.rebind("INSERT INTO groups(id,display_name,external_id,created_at,updated_at) VALUES(?,?,?,?,?)"), group.ID, group.DisplayName, group.ExternalID, now, now)
 		} else {
 			var res sql.Result
@@ -1431,7 +1431,6 @@ func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool
 		if err != nil {
 			return err
 		}
-		group.UpdatedAt = now
 		if _, err = tx.ExecContext(ctx, g.store.rebind("DELETE FROM group_members WHERE group_id=?"), group.ID); err != nil {
 			return err
 		}
@@ -1445,6 +1444,13 @@ func (g *groupStore) ReplaceGroup(ctx context.Context, group *Group, create bool
 		}
 		return tx.Commit()
 	})
+	if err == nil {
+		if create {
+			group.CreatedAt = now
+		}
+		group.UpdatedAt = now
+	}
+	return err
 }
 func (g *groupStore) GetGroupByExternalID(ctx context.Context, id string) (*Group, error) {
 	var groupID string

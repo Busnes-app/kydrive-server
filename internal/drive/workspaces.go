@@ -89,6 +89,7 @@ func (s *Store) DeleteWorkspace(ctx context.Context, user, workspace, confirm st
 		return false, err
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		recoverable = false
 		if err := admin(ctx, tx, user); err != nil {
 			return err
 		}
@@ -242,6 +243,7 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 	for _, id := range ids {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
+			b = nil
 			var name, org string
 			err := tx.QueryRowContext(ctx, `SELECT name,org_id FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name, &org)
 			if errors.Is(err, sql.ErrNoRows) {

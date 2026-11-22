@@ -39,6 +39,7 @@ func (s *Store) Changes(ctx context.Context, user, workspace string, after int64
 		kind, item string
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		more = false
 		cs, next = []Change{}, after
 		if err := authorize(ctx, tx, user, workspace, 1); err != nil {
 			return err

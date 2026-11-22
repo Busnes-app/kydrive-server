@@ -147,6 +147,8 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 	}
 	denied := false
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		denied = false
+		token = ""
 		var name, platform, challenge string
 		var expires int64
 		err := tx.QueryRowContext(ctx, `SELECT user_id,name,platform,challenge,expires FROM drive_device_codes WHERE code_hash=?`, tokenHash(code)).Scan(&user, &name, &platform, &challenge, &expires)

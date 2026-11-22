@@ -92,6 +92,7 @@ func purgeVersion(ctx context.Context, tx *sql.Tx, id string, revision, current 
 func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		blobs = nil
 		var workspace, parent string
 		var trashed bool
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &trashed); err != nil {
@@ -123,6 +124,7 @@ func (s *Store) PurgeFile(ctx context.Context, user, id string) ([]string, error
 func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		blobs = nil
 		var workspace, parent string
 		var trashed bool
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,trashed FROM drive_folders WHERE id=?`, id).Scan(&workspace, &parent, &trashed); err != nil {
@@ -177,6 +179,7 @@ func (s *Store) PurgeFolder(ctx context.Context, user, id string) ([]string, err
 func (s *Store) PurgeVersion(ctx context.Context, user, id string, revision int64) ([]string, error) {
 	var blobs []string
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		blobs = nil
 		var workspace, parent string
 		var current int64
 		if err := tx.QueryRowContext(ctx, `SELECT workspace,parent,revision FROM drive_files WHERE id=?`, id).Scan(&workspace, &parent, &current); err != nil {

@@ -124,7 +124,9 @@ func (s *Store) OpenLink(ctx context.Context, user, token string) (SharedItem, e
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service {
 		return item, ErrDenied
 	}
+	item0 := item
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		item = item0
 		var link string
 		err := tx.QueryRowContext(ctx, `SELECT id,resource_kind,resource_id FROM drive_links WHERE token_hash=? AND scope='org' AND revoked=0 AND (expires=0 OR expires>?)`, tokenHash(token), time.Now().Unix()).Scan(&link, &item.Kind, &item.ID)
 		if errors.Is(err, sql.ErrNoRows) {

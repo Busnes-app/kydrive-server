@@ -286,6 +286,7 @@ func (s *Store) ExpireAgentTokens(ctx context.Context, at time.Time) (int, error
 func (s *Store) expireAgentTokens(ctx context.Context, at time.Time, id string) (int, error) {
 	n := 0
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		n = 0
 		rows, err := tx.QueryContext(ctx, `SELECT id,user_id,created,last_used,scope FROM drive_app_passwords WHERE scope IN ('mcp:read','mcp:write') AND (?='' OR id=?)`, id, id)
 		if err != nil {
 			return err

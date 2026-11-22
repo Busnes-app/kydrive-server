@@ -315,7 +315,9 @@ func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v V
 	}
 	f := File{ID: uuid.NewString(), Workspace: g.workspace, Parent: g.root, Name: name}
 	v.FileID, v.Revision, v.Created = f.ID, 1, now()
+	f0 := f
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		f = f0
 		for n := 2; ; n++ {
 			err := s.attempt(ctx, tx, func() error { return s.publishTX(ctx, tx, g.creator, f, v, 0) })
 			if err == nil {

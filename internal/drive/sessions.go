@@ -107,7 +107,9 @@ func (s *Store) EditorSession(ctx context.Context, user, id string) (EditorSessi
 	if !login.At.IsZero() {
 		loginAt = login.At.UnixNano()
 	}
+	e0 := e
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		e = e0
 		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 1); err != nil {
 			return err
 		}
@@ -285,7 +287,10 @@ func (s *Store) DeferRevocation(ctx context.Context, id string) error {
 // The digest of the document's newest save is successful without publishing another blob.
 func (s *Store) PublishEditor(ctx context.Context, user string, f File, v Version, key string, final bool) (bool, error) {
 	duplicate := false
+	v0 := v
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		duplicate = false
+		v = v0
 		if err := authorizeItem(ctx, tx, user, f.Workspace, f.Parent, f.ID, 2); err != nil {
 			return err
 		}

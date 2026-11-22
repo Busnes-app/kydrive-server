@@ -120,7 +120,9 @@ func (s *Store) CopyFile(ctx context.Context, user, id string, to Location) (Fil
 	if !ValidName(to.Name) {
 		return out, ErrInvalid
 	}
+	out0 := out
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
+		out = out0
 		src, err := s.scanFile(tx.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND f.trashed=false`, id))
 		if err != nil {
 			return err

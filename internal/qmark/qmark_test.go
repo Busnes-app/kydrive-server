@@ -1,6 +1,9 @@
 package qmark
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestRebind(t *testing.T) {
 	for q, want := range map[string]string{
@@ -20,5 +23,28 @@ func TestRebind(t *testing.T) {
 		if got := Rebind(q); got != want {
 			t.Errorf("Rebind(%q) = %q, want %q", q, got, want)
 		}
+	}
+}
+
+func TestRetryRerunsOnlySerializationFailures(t *testing.T) {
+	for msg, want := range map[string]int{
+		"ERROR: could not serialize access (SQLSTATE 40001)": MaxAttempts,
+		"ERROR: deadlock detected (SQLSTATE 40P01)":          MaxAttempts,
+		"ERROR: duplicate key value (SQLSTATE 23505)":        1,
+	} {
+		runs := 0
+		err := Retry(t.Context(), func() error { runs++; return errors.New(msg) })
+		if runs != want || err == nil || err.Error() != msg {
+			t.Errorf("%s: %d runs, %v", msg, runs, err)
+		}
+	}
+	runs := 0
+	if err := Retry(t.Context(), func() error {
+		if runs++; runs < 3 {
+			return errors.New("(SQLSTATE 40001)")
+		}
+		return nil
+	}); err != nil || runs != 3 {
+		t.Fatalf("%d runs, %v", runs, err)
 	}
 }

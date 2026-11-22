@@ -360,6 +360,7 @@ func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) 
 		return false, ErrNotFound
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		staffNotActive = false
 		for _, o := range orgs {
 			if o.ID == s.tenancy.StaffOrg {
 				staffNotActive = staffNotActive || o.Status != suitedir.OrgActive || !o.Enabled
