@@ -576,7 +576,9 @@ func TestChangeRowsCommitInSeqOrder(t *testing.T) {
 		b <- seq
 	}()
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		waiting, err := drive.QueryInt(e.ctx, e.d, `SELECT COUNT(*) FROM pg_locks WHERE locktype='advisory' AND NOT granted`)
+		// The waiter on this workspace's key only: pg_locks is the whole server's, and other
+		// packages' tests take advisory locks too. A bigint key is classid (high) and objid (low).
+		waiting, err := drive.QueryInt(e.ctx, e.d, `SELECT COUNT(*) FROM pg_locks, (SELECT hashtextextended('kydrive changes '||?,0) AS k) q WHERE locktype='advisory' AND NOT granted AND objsubid=1 AND classid::bigint=((q.k>>32)&4294967295) AND objid::bigint=(q.k&4294967295)`, e.w)
 		if err != nil {
 			t.Fatal(err)
 		}
