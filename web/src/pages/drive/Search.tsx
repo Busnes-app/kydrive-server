@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Autocomplete } from '@base-ui/react/autocomplete';
 import { Check, Folder, Search as SearchIcon } from 'lucide-react';
 import { record, response } from './client';
 import type { Workspace } from './client';
@@ -74,7 +75,7 @@ function idle(q: string, type: string): boolean {
 
 // Search finds files and folders by name, and files by the words in them, across every workspace
 // the user can read and what is shared with them, optionally of one type (a type alone lists all of it). Results open below
-// the box and close on Escape or a click elsewhere.
+// the box as a listbox.
 export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen: (h: Hit) => void }) {
   const [q, setQ] = useState('');
   const [type, setType] = useState(urlType);
@@ -102,39 +103,47 @@ export function Search({ workspaces, onOpen }: { workspaces: Workspace[]; onOpen
     })(), 300);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [q, type]);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
-  }, [open]);
   const choose = (t: string) => { pushType(t); setType(t); };
   const names = new Map(workspaces.map(w => [w.id, w.name]));
-  return <div className="drive-search" role="search" ref={box} onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}>
-    <SearchIcon className="drive-search-icon" size={18} aria-hidden="true" />
-    <input type="search" aria-label="Search files" value={q} maxLength={100} placeholder="Search names and words in files" onFocus={() => setOpen(true)} onChange={e => setQ(e.target.value)} />
-    {open && <div className="drive-search-results">
-      <div className="drive-search-types" role="group" aria-label="File type">
-        {TYPES.map(([v, label]) => <button key={v} type="button" aria-pressed={type === v} onClick={() => choose(type === v ? '' : v)}>
-          {type === v && <Check size={14} aria-hidden="true" />}{label}
-        </button>)}
-      </div>
-      <div aria-live="polite">
-      {idle(q, type) && <p className="drive-search-note">Enter at least 2 characters, or choose a type.</p>}
-      {error ? <p role="alert">{error}</p> : found && (found.results.length === 0 ? <p>No matches</p> : <ul>{found.results.map(h => {
-        const Icon = h.kind === 'folder' ? Folder : iconFor(h.name);
-        return <li key={`${h.kind}-${h.id}`}><button type="button" onClick={() => { setQ(''); setOpen(false); choose(''); onOpen(h); }}>
-          <Icon size={18} aria-hidden="true" /><span>{h.match?.includes('name') ? marks(h.name, nameMatches(h.name, found.query)) : h.name}</span>
-          <small>{[h.shared?.from ?? names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
-          {h.snippet && <Marked s={h.snippet} />}
-        </button></li>;
-      })}</ul>)}
-      {found?.truncated && <p>Showing the first {found.results.length} matches; refine the search to see more.</p>}
-      {found && found.pending > 0 && <p className="drive-search-note">Still indexing {found.pending} of your files, so their contents may not be found yet.</p>}
-      {found && found.unverified > 0 && <p className="drive-search-note">{found.unverified} more files have these words but were not checked for the exact phrase.</p>}
-      {found?.capped && <p className="drive-search-note">A word start matched many words; only the most common were searched.</p>}
-      {found?.query && <p className="drive-search-note">File contents match whole words. Add * to 3 or more letters to match the start of a word (conf*), or put words in quotes for an exact phrase ("site report").</p>}
-      </div>
-    </div>}
-  </div>;
+  const select = (h: Hit) => { setQ(''); setOpen(false); choose(''); onOpen(h); };
+  // Base UI's Autocomplete owns the combobox wiring: arrows move through the results from the
+  // box, Enter opens the highlighted one, Escape and a click elsewhere close the panel.
+  return <Autocomplete.Root items={found?.results ?? []} filter={null} itemToStringValue={(h: Hit) => h.name}
+    value={q} onValueChange={(v, d) => { if (d.reason === 'input-change' || d.reason === 'input-clear') setQ(v); }}
+    open={open} onOpenChange={setOpen}>
+    <div className="drive-search" role="search" ref={box}>
+      <SearchIcon className="drive-search-icon" size={18} aria-hidden="true" />
+      <Autocomplete.Input type="search" aria-label="Search files" maxLength={100} placeholder="Search names and words in files" onFocus={() => setOpen(true)} />
+    </div>
+    <Autocomplete.Portal container={box}>
+      <Autocomplete.Positioner className="drive-search-positioner" anchor={box} sideOffset={4} align="start">
+        <Autocomplete.Popup className="drive-search-results">
+          <div className="drive-search-types" role="group" aria-label="File type">
+            {TYPES.map(([v, label]) => <button key={v} type="button" aria-pressed={type === v} onClick={() => choose(type === v ? '' : v)}>
+              {type === v && <Check size={14} aria-hidden="true" />}{label}
+            </button>)}
+          </div>
+          <Autocomplete.Status>
+            {idle(q, type) && <p className="drive-search-note">Enter at least 2 characters, or choose a type.</p>}
+            {error ? <p role="alert">{error}</p> : found?.results.length === 0 && <p>No matches</p>}
+          </Autocomplete.Status>
+          {!error && <Autocomplete.List>
+            {(h: Hit) => {
+              const Icon = h.kind === 'folder' ? Folder : iconFor(h.name);
+              return <Autocomplete.Item key={`${h.kind}-${h.id}`} value={h} className="drive-search-hit" onClick={() => select(h)}>
+                <Icon size={18} aria-hidden="true" /><span>{h.match?.includes('name') && found ? marks(h.name, nameMatches(h.name, found.query)) : h.name}</span>
+                <small>{[h.shared?.from ?? names.get(h.workspace) ?? 'Workspace', h.path].filter(Boolean).join(' / ')}</small>
+                {h.snippet && <Marked s={h.snippet} />}
+              </Autocomplete.Item>;
+            }}
+          </Autocomplete.List>}
+          {found?.truncated && <p>Showing the first {found.results.length} matches; refine the search to see more.</p>}
+          {found && found.pending > 0 && <p className="drive-search-note">Still indexing {found.pending} of your files, so their contents may not be found yet.</p>}
+          {found && found.unverified > 0 && <p className="drive-search-note">{found.unverified} more files have these words but were not checked for the exact phrase.</p>}
+          {found?.capped && <p className="drive-search-note">A word start matched many words; only the most common were searched.</p>}
+          {found?.query && <p className="drive-search-note">File contents match whole words. Add * to 3 or more letters to match the start of a word (conf*), or put words in quotes for an exact phrase ("site report").</p>}
+        </Autocomplete.Popup>
+      </Autocomplete.Positioner>
+    </Autocomplete.Portal>
+  </Autocomplete.Root>;
 }

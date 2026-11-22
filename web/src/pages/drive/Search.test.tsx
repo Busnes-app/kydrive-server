@@ -25,7 +25,7 @@ describe('Search', () => {
     expect(urls).toEqual(['/api/drive/search?q=bud%20get']);
     expect(screen.getByText('Team / Reports')).toBeTruthy();
     expect(screen.getByText(/Showing the first 1 matches/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Q1 budget\.xlsx/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Q1 budget\.xlsx/ }));
     expect(open).toHaveBeenCalledWith(results[0]);
   });
 
@@ -48,7 +48,7 @@ describe('Search', () => {
     render(<Search workspaces={workspaces} onOpen={open} />);
     fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'plan' } });
     expect(await screen.findByText('Ann Lee / Projects/Q1')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Plan\.docx/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Plan\.docx/ }));
     expect(open).toHaveBeenCalledWith(shared);
   });
 
@@ -86,7 +86,7 @@ describe('Search', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: hits, truncated: false }), { status: 200 })));
     const { container } = render(<Search workspaces={workspaces} onOpen={() => {}} />);
     fireEvent.change(screen.getByLabelText('Search files'), { target: { value: ' budget ' } });
-    expect(await screen.findByRole('button', { name: /Q4 Budget \(budget\)\.csv/ })).toBeTruthy();
+    expect(await screen.findByRole('option', { name: /Q4 Budget \(budget\)\.csv/ })).toBeTruthy();
     expect([...container.querySelectorAll('mark')].map(m => m.textContent)).toEqual(['Budget', 'budget']);
     expect(nameMatches('a.b (c)', '.b (')).toEqual([[1, 5]]);
     expect(nameMatches('Ärger', 'är')).toEqual([[0, 2]]);
@@ -147,7 +147,7 @@ describe('Search', () => {
     await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Images' }).getAttribute('aria-pressed')).toBe('true'));
     await vi.waitFor(() => expect(urls.at(-1)).toBe('/api/drive/search?q=budget&type=images'));
     // Opening a result clears the type, so Back comes back to this list.
-    fireEvent.click(await screen.findByRole('button', { name: /Q1 budget\.xlsx/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /Q1 budget\.xlsx/ }));
     expect(open).toHaveBeenCalled();
     expect(location.search).toBe('');
     expect(screen.queryByRole('group', { name: 'File type' })).toBeNull();

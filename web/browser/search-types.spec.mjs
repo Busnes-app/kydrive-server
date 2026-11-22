@@ -36,8 +36,8 @@ test('filters search results by type from the chips', async ({ page }, testInfo)
   const search = page.getByRole('search');
   const box = page.getByLabel('Search files');
   await box.fill(tag);
-  await expect(search.getByRole('button', { name: pdf })).toBeVisible();
-  await expect(search.getByRole('button', { name: doc })).toBeVisible();
+  await expect(search.getByRole('option', { name: pdf })).toBeVisible();
+  await expect(search.getByRole('option', { name: doc })).toBeVisible();
 
   // Keyboard: Tab from the box reaches the chips; Space presses one.
   await box.focus();
@@ -49,34 +49,34 @@ test('filters search results by type from the chips', async ({ page }, testInfo)
   await page.keyboard.press('Space');
   await expect(pdfs).toHaveAttribute('aria-pressed', 'true');
   await expect(page).toHaveURL(/\?type=pdfs#\/drive$/);
-  await expect(search.getByRole('button', { name: doc })).toHaveCount(0);
-  await expect(search.getByRole('button', { name: pdf })).toBeVisible();
+  await expect(search.getByRole('option', { name: doc })).toHaveCount(0);
+  await expect(search.getByRole('option', { name: pdf })).toBeVisible();
 
   // A type alone lists every PDF the user can read.
   await box.fill('');
-  await expect(search.getByRole('button', { name: pdf })).toBeVisible();
-  await expect(search.getByRole('button', { name: doc })).toHaveCount(0);
+  await expect(search.getByRole('option', { name: pdf })).toBeVisible();
+  await expect(search.getByRole('option', { name: doc })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('type-pdfs.png') });
 
   // Another chip replaces it; Back restores PDFs, Forward Documents.
   await search.getByRole('button', { name: 'Documents' }).click();
   await expect(page).toHaveURL(/\?type=documents#\/drive$/);
-  await expect(search.getByRole('button', { name: doc })).toBeVisible();
+  await expect(search.getByRole('option', { name: doc })).toBeVisible();
   await page.goBack();
   await expect(pdfs).toHaveAttribute('aria-pressed', 'true');
-  await expect(search.getByRole('button', { name: pdf })).toBeVisible();
+  await expect(search.getByRole('option', { name: pdf })).toBeVisible();
   await page.goForward();
   await expect(search.getByRole('button', { name: 'Documents' })).toHaveAttribute('aria-pressed', 'true');
 
   // A reload keeps the type; opening a result clears it, and Back returns to the list.
   await page.reload();
-  await expect(search.getByRole('button', { name: doc })).toBeVisible();
-  await search.getByRole('button', { name: doc }).click();
+  await expect(search.getByRole('option', { name: doc })).toBeVisible();
+  await search.getByRole('option', { name: doc }).click();
   await expect(page).toHaveURL(/\/#\/drive$/);
   await expect(page.getByRole('group', { name: 'File type' })).toHaveCount(0);
   await page.goBack();
-  await expect(search.getByRole('button', { name: doc })).toBeVisible();
+  await expect(search.getByRole('option', { name: doc })).toBeVisible();
   await box.press('Escape');
   await expect(page.getByRole('group', { name: 'File type' })).toHaveCount(0);
 });
