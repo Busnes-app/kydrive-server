@@ -29,10 +29,10 @@ type fakeKySignOn struct {
 	key     *rsa.PrivateKey
 	issuer  string
 	idToken string
-	org     string // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
-	orgs    string // the /api/suite/orgs answer
-	polls   int    // /api/suite/orgs calls
-	groups  int    // /api/suite/groups calls
+	org     string            // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
+	orgs    string            // the /api/suite/orgs answer
+	polls   int               // /api/suite/orgs calls
+	groups  int               // /api/suite/groups calls
 	orgOf   []string          // each /api/suite/groups call's org_id
 	byOrg   map[string]string // the /api/suite/groups answer per org_id, else no groups
 }
