@@ -509,3 +509,48 @@ func TestStaffOrgIsRecorded(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 }
+
+// A single-tenant install's audit still lists what actors without an account record (the
+// system, a guest link): they land in its one org.
+func TestSingleTenantAuditKeepsSystemEvents(t *testing.T) {
+	st, _, _ := fixture(t)
+	ctx, d := context.Background(), st.Drive()
+	for _, actor := range []string{"system", "guest-link:x", "removed-account"} {
+		if err := drive.RecordEvent(ctx, d, actor, "test.recorded", actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, err := d.Events(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, e := range events {
+		seen[e.User] = true
+	}
+	for _, actor := range []string{"system", "guest-link:x", "removed-account"} {
+		if !seen[actor] {
+			t.Errorf("audit lost the event of %s", actor)
+		}
+	}
+}
+
+// On a multi-tenant store, a guest download and a retention purge are audited in the org of
+// the workspace they touched, not as platform rows.
+func TestWorkerAndGuestEventsLandInTheirOrg(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	if _, err := d.GuestFile(ctx, o.guestB, "", o.fileB.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetTrash(ctx, "a1", o.fileA.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ApplyRetention(ctx, time.Now().Add(40*24*time.Hour), 30); err != nil {
+		t.Fatal(err)
+	}
+	got := strs(t, o.db, `SELECT action||' '||COALESCE(org_id,'none') FROM drive_events WHERE action IN ('guest_link.downloaded','file.retention_purged') ORDER BY action`)
+	if want := []string{"file.retention_purged org-a", "guest_link.downloaded org-b"}; !slices.Equal(got, want) {
+		t.Fatalf("events %v, want %v", got, want)
+	}
+}

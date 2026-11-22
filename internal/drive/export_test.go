@@ -304,3 +304,8 @@ func SealName(s *Store, table, id, name string) (string, string, error) {
 func NameFree(ctx context.Context, s *Store, org, name string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error { return nameFree(ctx, tx, org, name, "") })
 }
+
+// RecordEvent records an action as event does, in its own transaction.
+func RecordEvent(ctx context.Context, s *Store, user, action, resource string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return event(ctx, tx, user, action, resource) })
+}

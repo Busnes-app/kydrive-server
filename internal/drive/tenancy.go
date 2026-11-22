@@ -276,6 +276,18 @@ func (s *Store) OrgGroups(ctx context.Context) (map[string]bool, error) {
 	return out, nil
 }
 
+// inOrgOf is ctx acting in the org query (one row, one column) finds, so a worker's event lands
+// in the org of the row it is about to change.
+func inOrgOf(ctx context.Context, q queryer, query string, args ...any) (context.Context, error) {
+	var org sql.NullString
+	if err := q.QueryRowContext(ctx, query, args...).Scan(&org); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return ctx, err
+	}
+	return WithOrg(ctx, org.String), nil
+}
+
+const fileOrg = `SELECT w.org_id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE f.id=?`
+
 // UserOrgSQL is userOrg for SQL built outside the drive store; user is a column reference or
 // placeholder.
 func UserOrgSQL(user string) string { return userOrg(user) }

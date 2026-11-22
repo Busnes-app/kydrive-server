@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 // schema upgrades drive tables in place; entry i is version i+1. Append only: never edit
@@ -220,10 +222,12 @@ func (s *Store) renameClashes(ctx context.Context, tx *sql.Tx) error {
 			if _, err := tx.ExecContext(ctx, `UPDATE drive_files SET name=?,name_hmac=? WHERE id=?`, stored, mac, c.id); err != nil {
 				return err
 			}
-			if err := change(ctx, tx, c.workspace, "file", c.id); err != nil {
+			// Schema 20 predates org_id (27), which change and event write: these are their
+			// statements as of schema 20, and schema 27's column default gives the rows their org.
+			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_changes(workspace,kind,item,created) VALUES(?,'file',?,?)`, c.workspace, c.id, time.Now().Unix()); err != nil {
 				return err
 			}
-			if err := event(ctx, tx, "system", "file.renamed", c.id+" name clashed with a folder"); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_events(id,user_id,action,resource,created) VALUES(?,'system','file.renamed',?,?)`, uuid.NewString(), c.id+" name clashed with a folder", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 				return err
 			}
 			break

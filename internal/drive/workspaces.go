@@ -242,8 +242,8 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 	for _, id := range ids {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
-			var name string
-			err := tx.QueryRowContext(ctx, `SELECT name FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name)
+			var name, org string
+			err := tx.QueryRowContext(ctx, `SELECT name,org_id FROM drive_workspaces WHERE id=? AND `+expired, id, stamp, days).Scan(&name, &org)
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil // restored meanwhile
 			}
@@ -280,7 +280,7 @@ func (s *Store) PurgeDeletedWorkspaces(ctx context.Context, at time.Time, days i
 			if b, err = unreferenced(ctx, tx, candidates); err != nil {
 				return err
 			}
-			return event(ctx, tx, "system", "workspace.purged", fmt.Sprintf("%s name=%q", id, name)+counts+rest)
+			return event(WithOrg(ctx, org), tx, "system", "workspace.purged", fmt.Sprintf("%s name=%q", id, name)+counts+rest)
 		})
 		if err != nil {
 			return blobs, err // a rolled-back purge still references b

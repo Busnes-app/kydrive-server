@@ -102,14 +102,17 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 			log.Printf("retention: skipped %d items", skipped)
 		}
 	}()
-	each := func(action, resource string, purge func(*sql.Tx) ([]string, error)) error {
+	each := func(file, action, resource string, purge func(*sql.Tx) ([]string, error)) error {
 		var b []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
-			var err error
+			in, err := inOrgOf(ctx, tx, fileOrg, file)
+			if err != nil {
+				return err
+			}
 			if b, err = purge(tx); err != nil {
 				return err
 			}
-			return event(ctx, tx, "system", action, resource)
+			return event(in, tx, "system", action, resource)
 		})
 		if errors.Is(err, ErrConflict) || errors.Is(err, ErrInvalid) || errors.Is(err, ErrDenied) {
 			skipped++
@@ -154,7 +157,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 		}
 	}
 	err := pages(`SELECT f.trashed_at,f.id `+expiredFile+` AND (f.trashed_at>? OR (f.trashed_at=? AND f.id>?)) ORDER BY f.trashed_at,f.id LIMIT 500`, []any{stamp, trashDays}, func(_, id string) error {
-		return each("file.retention_purged", id, func(tx *sql.Tx) ([]string, error) { return retainFile(ctx, tx, id, stamp, trashDays) })
+		return each(id, "file.retention_purged", id, func(tx *sql.Tx) ([]string, error) { return retainFile(ctx, tx, id, stamp, trashDays) })
 	})
 	if err != nil {
 		return blobs, err
@@ -164,6 +167,10 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 		deleted = 0
 		err = pages(`SELECT d.trashed_at,d.id FROM (`+expiredFolders+`) d2 JOIN drive_folders d ON d.id=d2.id WHERE (d.trashed_at>? OR (d.trashed_at=? AND d.id>?)) ORDER BY d.trashed_at,d.id LIMIT 500`, []any{stamp, trashDays}, func(_, id string) error {
 			return s.transaction(ctx, func(tx *sql.Tx) error {
+				in, err := inOrgOf(ctx, tx, `SELECT w.org_id FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE d.id=?`, id)
+				if err != nil {
+					return err
+				}
 				res, err := tx.ExecContext(ctx, `DELETE FROM drive_folders WHERE id=? AND id IN (`+expiredFolders+`)`, id, stamp, trashDays)
 				if err != nil {
 					return err
@@ -177,7 +184,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 					return nil
 				}
 				deleted++
-				return event(ctx, tx, "system", "folder.retention_purged", id)
+				return event(in, tx, "system", "folder.retention_purged", id)
 			})
 		})
 		if err != nil {
@@ -190,7 +197,7 @@ func (s *Store) ApplyRetention(ctx context.Context, at time.Time, trashDays int)
 		if err != nil {
 			return err
 		}
-		return each("version.retention_purged", fmt.Sprintf("%s:%d", file, revision), func(tx *sql.Tx) ([]string, error) {
+		return each(file, "version.retention_purged", fmt.Sprintf("%s:%d", file, revision), func(tx *sql.Tx) ([]string, error) {
 			return retainVersion(ctx, tx, file, revision)
 		})
 	})

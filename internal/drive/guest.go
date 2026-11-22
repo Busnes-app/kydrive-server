@@ -148,6 +148,7 @@ func (s *Store) GuestLinks(ctx context.Context, user, kind, id string) ([]GuestL
 type guestAccess struct {
 	link, workspace, kind, root, creator string
 	uploadOnly                           bool
+	org                                  string // the workspace's, where its events go
 }
 
 // guest checks a token and password. Only a live link whose item is live and whose creator may
@@ -155,8 +156,8 @@ type guestAccess struct {
 func (s *Store) guest(ctx context.Context, token, secret string) (guestAccess, error) {
 	var g guestAccess
 	var hash string
-	err := s.db.QueryRowContext(ctx, `SELECT id,workspace,resource_kind,resource_id,created_by,upload_only,password_hash FROM drive_links WHERE token_hash=? AND scope='guest' AND revoked=0 AND expires>?`, tokenHash(token), time.Now().Unix()).
-		Scan(&g.link, &g.workspace, &g.kind, &g.root, &g.creator, &g.uploadOnly, &hash)
+	err := s.db.QueryRowContext(ctx, `SELECT l.id,l.workspace,l.resource_kind,l.resource_id,l.created_by,l.upload_only,l.password_hash,COALESCE(w.org_id,'') FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE l.token_hash=? AND l.scope='guest' AND l.revoked=0 AND l.expires>?`, tokenHash(token), time.Now().Unix()).
+		Scan(&g.link, &g.workspace, &g.kind, &g.root, &g.creator, &g.uploadOnly, &hash, &g.org)
 	if errors.Is(err, sql.ErrNoRows) {
 		return g, ErrNotFound
 	}
@@ -294,7 +295,7 @@ func (s *Store) GuestFile(ctx context.Context, token, secret, id string) (File, 
 		}
 	}
 	return f, s.transaction(ctx, func(tx *sql.Tx) error {
-		return event(ctx, tx, "guest-link:"+g.link, "guest_link.downloaded", f.ID)
+		return event(WithOrg(ctx, g.org), tx, "guest-link:"+g.link, "guest_link.downloaded", f.ID)
 	})
 }
 
@@ -325,7 +326,7 @@ func (s *Store) GuestUpload(ctx context.Context, token, secret, name string, v V
 			}
 			f.Name = numbered(name, n)
 		}
-		return event(ctx, tx, "guest-link:"+g.link, "guest_link.uploaded", f.ID)
+		return event(WithOrg(ctx, g.org), tx, "guest-link:"+g.link, "guest_link.uploaded", f.ID)
 	})
 	f.Revision, f.Size, f.Digest, f.Blob, f.Sealed, f.Modified, f.Mtime = 1, v.Size, v.Digest, v.Blob, v.Sealed, v.Created, v.Created
 	return f, err

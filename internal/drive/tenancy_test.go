@@ -388,3 +388,51 @@ func TestTenancyUpgradeKeepsEveryRow(t *testing.T) {
 		t.Fatalf("%d events outside the default org", n)
 	}
 }
+
+// An upgrade from before schema 20 renames a file that clashes with a folder, recording its
+// change and event in statements of that schema, which has no org_id yet; both rows end up in
+// the default org.
+func TestUpgradeRenamesAClashBeforeTenancy(t *testing.T) {
+	ctx := context.Background()
+	cfg := testdb.Config(t)
+	if cfg.Driver != "sqlite" {
+		t.Skip("drive is SQLite-only")
+	}
+	db := rawDB(t, cfg.DSN)
+	if err := migrations.Run(ctx, db, "sqlite"); err != nil {
+		t.Fatal(err)
+	}
+	d, err := drive.OpenAt(ctx, db, testdb.Key, drive.ClashSchemaVersion-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folderName, folderMAC, err := drive.SealName(d, "drive_folders", "folder", "Plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileName, fileMAC, err := drive.SealName(d, "drive_files", "file", "Plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO drive_workspaces(id,name,quota) VALUES('ws','Team',1048576)`,
+		`INSERT INTO drive_folders(id,workspace,parent,name,name_hmac) VALUES('folder','ws','','` + folderName + `','` + folderMAC + `')`,
+		`INSERT INTO drive_files(id,workspace,parent,name,name_hmac,revision) VALUES('file','ws','','` + fileName + `','` + fileMAC + `',1)`,
+		`INSERT INTO drive_versions(file_id,revision,blob,digest,size,created) VALUES('file',1,'blob','` + strings.Repeat("a", 64) + `',1,'now')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	st, err := store.Open(ctx, cfg, testdb.Key)
+	if err != nil {
+		t.Fatal("upgrade:", err)
+	}
+	defer st.Close()
+	if got := strs(t, db, `SELECT action||' '||org_id FROM drive_events WHERE resource LIKE 'file %'`); len(got) != 1 || got[0] != "file.renamed "+drive.DefaultOrg {
+		t.Fatalf("rename events %v", got)
+	}
+	if got := strs(t, db, `SELECT item||' '||org_id FROM drive_changes WHERE workspace='ws'`); len(got) != 1 || got[0] != "file "+drive.DefaultOrg {
+		t.Fatalf("changes %v", got)
+	}
+}
