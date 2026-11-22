@@ -42,7 +42,7 @@ test('finds a file by a word inside it and highlights it', async ({ page }, test
   // Markup in the file stays text: no <b> element is created from it.
   await expect(page.locator('.drive-search-snippet b')).toHaveCount(0);
   await expect(page.locator('.drive-search-snippet')).toContainText('<b>');
-  await page.getByRole('search').getByRole('button', { name: new RegExp(name.replace('.', '\\.')) }).click();
+  await page.getByRole('search').getByRole('option', { name: new RegExp(name.replace('.', '\\.')) }).click();
   await expect(page.getByRole('navigation', { name: 'Folder path' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

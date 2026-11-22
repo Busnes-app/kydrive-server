@@ -212,7 +212,7 @@ test('search marks the matched words in a file name', async ({ page }, testInfo)
   expect((await page.request.post(`/api/drive/workspaces/${mine.id}/uploads?name=${encodeURIComponent(name)}&parent=&revision=0`, { headers, data: 'item,amount\n' })).status()).toBe(201);
   await page.reload();
   await page.getByLabel('Search files').fill(word.toUpperCase());
-  const result = page.getByRole('search').getByRole('button', { name: new RegExp(name.replace('.', '\\.')) });
+  const result = page.getByRole('search').getByRole('option', { name: new RegExp(name.replace('.', '\\.')) });
   await expect(result.locator('span > mark')).toHaveText(word);
 });
 

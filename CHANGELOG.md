@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Search results are reachable from the box with the arrow keys.** The box is a combobox
+  (Base UI `Autocomplete`): Down moves into the results, Enter opens the highlighted one, and a
+  screen reader announces them as options.
+
 - **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
   focus return and outside-click handling are no longer hand-rolled. A menu now flips or
   shifts to stay inside the window instead of guessing from the row count, and a mouse

@@ -47,7 +47,7 @@ test('finds a file in a folder shared with the user', async ({ page, request }, 
   await page.getByLabel('Search files').fill(tag);
   await expect(search.getByText(/No matches|survey/).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('search-shared.png') });
-  const hit = search.getByRole('button', { name: new RegExp(name) });
+  const hit = search.getByRole('option', { name: new RegExp(name) });
   await expect(hit).toContainText(`Field team ${tag} / Site reports`);
   await hit.click();
   await expect(page.getByRole('heading', { name: 'Shared with me' })).toBeVisible();
