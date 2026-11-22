@@ -12,6 +12,8 @@ Interface and behaviour changes, newest first.
 - **Search results are reachable from the box with the arrow keys.** The box is a combobox
   (Base UI `Autocomplete`): Down moves into the results, Enter opens the highlighted one, and a
   screen reader announces them as options.
+- **Search type chips are one tab stop.** Tab reaches the chips once and the arrow keys move
+  between them (Base UI `ToggleGroup`); Space or Enter presses one as before.
 
 - **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
   focus return and outside-click handling are no longer hand-rolled. A menu now flips or
