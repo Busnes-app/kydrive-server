@@ -4,24 +4,29 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
-- **Server settings and workspace views are keyboard tabs.** Arrow keys move between tabs and
-  Enter or Space opens one (Base UI `Tabs`); each tab now names its panel.
-- **Dialogs run on Base UI's Dialog.** The page behind a dialog no longer scrolls, and focus
-  returns to whatever opened it. Escape still closes a dialog and a backdrop click still does
-  not. Quick look and About remain native dialogs.
-- **Search results are reachable from the box with the arrow keys.** The box is a combobox
-  (Base UI `Autocomplete`): Down moves into the results, Enter opens the highlighted one, and a
-  screen reader announces them as options.
-- **Search type chips are one tab stop.** Tab reaches the chips once and the arrow keys move
-  between them (Base UI `ToggleGroup`); Space or Enter presses one as before.
+- **Menus, dialogs, tabs and search run on Base UI (`@base-ui/react`, pinned, unstyled).**
+  The ky-ui look is unchanged; keyboard and focus handling are no longer hand-rolled. Style CSP
+  needs nothing new. The main bundle grows by about 57 KB gzipped.
+  - Row and New menus flip or shift to stay inside the window. A mouse click opens a menu on
+    the menu rather than its first item; Enter, Space and the arrows still start on an item.
+  - Dialogs focus their `autoFocus` field (before, the close button took focus), return focus
+    to whatever opened them on Escape, and lock the page behind them. A backdrop click still
+    does not close one. Quick look and About remain native dialogs.
+  - Server settings and workspace views are tabs: arrows move between them, Enter or Space
+    opens one, and each panel is labelled by its tab.
+  - The search box is a combobox: Down moves into the results, which are options, and Enter
+    opens the highlighted one. The type chips are one tab stop that the arrows move along.
 
-- **Row and New menus run on Base UI's menu (`@base-ui/react`, pinned).** Keyboard,
-  focus return and outside-click handling are no longer hand-rolled. A menu now flips or
-  shifts to stay inside the window instead of guessing from the row count, and a mouse
-  click opens it on the menu rather than its first item (Enter, Space and the arrows still
-  start on an item). It adds no `<style>` element, so it needs nothing from the style CSP.
-  The main bundle grows by about 37 KB gzipped.
-
+- **Sign-in, step-up, logout and the directory webhook bind accounts to their org (tenancy
+  groundwork).** On a multi-tenant install, KyIdentity's `org_id` claim and webhook field are
+  required. A sign-in for an unknown org polls KyIdentity's org list once, and an org that is
+  not active and enabled signs nobody in or up. An account is created at first sign-in in the
+  token's org, whatever `KY_SSO_AUTO_PROVISION` says, and a known account arriving with
+  another org is refused and audited as `tenancy.org_mismatch`. KyDrive mirrors KyIdentity's
+  orgs every 60 seconds, including each org's `storage_bytes` quota. A KyIdentity subject is
+  one account there, the installer channel is refused, and suite groups are not read until
+  they can be read per org. A single-tenant install ignores the claim, and nothing changes
+  for it. Multi-tenant mode still cannot be enabled.
 - **Fix: upgrading a database older than drive schema 20 that holds a file and a folder of
   the same name no longer fails at startup.** Since the org groundwork, schema 20's clash
   rename wrote `org_id`, which that schema does not have yet; it now writes the columns of its

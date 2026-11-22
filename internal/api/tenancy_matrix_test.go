@@ -33,6 +33,7 @@ const testStaffOrg = "5ea1f000-0000-4000-8000-000000000001"
 // a leaver whose My files holds a file, and a deleted shared workspace.
 type multiAPI struct {
 	srv     *api.Server
+	cfg     *config.Config
 	st      store.Store
 	db      *sql.DB
 	session map[string]*http.Cookie
@@ -67,7 +68,7 @@ func setupMultiServer(t *testing.T) *multiAPI {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { raw.Close() })
-	m := &multiAPI{srv: api.NewServer(cfg, st), st: st, db: raw, session: map[string]*http.Cookie{}, ids: map[string]map[string]string{}}
+	m := &multiAPI{srv: api.NewServer(cfg, st), cfg: cfg, st: st, db: raw, session: map[string]*http.Cookie{}, ids: map[string]map[string]string{}}
 	exec := func(q string, args ...any) {
 		t.Helper()
 		if _, err := raw.Exec(q, args...); err != nil {

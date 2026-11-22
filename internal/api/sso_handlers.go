@@ -117,11 +117,31 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Multi-tenant: the token names the org, which must be active, and accounts are created at
+	// first sign-in (inbound SCIM is off). Single-tenant ignores the claim.
+	multi, org := s.multi(), ""
+	if multi {
+		if org = claims.OrgID; org == "" {
+			s.writeError(w, http.StatusForbidden, "User account not provisioned")
+			return
+		}
+		if active, err := s.orgActive(r.Context(), org); err != nil {
+			s.writeError(w, http.StatusInternalServerError, "Authentication error")
+			return
+		} else if !active {
+			s.writeError(w, http.StatusForbidden, "Account is inactive")
+			return
+		}
+	}
 	user, err := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject)
-	if errors.Is(err, store.ErrNotFound) && s.config.SSO.AutoProvision {
+	if err == nil && !s.inOrg(r, user, org, "sign-in") {
+		s.writeError(w, http.StatusForbidden, "User account not provisioned")
+		return
+	}
+	if errors.Is(err, store.ErrNotFound) && (s.config.SSO.AutoProvision || multi) {
 		user, err = s.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{
 			Provider: "kysignon", Subject: claims.Subject, Username: claims.PreferredUsername,
-			Email: claims.Email, DisplayName: claims.Name, Active: true,
+			Email: claims.Email, DisplayName: claims.Name, Active: true, OrgID: org,
 		})
 		if errors.Is(err, store.ErrInvalidUsername) || errors.Is(err, store.ErrAlreadyExists) {
 			s.writeError(w, http.StatusForbidden, "User account not provisioned")
@@ -160,6 +180,20 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// inOrg reports whether account u is in org, which a multi-tenant directory asserted at entry.
+// A mismatch is audited as tenancy.org_mismatch. Single-tenant (org "") is always true.
+func (s *Server) inOrg(r *http.Request, u *store.User, org, entry string) bool {
+	if !s.multi() {
+		return true
+	}
+	have, err := s.store.Drive().UserOrg(r.Context(), u.ID)
+	if err == nil && have == org && org != "" {
+		return true
+	}
+	s.audit(r.Context(), &store.AuditRecord{UserID: u.ID, Action: "tenancy.org_mismatch", Resource: "user", Details: "entry=" + entry, IPAddress: s.requestIP(r)})
+	return false
 }
 
 // flowCookie names a sign-in flow cookie host-only (__Host-, as the session cookie is) on a
@@ -206,7 +240,7 @@ func (s *Server) finishSSOStepUp(w http.ResponseWriter, r *http.Request, state, 
 		return
 	}
 	owner, err := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject)
-	if err != nil || owner.ID != user.ID {
+	if err != nil || owner.ID != user.ID || !s.inOrg(r, user, claims.OrgID, "step-up") {
 		s.writeError(w, http.StatusForbidden, "That KyIdentity account is not the one signed in here")
 		return
 	}
@@ -260,7 +294,7 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 	w.Header().Set("Cache-Control", "no-store")
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	claims, err := s.kysignon.VerifyLogoutToken(r.Context(), r.PostFormValue("logout_token"))
-	if err != nil {
+	if err != nil || (s.multi() && claims.OrgID == "") {
 		s.writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
@@ -273,6 +307,11 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 		err = s.store.Sessions().EndSSOSubject(r.Context(), "kysignon", claims.Subject, claims.IssuedAt.Add(time.Second), fenceUntil)
 		if user, lookupErr := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject); err == nil && lookupErr == nil {
 			rec.UserID = user.ID
+			// A subject is one account in one org, so a mismatch is a KyIdentity bug. The logout
+			// still applies: it only takes access away.
+			if !s.inOrg(r, user, claims.OrgID, "logout") {
+				log.Printf("ALERT sso: back-channel logout for %s names another org", user.ID)
+			}
 		}
 	}
 	if err != nil {

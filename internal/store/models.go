@@ -39,6 +39,9 @@ type DirectoryUser struct {
 	DisplayName string
 	Active      bool
 	Revision    int64
+	// OrgID is the account's org on a multi-tenant drive, set at creation only; "" leaves the
+	// column default (the default org; refused on a multi-tenant database).
+	OrgID string
 }
 
 // Session represents an active authenticated user session.
