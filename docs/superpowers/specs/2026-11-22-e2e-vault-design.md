@@ -17,6 +17,9 @@ Owner decisions of 2026-11-22 (fixed, not reopened here):
 3. **No escrow on the multi-tenant service.** Only staff are administrators there (tenancy
    owner decision 4), so escrow would hand vaults to the operator. Each member has only their
    own recovery key.
+   - Since 2026-11-23 every paid plan, Business included, runs on that service (tenancy owner
+     decision 5). So a Business team's vaults have no escrow either.
+   - Only an Enterprise install, which is single-tenant, can give its admin one.
 4. Orgs cannot bring their own key.
 
 Line references are to KyDrive `origin/master` at `efdd9a4`. "Unverified" marks a claim this
