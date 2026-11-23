@@ -628,8 +628,11 @@ unverified until T's amendment lands.
     - thumbnails, text caches and the search index, which are derived and rebuildable;
     - the sealing overhead of KYB2;
     - the storage provider's backup copy.
-- **The check.** In `fits`, inside the write transaction: a write that adds n bytes to the
-  org passes only if `drive_bytes + n + others_bytes <= pool_bytes`.
+- **The check.** In `fits`, inside the write transaction, for a write whose net change to the
+  org is n bytes:
+  - n > 0 passes only if `drive_bytes + n + others_bytes <= pool_bytes`;
+  - n <= 0 (a move or handover inside the org, or anything that frees bytes) always passes,
+    even for an org already over its pool (Downgrade).
   - **Concurrency.** On PostgreSQL every transaction is serializable (R1a as built, `qmark`),
     and `fits` takes no row lock. It covers both checks:
     - the org pool, since `drive_bytes` is read in the write's own transaction, so two
