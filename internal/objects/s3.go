@@ -141,18 +141,22 @@ func (st s3Store) Open(ctx context.Context, name string) (Object, error) {
 	if err != nil {
 		return nil, wrap("open", key, err)
 	}
-	return &s3Object{st: st, key: key, etag: aws.ToString(h.ETag), size: aws.ToInt64(h.ContentLength)}, nil
+	rctx, cancel := context.WithCancel(ctx)
+	return &s3Object{st: st, key: key, etag: aws.ToString(h.ETag), size: aws.ToInt64(h.ContentLength), ctx: rctx, cancel: cancel}, nil
 }
 
 // readAhead is how much one ranged GET fetches: sealed blobs are read in 64 KiB chunks.
 const readAhead = 4 << 20
 
-// s3Object reads one version of an object (its ETag), a window at a time.
+// s3Object reads one version of an object (its ETag), a window at a time, under Open's
+// context; Close cancels a read still in flight.
 type s3Object struct {
-	st   s3Store
-	key  string
-	etag string
-	size int64
+	st     s3Store
+	key    string
+	etag   string
+	size   int64
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	mu  sync.Mutex
 	off int64
@@ -160,7 +164,7 @@ type s3Object struct {
 }
 
 func (o *s3Object) Size() int64  { return o.size }
-func (o *s3Object) Close() error { return nil }
+func (o *s3Object) Close() error { o.cancel(); return nil }
 
 func (o *s3Object) ReadAt(p []byte, off int64) (int, error) {
 	if off < 0 {
@@ -187,7 +191,7 @@ func (o *s3Object) ReadAt(p []byte, off int64) (int, error) {
 
 func (o *s3Object) fill(off, want int64) error {
 	end := min(off+max(want, readAhead), o.size) - 1
-	out, err := o.st.b.c.GetObject(context.Background(), &s3.GetObjectInput{
+	out, err := o.st.b.c.GetObject(o.ctx, &s3.GetObjectInput{
 		Bucket: aws.String(o.st.b.bucket), Key: aws.String(o.key),
 		Range: aws.String(fmt.Sprintf("bytes=%d-%d", off, end)), IfMatch: aws.String(o.etag),
 	})

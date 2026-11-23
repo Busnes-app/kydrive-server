@@ -176,3 +176,38 @@ func TestS3PublishHonoursCancellation(t *testing.T) {
 		t.Fatalf("a cancelled object was published: %v", err)
 	}
 }
+
+// Reads run under Open's context: once it is cancelled, or the object is closed, a read fails
+// instead of reaching the service.
+func TestS3ReadsHonourCancellation(t *testing.T) {
+	b, err := objects.NewBucket(s3Config(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := b.Store(prefix(t))
+	w, err := st.Create(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(w, "body")
+	if err := w.Publish("o"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	o, err := st.Open(ctx, "o")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if _, err := o.ReadAt(make([]byte, 4), 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("read after cancel: %v", err)
+	}
+	o, err = st.Open(context.Background(), "o")
+	if err != nil {
+		t.Fatal(err)
+	}
+	o.Close()
+	if _, err := o.ReadAt(make([]byte, 4), 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("read after Close: %v", err)
+	}
+}
