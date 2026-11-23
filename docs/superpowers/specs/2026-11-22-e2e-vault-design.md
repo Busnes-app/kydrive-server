@@ -346,3 +346,7 @@ for one.
    most households would skip vaults.
 4. **The outside protocol review before V2.** Recommendation: yes, for the key formats and the
    device-linking flow.
+
+5. **The freshness window (Freshness).** Recommendation: 24 hours. A shorter window shrinks
+   what a server-hidden removal can expose, but blocks uploads to a shared vault more often
+   when the other members' devices are offline.
