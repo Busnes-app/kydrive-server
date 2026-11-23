@@ -45,7 +45,6 @@ CREATE TABLE drive_peer_picks(owner TEXT NOT NULL,file TEXT NOT NULL,expires BIG
 CREATE TABLE drive_peer_guest(user_id TEXT PRIMARY KEY);
 CREATE TABLE drive_view_copies(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,workspace TEXT NOT NULL,name TEXT NOT NULL,size BIGINT NOT NULL,pairing TEXT NOT NULL,token_hash TEXT UNIQUE,ticket_expires BIGINT NOT NULL,expires BIGINT NOT NULL,blob TEXT NOT NULL DEFAULT '',sso_sid TEXT NOT NULL DEFAULT '',login_at BIGINT NOT NULL DEFAULT 0,revoked BIGINT NOT NULL DEFAULT 0,dropped BIGINT NOT NULL DEFAULT 0,next_attempt BIGINT NOT NULL DEFAULT 0,service_token TEXT NOT NULL DEFAULT '');
 CREATE TABLE drive_suite_groups(kyid TEXT PRIMARY KEY,workspace TEXT NOT NULL UNIQUE REFERENCES drive_workspaces(id),grp TEXT NOT NULL UNIQUE REFERENCES groups(id));
-CREATE TABLE drive_erasures(subject TEXT PRIMARY KEY,org_id TEXT NOT NULL,revision BIGINT NOT NULL);
 CREATE UNIQUE INDEX drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';
 CREATE UNIQUE INDEX drive_group_external ON groups(external_id) WHERE external_id!='';
 CREATE UNIQUE INDEX drive_live_names ON drive_files(workspace,parent,name_hmac) WHERE trashed=false;
@@ -123,7 +122,7 @@ func (s *Store) createPostgres(ctx context.Context) error {
 // postgresSchema is the drive schema at postgresVersion.
 func postgresSchema() string {
 	pg := dialect{pg: true}
-	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg)
+	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg)
 }
 
 // dialect spells what the two backends write differently: triggers and IS NOT between values.

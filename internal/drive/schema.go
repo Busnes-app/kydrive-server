@@ -128,9 +128,17 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	// Staff administrators (tenancy.go, D9): on a multi-tenant database only the staff org
 	// holds role='admin'.
 	staffAdminSchema(sqlite),
-	// KyIdentity's erased subjects (Delete everything), multi-tenant only: opaque IDs, never
-	// deleted, so an erased person is never provisioned again.
-	`CREATE TABLE drive_erasures(subject TEXT PRIMARY KEY,org_id TEXT NOT NULL,revision INTEGER NOT NULL);`,
+	erasuresSchema(sqlite),
+}
+
+// erasuresSchema is drive schema 29: KyIdentity's erased subjects (Delete everything),
+// multi-tenant only. Opaque IDs, never deleted, so an erased person is never provisioned again.
+func erasuresSchema(d dialect) string {
+	integer := "INTEGER"
+	if d.pg {
+		integer = "BIGINT"
+	}
+	return `CREATE TABLE drive_erasures(subject TEXT PRIMARY KEY,org_id TEXT NOT NULL,revision ` + integer + ` NOT NULL);`
 }
 
 // nameFreeSchema is drive schema 20's triggers.
