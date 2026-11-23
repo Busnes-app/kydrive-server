@@ -41,6 +41,13 @@ func TestExportOnlySessionAndPersonalArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := m.st.Drive()
+	for _, restricted := range []context.Context{
+		drive.WithDevice(ctx), drive.WithPeer(ctx, drive.Peer{}), drive.WithServiceAccess(ctx, drive.ServiceAccess{}),
+	} {
+		if _, err := d.PersonalExport(restricted, alice.ID, 1024); !errors.Is(err, drive.ErrDenied) {
+			t.Fatalf("narrowed context reached personal export: %v", err)
+		}
+	}
 	ws, err := d.EnsurePersonalWorkspace(ctx, alice.ID)
 	if err != nil {
 		t.Fatal(err)

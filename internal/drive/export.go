@@ -32,6 +32,9 @@ type PersonalExport struct {
 
 func (s *Store) PersonalExport(ctx context.Context, user string, maxBytes int64) (PersonalExport, error) {
 	var out PersonalExport
+	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
+		return out, ErrDenied
+	}
 	if !s.Multi() {
 		return out, ErrNotFound
 	}

@@ -31,9 +31,10 @@ var (
 		"SharedWithMe", "Shares", "Snapshot", "Unshare", "Versions", "Workspaces", "Colleagues", "RecordPicks", "SetPeerGuestSetting",
 		"ViewCopy", "CloseViewCopy",
 	}
-	// Credential checks, callbacks, the operator CLI and background workers take no user context.
+	// Credential checks, callbacks, session-only exports, the operator CLI and background workers
+	// are never reached through the peer routes.
 	peerUnreachable = []string{
-		"ActivePrincipal", "Multi", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
+		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
 		"PurgeDeletedWorkspaces", "ReconcileSuiteGroups", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
