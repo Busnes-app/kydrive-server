@@ -160,7 +160,8 @@ about a vault's members or keys unless the vault log says so.
 - **Records.** The log is a hash-chained list of records, each signed by its author's
   signing key:
   - `create` (generation 1). It marks the vault `personal` or `shared`, for good: a client
-    refuses any `add` record in a personal vault's log;
+    refuses any `add` record in a personal vault's log. The one way a personal vault gains a
+    member is escrow (Escrow), and that turns it shared;
   - `add` (a member, with their key fingerprint);
   - `rotate` (generation n+1), and `remove` (a member, and generation n+1 in the same record);
   - on single-tenant, `escrow` (the escrow key's fingerprint) and `escrow-access` (Escrow).
@@ -226,10 +227,26 @@ so a shared vault's freshness rests on an independent **witness**.
   reuse of a checkpoint it already held.
 - **Personal vaults** need no witness. Whether a vault is personal is read from its signed
   `create` record, never from its current member list, and a personal vault can never gain a
-  member. So no device can skip the witness by holding an out-of-date view. Every vault created
-  `shared` uses the witness, even while it has one member.
-- **Detection.** Every version carries a signed upload record: the head its uploader used,
-  its generation and the witness checkpoint it held, signed by the uploader. A member who
+  member except by escrow. So no device can skip the witness by holding an out-of-date view.
+  Every vault created `shared` uses the witness, even while it has one member.
+  - An `escrow-access` record in a personal vault turns it `shared` from that record on, the
+    only change of kind a client accepts. Every device that has verified the record uses the
+    witness from then on.
+  - A device that has not seen it still skips the witness. It belongs to the vault's own
+    member, and the only new member is the escrow holder, who can already open every
+    generation. So nothing it uploads reaches anyone the escrow key could not already reach.
+- **Upload records.** Every version carries a signed upload record, signed by the uploader.
+  It holds:
+  - the workspace, the file ID and the version's revision;
+  - the SHA-256 digest of the version's ciphertext;
+  - the head the uploader used, its generation, and the witness checkpoint it held.
+
+  Anyone can encrypt to a vault's public recipient, the server included. So a client accepts
+  a downloaded version only when its upload record verifies against a member's pinned key, the
+  uploader was a member at that head, and the record's workspace, file, revision and digest
+  match what it downloaded. A file the server made up, or one moved from another file or
+  vault, is refused.
+- **Detection.** A member who
   sees a version encrypted under a generation an earlier committed record revoked is warned
   that records were withheld, and so is the uploader once their device catches up.
 
@@ -369,7 +386,10 @@ Each PR is shippable on its own, with vaults off until V3.
      - a shared vault that went from one member to two, then had the second removed and the
        key rotated, all withheld from one device of the first member: that device still asks
        the witness and blocks;
-     - an `add` record in a personal vault's log, which is refused;
+     - an `add` record in a personal vault's log, which is refused, and an `escrow-access`
+       record there, which turns it shared, so its next upload asks the witness;
+     - a downloaded version whose ciphertext digest, or file or revision, differs from its
+       signed upload record, which is refused, as is one with no valid upload record;
      - a witness that cannot be reached, which blocks uploads to shared vaults;
      - a witness asked to sign a head that does not extend its last one, which refuses;
      - a `remove` with no new generation, which is refused, so an interrupted removal leaves
