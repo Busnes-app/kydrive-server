@@ -145,7 +145,8 @@ whether that suits every client build). Android needs an ML-DSA implementation a
   - the signed `rotate` or `remove` record for the vault log.
 
   The server accepts it only when the call names generation n as the current one and
-  carries a wrap for every current member. Two rotations racing then cannot both win. New
+  carries a wrap for every member remaining after the record, and none for a member it
+  removes. Two rotations racing then cannot both win. New
   versions record n+1.
 
   A member or the escrow key holds only the current generation. They reach every older one
@@ -380,7 +381,9 @@ Each PR is shippable on its own, with vaults off until V3.
    source scan, quota on ciphertext, audit. Tests:
    - every refused path, membership checks across orgs, and a vault whose items never reach
      the index or a preview;
-   - a rotation refused when it names a stale generation or misses a current member's wrap;
+   - a rotation refused when it names a stale generation or misses the wrap of a member
+     remaining after it, and a `remove` refused when it carries a wrap for the member it
+     removes;
    - after two rotations, a member added afterwards and the escrow key both open the first
      version (in the client tests, V3);
    - in the client protocol tests (V3), with every member fingerprint unchanged:
