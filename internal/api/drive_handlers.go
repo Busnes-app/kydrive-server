@@ -17,6 +17,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -368,16 +369,17 @@ func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	s.writeJSON(w, 200, map[string]any{"results": s.withSnippets(r.Context(), user, hits, snip, snippetCount), "truncated": truncated, "contents": contents})
 }
-func (s *Server) blobRoot() string { return filepath.Join(s.config.Database.DataDir, "blobs") }
+
+// blobRoot is the store of file contents. Every other store is named the same way, so the
+// hosted backend is chosen here.
+func (s *Server) blobRoot() objects.Local {
+	return objects.Dir(filepath.Join(s.config.Database.DataDir, "blobs"))
+}
 
 // discardBlob removes a blob that never became a version. A failure is logged; the orphan
 // sweep retries it.
 func (s *Server) discardBlob(id string) {
-	path, err := drive.BlobPath(s.blobRoot(), id)
-	if err == nil {
-		err = os.Remove(path)
-	}
-	if err != nil {
+	if err := drive.RemoveBlobs(s.blobRoot(), []string{id}); err != nil {
 		log.Printf("discard blob %s: %v", id, err)
 	}
 }
@@ -438,11 +440,7 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 
 // openBlob opens f's current bytes.
 func (s *Server) openBlob(f drive.File) (io.ReadSeekCloser, error) {
-	path, err := drive.BlobPath(s.blobRoot(), f.Blob)
-	if err != nil {
-		return nil, err
-	}
-	return drive.OpenBlob(path, s.config.Security.EncryptionKey, f.Sealed, f.Size)
+	return drive.OpenBlob(s.blobRoot(), f.Blob, s.config.Security.EncryptionKey, f.Sealed, f.Size)
 }
 
 // openFile opens f's current bytes, answering the request itself when it cannot.

@@ -9,11 +9,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -134,7 +134,7 @@ func (s *Store) viewCopy(ctx context.Context, where string, args ...any) (ViewCo
 // StoreViewCopy (a peer context, under the pairing that issued the ticket) seals exactly
 // c.Size bytes of r into root and spends the ticket. Bytes that do not look like the name's
 // type are ErrUnsupported; a wrong length is ErrInvalid.
-func (s *Store) StoreViewCopy(ctx context.Context, root string, key []byte, c ViewCopy, token string, r io.Reader) error {
+func (s *Store) StoreViewCopy(ctx context.Context, st objects.Store, key []byte, c ViewCopy, token string, r io.Reader) error {
 	if p, _ := ctx.Value(peerKey{}).(Peer); !isPeer(ctx) || p.Pairing == "" || p.Pairing != c.Pairing {
 		return ErrPeerGone
 	}
@@ -146,7 +146,7 @@ func (s *Store) StoreViewCopy(ctx context.Context, root string, key []byte, c Vi
 	if !viewSniffs(ext, head) {
 		return ErrUnsupported
 	}
-	v, err := WriteBlob(root, key, io.MultiReader(bytes.NewReader(head), r), c.Size)
+	v, err := WriteBlob(st, key, io.MultiReader(bytes.NewReader(head), r), c.Size)
 	if errors.Is(err, ErrTooLarge) || (err == nil && v.Size != c.Size) {
 		err = ErrInvalid
 	}
@@ -167,7 +167,7 @@ func (s *Store) StoreViewCopy(ctx context.Context, root string, key []byte, c Vi
 		})
 	}
 	if err != nil && v.Blob != "" {
-		os.Remove(filepath.Join(root, v.Blob))
+		RemoveBlobs(st, []string{v.Blob})
 	}
 	return err
 }

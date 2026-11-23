@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
@@ -164,7 +165,7 @@ func TestUpgradeBlobsResumesAfterCrash(t *testing.T) {
 				t.Fatal("queue not drained")
 			}
 			// Leftover staging files are the orphan sweep's.
-			if _, err := d.SweepOrphans(ctx, root, -time.Hour); err != nil {
+			if _, err := d.SweepOrphans(ctx, objects.Dir(root), -time.Hour); err != nil {
 				t.Fatal(err)
 			}
 			if entries, _ := os.ReadDir(root); len(entries) != len(blobs) {
@@ -186,7 +187,7 @@ func TestUpgradeBlobsRacesPurgeAndCopy(t *testing.T) {
 	}
 	d.SetTrash(ctx, "worker", files[1], 1, true)
 	purged, err := d.PurgeFile(ctx, "worker", files[1])
-	if err != nil || len(purged) != 1 || drive.RemoveBlobs(root, purged) != nil {
+	if err != nil || len(purged) != 1 || drive.RemoveBlobs(objects.Dir(root), purged) != nil {
 		t.Fatalf("purge %v %v", purged, err)
 	}
 	if err = drive.CommitUpgrade(ctx, d, root, blobs[1], tmp); err != nil {
@@ -216,7 +217,7 @@ func TestUpgradeBlobsRacesPurgeAndCopy(t *testing.T) {
 	if purged, err = d.PurgeFile(ctx, "worker", files[0]); err != nil || len(purged) != 2 {
 		t.Fatalf("purge %v %v", purged, err)
 	}
-	drive.RemoveBlobs(root, purged)
+	drive.RemoveBlobs(objects.Dir(root), purged)
 	if n, err := d.UpgradeBlobs(ctx, root, testKey, 0); err != nil || n != 1 {
 		t.Fatalf("upgraded %d: %v", n, err)
 	}
@@ -265,11 +266,11 @@ func TestUpgradeBlobsThrottles(t *testing.T) {
 func TestUpgradeChecksStagedCopy(t *testing.T) {
 	root := t.TempDir()
 	p := plaintext(chunk + 1)
-	v, err := drive.WriteBlob(root, testKey, bytes.NewReader(p), int64(len(p)))
+	v, err := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(p), int64(len(p)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _ := drive.WriteBlob(root, testKey, bytes.NewReader(p), int64(len(p)))
+	other, _ := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(p), int64(len(p)))
 	staged := filepath.Join(root, ".upload-staged")
 	raw, _ := os.ReadFile(filepath.Join(root, v.Blob))
 	os.WriteFile(staged, raw, 0600)

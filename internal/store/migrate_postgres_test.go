@@ -13,6 +13,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -95,7 +96,7 @@ func source(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := drive.WriteBlob(filepath.Join(dir, "blobs"), testdb.Key, strings.NewReader("kept"), 1024)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(dir, "blobs")), testdb.Key, strings.NewReader("kept"), 1024)
 	if err != nil {
 		t.Fatal(err)
 	}

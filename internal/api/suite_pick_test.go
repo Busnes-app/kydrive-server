@@ -13,6 +13,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // pickWorld is a KyDrive whose KyIdentity lists KyPost, KyCalendar and an http app for every
@@ -68,7 +69,7 @@ func homeFileNamed(t *testing.T, w *pickWorld, user, name string) string {
 	if _, err = d.AppendUpload(ctx, w.cfg.Database.DataDir+"/staging", w.cfg.Security.EncryptionKey, user, u.ID, 0, 1, strings.NewReader("x")); err != nil {
 		t.Fatal(err)
 	}
-	f, err := d.CompleteUpload(ctx, w.cfg.Database.DataDir+"/staging", w.cfg.Database.DataDir+"/blobs", w.cfg.Security.EncryptionKey, user, u.ID)
+	f, err := d.CompleteUpload(ctx, w.cfg.Database.DataDir+"/staging", objects.Dir(w.cfg.Database.DataDir+"/blobs"), w.cfg.Security.EncryptionKey, user, u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

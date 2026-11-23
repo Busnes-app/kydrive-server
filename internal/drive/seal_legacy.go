@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // SealLegacyBlobs replaces every plaintext blob with a sealed copy under a new ID. Each swap
@@ -69,7 +71,7 @@ func (s *Store) sealCopy(ctx context.Context, root string, key []byte, id string
 		return want, err
 	}
 	defer f.Close()
-	v, err := WriteBlob(root, key, f, want.Size+1)
+	v, err := WriteBlob(objects.Dir(root), key, f, want.Size+1)
 	if err != nil {
 		return v, err
 	}
@@ -117,7 +119,7 @@ func (s *Store) retireBlobs(ctx context.Context, root string) error {
 			return err
 		}
 		if n == 0 {
-			if err = RemoveBlobs(root, []string{id}); err != nil {
+			if err = RemoveBlobs(objects.Dir(root), []string{id}); err != nil {
 				return err
 			}
 		}

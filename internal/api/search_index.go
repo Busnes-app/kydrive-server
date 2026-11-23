@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -154,12 +153,15 @@ func failCode(err error) string {
 }
 
 func (s *Server) textCached(blob string) bool {
-	p, err := drive.BlobPath(s.textRoot(), blob)
+	if _, err := drive.BlobPath("", blob); err != nil {
+		return false
+	}
+	o, err := s.textRoot().Open(context.Background(), blob)
 	if err != nil {
 		return false
 	}
-	_, err = os.Stat(p)
-	return err == nil
+	o.Close()
+	return true
 }
 
 // RunSearchIndex keeps the index in step with the drive until ctx ends: it reconciles at start

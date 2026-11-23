@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -31,7 +32,7 @@ func TestHandoverCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := drive.WriteBlob(t.TempDir(), testdb.Key, strings.NewReader("private"), 1024)
+	v, err := drive.WriteBlob(objects.Dir(t.TempDir()), testdb.Key, strings.NewReader("private"), 1024)
 	if err != nil {
 		t.Fatal(err)
 	}

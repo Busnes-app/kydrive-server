@@ -22,6 +22,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 	"github.com/google/uuid"
@@ -79,7 +80,7 @@ func newBulkFixture(t *testing.T) *bulkFixture {
 
 func (f *bulkFixture) publish(t *testing.T, name, content string) (drive.File, drive.Version) {
 	t.Helper()
-	v, err := drive.WriteBlob(filepath.Join(f.dir, "blobs"), f.key, strings.NewReader(content), 1024)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(f.dir, "blobs")), f.key, strings.NewReader(content), 1024)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func (f *bulkFixture) stored(t *testing.T, v drive.Version) string {
 // read returns the plaintext of v restored under dir.
 func (f *bulkFixture) read(t *testing.T, dir string, v drive.Version, sealed bool) string {
 	t.Helper()
-	r, err := drive.OpenBlob(filepath.Join(dir, v.Blob), f.key, sealed, v.Size)
+	r, err := drive.OpenBlob(objects.Dir(dir), v.Blob, f.key, sealed, v.Size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -413,7 +414,7 @@ func TestPruneBulkForgetsPurgedBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = drive.RemoveBlobs(filepath.Join(f.dir, "blobs"), blobs); err != nil {
+	if err = drive.RemoveBlobs(objects.Dir(filepath.Join(f.dir, "blobs")), blobs); err != nil {
 		t.Fatal(err)
 	}
 	f.collect(t, backup.PurposeDeposit)

@@ -11,6 +11,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -181,7 +182,7 @@ func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 // owner's peer folder (made or remade here), under the first free numbered name; the session
 // expires with the ticket. The last bytes publish the file and spend the ticket. f is nil
 // until then.
-func (s *Store) TicketUpload(ctx context.Context, staging, blobs string, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
+func (s *Store) TicketUpload(ctx context.Context, staging string, blobs objects.Store, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
 	if !isPeer(ctx) {
 		return 0, nil, ErrDenied
 	}

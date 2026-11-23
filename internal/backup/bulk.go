@@ -22,6 +22,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"golang.org/x/sys/unix"
 )
 
@@ -403,7 +404,7 @@ func verifyBulkFile(path string, f BulkFile, key []byte) error {
 	if err != nil || !info.Mode().IsRegular() || !drive.StoredSizeOK(f.Sealed, f.Size, info.Size()) {
 		return errors.New("bulk file missing or size differs")
 	}
-	file, err := drive.OpenBlob(path, key, f.Sealed, f.Size)
+	file, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), key, f.Sealed, f.Size)
 	if err != nil {
 		return err
 	}

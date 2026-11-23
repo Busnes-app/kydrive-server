@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -293,7 +294,7 @@ func TestSweepOrphansKeepsReferencedAndFreshFiles(t *testing.T) {
 	touch(".upload-stale", old)
 	touch(".upload-fresh", time.Now())
 	touch("notes.txt", old)
-	n, err := d.SweepOrphans(ctx, root, time.Hour)
+	n, err := d.SweepOrphans(ctx, objects.Dir(root), time.Hour)
 	if err != nil || n != 2 {
 		t.Fatalf("removed %d: %v", n, err)
 	}

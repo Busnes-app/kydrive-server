@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -135,7 +136,7 @@ var mutators = []mutatorCase{
 			t.Fatal(err)
 		}
 		return func() ([]string, error) {
-			f, err := e.d.CompleteUpload(e.ctx, staging, e.blobs, testKey, "worker", u.ID)
+			f, err := e.d.CompleteUpload(e.ctx, staging, objects.Dir(e.blobs), testKey, "worker", u.ID)
 			return []string{row(e.w, "file", f.ID)}, err
 		}
 	}},
@@ -154,7 +155,7 @@ var mutators = []mutatorCase{
 			t.Fatal(err)
 		}
 		return func() ([]string, error) {
-			_, f, err := e.d.TicketUpload(drive.WithPeer(e.ctx, livePeer), staging, e.blobs, testKey, tk, 0, 3, strings.NewReader("abc"))
+			_, f, err := e.d.TicketUpload(drive.WithPeer(e.ctx, livePeer), staging, objects.Dir(e.blobs), testKey, tk, 0, 3, strings.NewReader("abc"))
 			if err != nil {
 				return nil, err
 			}

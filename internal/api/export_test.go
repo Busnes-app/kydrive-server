@@ -90,7 +90,7 @@ func IndexSearchForTest(s *Server) error { return s.indexIdle(context.Background
 func SearchRootForTest(s *Server) string { return s.searchRoot() }
 
 // TextRootForTest is where document text is cached. Test-only.
-func TextRootForTest(s *Server) string { return s.textRoot() }
+func TextRootForTest(s *Server) string { return s.textRoot().Root() }
 
 // OfficeBudgetForTest is the shared office budget per per-IP limit.
 const OfficeBudgetForTest = officeBudget

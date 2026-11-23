@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // previewTypes are the sniffed types a browser may render from the app origin. The bytes
@@ -29,7 +30,9 @@ var previewTypes = map[string]bool{
 // from acting as the app.
 const previewCSP = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
 
-func (s *Server) thumbRoot() string { return filepath.Join(s.config.Database.DataDir, "thumbs") }
+func (s *Server) thumbRoot() objects.Local {
+	return objects.Dir(filepath.Join(s.config.Database.DataDir, "thumbs"))
+}
 
 // previewHeaders marks a response as inline content that renders sandboxed, for this origin only.
 func previewHeaders(w http.ResponseWriter, kind, name string) {

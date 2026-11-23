@@ -142,14 +142,14 @@ func (s *Server) RunBlobSealing(ctx context.Context) {
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
-		n, err := s.store.Drive().SealLegacyBlobs(ctx, s.blobRoot(), s.config.Security.EncryptionKey)
+		n, err := s.store.Drive().SealLegacyBlobs(ctx, s.blobRoot().Root(), s.config.Security.EncryptionKey)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("blob sealing: %v", err)
 		}
 		if n > 0 {
 			log.Printf("blob sealing: sealed %d legacy blobs", n)
 		}
-		if _, err = s.store.Drive().UpgradeBlobs(ctx, s.blobRoot(), s.config.Security.EncryptionKey, blobUpgradeRate); err != nil && ctx.Err() == nil {
+		if _, err = s.store.Drive().UpgradeBlobs(ctx, s.blobRoot().Root(), s.config.Security.EncryptionKey, blobUpgradeRate); err != nil && ctx.Err() == nil {
 			log.Printf("blob format: %v", err)
 		}
 		select {

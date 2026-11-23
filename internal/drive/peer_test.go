@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // ticket issues one and returns a function reading it afresh, as each request does.
@@ -36,7 +37,7 @@ func (e *peerEnv) count(t *testing.T, q string, args ...any) int {
 }
 
 func (e *peerEnv) put(tk drive.Ticket, start int64, body string) (int64, *drive.File, error) {
-	return e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, tk, start, int64(len(body)), strings.NewReader(body))
+	return e.d.TicketUpload(e.peer, e.staging, objects.Dir(e.blobs), testKey, tk, start, int64(len(body)), strings.NewReader(body))
 }
 
 func TestTicketIssueRefusals(t *testing.T) {
@@ -147,7 +148,7 @@ func TestTicketChunks(t *testing.T) {
 func TestTicketExactSize(t *testing.T) {
 	e := newPeerEnv(t)
 	fresh := e.ticket(t, "worker", "a.txt", 3)
-	if _, _, err := e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, fresh(), 0, 3, strings.NewReader("ab")); err == nil {
+	if _, _, err := e.d.TicketUpload(e.peer, e.staging, objects.Dir(e.blobs), testKey, fresh(), 0, 3, strings.NewReader("ab")); err == nil {
 		t.Error("short body accepted")
 	}
 	if _, f, err := e.put(fresh(), 0, "abc"); err != nil || f == nil {
@@ -266,7 +267,7 @@ func TestTicketSwitchOffMidUpload(t *testing.T) {
 	e := newPeerEnv(t)
 	tk := e.ticket(t, "worker", "late.txt", 3)()
 	before := e.count(t, `SELECT COUNT(*) FROM drive_files`)
-	_, f, err := e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, tk, 0, 3, &flipReader{e: e, t: t, r: strings.NewReader("abc")})
+	_, f, err := e.d.TicketUpload(e.peer, e.staging, objects.Dir(e.blobs), testKey, tk, 0, 3, &flipReader{e: e, t: t, r: strings.NewReader("abc")})
 	if !errors.Is(err, drive.ErrPeerOff) || f != nil {
 		t.Fatalf("published after the switch went off: %+v %v", f, err)
 	}
@@ -294,7 +295,7 @@ func TestTicketUnpairedMidUpload(t *testing.T) {
 	tk := e.ticket(t, "worker", "late.txt", 3)()
 	live := true
 	p := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return live }, Pairing: "pairing-1"})
-	if _, _, err := e.d.TicketUpload(p, e.staging, e.blobs, testKey, tk, 0, 1, strings.NewReader("a")); err != nil {
+	if _, _, err := e.d.TicketUpload(p, e.staging, objects.Dir(e.blobs), testKey, tk, 0, 1, strings.NewReader("a")); err != nil {
 		t.Fatal(err)
 	}
 	live = false
@@ -302,7 +303,7 @@ func TestTicketUnpairedMidUpload(t *testing.T) {
 	if err := drive.QueryRow(e.ctx, e.d, `SELECT session FROM drive_peer_tickets WHERE id=?`, tk.ID).Scan(&tk.Session); err != nil {
 		t.Fatal(err)
 	}
-	if _, f, err := e.d.TicketUpload(p, e.staging, e.blobs, testKey, tk, 1, 2, strings.NewReader("bc")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+	if _, f, err := e.d.TicketUpload(p, e.staging, objects.Dir(e.blobs), testKey, tk, 1, 2, strings.NewReader("bc")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
 		t.Fatalf("unpaired: %+v %v", f, err)
 	}
 	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {
@@ -320,10 +321,10 @@ func TestTicketBoundToItsPairing(t *testing.T) {
 		t.Fatal(err)
 	}
 	rotated := drive.WithPeer(e.ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return true }, Pairing: "pairing-2"})
-	if _, f, err := e.d.TicketUpload(rotated, e.staging, e.blobs, testKey, unused, 0, 1, strings.NewReader("x")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+	if _, f, err := e.d.TicketUpload(rotated, e.staging, objects.Dir(e.blobs), testKey, unused, 0, 1, strings.NewReader("x")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
 		t.Errorf("unused ticket after rotation: %+v %v", f, err)
 	}
-	if _, f, err := e.d.TicketUpload(rotated, e.staging, e.blobs, testKey, partial(), 1, 1, strings.NewReader("b")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
+	if _, f, err := e.d.TicketUpload(rotated, e.staging, objects.Dir(e.blobs), testKey, partial(), 1, 1, strings.NewReader("b")); !errors.Is(err, drive.ErrPeerGone) || f != nil {
 		t.Errorf("partial ticket after rotation: %+v %v", f, err)
 	}
 	if n := e.count(t, `SELECT (SELECT COUNT(*) FROM drive_upload_sessions)+(SELECT COUNT(*) FROM drive_peer_tickets)`); n != 0 {

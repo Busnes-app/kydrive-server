@@ -23,6 +23,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/appversion"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -96,7 +97,7 @@ func (w *mcpWorld) folder(t *testing.T, workspace, parent, name string) string {
 // file publishes body as name under parent, as alice.
 func (w *mcpWorld) file(t *testing.T, workspace, parent, name string, body []byte) drive.File {
 	t.Helper()
-	v, err := drive.WriteBlob(filepath.Join(w.cfg.Database.DataDir, "blobs"), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
