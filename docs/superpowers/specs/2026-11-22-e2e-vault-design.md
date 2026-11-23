@@ -91,7 +91,12 @@ whether that suits every client build). Android needs an ML-DSA implementation a
 - **Schema** (both backends):
   - `drive_user_keys(user_id, public_key, signing_key, fingerprint, recovery_copy, created)`,
     the fingerprint covering both public keys;
-  - `drive_workspaces.vault` (boolean), and `vault_generation` on `drive_files` and
+  - `drive_workspaces.vault` (boolean). A vault is created by its first member's client, in
+    the member's own org, and that member is its first log signer. This is an exception to
+    the tenancy spec's D10 (multi-tenant shared workspaces only from suite groups): a suite
+    group cannot receive a vault key, so a vault can never come from one. It does not wait
+    on that spec's question 15. The org's storage pool bounds it like any workspace;
+  - `vault_generation` on `drive_files` and
     `drive_folders`, the generation that sealed each name;
   - `drive_vault_keys(workspace, generation, previous, name_index, created)`: one row per vault
     key generation. `previous` is the generation before, and `name_index` the vault's
@@ -219,9 +224,18 @@ every vault except a personal one that is not `escrowable` (below).
     never signs a fork or a rollback.
   - The checkpoint format follows C2SP's `tlog-checkpoint` and `tlog-witness` (unverified:
     whether an existing public witness suits, or ours must be run apart).
-- **Committing.** A client's `add`, `remove`, `rotate` or `escrow-access` takes effect only
-  once the client has sent the new head to the witness and holds a checkpoint naming it. A
-  removal is committed, and effective for everyone, at that checkpoint's time.
+- **Committing, server first.** A client's `add`, `remove`, `rotate` or `escrow-access`
+  goes to the server first, which accepts it only as the next record of its log (the
+  acceptance rules above). Only a record the server accepted is sent to the witness. So two
+  racing changes are settled by the server, and the witness only ever sees one of them.
+  - The change takes effect once the witness holds a checkpoint naming its head. A removal is
+    effective for everyone at that checkpoint's time.
+  - A record the server holds but the witness has not checkpointed, because its client
+    crashed between the two steps, is sent to the witness by the next device that verifies
+    it. Any device can do it, since the records carry their authors' signatures and the
+    witness checks they extend its head.
+  - Until then, the checkpoint names an older head than a device's own, so uploads to the
+    vault block (The rule), and the device forwards the records at once.
 - **The rule.** Before each upload to a witnessed vault, the client asks the witness for its
   current checkpoint. It reuses one for at most 5 minutes, for a batch of uploads (question 6).
   It encrypts only when that checkpoint names exactly the head it has verified.
@@ -412,6 +426,11 @@ Each PR is shippable on its own, with vaults off until V3.
        shared vault, and a single-tenant personal vault; a multi-tenant personal vault still
        uploads;
      - a witness asked to sign a head that does not extend its last one, which refuses;
+     - two racing `remove` records: the server takes one, the witness checkpoints only that
+       one, and the losing client rebuilds on the new head;
+     - a client that crashes after the server accepted its record and before the witness
+       checkpointed it: the next device that verifies the record forwards it, and uploads
+       block until it does;
      - a `remove` with no new generation, which is refused, so an interrupted removal leaves
        the old head, and its generation, in force until the whole `remove` commits;
      - a recovered device given a changed `name_index` while the signed log and generation
