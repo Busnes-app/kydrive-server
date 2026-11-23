@@ -48,6 +48,7 @@ type Server struct {
 	editorErr  error
 	revokeMu   sync.Mutex
 	orgsMu     sync.Mutex // one org poll at a time: each starts from the last one's revision
+	orgsOK     time.Time  // the last successful org poll, under orgsMu
 	config     *config.Config
 	store      store.Store
 	sessions   *auth.SessionManager

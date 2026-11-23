@@ -68,6 +68,9 @@ func restoreStore(t *testing.T) (*SQLStore, drive.File) {
 	if err := s.Settings().SetSetting(ctx, "installer.integration", "retained-config-reference"); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.Settings().SetSetting(ctx, drive.OrgsFreshUntil, "99999999999"); err != nil {
+		t.Fatal(err)
+	}
 	return s, f
 }
 
@@ -107,6 +110,9 @@ func TestResetAfterRestore(t *testing.T) {
 			t.Fatal("editor key epoch was reused", epoch, previousEpoch, err)
 		}
 		previousEpoch = epoch
+		if value, err := s.Settings().GetSetting(ctx, drive.OrgsFreshUntil); err == nil || value != "" {
+			t.Fatal("a restored org mirror still reads as fresh", value, err)
+		}
 		if value, err := s.Settings().GetSetting(ctx, "backup_interval_sec"); err != nil || value != "0" {
 			t.Fatal("restored copy keeps depositing on schedule", value, err)
 		}

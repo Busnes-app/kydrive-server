@@ -93,6 +93,11 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 				return err
 			}
 		}
+		// A restored org mirror is not fresh, however recent the backup: no customer org is
+		// served until a poll succeeds.
+		if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM server_settings WHERE key=?`), drive.OrgsFreshUntil); err != nil {
+			return err
+		}
 		// A new opener must not reuse a document key held by an editor from before restoration.
 		// A random positive 56-bit epoch also separates repeated restores of the same capsule.
 		epoch, err := strconv.ParseInt(crypto.RandomHex(7), 16, 64)

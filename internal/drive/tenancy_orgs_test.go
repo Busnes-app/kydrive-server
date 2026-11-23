@@ -82,3 +82,54 @@ func TestMultiTenantSubjectIsOneAccount(t *testing.T) {
 		t.Fatalf("index reaches past kysignon: %v", err)
 	}
 }
+
+// Once the last successful poll is older than OrgsMaxAge, every org KyIdentity reports is served
+// nothing; the staff org still is, and the next successful poll restores the rest.
+func TestStaleOrgMirrorServesNothing(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
+		t.Fatalf("fresh mirror: %v %v", ok, err)
+	}
+	// An expired stamp, and none at all (as a restore leaves it).
+	for _, stale := range []string{`UPDATE server_settings SET value='1' WHERE key='orgs_fresh_until'`, `DELETE FROM server_settings WHERE key='orgs_fresh_until'`} {
+		if _, err := o.db.Exec(stale); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || ok {
+			t.Fatalf("%s: stale mirror still serves a member: %v %v", stale, ok, err)
+		}
+		if known, active, err := d.OrgActive(ctx, "org-a"); err != nil || !known || active {
+			t.Fatalf("%s: stale mirror reports org-a known=%v active=%v: %v", stale, known, active, err)
+		}
+		if orgs, err := d.ActiveOrgs(ctx); err != nil || len(orgs) != 1 || orgs[0] != drive.TestStaffOrg {
+			t.Fatalf("%s: stale mirror lists %v (%v), want only the staff org", stale, orgs, err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "staff"); err != nil || !ok {
+			t.Fatalf("%s: staff stopped with the mirror: %v %v", stale, ok, err)
+		}
+		if _, err := d.ApplyOrgs(ctx, nil, 0); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
+			t.Fatalf("%s: a successful poll did not restore the member: %v %v", stale, ok, err)
+		}
+	}
+}
+
+// A deleted org stays deleted: a later revision saying otherwise changes nothing.
+func TestDeletedOrgStaysDeleted(t *testing.T) {
+	o := multiTenant(t)
+	org := func(status string, rev int64) suitedir.Org {
+		return suitedir.Org{ID: "org-x", Status: status, Revision: rev, Enabled: true, Quotas: json.RawMessage(`{}`)}
+	}
+	for _, batch := range [][]suitedir.Org{{org("deleted", 5)}, {org("active", 6)}} {
+		if _, err := o.d.ApplyOrgs(o.ctx, batch, 6); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var status string
+	if err := o.db.QueryRow(`SELECT status FROM drive_orgs WHERE id='org-x'`).Scan(&status); err != nil || status != "deleted" {
+		t.Fatalf("status %q (%v)", status, err)
+	}
+}

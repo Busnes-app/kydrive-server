@@ -166,6 +166,7 @@ func TestTenancyTriggersKeepRowsInOneOrg(t *testing.T) {
 	}
 	const b = "org-b"
 	mustExec(`INSERT INTO drive_orgs(id,status) VALUES(?,'active'),('org-gone','deleted')`, b)
+	mustExec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`)
 	for _, u := range []struct{ id, org string }{{"ua", drive.DefaultOrg}, {"ua2", drive.DefaultOrg}, {"ub", b}} {
 		mustExec(`INSERT INTO users(id,username,created_at,updated_at,org_id) VALUES(?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)`, u.id, u.id, u.org)
 	}
