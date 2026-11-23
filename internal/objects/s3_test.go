@@ -198,12 +198,19 @@ func TestS3ReadsHonourCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// One read first, so the bytes are cached: cancellation must refuse those too.
+	if _, err := o.ReadAt(make([]byte, 4), 0); err != nil {
+		t.Fatal(err)
+	}
 	cancel()
 	if _, err := o.ReadAt(make([]byte, 4), 0); !errors.Is(err, context.Canceled) {
 		t.Fatalf("read after cancel: %v", err)
 	}
 	o, err = st.Open(context.Background(), "o")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.ReadAt(make([]byte, 4), 0); err != nil {
 		t.Fatal(err)
 	}
 	o.Close()

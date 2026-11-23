@@ -172,6 +172,10 @@ func (o *s3Object) ReadAt(p []byte, off int64) (int, error) {
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	// Cached bytes too: a cancelled or closed object reads nothing.
+	if err := o.ctx.Err(); err != nil {
+		return 0, err
+	}
 	n := 0
 	for n < len(p) && off < o.size {
 		if off < o.off || off >= o.off+int64(len(o.buf)) {
