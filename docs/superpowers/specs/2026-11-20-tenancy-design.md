@@ -860,8 +860,9 @@ deleted. Nothing any other member owns is deleted.
   share and link unchanged. Only the member's own My files is affected.
 - **Who receives each shared item.** For each topmost shared item in the member's My files,
   the successor is chosen among the org's other active members that the item's share records
-  name: a person share to them, a group share to a group they belong to, an organisation link
-  they opened (`drive_link_users`), or, for an item in a workspace they manage, their grant.
+  name: a person share to them, a group share to a group they belong to, or an organisation
+  link they opened (`drive_link_users`). My files has no workspace grants, so no other record
+  applies.
   Eligibility is read from those records, as "What counts as shared" is, and never from
   whether the shares work right now: KyIdentity may deactivate the owner before the erase
   arrives, which stops their shares but must not change who receives the item. Only the
