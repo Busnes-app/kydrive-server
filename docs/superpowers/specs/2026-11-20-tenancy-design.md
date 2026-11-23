@@ -81,7 +81,7 @@ T "Tokens and suite contracts (multi-tenant)", **Downstream contract**, point by
 | 2 | Key every row by `org_id` | Every table in the inventory marked **O** gets `org_id` (D4). Derived tables (**D**) reach it through a foreign key. Platform tables (**P**) hold no customer data. | No `org_id` anywhere (`grep -rn org_id internal` finds none) | `TestEveryTableIsClassified`, `TestOrgOwnedTablesHaveOrgID` (see Isolation) |
 | 3 | Bind a local account to `(sub, org_id)`; refuse a known `sub` with a different `org_id` | `users.org_id` is set once, at account creation, from the token or webhook, and is immutable (trigger). A partial unique index on `(sso_provider, sso_subject)` for `kysignon` accounts, multi-tenant only and created by the mode-only DDL (see Triggers), makes `sub` resolve to one account. Callback, webhook, logout, suite group members and KyPost all compare the incoming `org_id` with the account's, and refuse a mismatch with the same answer as an unknown subject, plus an audit row `tenancy.org_mismatch`. | `DirectorySubject` resolves by subject alone (`sso_handlers.go:119`, `kysignon.go:92`, `kypost.go:334`, `suitegroups.go:215`); `idx_users_sso` is not unique (`migrations.go:50`) | A test per entry point: a known `sub` arrives with org B's ID |
 | 4 | Take the org only from a verified token, a signed webhook or a suite answer | D12, including its one exception (local staff administrators, from operator configuration). No route reads an org from a URL, form, cookie or header, except staff's org selection on `org` admin routes (see Admin surface), which applies only after the caller is proven staff. | n/a | `TestOrgSQLNamesOrgID`'s allowlist, plus review: the only `X-Ky-Org` reader is the admin middleware |
-| 5 | Stop serving an org whose status is not `active`; keep its data unless `deleted` | D11 and Lifecycle. Every principal resolution reads `drive_orgs` in the same statement as the user's status. | Principals check `users.status='active'` only (`access.go:20,22,43`, `apppasswords.go:223,248`, `devices.go:217,249`, `session.go:108`) | `TestSuspendedOrgServesNothing`: every credential type, before and after a status change |
+| 5 | Stop serving an org whose status is not `active`; keep its data unless `deleted` | D11 and Lifecycle. Ordinary principal resolution checks org status and freshness. The verified `export_only` amendment grants only the separate personal export during `deletion_scheduled` (Export). | Principals check `users.status='active'` only (`access.go:20,22,43`, `apppasswords.go:223,248`, `devices.go:217,249`, `session.go:108`) | `TestSuspendedOrgServesNothing`: every credential type, before and after a status change; `TestExportOnlyAdmissionAndLifecycle` for the separate exception |
 | 6 | Enforce its own quotas from `/api/suite/orgs` | D7, amended 2026-11-23: the suite-wide pool through KyIdentity's grants (`POST /api/suite/storage`) in `fits`, plus usage reports (Quotas). | `fits` checks one workspace (`store.go:682-692`) | Quota tests on every byte-adding path (see Quotas) |
 
 ## Inventory
@@ -747,6 +747,9 @@ change and KyDrive's.
 
 ### `suspended`, `deletion_scheduled`, or `enabled: false`
 
+Ordinary access follows the table below. Only an enabled `deletion_scheduled` org has the
+separate verified export-only exception described under Export.
+
 | What | Effect |
 |---|---|
 | Browser sessions | Refused through `activePrincipal`. KyIdentity also sends back-channel logouts for every client session (T "Suspension", step 3), which delete them (`sso_handlers.go:264-289`). |
@@ -1005,12 +1008,12 @@ the release before. No R step starts before the owner approves this amendment.
    - As built, in two PRs. 4a: the tokens, the webhook, the org poller, forced
      provisioning, the unique subject index and the installer refusal. 4b: suite groups per
      org, which needs a ky-primitives `suitedir.Groups` that takes an org (until then a
-     multi-tenant install does not read suite groups), and KyPost `org_id`. 4a departs from
-     the text above in four places:
-     - A back-channel logout by `sid` ends that login's sessions whatever org the token
-       names. Filtering by org would only let a mismatched token end less, and a logout only
-       takes access away. A subject-wide logout checks the org, logs a mismatch as an alert
-       and still applies, as above.
+     multi-tenant install does not read suite groups), and KyPost `org_id`. 4a and its merged follow-ups have these as-built details:
+     - Amended by #180: a back-channel logout by `sid` ends only that login's sessions
+       in the token's org, leaving and alerting on same-SID sessions in other orgs. Each
+       `jti` is spent in the revocation transaction, so a replay has no effect and a failed
+       revocation can be retried. A subject-wide logout checks the org, logs a mismatch as
+       an alert and still applies, as above.
      - The unique subject index is created with `IF NOT EXISTS` each time a multi-tenant
        store opens (`recordTenancy`), not by a versioned `initMultiTenant`. A single-tenant
        store never runs it.
