@@ -13,7 +13,8 @@ import (
 type Tree interface {
 	// Sub is the Store called name; it exists once something is written to it.
 	Sub(name string) Store
-	// List calls fn for every Sub, with the time it last changed.
+	// List calls fn for every Sub that holds an object, with the time it last changed; an
+	// empty Sub may or may not be listed.
 	List(ctx context.Context, fn func(name string, modified time.Time) error) error
 	// RemoveAll deletes the Sub called name and everything in it; a missing one is gone.
 	RemoveAll(ctx context.Context, name string) error
