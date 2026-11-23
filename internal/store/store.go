@@ -17,7 +17,16 @@ var (
 	// ErrStale reports a directory event no newer than the last one applied to the account.
 	ErrStale           = errors.New("directory event is not newer than the applied state")
 	ErrInvalidUsername = errors.New("directory username must be 1-128 letters, digits or ._@+-")
+	// ErrErased refuses an account KyIdentity erased (Delete everything): never created or
+	// reactivated again.
+	ErrErased = errors.New("directory subject was erased")
+	// ErrOtherOrg is an erasure naming an account that is in another org.
+	ErrOtherOrg = errors.New("account is in another org")
 )
+
+// ErasedSince is the server_settings key holding the revision the next read of KyIdentity's
+// erased list starts after. A restore deletes it, so the whole list is read again.
+const ErasedSince = "erased_since"
 
 // Store defines the unified storage contract implemented across SQLite, PostgreSQL, and MySQL.
 type Store interface {
@@ -49,6 +58,9 @@ type UserStore interface {
 	ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (*User, error)
 	// DeleteDirectoryUser deletes a directory account; revision orders it like ApplyDirectoryUser.
 	DeleteDirectoryUser(ctx context.Context, id string, revision int64) error
+	// EraseDirectoryUser records that KyIdentity erased subject in org (Delete everything),
+	// for good, and disables its account if there is one. Repeating it changes nothing.
+	EraseDirectoryUser(ctx context.Context, subject, org string, revision int64) error
 	// RevokeDirectoryCredentials ends a directory account's sessions and every credential it
 	// issued, as disabling does, but leaves it active. KyIdentity's MFA reset calls it.
 	RevokeDirectoryCredentials(ctx context.Context, id string) error

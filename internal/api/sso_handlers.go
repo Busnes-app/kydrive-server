@@ -143,7 +143,7 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 			Provider: "kysignon", Subject: claims.Subject, Username: claims.PreferredUsername,
 			Email: claims.Email, DisplayName: claims.Name, Active: true, OrgID: org,
 		})
-		if errors.Is(err, store.ErrInvalidUsername) || errors.Is(err, store.ErrAlreadyExists) {
+		if errors.Is(err, store.ErrInvalidUsername) || errors.Is(err, store.ErrAlreadyExists) || errors.Is(err, store.ErrErased) {
 			s.writeError(w, http.StatusForbidden, "User account not provisioned")
 			return
 		}

@@ -152,7 +152,20 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 		if existing == nil {
 			return nil
 		}
+		if multi {
+			// A multi-tenant KyIdentity means "disable": its files stay, and only an erasure
+			// (user.erased) removes the person.
+			_, err = k.store.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: existing.ID, Subject: user.ID, Active: false, Revision: revision, OrgID: org})
+			break
+		}
 		err = k.store.Users().DeleteDirectoryUser(ctx, existing.ID, revision)
+	case "user.erased":
+		// Delete everything, multi-tenant only. The record outlives the account, so the person
+		// can never sign in or be provisioned again.
+		if !multi {
+			return nil
+		}
+		err = k.store.Users().EraseDirectoryUser(ctx, user.ID, org, revision)
 	case "user.mfa_reset":
 		// The person's second factor may have been lost or taken. Whatever was signed in or
 		// minted with it ends, whatever the revision: revoking is restrictive and repeatable.
@@ -166,7 +179,7 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 	default:
 		return nil // acknowledge events this version does not consume
 	}
-	if errors.Is(err, store.ErrStale) {
+	if errors.Is(err, store.ErrStale) || errors.Is(err, store.ErrErased) {
 		return nil
 	}
 	if errors.Is(err, store.ErrInvalidUsername) {
