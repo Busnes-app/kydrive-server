@@ -143,6 +143,11 @@ func main() {
 		case "restore-reset":
 			runRestoreReset(os.Args[2:])
 			return
+		case "migrate-postgres":
+			if err := migratePostgres(context.Background(), os.Args[2:], os.Stdout); err != nil {
+				log.Fatal("migrate-postgres: ", err)
+			}
+			return
 		case "version":
 			fmt.Println("kydrive-server v" + appversion.String() + " (KyDrive)")
 			return
@@ -183,6 +188,13 @@ func runServer() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if cfg.Database.Driver == "sqlite" {
+		lock, err := store.LockSQLite(cfg.Database.SQLitePath())
+		if err != nil {
+			log.Fatalf("SQLite database: %v", err)
+		}
+		defer lock.Close()
+	}
 	st, err := store.Open(ctx, cfg.Database, cfg.Security.EncryptionKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize database (%s): %v", cfg.Database.Driver, err)

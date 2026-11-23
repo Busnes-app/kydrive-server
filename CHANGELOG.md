@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **`migrate-postgres` moves a single-tenant SQLite install to PostgreSQL (tenancy R1b).** It
+  copies every table into an empty database in one transaction and checks each table's rows
+  and content before it commits; `-check` rolls the copy back. The target DSN comes only from
+  `KY_MIGRATE_POSTGRES_DSN`. A SQLite server now holds a lock on its database
+  (`ky_server.db.lock` beside it) for as long as it runs, so a second server or a migration
+  on the same file is refused. Backups and content search still do not run on PostgreSQL
+  (R3, R2). Steps: [Deployment](docs/DEPLOYMENT.md#moving-to-postgresql).
 - **The drive store opens on PostgreSQL (tenancy R1a).** Before, a PostgreSQL install had no
   drive. Now it gets the full drive schema at first start, with the same triggers as SQLite.
   Every test runs on both backends in CI, apart from content search and backups, which stay
