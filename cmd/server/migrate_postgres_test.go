@@ -43,7 +43,7 @@ func TestMigratePostgresCommand(t *testing.T) {
 	if err := migratePostgres(ctx, []string{"-check"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), `"users":1`) || !strings.Contains(out.String(), "nothing was kept") {
+	if !strings.Contains(out.String(), `"users":1`) || !strings.Contains(out.String(), "no copied rows") {
 		t.Fatalf("output: %s", out.String())
 	}
 }

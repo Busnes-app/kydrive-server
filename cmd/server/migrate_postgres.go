@@ -45,7 +45,7 @@ func migratePostgres(ctx context.Context, args []string, out io.Writer) error {
 	}
 	done := "Copied and verified."
 	if *check {
-		done = "Verified; nothing was kept in PostgreSQL."
+		done = "Verified and rolled back: PostgreSQL keeps KyDrive's schema and the rows a first start writes, which the migration replaces, but no copied rows."
 	}
 	_, err = fmt.Fprintln(out, done, "The SQLite database and settings are unchanged. Keep the same KY_ENCRYPTION_KEY (or encryption.key) and the data directory: files, the search index and backups stay there.")
 	return err
