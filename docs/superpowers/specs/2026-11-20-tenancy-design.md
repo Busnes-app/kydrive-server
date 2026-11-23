@@ -859,8 +859,13 @@ deleted. Nothing any other member owns is deleted.
   belong to the org. The files the member put in them stay where they are, with every grant,
   share and link unchanged. Only the member's own My files is affected.
 - **Who receives each shared item.** For each topmost shared item in the member's My files,
-  the successor is chosen among the org's other active members who reach that item today
-  through its shares, grants or organisation links:
+  the successor is chosen among the org's other active members that the item's share records
+  name: a person share to them, a group share to a group they belong to, an organisation link
+  they opened (`drive_link_users`), or, for an item in a workspace they manage, their grant.
+  Eligibility is read from those records, as "What counts as shared" is, and never from
+  whether the shares work right now: KyIdentity may deactivate the owner before the erase
+  arrives, which stops their shares but must not change who receives the item. Only the
+  successor must be active. The role each record carries decides the order:
   1. the longest-standing member with manager rights on it (the "admin" of the owner's rule);
   2. else the longest-standing with editor rights;
   3. else the longest-standing with any access.
@@ -1184,8 +1189,10 @@ the release before. No R step starts before the owner approves this amendment.
        editor, else any access, with every person and group share and organisation link
        still working for the same people, including access inherited from a shared parent
        folder, and its guest links revoked.
-     - A file shared only by guest link, or reachable by nobody else, is deleted with the
-       rest; files the member put in a shared workspace stay.
+     - A file shared only by guest link, or named by no other active member's record, is
+       deleted with the rest; files the member put in a shared workspace stay.
+     - An owner deactivated before the erase arrives gives the same successors and keeps the
+       same items as one erased while active.
      - An erase replayed from `/api/suite/erased` after a restore deletes again.
      - An org suspended meanwhile erases nothing until it is active again.
      - `user.deleted` alone, a member who drops out of a group list, and a poll that fails or
