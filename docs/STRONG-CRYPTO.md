@@ -106,11 +106,21 @@ with their own key and TLS policy. This guide makes no claim about them:
   default.
 - **KyIdentity, KyRecovery** and other suite services: each has its own guide.
 
+Multi-tenant startup remains disabled. Its configuration loader already enforces D13:
+`KY_ENCRYPTION_KEY` must be explicit and `KYDRIVE_IDENTITY_KEY_FILE` must name an existing
+private seed outside `KY_DATA_DIR` (symlinked ancestors included). Neither key is created
+in that mode; local `encryption.key` or `identity.key` copies are refused and left untouched.
+Valid keys do not lift the remaining startup gates. Single-tenant creation and retained
+keys follow the table above unchanged. Retain the deployment key and device identity;
+this check does not authorize a rotation or delete arbitrary copies an operator made.
+
 ## Verification
 
 CI runs the full race suite twice, plainly and with `GODEBUG=fips140=on`, then
 the Compose check. The regressions cover:
 
+- `internal/config/replica_keys_test.go`: multi-mode refusal leaves the key/data tree
+  unchanged; external-path separation includes symlinked ancestors and fresh directories.
 - `internal/config/key_strength_test.go`: 1/15-byte session and webhook secrets
   refused, 16/32 accepted, the deployment key file unchanged.
 - `internal/sso/strong_crypto_test.go`: real RS256 ID tokens from 1024/2047-bit

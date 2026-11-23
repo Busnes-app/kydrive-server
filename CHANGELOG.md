@@ -4,6 +4,11 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Replica key loading (tenancy R3/D13).** Multi-mode configuration now requires retained
+  external deployment/device keys and refuses local key copies before creating any files.
+  Missing, corrupt or public identity seeds are never replaced. Multi startup remains
+  disabled; single-tenant key creation and upgrades are unchanged.
+
 - **Hosted members can export My files during scheduled deletion (tenancy groundwork).**
   A verified KyIdentity `export_only` claim opens a separate session of at most one hour,
   for existing members only. Its only product route, `GET /api/export`, downloads a zip of
