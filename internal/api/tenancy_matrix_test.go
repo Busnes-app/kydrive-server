@@ -63,6 +63,11 @@ func setupMultiServer(t *testing.T) *multiAPI {
 	t.Cleanup(func() { _ = st.Close() })
 	raw := testdb.Open(t, cfg.Database)
 	m := &multiAPI{srv: api.NewServer(cfg, st), cfg: cfg, st: st, db: raw, session: map[string]*http.Cookie{}, ids: map[string]map[string]string{}}
+	t.Cleanup(func() {
+		if err := m.srv.CloseSearch(); err != nil {
+			t.Error(err)
+		}
+	})
 	exec := func(q string, args ...any) {
 		t.Helper()
 		if _, err := raw.Exec(q, args...); err != nil {
@@ -110,11 +115,11 @@ func setupMultiServer(t *testing.T) *multiAPI {
 			t.Fatal(err)
 		}
 		ids["share"] = share.ID
-		link, _, err := d.CreateLink(ctx, member, "file", f.ID, "reader", 0)
+		link, token, err := d.CreateLink(ctx, member, "file", f.ID, "reader", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ids["link"] = link.ID
+		ids["link"], ids["linkToken"] = link.ID, token
 		if ids["personal"], err = d.EnsurePersonalWorkspace(ctx, o+"-gone"); err != nil {
 			t.Fatal(err)
 		}
@@ -149,13 +154,15 @@ func (m *multiAPI) signIn(t *testing.T, username string) *http.Cookie {
 // call sends method path as user's session, with org in X-Ky-Org when set, and a JSON body
 // of {} for a write.
 func (m *multiAPI) call(user, org, method, path string) *httptest.ResponseRecorder {
-	var body *bytes.Reader
-	if method == http.MethodGet || method == http.MethodDelete {
-		body = bytes.NewReader(nil)
-	} else {
-		body = bytes.NewReader([]byte(`{}`))
+	body := ""
+	if method != http.MethodGet && method != http.MethodDelete {
+		body = "{}"
 	}
-	req := httptest.NewRequest(method, path, body)
+	return m.callBody(user, org, method, path, body)
+}
+
+func (m *multiAPI) callBody(user, org, method, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if org != "" {
 		req.Header.Set("X-Ky-Org", org)
@@ -172,14 +179,19 @@ func (m *multiAPI) orgBState(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
 	for _, q := range []string{
-		`SELECT id||deleted_at||name||quota FROM drive_workspaces WHERE org_id='org-b' ORDER BY id`,
-		`SELECT f.id||f.parent||f.name||f.revision||f.trashed FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id='org-b' ORDER BY f.id`,
-		`SELECT d.id||d.parent||d.name||d.trashed FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE w.org_id='org-b' ORDER BY d.id`,
+		`SELECT id||deleted_at||name||quota||editors_share FROM drive_workspaces WHERE org_id='org-b' ORDER BY id`,
+		`SELECT f.id||f.workspace||f.parent||f.name||f.revision||f.trashed FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id='org-b' ORDER BY f.id`,
+		`SELECT d.id||d.workspace||d.parent||d.name||d.trashed FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE w.org_id='org-b' ORDER BY d.id`,
 		`SELECT s.id||s.principal_id||s.role FROM drive_shares s JOIN drive_workspaces w ON w.id=s.workspace WHERE w.org_id='org-b' ORDER BY s.id`,
 		`SELECT l.id||l.revoked||l.role FROM drive_links l JOIN drive_workspaces w ON w.id=l.workspace WHERE w.org_id='org-b' ORDER BY l.id`,
 		`SELECT g.workspace||g.group_id||g.role FROM drive_grants g JOIN drive_workspaces w ON w.id=g.workspace WHERE w.org_id='org-b' ORDER BY 1`,
 		`SELECT group_id||user_id FROM group_members WHERE group_id='group-b' ORDER BY 1`,
 		`SELECT link||user_id FROM drive_link_users ORDER BY 1`,
+		`SELECT v.file_id||v.revision||v.blob||v.digest FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id='org-b' ORDER BY v.file_id,v.revision`,
+		`SELECT u.id||u.received||u.completing FROM drive_upload_sessions u JOIN drive_workspaces w ON w.id=u.workspace WHERE w.org_id='org-b' ORDER BY u.id`,
+		`SELECT s.session||s.start||s.path||s.size FROM drive_upload_segments s JOIN drive_upload_sessions u ON u.id=s.session JOIN drive_workspaces w ON w.id=u.workspace WHERE w.org_id='org-b' ORDER BY s.session,s.start`,
+		`SELECT id||blob||revoked||dropped||login_at||sso_sid FROM drive_view_copies WHERE org_id='org-b' ORDER BY id`,
+		`SELECT s.id||s.revoked||s.revision FROM drive_editor_sessions s JOIN drive_files f ON f.id=s.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id='org-b' ORDER BY s.id`,
 	} {
 		rows, err := m.db.Query(q)
 		if err != nil {
@@ -191,6 +203,9 @@ func (m *multiAPI) orgBState(t *testing.T) string {
 				t.Fatal(err)
 			}
 			b.WriteString(s + "\n")
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(q, err)
 		}
 		rows.Close()
 	}
