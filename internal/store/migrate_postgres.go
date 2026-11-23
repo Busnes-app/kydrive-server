@@ -37,7 +37,7 @@ var migrationTables = []string{
 	"drive_upload_sessions", "drive_upload_segments", "drive_blob_kyb1", "drive_blob_retire",
 	"drive_app_passwords", "drive_devices", "drive_device_codes", "drive_view_copies",
 	"drive_peer_settings", "drive_peer_folders", "drive_peer_tickets", "drive_peer_picks",
-	"drive_peer_guest",
+	"drive_peer_guest", "drive_erasures",
 }
 
 // schemaTables record schema versions; each side has its own, at the same versions.

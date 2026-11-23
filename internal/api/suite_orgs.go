@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 // suiteOrgsPoll is how often a multi-tenant KyIdentity's orgs are read. A suspension there stops
@@ -66,7 +69,8 @@ func (s *Server) RunSuiteOrgs(ctx context.Context) {
 
 var errNoSuite = errors.New("KySignOn is not configured")
 
-// pollOrgs applies the orgs changed since the last poll. A failed call changes nothing.
+// pollOrgs applies KyIdentity's erasures, then the orgs changed since the last poll. A failed
+// call changes nothing. Erasures come first, so a fresh org mirror means they are applied.
 func (s *Server) pollOrgs(ctx context.Context) error {
 	client, ok := s.suiteClient()
 	if !ok {
@@ -74,6 +78,9 @@ func (s *Server) pollOrgs(ctx context.Context) error {
 	}
 	s.orgsMu.Lock()
 	defer s.orgsMu.Unlock()
+	if err := s.applyErased(ctx, &client); err != nil {
+		return err
+	}
 	d := s.store.Drive()
 	since, err := d.OrgsSince(ctx)
 	if err != nil {
@@ -91,6 +98,39 @@ func (s *Server) pollOrgs(ctx context.Context) error {
 		log.Printf("ALERT suite orgs: KyIdentity lists the staff org as not active; KyDrive keeps it active")
 	}
 	return err
+}
+
+// applyErased applies the erasures KyIdentity listed after the last read (all of them after a
+// restore, which deletes store.ErasedSince).
+func (s *Server) applyErased(ctx context.Context, client *suitedir.Client) error {
+	since := int64(0)
+	v, err := s.store.Settings().GetSetting(ctx, store.ErasedSince)
+	switch {
+	case err == nil:
+		if since, err = strconv.ParseInt(v, 10, 64); err != nil {
+			return fmt.Errorf("%s: %w", store.ErasedSince, err)
+		}
+	case !errors.Is(err, store.ErrNotFound):
+		return err
+	}
+	subjects, next, err := client.Erased(ctx, since)
+	if err != nil {
+		return err
+	}
+	for _, e := range subjects {
+		err := s.store.Users().EraseDirectoryUser(ctx, e.Sub, e.OrgID, e.Revision)
+		if errors.Is(err, store.ErrOtherOrg) {
+			log.Printf("ALERT suite erased: an erasure at revision %d names an account in another org; not applied", e.Revision)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if next == since {
+		return nil
+	}
+	return s.store.Settings().SetSetting(ctx, store.ErasedSince, strconv.FormatInt(next, 10))
 }
 
 // orgActive reports whether org is registered, active and enabled, polling once for an org not

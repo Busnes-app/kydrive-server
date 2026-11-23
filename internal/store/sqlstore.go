@@ -95,8 +95,12 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 		}
 		// A restored org mirror is not fresh, however recent the backup: no customer org is
 		// served until a poll succeeds.
-		if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM server_settings WHERE key=?`), drive.OrgsFreshUntil); err != nil {
-			return err
+		// Nor is the erased list: it is read again from the start, so an erasure the backup
+		// predates is applied again.
+		for _, key := range []string{drive.OrgsFreshUntil, ErasedSince} {
+			if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM server_settings WHERE key=?`), key); err != nil {
+				return err
+			}
 		}
 		// A new opener must not reuse a document key held by an editor from before restoration.
 		// A random positive 56-bit epoch also separates repeated restores of the same capsule.
@@ -419,6 +423,15 @@ func (u *userStore) ApplyDirectoryUser(ctx context.Context, d *DirectoryUser) (a
 				return nil, err
 			}
 			defer tx.Rollback()
+			if d.Active && d.Subject != "" && u.store.drive != nil && u.store.drive.Multi() {
+				var erased bool
+				if err := tx.QueryRowContext(ctx, u.store.rebind(`SELECT EXISTS(SELECT 1 FROM drive_erasures WHERE subject = ?)`), d.Subject).Scan(&erased); err != nil {
+					return nil, err
+				}
+				if erased {
+					return nil, ErrErased
+				}
+			}
 			id := d.ID
 			if id == "" {
 				if d.Provider != "scim" && d.Provider != "kysignon" {
@@ -506,6 +519,39 @@ func (u *userStore) DeleteDirectoryUser(ctx context.Context, id string, revision
 			return err
 		}
 		if err := u.store.drive.RevokeUserEditors(ctx, tx, id); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+}
+
+func (u *userStore) EraseDirectoryUser(ctx context.Context, subject, org string, revision int64) error {
+	return qmark.Retry(ctx, func() error {
+		tx, err := u.store.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		var id, have string
+		err = tx.QueryRowContext(ctx, u.store.rebind(`SELECT id, org_id FROM users WHERE sso_subject = ? AND sso_provider = 'kysignon'`), subject).Scan(&id, &have)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return err
+		case have != org:
+			return ErrOtherOrg
+		default:
+			if _, err := tx.ExecContext(ctx, u.store.rebind(`UPDATE users SET status = 'inactive', updated_at = ? WHERE id = ? AND org_id = ?`), time.Now().UTC(), id, org); err != nil {
+				return err
+			}
+			if err := u.store.revokeGrants(ctx, tx, id); err != nil {
+				return err
+			}
+			if err := u.store.drive.RevokeUserCredentials(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, u.store.rebind(`INSERT INTO drive_erasures(subject, org_id, revision) VALUES(?, ?, ?) ON CONFLICT(subject) DO NOTHING`), subject, org, revision); err != nil {
 			return err
 		}
 		return tx.Commit()

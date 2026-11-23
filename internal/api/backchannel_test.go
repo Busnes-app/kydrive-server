@@ -35,6 +35,9 @@ type fakeKySignOn struct {
 	groups  int               // /api/suite/groups calls
 	orgOf   []string          // each /api/suite/groups call's org_id
 	byOrg   map[string]string // the /api/suite/groups answer per org_id, else no groups
+	erased  string            // the /api/suite/erased answer, else none
+	asked   []string          // each /api/suite/erased call's since
+	down    bool              // /api/suite/erased fails
 }
 
 func newFakeKySignOn(t *testing.T) *fakeKySignOn {
@@ -65,6 +68,16 @@ func newFakeKySignOn(t *testing.T) *fakeKySignOn {
 			body, ok := f.byOrg[org]
 			if !ok {
 				body = `{"groups":[]}`
+			}
+			_, _ = w.Write([]byte(body))
+		case "/api/suite/erased":
+			f.asked = append(f.asked, r.URL.Query().Get("since"))
+			body := f.erased
+			if body == "" {
+				body = `{"subjects":[]}`
+			}
+			if f.down {
+				w.WriteHeader(http.StatusBadGateway)
 			}
 			_, _ = w.Write([]byte(body))
 		case "/api/suite/orgs":

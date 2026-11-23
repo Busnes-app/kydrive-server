@@ -136,6 +136,7 @@ func source(t *testing.T) (string, string) {
 		`INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires,pairing) VALUES('ticket','ticket-hash','owner','name',1,1,'pairing')`,
 		`INSERT INTO drive_peer_picks(owner,file,expires) VALUES('owner','` + f.ID + `',1)`,
 		`INSERT INTO drive_peer_guest(user_id) VALUES('owner')`,
+		`INSERT INTO drive_erasures(subject,org_id,revision) VALUES('erased','org',1)`,
 	} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(q, err)
