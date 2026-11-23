@@ -17,7 +17,7 @@ type LogoutClaims struct {
 	SessionID string
 	IssuedAt  time.Time
 	OrgID     string    // multi-tenant KyIdentity only
-	JTI       string    // the token's own ID, spent once (store.SpendLogoutToken)
+	JTI       string    // the token's own ID, spent once (store.LogoutToken)
 	Expires   time.Time // when the token stops verifying, so its JTI can be forgotten
 }
 

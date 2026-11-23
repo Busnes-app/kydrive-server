@@ -817,7 +817,7 @@ const SSOLogoutFence = 10 * time.Minute
 // DirectorySubject, a KySignOn subject also names the SCIM account with that subject.
 const ssoSubjectUser = `u.sso_subject = f.subject AND (u.sso_provider = f.provider OR (f.provider = 'kysignon' AND u.sso_provider = 'scim'))`
 
-func (s *sessionStore) EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time) (int, error) {
+func (s *sessionStore) EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time, token LogoutToken) (int, error) {
 	now := time.Now().UTC()
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logouts WHERE expires_at <= ?`), now); err != nil {
 		return 0, err
@@ -826,7 +826,7 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid, org string, fence
 		return 0, err
 	}
 	if org == "" {
-		return 0, s.deleteSessions(ctx, func(tx *sql.Tx) error {
+		return 0, s.deleteSessions(ctx, token, func(tx *sql.Tx) error {
 			return s.store.drive.RevokeSSOEditors(ctx, tx, sid, "")
 		}, `sso_sid = ?`, sid)
 	}
@@ -834,21 +834,27 @@ func (s *sessionStore) EndSSOSession(ctx context.Context, sid, org string, fence
 	if err := s.store.db.QueryRowContext(ctx, s.store.rebind(`SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.sso_sid = ? AND u.org_id <> ?`), sid, org).Scan(&other); err != nil {
 		return 0, err
 	}
-	return other, s.deleteSessions(ctx, func(tx *sql.Tx) error {
+	return other, s.deleteSessions(ctx, token, func(tx *sql.Tx) error {
 		return s.store.drive.RevokeSSOEditors(ctx, tx, sid, org)
 	}, `sso_sid = ? AND user_id IN (SELECT id FROM users WHERE org_id = ?)`, sid, org)
 }
 
-func (s *sessionStore) SpendLogoutToken(ctx context.Context, jti string, expires time.Time) (bool, error) {
-	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logout_tokens WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
-		return false, err
+// spendLogoutToken records token's jti until it expires, or answers ErrLogoutTokenSpent.
+func (s *sessionStore) spendLogoutToken(ctx context.Context, tx *sql.Tx, token LogoutToken) error {
+	if token.JTI == "" {
+		return nil
 	}
-	res, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logout_tokens (jti, expires_at) VALUES (?, ?) ON CONFLICT (jti) DO NOTHING`), jti, expires.UTC())
+	if _, err := tx.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logout_tokens WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logout_tokens (jti, expires_at) VALUES (?, ?) ON CONFLICT (jti) DO NOTHING`), token.JTI, token.Expires.UTC())
 	if err != nil {
-		return false, err
+		return err
 	}
-	n, err := res.RowsAffected()
-	return n == 1, err
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return errors.Join(err, ErrLogoutTokenSpent)
+	}
+	return nil
 }
 
 // fenceSSOSubject commits a fence refusing the subject's logins issued before cutoff until
@@ -864,12 +870,12 @@ ON CONFLICT (provider, subject) DO UPDATE SET cutoff = excluded.cutoff, expires_
 	return err
 }
 
-func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error {
+func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time, token LogoutToken) error {
 	if err := s.store.fenceSSOSubject(ctx, provider, subject, cutoff, fenceUntil); err != nil {
 		return err
 	}
 	subjectUsers := `SELECT u.id FROM users u, sso_subject_logouts f WHERE f.provider = ? AND f.subject = ? AND ` + ssoSubjectUser
-	return s.deleteSessions(ctx, func(tx *sql.Tx) error {
+	return s.deleteSessions(ctx, token, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx, s.store.rebind(subjectUsers), provider, subject)
 		if err != nil {
 			return err
@@ -895,12 +901,16 @@ func (s *sessionStore) EndSSOSubject(ctx context.Context, provider, subject stri
 	}, `created_at < ? AND user_id IN (`+subjectUsers+`)`, cutoff.UTC(), provider, subject)
 }
 
-// deleteSessions deletes the sessions matching where and, in the same transaction, the
-// editor sessions of their accounts. revokeLogin also revokes, in that transaction, the
-// editor sessions bound to the logged-out login, which outlive its expired browser sessions.
+// deleteSessions spends token and deletes the sessions matching where and, in the same
+// transaction, the editor sessions of their accounts. revokeLogin also revokes, in that
+// transaction, the editor sessions bound to the logged-out login, which outlive its expired
+// browser sessions.
 
-func (s *sessionStore) deleteSessions(ctx context.Context, revokeLogin func(*sql.Tx) error, where string, args ...any) error {
+func (s *sessionStore) deleteSessions(ctx context.Context, token LogoutToken, revokeLogin func(*sql.Tx) error, where string, args ...any) error {
 	return s.store.inTx(ctx, func(tx *sql.Tx) error {
+		if err := s.spendLogoutToken(ctx, tx, token); err != nil {
+			return err
+		}
 		if err := revokeLogin(tx); err != nil {
 			return err
 		}

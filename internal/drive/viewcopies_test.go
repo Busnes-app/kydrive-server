@@ -11,6 +11,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/objects"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 // docx is the shortest body that sniffs as a zip.
@@ -250,7 +251,7 @@ func TestViewCopyEndsWithItsSignIn(t *testing.T) {
 			t.Fatalf("another sign-in %+v opened it: %v", l, err)
 		}
 	}
-	if _, err := st.Sessions().EndSSOSession(ctx, "sid-1", "", time.Now().Add(time.Minute)); err != nil {
+	if _, err := st.Sessions().EndSSOSession(ctx, "sid-1", "", time.Now().Add(time.Minute), store.LogoutToken{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.ViewDownload(ctx, c.ID); !errors.Is(err, drive.ErrNotFound) {
@@ -303,7 +304,7 @@ func TestClosedViewCopyKeepsItsDrop(t *testing.T) {
 	if free, _ := d.PeerFree(ctx, "worker"); free != before+int64(len(docx)) {
 		t.Fatalf("closed copy still counted: %d", free)
 	}
-	if _, err = st.Sessions().EndSSOSession(ctx, "sid-1", "", time.Now().Add(time.Minute)); err != nil {
+	if _, err = st.Sessions().EndSSOSession(ctx, "sid-1", "", time.Now().Add(time.Minute), store.LogoutToken{}); err != nil {
 		t.Fatal(err)
 	}
 	if blobs, _ := d.ExpireViewCopies(ctx); len(blobs) != 0 {

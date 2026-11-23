@@ -160,7 +160,7 @@ func (k *KySignOnClient) HandleSyncWebhook(ctx context.Context, headers syncauth
 			// No account yet, but a first login may be in flight with a pre-reset ID token.
 			// Fence the subject so it cannot finish, as a back-channel logout does.
 			now := time.Now()
-			return k.store.Sessions().EndSSOSubject(ctx, "kysignon", user.ID, now.Add(time.Second), now.Add(store.SSOLogoutFence))
+			return k.store.Sessions().EndSSOSubject(ctx, "kysignon", user.ID, now.Add(time.Second), now.Add(store.SSOLogoutFence), store.LogoutToken{})
 		}
 		err = k.store.Users().RevokeDirectoryCredentials(ctx, existing.ID)
 	default:

@@ -14,6 +14,8 @@ var (
 	ErrSessionExpired = errors.New("session expired")
 	// ErrSSOSessionEnded means the identity provider already ended the login being signed in.
 	ErrSSOSessionEnded = errors.New("SSO session already ended")
+	// ErrLogoutTokenSpent is a back-channel logout token already acted on.
+	ErrLogoutTokenSpent = errors.New("logout token already spent")
 	// ErrStale reports a directory event no newer than the last one applied to the account.
 	ErrStale           = errors.New("directory event is not newer than the applied state")
 	ErrInvalidUsername = errors.New("directory username must be 1-128 letters, digits or ._@+-")
@@ -35,6 +37,12 @@ type Store interface {
 	Close() error
 	// ResetAfterRestore invalidates restored bearer grants without changing accounts or content.
 	ResetAfterRestore(context.Context) error
+}
+
+// LogoutToken is a back-channel logout token's jti and expiry. The zero value spends nothing.
+type LogoutToken struct {
+	JTI     string
+	Expires time.Time
 }
 
 // UserStore defines repository operations for accounts.
@@ -78,14 +86,13 @@ type SessionStore interface {
 	DeleteUserSessions(ctx context.Context, userID string) error
 	// EndSSOSubject ends the provider subject's sessions whose credentials were verified
 	// before cutoff and fences that subject's earlier logins until fenceUntil.
-	EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error
+	// A non-zero token is spent in the transaction that ends the sessions (ErrLogoutTokenSpent
+	// if it already was), so a failed revocation leaves it unspent for the retry.
+	EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time, token LogoutToken) error
 	// EndSSOSession ends every session of an SSO login and fences its sid until fenceUntil.
 	// A non-empty org limits it to accounts in that org, and returns how many of the sid's
-	// sessions it left because their account is elsewhere.
-	EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time) (otherOrg int, err error)
-	// SpendLogoutToken records a logout token's jti until it expires, and reports false when
-	// it was already spent.
-	SpendLogoutToken(ctx context.Context, jti string, expires time.Time) (bool, error)
+	// sessions it left because their account is elsewhere. token is spent as EndSSOSubject's.
+	EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time, token LogoutToken) (otherOrg int, err error)
 	EndSession(ctx context.Context, tokenHash string) error
 	CleanExpiredSessions(ctx context.Context) error
 	CleanExpiredMFAChallenges(ctx context.Context) error
