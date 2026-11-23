@@ -129,14 +129,17 @@ whether that suits every client build). Android needs an ML-DSA implementation a
   checks keep the rows consistent; the log, which clients verify, is what makes membership
   trustworthy.
 
-  Removing a member deletes their row at once, and the server stops serving them. A
-  remaining member's client then rotates the vault key (Key generations). Files the removed
-  member already downloaded stay readable to them.
-- **Key generations.** A rotation makes generation n+1 and uploads, in one call:
+  Removing a member is one `remove` record that also rotates the vault key: it carries
+  everything a rotation carries (Key generations). Removal and rotation are therefore one
+  commit, with one witness checkpoint, and no head ever names a removal whose newest generation
+  the removed member still holds. The server deletes their row at once and stops serving
+  them. Files the removed member already downloaded stay readable to them.
+- **Key generations.** A rotation, alone or inside a `remove`, makes generation n+1 and
+  uploads, in one call:
   - the `drive_vault_keys` row, with generation n encrypted to n+1's recipient as `previous`;
   - a wrap of n+1 for every remaining member;
   - on single-tenant, n+1's escrow wrap;
-  - the signed `rotate` record for the vault log.
+  - the signed `rotate` or `remove` record for the vault log.
 
   The server accepts it only when the call names generation n as the current one and
   carries a wrap for every current member. Two rotations racing then cannot both win. New
@@ -158,14 +161,16 @@ about a vault's members or keys unless the vault log says so.
   signing key:
   - `create` (generation 1). It marks the vault `personal` or `shared`, for good: a client
     refuses any `add` record in a personal vault's log;
-  - `add` and `remove` (a member, with their key fingerprint);
-  - `rotate` (generation n+1);
+  - `add` (a member, with their key fingerprint);
+  - `rotate` (generation n+1), and `remove` (a member, and generation n+1 in the same record);
   - on single-tenant, `escrow` (the escrow key's fingerprint) and `escrow-access` (Escrow).
 
   Each record names the workspace, its `seq` and the hash of the record before it.
-  - A `create` or `rotate` record also holds the new generation's public recipient, the hash
-    of its encrypted `previous`, the full member list with fingerprints and, on single-tenant,
-    the escrow fingerprint.
+  - A `create`, `rotate` or `remove` record also holds the new generation's public recipient,
+    the hash of its whole `drive_vault_keys` row (its encrypted `previous` and `name_index`),
+    the full member list with fingerprints and, on single-tenant, the escrow fingerprint.
+  - A client refuses a `remove` that names no new generation, and refuses a key row, whether
+    loaded normally or in a restore replay, whose hash differs from its record's.
   - Every record but `escrow-access` must be signed by a member of the vault as the log stood
     before it. In v1 every member may add, remove and rotate.
 - **What a client checks** before it uses a vault:
@@ -237,8 +242,8 @@ find a log shorter than their stored head, which they would otherwise refuse as 
   of every generation it has seen, not just the head. When the server's log is a prefix of its
   own, the client replays in one call:
   - its later records;
-  - the `drive_vault_keys` row of every later generation, each with its `previous`, whose hash
-    is in that generation's `rotate` record;
+  - the `drive_vault_keys` row of every later generation, each with its `previous` and
+    `name_index`, whose hash is in that generation's `rotate` or `remove` record;
   - a wrap of the newest generation for every member those records name, and on single-tenant
     its escrow wrap.
 
@@ -247,7 +252,7 @@ find a log shorter than their stored head, which they would otherwise refuse as 
   that each key row matches its record's hash. The normal rotation check (current generation
   named, a wrap per member) does not apply to replayed records. Every other device then
   verifies the longer log as usual, and walks `previous` back from the newest generation to
-  every older one. A `remove` and `rotate` written after the snapshot are restored this way,
+  every older one. A `remove` written after the snapshot is restored this way,
   so a removed member stays removed.
 - **Until a member replays,** the vault is read-only on every device that is ahead of the
   server. If no device holds the later records, the vault stays read-only, showing which
@@ -356,7 +361,7 @@ Each PR is shippable on its own, with vaults off until V3.
      - a server-added member;
      - a rolled-back log;
      - a log forked between two members;
-     - a committed removal and rotation the server withholds from a group of devices that
+     - a committed `remove` the server withholds from a group of devices that
        keep signing statements for the old head: each blocks at its next upload, and is warned
        when the records arrive;
      - a device holding a 1-hour-old checkpoint for the old head, with the witness reachable
@@ -366,15 +371,20 @@ Each PR is shippable on its own, with vaults off until V3.
        the witness and blocks;
      - an `add` record in a personal vault's log, which is refused;
      - a witness that cannot be reached, which blocks uploads to shared vaults;
-     - a witness asked to sign a head that does not extend its last one, which refuses.
+     - a witness asked to sign a head that does not extend its last one, which refuses;
+     - a `remove` with no new generation, which is refused, so an interrupted removal leaves
+       the old head, and its generation, in force until the whole `remove` commits;
+     - a recovered device given a changed `name_index` while the signed log and generation
+       recipient are unchanged, which refuses the key row.
 
      Each is refused before any content is encrypted to it.
-   - a restore to before a `remove` and `rotate`, after which a member's device replays both
-     records and the key row, the removed member stays removed, and every member and the
-     escrow key still open the oldest version;
+   - a restore to before a `remove`, after which a member's device replays the record and its
+     key row, the removed member stays removed, and every member and the escrow key still
+     open the oldest version;
+   - a restore to before a `remove` when no device holds the later records: the vault stays
+     read-only;
    - a name written before a rotation and the same name checked after it: one `name_hmac`, so
-     the duplicate is refused; with no device holding them, the vault
-     stays read-only.
+     the duplicate is refused;
 3. **V3. Desktop app:** user and recovery keys, vault create, sync, membership, rotation and
    fingerprint pinning, in `kydrive-desktop/core`. Vaults are turned on here, desktop only.
 4. **V4. Android:** the same, after the age library choice.
