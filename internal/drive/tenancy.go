@@ -187,7 +187,22 @@ func asDenied(err error) error {
 // activePrincipal is true while user $U is active and their org is active and enabled: the
 // one test every credential and grant reads. $U is a column reference.
 func activePrincipal(user string) string {
-	return `EXISTS(SELECT 1 FROM users apu JOIN drive_orgs apo ON apo.id=apu.org_id WHERE apu.id=` + user + ` AND apu.status='active' AND apo.status='active' AND apo.enabled=1)`
+	return `EXISTS(SELECT 1 FROM users apu JOIN drive_orgs apo ON apo.id=apu.org_id WHERE apu.id=` + user + ` AND apu.status='active' AND ` + orgServing("apo") + `)`
+}
+
+// orgsFreshUntil is the server_settings key holding the unix time until which the last
+// successful org poll is trusted (OrgsMaxAge after it).
+const orgsFreshUntil = "orgs_fresh_until"
+
+// OrgsMaxAge is how long the org mirror is trusted after the last successful poll. Past it
+// every org KyIdentity reports is served nothing, until a poll succeeds: an outage shorter
+// than this keeps serving (question 4), a longer one fails closed.
+const OrgsMaxAge = time.Hour
+
+// orgServing is true while org row $O is active and enabled and, unless it is the seeded
+// staff org or the single-tenant default org, the mirror is fresh. $O is a table alias.
+func orgServing(o string) string {
+	return o + `.status='active' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR CAST((SELECT value FROM server_settings WHERE key='` + orgsFreshUntil + `') AS BIGINT)>unixepoch())`
 }
 
 // sameOrg is true when workspace $W is in user $U's org. Both are column references.
@@ -326,7 +341,7 @@ func (s *Store) UserOrg(ctx context.Context, user string) (string, error) {
 
 // OrgActive reports whether org is registered, and whether it is active and enabled.
 func (s *Store) OrgActive(ctx context.Context, org string) (known, active bool, err error) {
-	err = s.db.QueryRowContext(ctx, `SELECT 1, status='active' AND enabled=1 FROM drive_orgs WHERE id=?`, org).Scan(&known, &active)
+	err = s.db.QueryRowContext(ctx, `SELECT 1, `+orgServing("o")+` FROM drive_orgs o WHERE o.id=?`, org).Scan(&known, &active)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, false, nil
 	}
@@ -336,7 +351,7 @@ func (s *Store) OrgActive(ctx context.Context, org string) (known, active bool, 
 // ActiveOrgs lists the registered orgs that are active and enabled, the orgs whose suite groups
 // are read.
 func (s *Store) ActiveOrgs(ctx context.Context) ([]string, error) {
-	return column(ctx, s.db, `SELECT id FROM drive_orgs WHERE status='active' AND enabled=1 ORDER BY id`)
+	return column(ctx, s.db, `SELECT o.id FROM drive_orgs o WHERE `+orgServing("o")+` ORDER BY o.id`)
 }
 
 // orgsSince is the server_settings key holding the revision the next org poll starts after.
@@ -366,14 +381,20 @@ func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) 
 				staffNotActive = staffNotActive || o.Status != suitedir.OrgActive || !o.Enabled
 				continue
 			}
+			// A deleted org stays deleted: no later answer brings it back.
 			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,revision,enabled,storage_bytes) VALUES(?,?,?,?,?)
 ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes
-WHERE drive_orgs.seeded=0 AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
+WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
 				return err
 			}
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, orgsSince, strconv.FormatInt(next, 10), time.Now().UTC())
-		return err
+		now := time.Now().UTC()
+		for k, v := range map[string]string{orgsSince: strconv.FormatInt(next, 10), orgsFreshUntil: strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10)} {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, k, v, now); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	return staffNotActive, err
 }

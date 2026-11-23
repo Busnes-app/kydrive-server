@@ -53,6 +53,7 @@ func multiTenant(t *testing.T) *orgs {
 		}
 	}
 	exec(`INSERT INTO drive_orgs(id,status) VALUES('org-a','active'),('org-b','active')`)
+	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`) // as a successful poll leaves it
 	for _, u := range [][4]string{
 		{"staff", "admin", "active", drive.TestStaffOrg},
 		{"a1", "user", "active", "org-a"}, {"a2", "user", "active", "org-a"}, {"a-gone", "user", "inactive", "org-a"},

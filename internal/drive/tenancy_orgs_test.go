@@ -82,3 +82,51 @@ func TestMultiTenantSubjectIsOneAccount(t *testing.T) {
 		t.Fatalf("index reaches past kysignon: %v", err)
 	}
 }
+
+// Once the last successful poll is older than OrgsMaxAge, every org KyIdentity reports is served
+// nothing; the staff org still is, and the next successful poll restores the rest.
+func TestStaleOrgMirrorServesNothing(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
+		t.Fatalf("fresh mirror: %v %v", ok, err)
+	}
+	if _, err := o.db.Exec(`UPDATE server_settings SET value='1' WHERE key='orgs_fresh_until'`); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || ok {
+		t.Fatalf("stale mirror still serves a member: %v %v", ok, err)
+	}
+	if _, active, err := d.OrgActive(ctx, "org-a"); err != nil || active {
+		t.Fatalf("stale mirror reports org-a active: %v %v", active, err)
+	}
+	if orgs, err := d.ActiveOrgs(ctx); err != nil || len(orgs) != 1 || orgs[0] != drive.TestStaffOrg {
+		t.Fatalf("stale mirror lists %v (%v), want only the staff org", orgs, err)
+	}
+	if ok, err := d.ActivePrincipal(ctx, "staff"); err != nil || !ok {
+		t.Fatalf("staff stopped with the mirror: %v %v", ok, err)
+	}
+	if _, err := d.ApplyOrgs(ctx, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
+		t.Fatalf("a successful poll did not restore the member: %v %v", ok, err)
+	}
+}
+
+// A deleted org stays deleted: a later revision saying otherwise changes nothing.
+func TestDeletedOrgStaysDeleted(t *testing.T) {
+	o := multiTenant(t)
+	org := func(status string, rev int64) suitedir.Org {
+		return suitedir.Org{ID: "org-x", Status: status, Revision: rev, Enabled: true, Quotas: json.RawMessage(`{}`)}
+	}
+	for _, batch := range [][]suitedir.Org{{org("deleted", 5)}, {org("active", 6)}} {
+		if _, err := o.d.ApplyOrgs(o.ctx, batch, 6); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var status string
+	if err := o.db.QueryRow(`SELECT status FROM drive_orgs WHERE id='org-x'`).Scan(&status); err != nil || status != "deleted" {
+		t.Fatalf("status %q (%v)", status, err)
+	}
+}

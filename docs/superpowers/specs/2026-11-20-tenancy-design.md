@@ -1243,7 +1243,12 @@ the release before. No R step starts before the owner approves this amendment.
    their own copy.
 4. **`/api/suite/orgs` unreachable.** Keep the last status, and alert the operator after 10
    minutes. Refusing credentials in every org would turn a KyIdentity outage into a KyDrive
-   outage for every customer.
+   outage for every customer. Amended 2026-11-23: the last status is kept for at most
+   `drive.OrgsMaxAge` (1 hour) after the last successful poll (`server_settings.orgs_fresh_until`).
+   Past it, every org except the staff org is served nothing until a poll succeeds, so a long
+   outage cannot keep a suspended or deleted org working. A restore starts stale, which also
+   serves the restore rule (Lifecycle, `deleted`). A `deleted` org stays deleted: the mirror's
+   upsert never changes a deleted row.
 5. **Deleted orgs in backups.** Accepted. The hosted install must run bulk retention so
    copies age out. Amended 2026-11-22: per-org keys destroyed at purge (D14, step K) make
    every copy outside the backups unreadable. The backups themselves keep the wrapped key until

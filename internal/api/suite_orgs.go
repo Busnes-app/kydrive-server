@@ -7,11 +7,16 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
 // suiteOrgsPoll is how often a multi-tenant KyIdentity's orgs are read. A suspension there stops
 // KyDrive serving the org within one poll.
 const suiteOrgsPoll = 60 * time.Second
+
+// orgsAlertAfter is how long org polls may fail before each failure is logged as an alert
+// (question 4). drive.OrgsMaxAge later stops serving the orgs.
+const orgsAlertAfter = 10 * time.Minute
 
 // suiteClient is KyIdentity's suite directory, or false without KySignOn.
 func (s *Server) suiteClient() (suitedir.Client, bool) {
@@ -36,9 +41,20 @@ func (s *Server) RunSuiteOrgs(ctx context.Context) {
 	}
 	tick := time.NewTicker(suiteOrgsPoll)
 	defer tick.Stop()
+	started := time.Now()
 	for {
 		if err := s.pollOrgs(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("suite orgs: %v", err) // suitedir errors carry no secret
+			s.orgsMu.Lock()
+			last := s.orgsOK
+			s.orgsMu.Unlock()
+			if last.IsZero() {
+				last = started
+			}
+			if failing := time.Since(last); failing > orgsAlertAfter {
+				log.Printf("ALERT suite orgs: no successful poll for %s; orgs stop being served %s after the last one: %v", failing.Round(time.Second), drive.OrgsMaxAge, err)
+			} else {
+				log.Printf("suite orgs: %v", err) // suitedir errors carry no secret
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -68,6 +84,9 @@ func (s *Server) pollOrgs(ctx context.Context) error {
 		return err
 	}
 	staffNotActive, err := d.ApplyOrgs(ctx, orgs, next)
+	if err == nil {
+		s.orgsOK = time.Now()
+	}
 	if staffNotActive {
 		log.Printf("ALERT suite orgs: KyIdentity lists the staff org as not active; KyDrive keeps it active")
 	}
