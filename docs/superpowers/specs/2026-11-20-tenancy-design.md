@@ -642,6 +642,17 @@ unverified until T's amendment lands.
     `TestConcurrentPublishesKeepTheQuota` races eight uploads with room for one against the
     workspace quota on both backends; step 5 adds the same test for the org pool. On SQLite
     the one writer serialises them, as before.
+  - **Serialization aborts.** The pool read is a sum over the org's rows followed by an
+    insert into them, so two byte-adding writes in one org conflict under serializable
+    isolation, and PostgreSQL aborts one of them (SQLSTATE 40001) even when both fit.
+    `qmark.Retry` reruns every drive transaction on that error, up to 50 times with a random
+    pause (R1a as built), so the write succeeds, only later.
+    - Step 5's tests: twenty uploads in one org with room for all of them all succeed, and
+      uploads in two orgs at once all succeed.
+    - The capacity measurement (question 6) records the retry rate at a Business org's
+      concurrency.
+    - If retries prove costly, the fix is a per-org usage row updated in the write's
+      transaction, with the hourly reconciliation correcting it; not built until then.
   - The check uses the org's net change. Bytes that move between two workspaces of one org
     change nothing, so an over-pool org can still move files and receive a handover.
   - Every path that adds bytes ends there:
@@ -665,8 +676,12 @@ unverified until T's amendment lands.
 
   This matches KyCalendar's spec (KyCalendar #190), so every app reports the same way.
 
-  A report is the absolute total with a per-org sequence number that only grows, so a
-  repeated or late report changes nothing. It is authenticated as KyDrive's client (the way
+  A report is the absolute total with a sequence number: the report's time in milliseconds,
+  raised by one if it is not above the last one sent for the org. KyIdentity keeps the
+  highest it has seen, so a repeated or late report changes nothing. Time only moves
+  forward, so a capsule restore cannot roll the sequence back behind reports already sent.
+  The cost: a host clock set far ahead would hold back every later report until real time
+  passes it. The elected worker is the only sender, so replicas' clocks never mix. It is authenticated as KyDrive's client (the way
   T specifies; unverified).
 - **Failing closed.**
   - An org with no `pool_bytes`, or one KyDrive has never polled, refuses every write with
