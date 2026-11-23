@@ -545,3 +545,21 @@ func TestWorkerAndGuestEventsLandInTheirOrg(t *testing.T) {
 		t.Fatalf("events %v, want %v", got, want)
 	}
 }
+
+// Revoking another org's service token fails exactly as revoking one that never existed, and
+// leaves it working.
+func TestForeignServiceTokenIsMissing(t *testing.T) {
+	o := multiTenant(t)
+	ctx, d := o.ctx, o.d
+	id, err := d.CreateServiceToken(ctx, "b1", o.teamB.ID, "robot", "reader", "svc-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	same(t, "RevokeServiceToken", d.RevokeServiceToken(ctx, "a1", id), d.RevokeServiceToken(ctx, "a1", uuid.NewString()))
+	if _, _, err := d.ServiceToken(ctx, "svc-b"); err != nil {
+		t.Fatal("org B's token stopped working:", err)
+	}
+	if err := d.RevokeServiceToken(ctx, "b1", id); err != nil {
+		t.Fatal("its own org's manager:", err)
+	}
+}

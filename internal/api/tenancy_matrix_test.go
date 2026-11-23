@@ -416,3 +416,70 @@ func TestAdminRoutesHaveTheirClass(t *testing.T) {
 		}
 	}
 }
+
+// Revoking another org's service token answers exactly as revoking an ID that never existed:
+// the same status and body for an active, a revoked and an expired org B token, whether the
+// caller is an org A member's session or an org A reader service token. Org B's tokens are left
+// as they were.
+func TestForeignServiceTokensAnswerAsMissing(t *testing.T) {
+	m := setupMultiServer(t)
+	ctx, d := context.Background(), m.st.Drive()
+	tokenB := func(secret string) string {
+		t.Helper()
+		id, err := d.CreateServiceToken(ctx, "b1", m.ids["org-b"]["workspace"], "robot", "reader", secret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	active, revoked, expired := tokenB(strings.Repeat("1", 64)), tokenB(strings.Repeat("2", 64)), tokenB(strings.Repeat("3", 64))
+	if err := d.RevokeServiceToken(ctx, "b1", revoked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.db.Exec(`UPDATE drive_service_tokens SET expires=1 WHERE id=?`, expired); err != nil {
+		t.Fatal(err)
+	}
+	readerA := strings.Repeat("4", 64)
+	if _, err := d.CreateServiceToken(ctx, "a1", m.ids["org-a"]["workspace"], "robot", "reader", readerA); err != nil {
+		t.Fatal(err)
+	}
+	state := func() string {
+		var s strings.Builder
+		rows, err := m.db.Query(`SELECT id||revoked||expires FROM drive_service_tokens WHERE org_id='org-b' ORDER BY id`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r string
+			if err := rows.Scan(&r); err != nil {
+				t.Fatal(err)
+			}
+			s.WriteString(r + "\n")
+		}
+		return s.String()
+	}
+	orgB := state()
+	callers := map[string]func(path string) *httptest.ResponseRecorder{
+		"session": func(path string) *httptest.ResponseRecorder { return m.call("a1", "", http.MethodDelete, path) },
+		"reader service token": func(path string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			req.Header.Set("Authorization", "Bearer "+readerA)
+			w := httptest.NewRecorder()
+			m.srv.ServeHTTP(w, req)
+			return w
+		},
+	}
+	for who, call := range callers {
+		missing := call("/api/drive/tokens/" + uuid.NewString())
+		for name, id := range map[string]string{"active": active, "revoked": revoked, "expired": expired} {
+			got := call("/api/drive/tokens/" + id)
+			if got.Code != missing.Code || got.Body.String() != missing.Body.String() {
+				t.Errorf("%s, org B's %s token: %d %s; a missing ID: %d %s", who, name, got.Code, got.Body.String(), missing.Code, missing.Body.String())
+			}
+		}
+	}
+	if now := state(); now != orgB {
+		t.Fatalf("org B's tokens changed:\n%s\nwant\n%s", now, orgB)
+	}
+}
