@@ -22,6 +22,8 @@ const (
 
 var ErrPasswordChangeRequired = errors.New("password change required")
 
+var ErrExportOnly = errors.New("export-only session")
+
 type SessionManager struct {
 	store  store.Store
 	config config.SecurityConfig
@@ -38,17 +40,22 @@ func NewSessionManager(st store.Store, cfg config.SecurityConfig) *SessionManage
 // The password was just verified, so the session starts stepped up.
 func (sm *SessionManager) IssueSession(ctx context.Context, w http.ResponseWriter, r *http.Request, user *store.User) (*store.Session, string, error) {
 	now := time.Now().UTC()
-	return sm.issue(ctx, w, r, user, now, "", now)
+	return sm.issue(ctx, w, r, user, now, "", now, false)
 }
 
 // IssueSSOSession issues a session for an SSO login the provider names by sid and dates
 // it by the ID token's issuedAt, so a back-channel logout for that sid or subject ends it.
 // It fails with store.ErrSSOSessionEnded when the provider already ended that login.
 func (sm *SessionManager) IssueSSOSession(ctx context.Context, w http.ResponseWriter, r *http.Request, user *store.User, sid string, issuedAt time.Time) (*store.Session, string, error) {
-	return sm.issue(ctx, w, r, user, issuedAt.UTC(), sid, time.Time{})
+	return sm.issue(ctx, w, r, user, issuedAt.UTC(), sid, time.Time{}, false)
 }
 
-func (sm *SessionManager) issue(ctx context.Context, w http.ResponseWriter, r *http.Request, user *store.User, authenticatedAt time.Time, sid string, stepUpAt time.Time) (*store.Session, string, error) {
+// IssueExportSession retains the verified login binding but grants at most one hour to export.
+func (sm *SessionManager) IssueExportSession(ctx context.Context, w http.ResponseWriter, r *http.Request, user *store.User, sid string, issuedAt time.Time) (*store.Session, string, error) {
+	return sm.issue(ctx, w, r, user, issuedAt.UTC(), sid, time.Time{}, true)
+}
+
+func (sm *SessionManager) issue(ctx context.Context, w http.ResponseWriter, r *http.Request, user *store.User, authenticatedAt time.Time, sid string, stepUpAt time.Time, exportOnly bool) (*store.Session, string, error) {
 	rawToken := crypto.RandomHex(32)
 	tokenHash := crypto.SHA256Hex([]byte(rawToken))
 
@@ -57,15 +64,19 @@ func (sm *SessionManager) issue(ctx context.Context, w http.ResponseWriter, r *h
 		ttl = 7 * 24 * time.Hour
 	}
 
+	if exportOnly && ttl > time.Hour {
+		ttl = time.Hour
+	}
 	sess := &store.Session{
-		TokenHash: tokenHash,
-		UserID:    user.ID,
-		UserAgent: r.UserAgent(),
-		IPAddress: ClientIP(r, sm.config.TrustedProxies),
-		CreatedAt: authenticatedAt,
-		ExpiresAt: time.Now().UTC().Add(ttl),
-		SSOSID:    sid,
-		StepUpAt:  stepUpAt,
+		ExportOnly: exportOnly,
+		TokenHash:  tokenHash,
+		UserID:     user.ID,
+		UserAgent:  r.UserAgent(),
+		IPAddress:  ClientIP(r, sm.config.TrustedProxies),
+		CreatedAt:  authenticatedAt,
+		ExpiresAt:  time.Now().UTC().Add(ttl),
+		SSOSID:     sid,
+		StepUpAt:   stepUpAt,
 	}
 
 	if err := sm.store.Sessions().CreateSession(ctx, sess, user.PasswordHash, user.TOTPEnabled); err != nil {
@@ -105,7 +116,12 @@ func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *st
 	if err != nil {
 		return nil, nil, err
 	}
-	active, err := store.ActivePrincipal(r.Context(), sm.store, user)
+	var active bool
+	if sess.ExportOnly {
+		active, err = sm.store.Drive().ExportPrincipal(r.Context(), user.ID)
+	} else {
+		active, err = store.ActivePrincipal(r.Context(), sm.store, user)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -120,6 +136,10 @@ func (sm *SessionManager) AuthenticateRequest(r *http.Request) (*store.User, *st
 	// Recheck after loading the user so an old session cannot inherit a cleared flag.
 	if _, err := sm.store.Sessions().GetSession(r.Context(), tokenHash); err != nil {
 		return nil, nil, err
+	}
+
+	if sess.ExportOnly && !((r.Method == http.MethodGet && (r.URL.Path == "/api/export" || r.URL.Path == "/api/auth/me")) || (r.Method == http.MethodPost && r.URL.Path == "/api/auth/logout")) {
+		return nil, nil, ErrExportOnly
 	}
 
 	// A restricted session never authorizes product operations or private settings.

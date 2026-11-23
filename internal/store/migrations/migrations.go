@@ -312,6 +312,12 @@ UPDATE users SET directory_rev = 0;`,
 		SQLite:   `CREATE TABLE IF NOT EXISTS sso_logout_tokens (jti TEXT PRIMARY KEY, expires_at DATETIME NOT NULL);`,
 		Postgres: `CREATE TABLE IF NOT EXISTS sso_logout_tokens (jti TEXT PRIMARY KEY, expires_at TIMESTAMPTZ NOT NULL);`,
 	},
+	{
+		Version:  13,
+		Name:     "export_only_session",
+		SQLite:   `ALTER TABLE sessions ADD COLUMN export_only BOOLEAN NOT NULL DEFAULT false;`,
+		Postgres: `ALTER TABLE sessions ADD COLUMN export_only BOOLEAN NOT NULL DEFAULT false;`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

@@ -22,6 +22,8 @@ type IdentityClaims struct {
 	Provider          string `json:"provider"` // "kysignon", "oidc", "saml"
 	// OrgID is a multi-tenant KyIdentity's org_id claim; a single-tenant one sends none.
 	OrgID string `json:"-"`
+	// ExportOnly restricts a verified multi-tenant login to personal data export.
+	ExportOnly bool `json:"-"`
 	// SessionID is the provider's ID token `sid`; back-channel logout names the login by it.
 	SessionID string `json:"sid,omitempty"`
 	// IssuedAt is the ID token's iat: when the provider vouched for this login.

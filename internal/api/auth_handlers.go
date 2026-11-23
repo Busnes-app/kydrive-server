@@ -155,12 +155,16 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"authenticated":   true,
 		"user":            user,
 		"open_in_new_tab": newTab,
 		"version":         appversion.String(),
-	})
+	}
+	if sess.ExportOnly {
+		out["export_only"] = true
+	}
+	s.writeJSON(w, http.StatusOK, out)
 }
 
 // handleSetPreferences stores the signed-in user's own display preferences.

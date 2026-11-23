@@ -113,24 +113,31 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if c, err := r.Cookie("ky_stepup_" + state); err == nil {
+		if s.multi() && claims.ExportOnly {
+			s.writeError(w, http.StatusForbidden, "Export-only sign-in cannot step up")
+			return
+		}
 		s.finishSSOStepUp(w, r, state, c.Value, claims)
 		return
 	}
 
-	// Multi-tenant: the token names the org, which must be active, and accounts are created at
-	// first sign-in (inbound SCIM is off). Single-tenant ignores the claim.
+	// Multi-tenant: ordinary sign-in requires an active org. A verified export-only
+	// claim takes the separate admission check below and never provisions an account.
 	multi, org := s.multi(), ""
+	exportOnly := multi && claims.ExportOnly
 	if multi {
 		if org = claims.OrgID; org == "" {
 			s.writeError(w, http.StatusForbidden, "User account not provisioned")
 			return
 		}
-		if active, err := s.orgActive(r.Context(), org); err != nil {
-			s.writeError(w, http.StatusInternalServerError, "Authentication error")
-			return
-		} else if !active {
-			s.writeError(w, http.StatusForbidden, "Account is inactive")
-			return
+		if !exportOnly {
+			if active, err := s.orgActive(r.Context(), org); err != nil {
+				s.writeError(w, http.StatusInternalServerError, "Authentication error")
+				return
+			} else if !active {
+				s.writeError(w, http.StatusForbidden, "Account is inactive")
+				return
+			}
 		}
 	}
 	user, err := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject)
@@ -138,7 +145,7 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		s.writeError(w, http.StatusForbidden, "User account not provisioned")
 		return
 	}
-	if errors.Is(err, store.ErrNotFound) && (s.config.SSO.AutoProvision || multi) {
+	if errors.Is(err, store.ErrNotFound) && (s.config.SSO.AutoProvision || multi) && !exportOnly {
 		user, err = s.store.Users().ApplyDirectoryUser(r.Context(), &store.DirectoryUser{
 			Provider: "kysignon", Subject: claims.Subject, Username: claims.PreferredUsername,
 			Email: claims.Email, DisplayName: claims.Name, Active: true, OrgID: org,
@@ -162,14 +169,24 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if active, err := store.ActivePrincipal(r.Context(), s.store, user); err != nil {
+	var active bool
+	if exportOnly {
+		active, err = s.store.Drive().ExportPrincipal(r.Context(), user.ID)
+	} else {
+		active, err = store.ActivePrincipal(r.Context(), s.store, user)
+	}
+	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Authentication error")
 		return
 	} else if !active {
 		s.writeError(w, 403, "Account is inactive")
 		return
 	}
-	_, _, err = s.sessions.IssueSSOSession(r.Context(), w, r, user, claims.SessionID, claims.IssuedAt)
+	if exportOnly {
+		_, _, err = s.sessions.IssueExportSession(r.Context(), w, r, user, claims.SessionID, claims.IssuedAt)
+	} else {
+		_, _, err = s.sessions.IssueSSOSession(r.Context(), w, r, user, claims.SessionID, claims.IssuedAt)
+	}
 	if errors.Is(err, store.ErrSSOSessionEnded) {
 		s.writeError(w, http.StatusUnauthorized, "SSO session already ended")
 		return
@@ -179,7 +196,11 @@ func (s *Server) handleKySignOnCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	back := "/"
+	if exportOnly {
+		back = "/api/export"
+	}
+	http.Redirect(w, r, back, http.StatusFound)
 }
 
 // inOrg reports whether account u is in org, which a multi-tenant directory asserted at entry.

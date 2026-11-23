@@ -26,18 +26,19 @@ import (
 
 // fakeKySignOn is a TLS identity provider whose token endpoint returns the next ID token.
 type fakeKySignOn struct {
-	key     *rsa.PrivateKey
-	issuer  string
-	idToken string
-	org     string            // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
-	orgs    string            // the /api/suite/orgs answer
-	polls   int               // /api/suite/orgs calls
-	groups  int               // /api/suite/groups calls
-	orgOf   []string          // each /api/suite/groups call's org_id
-	byOrg   map[string]string // the /api/suite/groups answer per org_id, else no groups
-	erased  string            // the /api/suite/erased answer, else none
-	asked   []string          // each /api/suite/erased call's since
-	down    bool              // /api/suite/erased fails
+	key        *rsa.PrivateKey
+	issuer     string
+	idToken    string
+	exportOnly bool              // export_only in the next ID token
+	org        string            // org_id in the next ID and logout tokens, as a multi-tenant KyIdentity sends
+	orgs       string            // the /api/suite/orgs answer
+	polls      int               // /api/suite/orgs calls
+	groups     int               // /api/suite/groups calls
+	orgOf      []string          // each /api/suite/groups call's org_id
+	byOrg      map[string]string // the /api/suite/groups answer per org_id, else no groups
+	erased     string            // the /api/suite/erased answer, else none
+	asked      []string          // each /api/suite/erased call's since
+	down       bool              // /api/suite/erased fails
 }
 
 func newFakeKySignOn(t *testing.T) *fakeKySignOn {
@@ -149,6 +150,9 @@ func ssoLoginAt(t *testing.T, srv *api.Server, f *fakeKySignOn, sub, sid string,
 	claims := map[string]any{"sub": sub, "sid": sid, "nonce": q.Get("nonce"), "preferred_username": sub, "iat": iat.Unix()}
 	if f.org != "" {
 		claims["org_id"] = f.org
+	}
+	if f.exportOnly {
+		claims["export_only"] = true
 	}
 	f.idToken = f.sign(t, "", claims)
 	req := httptest.NewRequest(http.MethodGet, "/api/sso/kysignon/callback?code=c&state="+q.Get("state"), nil)

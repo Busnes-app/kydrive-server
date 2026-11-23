@@ -52,6 +52,8 @@ type Session struct {
 	IPAddress string    `json:"ip_address"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	// ExportOnly never authorizes ordinary product operations.
+	ExportOnly bool `json:"-"`
 	// SSOSID is the identity provider's sid for an SSO login; empty for local sign-in.
 	SSOSID string `json:"-"`
 	// StepUpAt is when the user last re-proved who they are in this session; zero if never.

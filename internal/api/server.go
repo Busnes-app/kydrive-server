@@ -413,7 +413,9 @@ func (s *Server) requireAdmin(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _, err := s.sessions.AuthenticateRequest(r)
 		if err != nil {
-			if errors.Is(err, auth.ErrPasswordChangeRequired) {
+			if errors.Is(err, auth.ErrExportOnly) {
+				s.writeError(w, http.StatusForbidden, "Only personal data export is available")
+			} else if errors.Is(err, auth.ErrPasswordChangeRequired) {
 				s.writeJSON(w, http.StatusForbidden, map[string]string{"error": "Change your password before continuing", "code": "password_change_required"})
 			} else {
 				s.writeError(w, http.StatusUnauthorized, "Authentication required")
@@ -510,7 +512,9 @@ func (s *Server) requireAuthenticated(h http.HandlerFunc) http.HandlerFunc {
 		}
 		user, sess, err := s.sessions.AuthenticateRequest(r)
 		if err != nil {
-			if errors.Is(err, auth.ErrPasswordChangeRequired) {
+			if errors.Is(err, auth.ErrExportOnly) {
+				s.writeError(w, http.StatusForbidden, "Only personal data export is available")
+			} else if errors.Is(err, auth.ErrPasswordChangeRequired) {
 				s.writeJSON(w, http.StatusForbidden, map[string]string{"error": "Change your password before continuing", "code": "password_change_required"})
 			} else {
 				s.writeError(w, http.StatusUnauthorized, "Authentication required")

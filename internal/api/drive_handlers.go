@@ -24,6 +24,9 @@ import (
 const uploadLimit int64 = 128 << 20
 
 func (s *Server) driveRoutes() {
+	if s.multi() {
+		s.mux.HandleFunc("GET /api/export", s.requireAuthenticated(s.driveExport))
+	}
 	s.mux.HandleFunc("GET /api/drive/status", s.platformAdmin(s.driveStatus))
 	s.mux.HandleFunc("GET /api/drive/workspaces/{id}/directory", s.requireAuthenticated(s.driveWorkspaceDirectory))
 	s.mux.HandleFunc("GET /editor.html", s.requireAuthenticated(s.editorPage))

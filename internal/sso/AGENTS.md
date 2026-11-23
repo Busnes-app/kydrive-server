@@ -11,6 +11,7 @@ Owns the application adapters around OAuth/OIDC login and KyIdentity's `syncauth
 - The verifier fetches JWKS through `strongJWKSTransport`: 1 MiB cap, no redirects, every RSA modulus at least 2048 bits, parsed with go-oidc's envelope and go-jose's case-sensitive members so it checks the key the verifier uses. Provider and verifier are built together under the discovery mutex; go-oidc keeps caching and rotation.
 - With `GODEBUG=fips140=on`, issuer, authorization, token and JWKS URLs must be HTTPS without credentials and discovery/token redirects are refused; the caller's `oauth2.HTTPClient` (roots, transport) is kept. `docs/STRONG-CRYPTO.md` owns the profile.
 - PKCE with `S256` is enforced on all OAuth/OIDC authorization requests.
+- `IdentityClaims.ExportOnly` reads the boolean `export_only` only from the verified ID token. The API ignores it on single-tenant installs; on multi-tenant installs it can issue only a separate export session, never an ordinary one or a step-up.
 - ID tokens require provider signature, issuer, audience, expiry, and one-time nonce verification before claims are trusted.
 - OAuth discovery, authorization URLs, PKCE parameters, code exchange, and token verification are delegated to `golang.org/x/oauth2` and `coreos/go-oidc`; application code only maps verified claims.
 - There is no generic OIDC client and no SAML service provider; add one only with a working callback/ACS route.
