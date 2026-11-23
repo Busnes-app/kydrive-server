@@ -218,3 +218,55 @@ func TestS3ReadsHonourCancellation(t *testing.T) {
 		t.Fatalf("read after Close: %v", err)
 	}
 }
+
+// A draft larger than one part is uploaded in parts and reads back whole. A multipart upload
+// that fails partway, here cancelled after its first part, publishes nothing and leaves no
+// parts stored.
+func TestS3PublishesInParts(t *testing.T) {
+	b, err := objects.NewBucket(s3Config(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := prefix(t)
+	st := b.Store(p)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	objects.SetPartSizeForTest(t, 5<<20, func(n int32) {
+		if n == 1 {
+			cancel()
+		}
+	})
+	data := make([]byte, 11<<20+123) // three parts, the last short
+	rand.Read(data)
+	put := func(ctx context.Context, name string) error {
+		w, err := st.Create(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		return w.Publish(name)
+	}
+	if err := put(ctx, "cut"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled multipart upload: %v", err)
+	}
+	if _, err := st.Open(context.Background(), "cut"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a cut upload was published: %v", err)
+	}
+	if n, err := objects.PendingUploadsForTest(context.Background(), b, p); err != nil || n != 0 {
+		t.Fatalf("a cut upload left %d pending: %v", n, err)
+	}
+	if err := put(context.Background(), "whole"); err != nil {
+		t.Fatal(err)
+	}
+	o, err := st.Open(context.Background(), "whole")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer o.Close()
+	got := make([]byte, len(data))
+	if n, err := o.ReadAt(got, 0); (err != nil && err != io.EOF) || n != len(data) || o.Size() != int64(len(data)) || !bytes.Equal(got, data) {
+		t.Fatalf("read back %d of %d bytes (size %d): %v", n, len(data), o.Size(), err)
+	}
+}

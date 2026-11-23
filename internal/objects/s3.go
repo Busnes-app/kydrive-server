@@ -15,8 +15,16 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
+
+// partSize is the multipart part size. A draft larger than one part is uploaded in parts: S3
+// refuses a single PUT over 5 GiB, and an upload over 10,000 parts.
+var partSize int64 = 64 << 20
+
+// partDone runs after each uploaded part (tests only).
+var partDone = func(int32) {}
 
 // S3Config names a bucket on an S3-compatible service. The secret is never logged or put in an
 // error.
@@ -38,7 +46,7 @@ type Bucket struct {
 }
 
 // NewBucket opens cfg's bucket. Drafts are written to files in spool, a private local
-// directory, and put whole on Publish.
+// directory, and uploaded on Publish (in parts when larger than partSize).
 func NewBucket(cfg S3Config, spool string) (*Bucket, error) {
 	u, err := url.Parse(cfg.Endpoint)
 	if err != nil || u.Host == "" || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
@@ -111,13 +119,49 @@ func (w *s3Draft) Publish(name string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = w.Seek(0, io.SeekStart); err != nil {
-		return err
+	if size > partSize {
+		return wrap("put", key, w.putParts(key, size))
 	}
 	_, err = w.st.b.c.PutObject(w.ctx, &s3.PutObjectInput{
-		Bucket: aws.String(w.st.b.bucket), Key: aws.String(key), Body: w.File, ContentLength: aws.Int64(size),
+		Bucket: aws.String(w.st.b.bucket), Key: aws.String(key), Body: io.NewSectionReader(w.File, 0, size), ContentLength: aws.Int64(size),
 	})
 	return wrap("put", key, err)
+}
+
+// putParts uploads the draft as a multipart upload, and aborts it on any failure so no parts
+// are left stored.
+func (w *s3Draft) putParts(key string, size int64) (err error) {
+	b := w.st.b
+	part := max(partSize, (size+9999)/10000)
+	up, err := b.c.CreateMultipartUpload(w.ctx, &s3.CreateMultipartUploadInput{Bucket: aws.String(b.bucket), Key: aws.String(key)})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil { // even after cancellation
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(w.ctx), 30*time.Second)
+			defer cancel()
+			_, _ = b.c.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{Bucket: aws.String(b.bucket), Key: aws.String(key), UploadId: up.UploadId})
+		}
+	}()
+	var parts []types.CompletedPart
+	for n, off := int32(1), int64(0); off < size; n, off = n+1, off+part {
+		l := min(part, size-off)
+		p, err := b.c.UploadPart(w.ctx, &s3.UploadPartInput{
+			Bucket: aws.String(b.bucket), Key: aws.String(key), UploadId: up.UploadId, PartNumber: aws.Int32(n),
+			Body: io.NewSectionReader(w.File, off, l), ContentLength: aws.Int64(l),
+		})
+		if err != nil {
+			return err
+		}
+		parts = append(parts, types.CompletedPart{ETag: p.ETag, PartNumber: aws.Int32(n)})
+		partDone(n)
+	}
+	_, err = b.c.CompleteMultipartUpload(w.ctx, &s3.CompleteMultipartUploadInput{
+		Bucket: aws.String(b.bucket), Key: aws.String(key), UploadId: up.UploadId,
+		MultipartUpload: &types.CompletedMultipartUpload{Parts: parts},
+	})
+	return err
 }
 
 func (w *s3Draft) Discard() error {
