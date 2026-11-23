@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -24,7 +25,9 @@ const (
 	viewPath        = "/api/suite/view/"
 )
 
-func (s *Server) viewRoot() string { return filepath.Join(s.config.Database.DataDir, "view") }
+func (s *Server) viewRoot() objects.Local {
+	return objects.Dir(filepath.Join(s.config.Database.DataDir, "view"))
+}
 
 func (s *Server) kypostViewTicket(r *http.Request, user *store.User, _ *kypostPeer, body []byte) kypostReply {
 	if s.editor == nil {
@@ -204,11 +207,7 @@ func (s *Server) viewDownload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrNotFound)
 		return
 	}
-	path, err := drive.BlobPath(s.viewRoot(), c.Blob)
-	var file io.ReadSeekCloser
-	if err == nil {
-		file, err = drive.OpenBlob(path, s.config.Security.EncryptionKey, true, c.Size)
-	}
+	file, err := drive.OpenBlob(s.viewRoot(), c.Blob, s.config.Security.EncryptionKey, true, c.Size)
 	if err != nil {
 		log.Printf("viewing copy %s: %v", c.ID, err)
 		s.writeError(w, 503, "Viewing copy unavailable")

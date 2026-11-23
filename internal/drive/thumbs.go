@@ -12,8 +12,8 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
-	"os"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
 )
@@ -293,22 +293,17 @@ func orient(img *image.NRGBA, o int) *image.NRGBA {
 
 // WriteThumb seals a thumbnail under key as root/<blob>: named by blob, never by digest, so the
 // cache cannot confirm what a file holds. It is bound as a cache entry, so it never opens as a blob.
-func WriteThumb(root string, key []byte, blob string, thumb []byte) error {
-	path, err := BlobPath(root, blob)
-	if err != nil {
+func WriteThumb(st objects.Store, key []byte, blob string, thumb []byte) error {
+	if _, err := BlobPath("", blob); err != nil {
 		return err
 	}
-	tmp, _, err := stage(root, key, cacheBinding(blob), bytes.NewReader(thumb), int64(len(thumb)))
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp)
-	return os.Rename(tmp, path)
+	_, err := writeObject(st, key, blob, cacheBinding(blob), bytes.NewReader(thumb), max(int64(len(thumb)), 1))
+	return err
 }
 
 // ReadThumb opens a cached thumbnail; a missing one is fs.ErrNotExist.
-func ReadThumb(root string, key []byte, blob string) ([]byte, error) {
-	f, err := OpenThumb(root, key, blob)
+func ReadThumb(st objects.Store, key []byte, blob string) ([]byte, error) {
+	f, err := OpenThumb(st, key, blob)
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +313,9 @@ func ReadThumb(root string, key []byte, blob string) ([]byte, error) {
 
 // OpenThumb streams a cache entry (thumbnail or document text), authenticating each chunk as
 // it is read; a missing one is fs.ErrNotExist.
-func OpenThumb(root string, key []byte, blob string) (io.ReadSeekCloser, error) {
-	path, err := BlobPath(root, blob)
-	if err != nil {
+func OpenThumb(st objects.Store, key []byte, blob string) (io.ReadSeekCloser, error) {
+	if _, err := BlobPath("", blob); err != nil {
 		return nil, err
 	}
-	return openFile(path, key, true, -1, cacheBinding(blob))
+	return openObject(st, blob, key, true, -1, cacheBinding(blob))
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 	"github.com/google/uuid"
@@ -95,7 +96,7 @@ func setupMultiServer(t *testing.T) *multiAPI {
 			t.Fatal(err)
 		}
 		ids["folder"] = folder.ID
-		v, err := drive.WriteBlob(filepath.Join(dir, "blobs"), cfg.Security.EncryptionKey, strings.NewReader("secret plan of "+org), 1024)
+		v, err := drive.WriteBlob(objects.Dir(filepath.Join(dir, "blobs")), cfg.Security.EncryptionKey, strings.NewReader("secret plan of "+org), 1024)
 		if err != nil {
 			t.Fatal(err)
 		}

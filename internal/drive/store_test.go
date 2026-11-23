@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -44,7 +45,7 @@ var testKey = testdb.Key
 
 func blob(t *testing.T, root, body string) drive.Version {
 	t.Helper()
-	v, e := drive.WriteBlob(root, testKey, strings.NewReader(body), 1024)
+	v, e := drive.WriteBlob(objects.Dir(root), testKey, strings.NewReader(body), 1024)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -206,7 +207,7 @@ func TestInterruptedAndOversizedBlobsNeverPublish(t *testing.T) {
 		body  interface{ Read([]byte) (int, error) }
 		limit int64
 	}{{brokenReader{}, 8}, {strings.NewReader("too large"), 2}} {
-		if _, err := drive.WriteBlob(root, testKey, reader.body, reader.limit); err == nil {
+		if _, err := drive.WriteBlob(objects.Dir(root), testKey, reader.body, reader.limit); err == nil {
 			t.Fatal("failed stream accepted")
 		}
 		files, err := os.ReadDir(root)

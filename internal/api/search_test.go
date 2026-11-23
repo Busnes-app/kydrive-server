@@ -26,6 +26,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/search"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
@@ -72,7 +73,7 @@ func newSearchWorld(t *testing.T) *searchWorld {
 // put publishes body as user, a new file (f.ID empty) or a new version of f.
 func (w *searchWorld) put(t *testing.T, user string, f drive.File, body []byte) drive.File {
 	t.Helper()
-	v, err := drive.WriteBlob(filepath.Join(w.cfg.Database.DataDir, "blobs"), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,7 +620,7 @@ func TestContentSearchKeepsNoPlaintextAtRest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = drive.RemoveBlobs(filepath.Join(w.cfg.Database.DataDir, "blobs"), blobs); err != nil {
+		if err = drive.RemoveBlobs(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), blobs); err != nil {
 			t.Fatal(err)
 		}
 	}

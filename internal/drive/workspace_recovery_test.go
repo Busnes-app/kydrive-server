@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // A workspace holding files is deleted only when the admin names it. Deleting takes away every
@@ -218,7 +219,7 @@ func TestPurgeDeletedWorkspaces(t *testing.T) {
 	if len(purged) != 1 || purged[0] != soloBlob {
 		t.Fatalf("unreferenced blobs %v, want [%s]", purged, soloBlob)
 	}
-	must(drive.RemoveBlobs(blobs, purged))
+	must(drive.RemoveBlobs(objects.Dir(blobs), purged))
 	if _, err := os.Stat(filepath.Join(blobs, soloBlob)); !os.IsNotExist(err) {
 		t.Fatalf("solo blob kept: %v", err)
 	}

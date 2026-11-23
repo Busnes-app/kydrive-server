@@ -144,6 +144,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `internal/backup/` — recoveryclient adapter, consistent metadata, Restic bulk binding and restore drill.
 - `internal/testdb/` — disposable test databases.
 - `internal/qmark/` — PostgreSQL through pgx with SQLite's `?` placeholders.
+- `internal/objects/` — the store of blobs and blob caches: a directory today, S3-compatible storage for the hosted install (tenancy R2).
 - `internal/api/` — HTTP transport, authorization middleware, editor page and the MCP endpoint.
 - `internal/agentskill/` — the embedded AI agent skill served at `/agent/skills/kydrive/SKILL.md`.
 - `internal/extract/` — bounded, standard-library text extraction from Office Open XML and OpenDocument files.

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 func managerFixture(t *testing.T) (*drive.Store, drive.Workspace, string) {
@@ -53,16 +54,16 @@ func TestPurgeKeepsBlobsStillReferenced(t *testing.T) {
 	if err != nil || len(blobs) != 1 || blobs[0] != c.Blob {
 		t.Fatalf("last reference: %v %v", blobs, err)
 	}
-	if err = drive.RemoveBlobs(root, blobs); err != nil {
+	if err = drive.RemoveBlobs(objects.Dir(root), blobs); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = os.Stat(filepath.Join(root, c.Blob)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("blob kept: %v", err)
 	}
-	if err = drive.RemoveBlobs(root, blobs); err != nil {
+	if err = drive.RemoveBlobs(objects.Dir(root), blobs); err != nil {
 		t.Fatalf("removing twice must be harmless: %v", err)
 	}
-	if err = drive.RemoveBlobs(root, []string{"../escape"}); !errors.Is(err, drive.ErrInvalid) {
+	if err = drive.RemoveBlobs(objects.Dir(root), []string{"../escape"}); !errors.Is(err, drive.ErrInvalid) {
 		t.Fatalf("non-UUID blob accepted: %v", err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -39,7 +40,7 @@ func readable(t *testing.T, d *drive.Store, root string, ids ...string) {
 		}
 		for _, v := range vs {
 			path, _ := drive.BlobPath(root, v.Blob)
-			r, err := drive.OpenBlob(path, testKey, v.Sealed, v.Size)
+			r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, v.Sealed, v.Size)
 			if err != nil {
 				t.Fatalf("%s r%d: %v", id, v.Revision, err)
 			}
@@ -152,7 +153,7 @@ func TestSealLegacyBlobsRacesPurgeAndCopy(t *testing.T) {
 	}
 	d.SetTrash(ctx, "worker", f.ID, 1, true)
 	blobs, err := d.PurgeFile(ctx, "worker", f.ID)
-	if err != nil || len(blobs) != 1 || drive.RemoveBlobs(root, blobs) != nil {
+	if err != nil || len(blobs) != 1 || drive.RemoveBlobs(objects.Dir(root), blobs) != nil {
 		t.Fatalf("purge %v %v", blobs, err)
 	}
 	if err = drive.SwapBlob(ctx, d, root, old.Blob, v); err != nil {
@@ -224,7 +225,7 @@ func TestSealLegacyBlobsConcurrentWithPurge(t *testing.T) {
 				d.SetTrash(ctx, "worker", id, f.Revision, true)
 				blobs, err := d.PurgeFile(ctx, "worker", id)
 				if err == nil {
-					drive.RemoveBlobs(root, blobs)
+					drive.RemoveBlobs(objects.Dir(root), blobs)
 				}
 				continue
 			}
@@ -238,7 +239,7 @@ func TestSealLegacyBlobsConcurrentWithPurge(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		drive.RemoveBlobs(root, blobs)
+		drive.RemoveBlobs(objects.Dir(root), blobs)
 	})
 	wg.Wait()
 	if _, err := d.SealLegacyBlobs(ctx, root, testKey); err != nil {

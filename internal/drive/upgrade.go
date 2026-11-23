@@ -100,7 +100,7 @@ func (s *Store) stageUpgrade(ctx context.Context, root string, key []byte, id st
 	if err != nil {
 		return "", size, err
 	}
-	old, err := OpenBlob(path, key, true, size)
+	old, err := openFile(path, key, true, size, blobBinding(id))
 	if err != nil {
 		return "", size, err
 	}

@@ -12,31 +12,50 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
-// WriteBlob seals r under key, bound to a new blob ID, into a unique staging file and
-// publishes it only after a durable flush. Digest and Size describe the plaintext.
-func WriteBlob(root string, key []byte, r io.Reader, limit int64) (Version, error) {
+// WriteBlob seals r under key, bound to a new blob ID, into a draft in st and publishes it only
+// after a durable flush. Digest and Size describe the plaintext.
+func WriteBlob(st objects.Store, key []byte, r io.Reader, limit int64) (Version, error) {
 	id := uuid.NewString()
-	tmp, v, err := stage(root, key, blobBinding(id), r, limit)
+	v, err := writeObject(st, key, id, blobBinding(id), r, limit)
 	if err != nil {
 		return v, err
 	}
-	defer os.Remove(tmp)
 	v.Blob, v.Sealed = id, true
-	if err = os.Rename(tmp, filepath.Join(root, id)); err != nil {
-		return v, err
-	}
-	if err = SyncDirectory(root); err != nil {
-		os.Remove(filepath.Join(root, id))
-		return v, err
-	}
 	return v, nil
 }
 
+// writeObject seals r under key and bind as st's object name.
+func writeObject(st objects.Store, key []byte, name, bind string, r io.Reader, limit int64) (Version, error) {
+	var v Version
+	if limit < 1 {
+		return v, ErrInvalid
+	}
+	w, err := st.Create(context.Background())
+	if err != nil {
+		return v, err
+	}
+	defer w.Discard()
+	h := sha256.New()
+	n, err := seal(w, key, bind, io.TeeReader(io.LimitReader(r, limit+1), h))
+	if err != nil {
+		return v, err
+	}
+	if n > limit {
+		return v, ErrTooLarge
+	}
+	if err = w.Publish(name); err != nil {
+		return v, err
+	}
+	return Version{Digest: hex.EncodeToString(h.Sum(nil)), Size: n}, nil
+}
+
 // stage seals r under key and bind into a synced, closed staging file in root and returns its
-// path; the caller renames or removes it.
+// path; the caller renames or removes it. Only the single-tenant format upgrade, which replaces
+// a file in place, still uses it.
 func stage(root string, key []byte, bind string, r io.Reader, limit int64) (string, Version, error) {
 	var v Version
 	if limit < 1 {
@@ -89,20 +108,20 @@ func BlobPath(root, id string) (string, error) {
 	return filepath.Join(root, id), nil
 }
 
-// RemoveBlobs deletes blobs whose last reference was purged. A missing file is already gone.
-func RemoveBlobs(root string, ids []string) error {
+// RemoveBlobs deletes blobs whose last reference was purged. A missing blob is already gone.
+// It runs to the end whatever the request does, since the rows are already gone.
+func RemoveBlobs(st objects.Store, ids []string) error {
 	var errs []error
+	valid := make([]string, 0, len(ids))
 	for _, id := range ids {
-		path, err := BlobPath(root, id)
-		if err == nil {
-			err = os.Remove(path)
-		}
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if _, err := BlobPath("", id); err != nil {
 			errs = append(errs, err)
+			continue
 		}
+		valid = append(valid, id)
 	}
 	if len(ids) > 0 {
-		errs = append(errs, SyncDirectory(root))
+		errs = append(errs, st.Remove(context.Background(), valid...))
 	}
 	return errors.Join(errs...)
 }
@@ -110,35 +129,43 @@ func RemoveBlobs(root string, ids []string) error {
 // SweepOrphans removes staging files left by a crash and blobs no version names. Only files
 // older than grace are touched, so an upload between its rename and its commit is safe; only
 // names WriteBlob creates are considered.
-func (s *Store) SweepOrphans(ctx context.Context, root string, grace time.Duration) (int, error) {
-	entries, err := os.ReadDir(root)
-	if errors.Is(err, fs.ErrNotExist) {
-		return 0, nil
-	}
+func (s *Store) SweepOrphans(ctx context.Context, st objects.Store, grace time.Duration) (int, error) {
+	cutoff := time.Now().Add(-grace)
+	var drafts, orphans []string
+	err := st.List(ctx, func(name string, modified time.Time) error {
+		if modified.After(cutoff) {
+			return nil
+		}
+		if strings.HasPrefix(name, ".upload-") {
+			drafts = append(drafts, name)
+			return nil
+		}
+		if _, err := BlobPath("", name); err != nil {
+			return nil
+		}
+		var n int
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_versions WHERE blob=?`, name).Scan(&n); err != nil || n > 0 {
+			return err
+		}
+		orphans = append(orphans, name)
+		return nil
+	})
 	if err != nil {
 		return 0, err
 	}
-	cutoff := time.Now().Add(-grace)
 	removed := 0
 	var errs []error
-	for _, e := range entries {
-		info, err := e.Info()
-		if err != nil || !info.Mode().IsRegular() || info.ModTime().After(cutoff) {
-			continue
-		}
-		if !strings.HasPrefix(e.Name(), ".upload-") {
-			if _, err := BlobPath(root, e.Name()); err != nil {
+	if l, ok := st.(objects.Local); ok {
+		for _, name := range drafts {
+			if err := os.Remove(filepath.Join(l.Root(), name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, err)
 				continue
 			}
-			var n int
-			if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_versions WHERE blob=?`, e.Name()).Scan(&n); err != nil {
-				return removed, err
-			}
-			if n > 0 {
-				continue
-			}
+			removed++
 		}
-		if err := os.Remove(filepath.Join(root, e.Name())); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	}
+	for _, name := range orphans {
+		if err := st.Remove(ctx, name); err != nil {
 			errs = append(errs, err)
 			continue
 		}

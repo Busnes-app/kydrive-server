@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // KyPost acting for a user (a peer context) may add new files to that user's Mail attachments
@@ -104,7 +105,7 @@ func (e *peerEnv) save(t *testing.T, user, name, body string) drive.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, f, err := e.d.TicketUpload(e.peer, e.staging, e.blobs, testKey, tk, 0, int64(len(body)), strings.NewReader(body))
+	_, f, err := e.d.TicketUpload(e.peer, e.staging, objects.Dir(e.blobs), testKey, tk, 0, int64(len(body)), strings.NewReader(body))
 	if err != nil || f == nil {
 		t.Fatalf("ticket upload: %v %v", f, err)
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -32,7 +33,7 @@ func plaintext(n int) []byte {
 func sealBytes(t *testing.T, p []byte) (string, drive.Version) {
 	t.Helper()
 	root := t.TempDir()
-	v, err := drive.WriteBlob(root, testKey, bytes.NewReader(p), int64(len(p))+1)
+	v, err := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(p), int64(len(p))+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestWriteBlobRefusesTruncatedBody(t *testing.T) {
 	for _, n := range []int{0, 5, chunk - 1, chunk, chunk + 5} {
 		r := io.MultiReader(bytes.NewReader(plaintext(n)), iotest.ErrReader(io.ErrUnexpectedEOF))
 		root := t.TempDir()
-		if _, err := drive.WriteBlob(root, testKey, r, 1<<20); err == nil {
+		if _, err := drive.WriteBlob(objects.Dir(root), testKey, r, 1<<20); err == nil {
 			t.Fatalf("%d bytes then a cut connection: blob published", n)
 		}
 		if entries, _ := os.ReadDir(root); len(entries) != 0 {
@@ -85,7 +86,7 @@ func TestSealedBlobRoundTrip(t *testing.T) {
 		if n >= 32 && bytes.Contains(raw, p[:32]) {
 			t.Fatalf("%d: plaintext on disk", n)
 		}
-		r, err := drive.OpenBlob(path, testKey, true, int64(n))
+		r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, true, int64(n))
 		if err != nil {
 			t.Fatal(n, err)
 		}
@@ -117,7 +118,7 @@ func TestKYB1FixtureStillReads(t *testing.T) {
 	if !drive.StoredSizeOK(true, chunk+5, int64(len(raw))) || drive.SealedSize(chunk+5) == int64(len(raw)) {
 		t.Fatal("KYB1 size not recognised as KYB1")
 	}
-	r, err := drive.OpenBlob(path, testKey, true, chunk+5)
+	r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, true, chunk+5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +134,7 @@ func TestSealedBlobSeeksEveryOffset(t *testing.T) {
 		n := 2*chunk + 5
 		p := plaintext(n)
 		path, _ := write(t, p)
-		r, err := drive.OpenBlob(path, testKey, true, int64(n))
+		r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, true, int64(n))
 		if err != nil {
 			t.Fatal(name, err)
 		}
@@ -175,7 +176,7 @@ func openRaw(t *testing.T, name string, raw, key, p []byte, size int) error {
 	if err := os.WriteFile(bad, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	r, err := drive.OpenBlob(bad, key, true, int64(size))
+	r, err := drive.OpenBlob(objects.Dir(filepath.Dir(bad)), filepath.Base(bad), key, true, int64(size))
 	if err != nil {
 		return err
 	}
@@ -242,11 +243,11 @@ func TestSealedBlobRejectsTampering(t *testing.T) {
 		}
 		// The empty blob is still one authenticated chunk.
 		empty, _ := write(t, nil)
-		if _, err := drive.OpenBlob(empty, wrongKey, true, 0); err == nil {
+		if _, err := drive.OpenBlob(objects.Dir(filepath.Dir(empty)), filepath.Base(empty), wrongKey, true, 0); err == nil {
 			t.Fatalf("%s: empty blob opened under the wrong key", name)
 		}
 		// A sealed blob is never served as plaintext.
-		if _, err := drive.OpenBlob(path, testKey, false, int64(len(p))); err == nil {
+		if _, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, false, int64(len(p))); err == nil {
 			t.Fatalf("%s: sealed blob opened as plaintext", name)
 		}
 	}
@@ -256,11 +257,11 @@ func TestSealedBlobRejectsTampering(t *testing.T) {
 // open, even when both hold the same number of bytes. Cache entries never open as blobs.
 func TestSealedBlobBoundToID(t *testing.T) {
 	root := t.TempDir()
-	a, err := drive.WriteBlob(root, testKey, bytes.NewReader(plaintext(chunk+9)), chunk+9)
+	a, err := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(plaintext(chunk+9)), chunk+9)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := drive.WriteBlob(root, testKey, bytes.NewReader(bytes.Repeat([]byte("b"), chunk+9)), chunk+9)
+	b, err := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(bytes.Repeat([]byte("b"), chunk+9)), chunk+9)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +273,7 @@ func TestSealedBlobBoundToID(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := t.TempDir()
-	if err = drive.WriteThumb(cache, testKey, a.Blob, plaintext(chunk+9)); err != nil {
+	if err = drive.WriteThumb(objects.Dir(cache), testKey, a.Blob, plaintext(chunk+9)); err != nil {
 		t.Fatal(err)
 	}
 	thumb, _ := os.ReadFile(filepath.Join(cache, a.Blob))
@@ -280,10 +281,10 @@ func TestSealedBlobBoundToID(t *testing.T) {
 		t.Fatal("cache entry opened as its blob")
 	}
 	os.WriteFile(filepath.Join(cache, b.Blob), rawA, 0600)
-	if _, err = drive.ReadThumb(cache, testKey, b.Blob); err == nil {
+	if _, err = drive.ReadThumb(objects.Dir(cache), testKey, b.Blob); err == nil {
 		t.Fatal("blob opened as a cache entry")
 	}
-	if got, err := drive.ReadThumb(cache, testKey, a.Blob); err != nil || !bytes.Equal(got, plaintext(chunk+9)) {
+	if got, err := drive.ReadThumb(objects.Dir(cache), testKey, a.Blob); err != nil || !bytes.Equal(got, plaintext(chunk+9)) {
 		t.Fatal("cache entry round trip", err)
 	}
 }
@@ -305,7 +306,7 @@ func TestSealedBlobServesRanges(t *testing.T) {
 	for name, write := range formats {
 		path, _ := write(t, p)
 		get := func(rng string) *httptest.ResponseRecorder {
-			r, err := drive.OpenBlob(path, testKey, true, int64(n))
+			r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, true, int64(n))
 			if err != nil {
 				t.Fatal(name, err)
 			}

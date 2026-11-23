@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
@@ -11,10 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 
 	"filippo.io/age"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // KYB2, written now: "KYB2" || an age v1 file (filippo.io/age: STREAM of ChaCha20-Poly1305
@@ -133,7 +133,7 @@ func seal(w io.Writer, key []byte, bind string, r io.Reader) (int64, error) {
 
 // sealedBlob reads KYB1.
 type sealedBlob struct {
-	f      *os.File
+	f      objects.Object
 	aead   cipher.AEAD
 	header []byte
 	size   int64
@@ -147,25 +147,43 @@ type sealedBlob struct {
 // exactly the size its format gives; its last chunk is authenticated before OpenBlob returns
 // and every other chunk before any of its bytes are read. A KYB2 blob opens only under the
 // file name (blob ID) it was written for.
-func OpenBlob(path string, key []byte, sealed bool, size int64) (io.ReadSeekCloser, error) {
+func OpenBlob(st objects.Store, id string, key []byte, sealed bool, size int64) (io.ReadSeekCloser, error) {
 	if size < 0 {
 		return nil, ErrInvalid
 	}
-	return openFile(path, key, sealed, size, blobBinding(filepath.Base(path)))
+	if _, err := BlobPath("", id); err != nil {
+		return nil, err
+	}
+	return openObject(st, id, key, sealed, size, blobBinding(id))
 }
 
-// openFile opens path as bound to bind. A sealed file of size -1 takes the size it proves.
+// openObject opens st's object name as bound to bind. A sealed object of size -1 takes the
+// size it proves.
+func openObject(st objects.Store, name string, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
+	f, err := st.Open(context.Background(), name)
+	if err != nil {
+		return nil, err
+	}
+	return closeOnError(openSealed(f, key, sealed, size, bind))(f)
+}
+
+// openFile opens path, a file outside any Store, as bound to bind.
 func openFile(path string, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
-	f, err := os.Open(path)
+	f, err := objects.OpenFile(path)
 	if err != nil {
 		return nil, err
 	}
-	b, err := openSealed(f, key, sealed, size, bind)
-	if err != nil {
-		f.Close()
-		return nil, err
+	return closeOnError(openSealed(f, key, sealed, size, bind))(f)
+}
+
+func closeOnError(r io.ReadSeekCloser, err error) func(io.Closer) (io.ReadSeekCloser, error) {
+	return func(c io.Closer) (io.ReadSeekCloser, error) {
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return r, nil
 	}
-	return b, nil
 }
 
 type ageBlob struct {
@@ -173,20 +191,16 @@ type ageBlob struct {
 	io.Closer
 }
 
-func openSealed(f *os.File, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	disk := info.Size()
+func openSealed(f objects.Object, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
+	disk := f.Size()
 	if !sealed {
 		if disk != size {
 			return nil, fmt.Errorf("blob size %d differs from %d", disk, size)
 		}
-		return f, nil
+		return ageBlob{io.NewSectionReader(f, 0, disk), f}, nil
 	}
 	magic := make([]byte, len(blobMagic))
-	if _, err = io.ReadFull(f, magic); err != nil {
+	if _, err := f.ReadAt(magic, 0); err != nil {
 		return nil, errSealed
 	}
 	switch string(magic) {
@@ -206,7 +220,7 @@ func openSealed(f *os.File, key []byte, sealed bool, size int64, bind string) (i
 	return nil, errSealed
 }
 
-func openV1(f *os.File, key []byte, size, disk int64) (io.ReadSeekCloser, error) {
+func openV1(f objects.Object, key []byte, size, disk int64) (io.ReadSeekCloser, error) {
 	if size < 0 {
 		var ok bool
 		if size, ok = plainSizeV1(disk); !ok {

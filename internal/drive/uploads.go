@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -214,7 +215,7 @@ func writeSegment(dir, path string, key []byte, r io.Reader, length int64) error
 // CompleteUpload publishes a fully received session as a file version and removes it. It ignores
 // cancellation: a proxy that times out on a long re-seal drops the connection, and stopping then
 // would only make every Retry re-seal the whole file again. The size cap bounds the work.
-func (s *Store) CompleteUpload(ctx context.Context, staging, blobs string, key []byte, user, id string) (File, error) {
+func (s *Store) CompleteUpload(ctx context.Context, staging string, blobs objects.Store, key []byte, user, id string) (File, error) {
 	ctx = context.WithoutCancel(ctx)
 	u, err := s.Upload(ctx, user, id)
 	if err != nil {
@@ -319,7 +320,7 @@ func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, k
 		return err
 	}
 	for _, g := range segments {
-		r, err := OpenBlob(filepath.Join(staging, id, g.path), key, true, g.size)
+		r, err := openFile(filepath.Join(staging, id, g.path), key, true, g.size, blobBinding(filepath.Base(g.path)))
 		if err != nil {
 			return err
 		}

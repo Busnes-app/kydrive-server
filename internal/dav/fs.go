@@ -18,16 +18,16 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/webdav"
-
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
+	"golang.org/x/net/webdav"
 )
 
 // FS is one request's view of the drive. Paths are /<workspace>/<folder>/.../<name>.
 type FS struct {
 	store   *drive.Store
 	user    string
-	blobs   string
+	blobs   objects.Store
 	key     []byte
 	maxFile int64
 	// IfMatch is set when the request's If-Match was checked: a write then publishes against
@@ -65,7 +65,7 @@ func (b *body) Read(p []byte) (int, error) {
 }
 
 // New builds one request's view. mtime is the request's X-OC-Mtime from Mtime.
-func New(store *drive.Store, user, blobs string, key []byte, maxFile int64, mtime string) *FS {
+func New(store *drive.Store, user string, blobs objects.Store, key []byte, maxFile int64, mtime string) *FS {
 	return &FS{store: store, user: user, blobs: blobs, key: key, maxFile: maxFile, mtime: mtime}
 }
 
@@ -283,11 +283,7 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 	if n.dir() {
 		return &dirFile{fs: f, ctx: ctx, n: n}, nil
 	}
-	p, err := drive.BlobPath(f.blobs, n.file.Blob)
-	if err != nil {
-		return nil, err
-	}
-	r, err := drive.OpenBlob(p, f.key, n.file.Sealed, n.file.Size)
+	r, err := drive.OpenBlob(f.blobs, n.file.Blob, f.key, n.file.Sealed, n.file.Size)
 	if err != nil {
 		return nil, err
 	}

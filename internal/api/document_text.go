@@ -12,6 +12,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/extract"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // Document text for agents: Office Open XML and OpenDocument files are extracted in process
@@ -32,7 +33,9 @@ const (
 // extracting bounds in-process extractions at once, as converting does conversions.
 var extracting = make(chan struct{}, 2)
 
-func (s *Server) textRoot() string { return filepath.Join(s.config.Database.DataDir, "text") }
+func (s *Server) textRoot() objects.Local {
+	return objects.Dir(filepath.Join(s.config.Database.DataDir, "text"))
+}
 
 // documentKind names the document type whose text read_file extracts for ext, or "".
 func (s *Server) documentKind(ext string) string {
