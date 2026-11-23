@@ -1246,6 +1246,51 @@ the release before. No R step starts before the owner approves this amendment.
      run against a KyIdentity in multi-tenant mode (unverified: whether one can run in CI
      before KyIdentity PR 6).
 
+## Hosted Office qualification — owner Priority 2 (2026-11-23)
+
+This is approved suite planning direction, not a competitor-parity suggestion or a claim
+of readiness. Complete the critical shared S3 client, R3/R4/K, isolation/lifecycle/pool,
+reliability/security and startup/launch acceptance gates first. Then qualify and package
+**the existing Euro-Office integration** for hosted documents, spreadsheets and presentations;
+no new editor is commissioned. Preserve the existing shared-editor architecture and supported
+placement rules. This plan change does not authorize deployments or reset in-flight verification.
+
+### Inventory: implemented is not hosted-qualified
+
+| Capability/evidence | Current status | Qualification still required |
+|---|---|---|
+| Create/open/edit DOCX, XLSX, PPTX | Implemented. `docs/ACCEPTANCE.md:10,13,29` records two-user DOCX collaboration, save/reopen and XLSX/PPTX round trips. | Fresh hosted, multi-org evidence for all three formats on the accepted release; historical local fixtures do not establish it. |
+| Permission loss and offboarding | Local second-user deactivation/drop queue and retained shared documents are recorded at `docs/ACCEPTANCE.md:29,33`. | Real KyIdentity member/group lifecycle, active editor revocation and in-flight save behavior across replicas; preserve workspace-owned content and wrong-org refusals. `docs/PILOT.md:55-57` leaves live collaboration/offboarding open. |
+| Deployment/restart/recovery | Existing supported packaging is documented in `docs/EURO-DOCKER.md`; its local fixture checks JWT refusal, health and persisted editor volumes (`:63-71`). Pilot records live editing and separate recovery drills. | Rehearse interruption, editor/Drive replica restart, upgrade/rollback and independent restore on the hosted topology, with HTTPS both ways and no change to current deployment authorization. Record exact artifacts/capture conditions. |
+| Provenance | `docs/PILOT.md:15` and `docs/EURO-PROVENANCE.md` record source/build correspondence for the pinned editor artifact; they claim no independent reproducible rebuild. | Assess the candidate hosted release's source, build/release chain, digest and provenance against existing release gates; retain the distinction between correspondence and an independent rebuild. Owner acceptance remains required. |
+
+### Qualification sequence after critical gates
+
+1. Reconcile the inventory above against the accepted current code/artifacts and existing
+   evidence. Preserve the original fixture conditions and mark unverified/live gaps explicitly.
+2. Exercise simultaneous collaboration, permission loss/offboarding, wrong-org editor/session
+   IDs and interrupted/conflicting saves for documents, sheets and presentations. A successful
+   ordinary save alone does not qualify live collaboration or offboarding.
+3. Exercise supported hosted packaging, pinned-image provenance, restart/rollback and complete
+   restore; record results in the existing acceptance/provenance/pilot records. Local evidence
+   and historical live evidence remain separate from current hosted acceptance.
+4. Package and describe only the qualified capability. Euro-Office and the server process
+   **plaintext** for ordinary editing; Drive vault E2EE does not transfer. Keep vault restrictions
+   and confidentiality contracts intact.
+
+Distinct product/release decisions still to surface are acceptance of the candidate provenance
+and hosted qualification evidence, and any advertised collaboration capacity, availability or
+support promises. Do not select limits or promises from competitor listings. The editor choice,
+shared-editor design and current placement restrictions are already decided, not reopened here.
+
+The suite owner's durable direction is in workspace `AGENTS.md`, User Preferences. The
+first-party-source research at `zentrimail-site/docs/research/competitor-product-gaps-2026-11-23.md`
+is evidence, not shipped status or roadmap authority; its password-manager recommendation is
+superseded. There is **no first-party password-manager product/builder/task**: compatibility
+with existing managers is sufficient and new integration is optional. VPN/AI remain optional
+with no new work. Android photo backup stays with the existing KyDrive-for-Android builder;
+this server plan creates no duplicate mobile owner or implementation.
+
 ## Residual risks (accepted)
 
 - **One database, one Euro-Office and one elected worker for every org.** Replicas spread
