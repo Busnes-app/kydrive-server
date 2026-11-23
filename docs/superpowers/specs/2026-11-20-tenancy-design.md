@@ -1,6 +1,6 @@
 # KyDrive tenancy: single-tenant and multi-tenant (SaaS), design
 
-Date: 2026-11-20. Status: design approved, with the owner's answers to its questions (2026-11-20). Amended 2026-11-22 by owner decision: multi-tenant requires PostgreSQL and runs as several replicas across hosts (D2, D13, build steps R1 to R4). The amendment awaits the owner's approval; no R step is built.
+Date: 2026-11-20. Status: design approved, with the owner's answers to its questions (2026-11-20). Amended 2026-11-22 by owner decision: multi-tenant requires PostgreSQL and runs as several replicas across hosts (D2, D13, build steps R1 to R4). The owner approved that amendment (#162), and R1 is built (#168, #169). Amended again 2026-11-22 by owner decision: per-org data keys in multi-tenant mode (D14, step K), and an end-to-end vault in its own spec (D15). This second amendment awaits the owner's approval.
 
 KyDrive today serves one organisation per install. This note adds a second mode to the same
 binary: **multi-tenant**, one shared install for every individual and household on the hosted
@@ -65,6 +65,8 @@ PR 3 until it does.
 | D11 | An org whose `drive_orgs.status` is not `active`, or whose `enabled` is false, is served nothing, by any credential. Its data is kept, and retention, version pruning and workspace purge pause for it. Only `deleted` triggers an org-wide purge. The one other purge, a leaver's unshared files 90 days after a verified `user.deleted` (A member leaves), also pauses while the org is not `active`. | T downstream contract point 5. A trash age must not delete a suspended customer's files while they settle a bill. |
 | D12 | The org comes from exactly three places: the verified ID token (`org_id`), a `syncauth`-verified webhook body (`org_id`), and a suite directory answer. One named exception: the local bootstrap and recovery administrators take the staff org from operator configuration (`KYDRIVE_STAFF_ORG`), since no token exists when they are created. Every KyDrive-issued credential (session, app password, agent token, device token, service token, guest link, upload ticket, editor token) takes its org from its user or workspace row, never from the request. | T downstream contract point 4. |
 | D13 | A multi-tenant install is replica-capable or it does not start (2026-11-22). Startup in multi mode requires PostgreSQL; shared file storage for blobs and every derived file (R2); the deployment key from `KY_ENCRYPTION_KEY` and the device identity key from `KYDRIVE_IDENTITY_KEY_FILE`, both outside the data directory and never minted there; and the replica plumbing of R3 and R4. The refusal names each missing piece. Each replica keeps its own data directory, never shared. | The replica pattern, "Product rollout contract" (f): state outside the database makes a product not replica-ready until it has a shared-storage contract. Today, without `KY_ENCRYPTION_KEY`, a fresh data directory mints its own key (`config.go:258-271`, `keyfile.LoadOrCreate`), so two replicas would hold two keys and could not read each other's sealed blobs. The identity key is read from the data directory unless `KYDRIVE_IDENTITY_KEY_FILE` names another file (`config.go:182-194`). |
+| D14 | **Per-org data keys, multi-tenant only** (2026-11-22). Each org has one random 32-byte data key, stored only wrapped under a key-encryption key (KEK) derived from the deployment key. The server unwraps it at runtime. Everything KyDrive seals for the org is sealed under keys derived from it: blob and cache file keys, file and folder names, and search keys. Deleting the org destroys its wrapped key (crypto-shredding). Orgs cannot bring their own key. Single-tenant installs keep today's deployment-key sealing, unchanged byte for byte. | Owner decisions of 2026-11-22: the KEK is the deployment key, not a KyIdentity-held key, and there is no bring-your-own-key. Today every key is derived from the one deployment key (`sealed.go:75`, `names.go:26,30`, `search/index.go:61-73`). A multi-tenant database always starts empty (D1), so nothing is re-sealed. See "Per-org data keys". |
+| D15 | **End-to-end vaults** are specified separately, in `2026-11-22-e2e-vault-design.md`: client-side encryption the server cannot read, in both modes. On a single-tenant install the org admin may hold an escrow key. The multi-tenant service has no escrow, because only staff are administrators there (owner decision 4). | Owner decisions of 2026-11-22. A vault trades search, previews, editing and admin recovery for content the platform cannot read. Per-org keys (D14) protect against storage loss and bugs, not against the operator. |
 
 ## KyDrive's half of the downstream contract
 
@@ -477,6 +479,42 @@ step-up, so a device takes the approving user's org and can never change it.
 
 ## Drive specifics
 
+### Per-org data keys (multi-tenant, D14)
+
+- **Today.** A KYB2 blob is an age file whose one `kydrive` stanza wraps the random per-file
+  key under AES-256-GCM with HKDF-SHA256(deployment key, stanza salt, binding)
+  (`sealed.go:19-23,75`). Names use HKDF keys `kydrive:name` and `kydrive:name-hmac`
+  (`names.go:26,30`), and the search index uses `kydrive:search-token`, `-doc`, `-check` and
+  `-vocab` (`search/index.go:61-73`). All of them come from the deployment key.
+- **Org keys.** A new table, `drive_org_keys(org_id PRIMARY KEY REFERENCES drive_orgs,
+  kek, wrapped, created)`, holds one row per org. The org key is 32 random bytes, created in
+  the transaction that first records the org (the poll, or the staff org's seed). `wrapped` is
+  AES-256-GCM under HKDF-SHA256(deployment key, "kydrive:org-kek"), with a random nonce and
+  the additional data `kydrive:org-key:<kek>:<org_id>`, so a row copied onto another org fails
+  to open. `kek` is 1, the deployment key. It leaves room for a later rewrap, such as a
+  deployment-key rotation or a two-part KEK with KyIdentity, without re-sealing a file.
+- **Blobs and caches.** In multi mode the stanza is `kydrive-org`, with the org ID and the
+  salt as arguments. It wraps the file key under HKDF-SHA256(org key, salt,
+  `kydrive:kyb2:org:<org_id>:` + binding), and the KYB2 framing is unchanged. The stanza
+  names its org, so a platform worker reading by blob ID (sealing, thumbnails, text) picks the
+  key without a lookup. The org is in the binding too, so a blob opened under the wrong org
+  fails authentication. Multi mode refuses a `kydrive` stanza, and single-tenant mode
+  refuses a `kydrive-org` one. View copies, staging segments, thumbnails and text are sealed
+  the same way, under their blob's org.
+- **Names.** The name and name-HMAC keys are derived from the org key. The same name in two
+  orgs then has two different `name_hmac` values. Uniqueness is per workspace, inside one
+  org, so nothing else changes.
+- **Search.** The token, document and check keys and the sealed vocabulary become per org.
+  An org's term hashes then cannot be linked to another org's, which narrows the residual
+  risk "The search index". The index lives where question 14 decides (R2); per-org keys
+  apply either way.
+- **Runtime.** Unwrapped org keys sit in a bounded in-memory cache on each replica. A key
+  is evicted when its org leaves `active`, and dropped at once when the org is deleted.
+  Every replica already has the deployment key (D13), so every replica can unwrap.
+- **Single-tenant** keeps the deployment-key scheme and has no `drive_org_keys` row. Its
+  blob, name and index bytes are unchanged byte for byte (`TestTenancyUpgradeKeepsEveryRow`
+  and the other upgrade tests).
+
 ### Blob storage
 
 - **Layout.** Flat, `<data>/blobs/<uuid>` (D8). Every new blob gets a fresh random ID
@@ -675,8 +713,19 @@ crash halfway repeats safely.
    Staging is cleared by `ExpireUploads`.
 4. The search index drops the org's refs on its next keep scan, and a full vocabulary
    rebuild is requested, so the org's words leave the sealed vocabulary.
-5. `drive_orgs` keeps the tombstone (`status='deleted'`, `purged=1`), and a platform audit
+5. In the transaction that sets `purged=1`, the org's `drive_org_keys` row is deleted
+   and every replica evicts the key (D14). Any file the steps above missed is then
+   unreadable: a leftover blob on the shared storage, an object version the storage kept, or
+   a replica's cache. The key goes last, because step 4 still needs it for the index.
+6. `drive_orgs` keeps the tombstone (`status='deleted'`, `purged=1`), and a platform audit
    row records the org ID and row counts per table, with no names.
+
+A capsule restore brings back every org key it held. In multi mode the restore reset
+(`ResetAfterRestore` today, the replica pattern's `prepareRestoredDatabase` in R3) therefore
+sets every org other than the staff org to `suspended` and `orgs_since` to 0. Nothing is
+served until the first full poll restores each org's real status, and an org KyIdentity
+reports `deleted` is purged again, key included. KyIdentity's org record is the durable
+tombstone.
 
 The `org_id` existence trigger refuses any new row once `drive_orgs.status` is `deleted`
 (see Triggers), during the purge and after it. That includes the two audit tables, whose
@@ -790,19 +839,20 @@ that member's My files at once, inside the org:
 | Customer of org A | Slow other orgs down: one database, one Euro-Office, one indexer | Per-user and per-IP rate limits, shared across replicas (R4). Replicas spread requests; the database, Euro-Office and the elected indexer stay shared. Residual (question 6). |
 | A replica with other shared settings or another key | Serve with another issuer, another KyPost secret, or a key that cannot read the blobs | The shared-configuration fingerprint refuses its start and names the fields, never the values (R3). Multi mode refuses a key minted in the data directory (D13). |
 | Holder of one replica's data directory | Decrypt customer files | In multi mode the directory holds no key and no blob (D13). |
-| Reader of the shared file storage | Read customer files | Every blob, view copy, thumbnail, text cache and staging segment is sealed under the deployment key and bound to its blob ID (`blobs.go:22`). The key is never stored there. |
+| Reader of the shared file storage | Read customer files | Every blob, view copy, thumbnail, text cache and staging segment is sealed under its org's key and bound to its org and blob ID (D14). The org keys are in the database, wrapped under the deployment key, and neither is stored there. |
+| A bug, or a swapped ID, that hands one org's blob or cache file to another | Read it | It opens only under its own org's key, and its binding names the org (D14). The org checks in Isolation come first; this is the cryptographic second layer. |
 | Anyone replaying to a second replica | Reuse a KyPost event, a device signature, a CAPTCHA or a thumbnail ticket, or reset a sign-in window | Replay and limit state is in PostgreSQL, one unique key or atomic upsert per item (R4). The two-replica test sends each replay to the other replica (step 6). |
 | Two replicas racing a job | Purge twice, or let two indexers write | One elected worker runs every job (R3), and every job is idempotent. The purge already is (Lifecycle, `deleted`). |
 | Staff, or a stolen staff account | Read customer content | No admin route opens an item, and administration grants no rank (`access.go:16`). Handover stays within one org and is audited in that org's log. Staff do see the org directory and workspace names (residual, as in T). |
-| Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`). Residual, unchanged. |
-| Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, and rebuilds the vocabulary. Backups keep copies until their retention ends (residual, question 5). |
+| Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`), except inside an end-to-end vault (D15). Otherwise residual, unchanged. |
+| Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, rebuilds the vocabulary, and destroys the org key last, so anything it missed is unreadable (D14). A restore suspends every org until a full poll, and purges again what KyIdentity reports deleted. Backups keep the wrapped key and copies until their retention ends (residual, question 5). |
 
 ## Phased build plan
 
 Each PR is shippable on its own, with single-tenant behaviour unchanged. `KYDRIVE_TENANCY=multi`
 is refused at startup until PR 6. Multi-tenant code runs only in tests before then.
 
-Amended 2026-11-22 (D2, D13). The build order is 1 to 4b, then R1 to R4, then 5 and 6. Every
+Amended 2026-11-22 (D2, D13). The build order is 1 to 4b, then R1 to R4, then K (per-org keys, amended 2026-11-22), then 5 and 6. Every
 R step is required before 6 can enable multi mode; none is optional. The R steps keep their
 own labels, so the existing references to steps 5 and 6 still hold. SQLite stays unchanged
 byte for byte through every R step: a test compares its schema (`sqlite_master.sql`) with
@@ -965,6 +1015,24 @@ the release before. No R step starts before the owner approves this amendment.
   | 4a (#160) | `recordTenancy`'s partial unique index on PostgreSQL, and `ApplyOrgs` and `OrgsSince` there (R1). The org poll under the elected worker in place of `orgsMu`, with a monotonic `orgs_since` (R3). The sign-in attempt limits it relies on move to R4. |
   | 4b | The suite-group reconcile under the elected worker (R3), and its tests on both backends (R1). |
 
+- **K. Per-org data keys** (D14, multi-tenant only), after R2 and before 5.
+  - `drive_org_keys`, the wrap under the deployment key, and the `kydrive-org` stanza for
+    blobs, view copies, staging, thumbnails and text. Name and search keys per org, and the
+    replica key cache.
+  - Step 5's purge destroys the key last, and the multi-mode restore reset suspends every
+    org until a full poll.
+  - Tests:
+    - A blob, cache file and name sealed for org A fail to open under org B's key, or with
+      the stanza's org ID changed.
+    - A wrapped key copied onto another org's row fails to open.
+    - Multi mode refuses a `kydrive` stanza, and single-tenant mode refuses a `kydrive-org`
+      one.
+    - Single-tenant sealing is byte-compatible with the release before (the upgrade tests),
+      and an upgraded single-tenant install has no `drive_org_keys` row.
+    - The same name in two orgs gets two `name_hmac` values.
+    - After a purge, a blob left on the storage on purpose cannot be opened.
+    - A restore in multi mode serves no org before the first full poll, and purges again an
+      org the poll reports `deleted`.
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.
    - Status enforcement, the retention pause, the editor revocation at suspension, the
@@ -1028,7 +1096,9 @@ the release before. No R step starts before the owner approves this amendment.
   before then cannot get them (question 1). The only warning is the billing service's,
   before it schedules deletion (Export).
 - **Backups outlive deletion.** A deleted org's blobs and rows stay in capsules and Restic
-  snapshots until backup retention drops them. Restic bulk pruning is opt-in and off by
+  snapshots until backup retention drops them. So does its wrapped key: anyone with a capsule
+  and the custodian shares can still read the org. Per-org keys make everything outside the
+  backups unreadable (D14), not the backups. Restic bulk pruning is opt-in and off by
   default (root `AGENTS.md`).
 - **Stale status.** If `/api/suite/orgs` cannot be read, KyDrive keeps the last status it
   saw, and alerts the operator after 10 minutes. A suspension is then late until the next
@@ -1038,7 +1108,7 @@ the release before. No R step starts before the owner approves this amendment.
 - **Staff see directories and workspace names**, never file names or content.
 - **The search index** (a file on SQLite, tables on PostgreSQL) shows word-frequency and co-occurrence patterns across orgs to
   whoever reads it, as it does across users today (root `AGENTS.md`).
-- **Euro-Office and the server read plaintext**, as today.
+- **Euro-Office and the server read plaintext**, as today, outside end-to-end vaults (D15).
 
 ## Questions, settled by the owner on 2026-11-20
 
@@ -1052,8 +1122,9 @@ the release before. No R step starts before the owner approves this amendment.
    minutes. Refusing credentials in every org would turn a KyIdentity outage into a KyDrive
    outage for every customer.
 5. **Deleted orgs in backups.** Accepted. The hosted install must run bulk retention so
-   copies age out. Per-org keys destroyed at purge (crypto-shredding) stay a later design:
-   today's sealing derives every key from one deployment key (`sealed.go:247`).
+   copies age out. Amended 2026-11-22: per-org keys destroyed at purge (D14, step K) make
+   every copy outside the backups unreadable. The backups themselves keep the wrapped key until
+   their retention ends, because the KEK is the deployment key, which every capsule carries.
 6. **Capacity.** Measure a target (orgs, stored bytes, writes a minute, concurrent editor
    sessions) before launch. Amended 2026-11-22: measure on the replica deployment of step 6.
    D2 is no longer the fallback.
