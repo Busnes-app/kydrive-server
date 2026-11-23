@@ -201,7 +201,8 @@ Signatures cannot show a device that a newer record exists. A server that carrie
 message can keep a whole group of members on a head another member has moved past, and those
 members' own signed statements would only vouch for each other. The removed member would then
 read what they upload. Only a party the server cannot control can say which head is current,
-so a shared vault's freshness rests on an independent **witness**.
+so freshness rests on an independent **witness**. It applies to every **witnessed vault**:
+every vault except a personal one that is not `escrowable` (below).
 
 - **The witness** is a checkpoint service that clients reach directly, never through the
   KyDrive server. It is operated apart from the KyDrive server, and on the hosted service
@@ -216,7 +217,7 @@ so a shared vault's freshness rests on an independent **witness**.
 - **Committing.** A client's `add`, `remove`, `rotate` or `escrow-access` takes effect only
   once the client has sent the new head to the witness and holds a checkpoint naming it. A
   removal is committed, and effective for everyone, at that checkpoint's time.
-- **The rule.** Before each upload to a shared vault, the client asks the witness for its
+- **The rule.** Before each upload to a witnessed vault, the client asks the witness for its
   current checkpoint. It reuses one for at most 5 minutes, for a batch of uploads (question 6).
   It encrypts only when that checkpoint names exactly the head it has verified.
 
@@ -341,7 +342,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 | Operator, staff, or anyone with the database, the storage and the deployment key | Read vault files or names | Only ciphertext and wrapped keys are on the server. No escrow on the multi-tenant service. |
 | The same, serving altered web code | Steal keys through the browser | The web app never handles vault keys or contents in v1. |
 | A malicious server at the moment a member is added | Get the vault key | Pinned keys, change warnings and fingerprint comparison. Residual for members who never compare. |
-| A malicious server | Hand clients a vault key it knows, add a member, or undo a removal | The vault log: clients use only generations and members from records signed by a member as the log stood before, and refuse rollback and forks. In a shared vault, an upload also needs a fresh witness checkpoint naming the client's head (Freshness). |
+| A malicious server | Hand clients a vault key it knows, add a member, or undo a removal | The vault log: clients use only generations and members from records signed by a member as the log stood before, and refuse rollback and forks. In every witnessed vault (all but a multi-tenant personal one), an upload also needs a fresh witness checkpoint naming the client's head (Freshness). |
 | A removed member | Read new versions | Their row is deleted at once, and the vault key moves to a new generation they hold no wrap for (Key generations). They keep what they downloaded. |
 | A member's modified client | Leave escrow out | The server checks that an escrow wrap is present, not that it opens. Residual. |
 | Holder of the escrow key (single-tenant) | Read every vault | Intended: the org admin's recovery. Every use is audited and shown to members. |
@@ -360,7 +361,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **Old versions stay readable to a removed member** if they downloaded them.
 - **A removed member keeps the name-index key,** so they can test whether a name they guess exists in the vault, though not read names written after their removal.
 - **A checkpoint is reused for up to 5 minutes** (Freshness). A removal committed in that time reaches a device that already holds a checkpoint only at its next fetch, so a batch of uploads in those minutes can be readable to the removed member.
-- **Shared vaults depend on the witness.** While it cannot be reached, uploads to shared vaults block, and adding or removing members waits. Reading still works.
+- **Witnessed vaults depend on the witness:** every shared vault, and on a single-tenant install every vault, personal ones included. While the witness cannot be reached, uploads to them block, and adding or removing members waits. Reading still works.
 - **The witness learns each vault log's activity:** when heads move, under an opaque ID.
 
 ## Build plan
@@ -399,7 +400,9 @@ Each PR is shippable on its own, with vaults off until V3.
        upload and blocks;
      - a downloaded version whose ciphertext digest, or file or revision, differs from its
        signed upload record, which is refused, as is one with no valid upload record;
-     - a witness that cannot be reached, which blocks uploads to shared vaults;
+     - a witness that cannot be reached, which blocks uploads to every witnessed vault: a
+       shared vault, and a single-tenant personal vault; a multi-tenant personal vault still
+       uploads;
      - a witness asked to sign a head that does not extend its last one, which refuses;
      - a `remove` with no new generation, which is refused, so an interrupted removal leaves
        the old head, and its generation, in force until the whole `remove` commits;
@@ -439,7 +442,7 @@ for one.
 5. **Who runs the witness (Freshness)?** Recommendation: a small witness service of our own,
    deployed on infrastructure and accounts separate from KyDrive's, with its signing key held
    by someone other than KyDrive's operators. An existing public C2SP witness may serve instead
-   (unverified). Without an independent witness, shared vaults cannot promise timely
+   (unverified). Without an independent witness, witnessed vaults cannot promise timely
    revocation, and the spec would have to say so.
 6. **How long a client may reuse a witness checkpoint.** Recommendation: 5 minutes, with no
    offline fallback. Longer reuse means fewer witness requests on a busy sync, but a longer gap
