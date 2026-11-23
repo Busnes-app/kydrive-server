@@ -60,7 +60,7 @@ PR 3 until it does.
 | D4 | Every org-owned table gets `org_id TEXT NOT NULL`. Triggers with the same names on both backends make it immutable, require it to exist in `drive_orgs`, and refuse a row that links two orgs (shares, grants, group members, link openers, personal-workspace owners). Isolation is enforced in the application, and the triggers are a second layer. | T D3 makes the same choice. On PostgreSQL `org_id` is also a real foreign key to `drive_orgs(id)` (R1). Both backends run the same statements, and every access decision already goes through `rankSQL` and `itemRankSQL` (`access.go:17,33`), so adding one org predicate there covers most paths. The triggers catch a path that forgets it. |
 | D5 | In multi-tenant mode, inbound SCIM is off (`/scim/v2` answers 404). A local account is created at first sign-in from the verified ID token's `sub` and `org_id`, so auto-provisioning is forced on. The signed webhook keeps accounts current. Groups come only from suite groups. | KyIdentity turns generic outbound SCIM targets off in multi-tenant v1 (T "Per-org features"), and SCIM bodies carry no org. Members of every plan, Business included, are added through KyIdentity (the billing portal or staff, within the org's seats), so first sign-in creates every account KyDrive needs. A business that syncs its own directory is Enterprise. If T's business-org amendment turns per-org SCIM on for Business, this decision is revisited (unverified: that amendment has not landed). |
 | D6 | Organisation links (`scope='org'`) become org-scoped: only an active member of the link's org can open one. Guest links (`scope='guest'`) stay as they are: they are the only deliberate way for content to leave an org. | Today an organisation link gives "any active signed-in user" its role (`links.go:14-16`). On a shared install that means every customer. |
-| D7 | **One storage pool per org, shared across every suite app** (owner decision, 2026-11-23, replacing KyDrive's own pool). KyIdentity holds each org's pool. Launch sizes: Personal 20 GB, Couple 40 GB, Family 100 GB, Business 30 GB per seat. KyDrive reports what it stores for the org, and before a write that adds bytes it checks that the org has room across every app. The check is in `fits` (`store.go:682`), the one function every byte-adding path already calls. Per-workspace `quota` is not enforced in multi-tenant mode. An org with no pool figure refuses writes. Enterprise runs single-tenant, with per-workspace quotas as today. | One number per account, shared by its members and its apps, is the plan the customer buys. Every path that adds bytes already ends in `fits` (see Quotas). Failing closed means a missing figure cannot hand out unlimited storage. The contract with KyIdentity is in Quotas, and is pending KyIdentity's design (unverified). |
+| D7 | **One storage pool per org, shared across every suite app** (owner decision, 2026-11-23, replacing KyDrive's own pool). KyIdentity holds each org's pool. Launch sizes: Personal 20 GB, Couple 40 GB, Family 100 GB, and Business 30 GB times its current seats, recalculated on every seat change. KyDrive reports what it stores for the org, and before a write that adds bytes it checks that the org has room across every app. The check is in `fits` (`store.go:682`), the one function every byte-adding path already calls. Per-workspace `quota` is not enforced in multi-tenant mode. An org with no pool figure refuses writes. Enterprise runs single-tenant, with per-workspace quotas as today. | One number per account, shared by its members and its apps, is the plan the customer buys. Every path that adds bytes already ends in `fits` (see Quotas). Failing closed means a missing figure cannot hand out unlimited storage. The contract with KyIdentity is in Quotas, and is pending KyIdentity's design (unverified). |
 | D8 | Blob storage stays flat (`blobs/<uuid>`: under `<data>` on SQLite, under the shared storage root in multi-tenant mode, D13). A trigger on `drive_versions` refuses a version that names a blob already named by a version in another org. | Blob IDs are fresh random UUIDs (`blobs.go:21`), with no content addressing, so there is no dedup across orgs. A blob is only reachable through a version row. The one path that shares a blob, copy (`move.go:131-132`), already needs ranks in both workspaces. A per-org directory would add an org argument to every `BlobPath` call and protect nothing the trigger doesn't. |
 | D9 | In multi-tenant mode, the store refuses `role='admin'` for any account outside the staff org, which is `KYDRIVE_STAFF_ORG` recorded at first start (question 2). Admin routes are classed as `platform`, `org` or `refused` (see Admin surface). | Owner decision 4, and T D8. |
 | D10 | In multi-tenant mode, shared workspaces exist only as suite group workspaces (`suitegroups.go:57`). Creating, renaming, deleting and re-quotaing a shared workspace through the admin API answers 404. | Customers have no administrator to create workspaces (owner decision 4). Suite groups give every plan shared folders, a Business team's included, and staff should not curate customer folders. Whether a member may create a shared workspace is question 15. |
@@ -649,8 +649,11 @@ unverified until T's amendment lands.
   `INSERT INTO drive_view_copies` is behind `fits` (`viewcopies.go:91-105`). The quota test
   asserts both by source scan, so a new byte-adding path cannot skip the check.
 - **Reporting.** The elected worker (R3) reports each org's `drive_bytes` to KyIdentity:
-  - when it has changed, at most every 30 s per org;
+  - after each org poll, when it has changed (about every 60 s);
+  - at once after a purge or a restore;
   - for every org once an hour, as a reconciliation.
+
+  This matches KyCalendar's spec (KyCalendar #190), so every app reports the same way.
 
   A report is the absolute total with a per-org sequence number that only grows, so a
   repeated or late report changes nothing. It is authenticated as KyDrive's client (the way
@@ -658,15 +661,21 @@ unverified until T's amendment lands.
 - **Failing closed.**
   - An org with no `pool_bytes`, or one KyDrive has never polled, refuses every write with
     `ErrQuota`. Reads keep working.
-  - When a poll fails, KyDrive keeps the last figures it saw (question 4's rule for status),
-    so a KyIdentity outage does not stop uploads.
+  - When a poll fails, KyDrive trusts the last figures for 15 minutes. After that it refuses
+    writes that add bytes until a poll succeeds; reads, moves and deletes keep working. If
+    KyIdentity's contract sets this time, its figure wins. This matches KyCalendar's rule, so
+    a KyIdentity outage stops new storage in every app at the same moment.
+  - A write that leaves the org under a tenth of its room makes the worker poll again at once.
 - **Cross-app overshoot.** KyDrive cannot see another app's write until that app reports.
   Two apps writing at once can therefore pass the pool by at most what the others wrote
   since their last report. That is accepted (Residual risks), and bounded by every app
-  reporting within 30 s.
-- **Downgrade.** Lowering the pool below usage deletes nothing. Writes are refused until
-  usage drops. Reads, trash, purge, moves and handover keep working. A test lowers the pool
-  below usage and expects a move and a handover to succeed and an upload to be refused.
+  reporting about once a minute.
+- **Downgrade** (the owner's over-pool rule of 2026-11-23). A Business pool is 30 GB times
+  the current seats, so removing a seat can leave the org over its pool, and so can a plan
+  change. Lowering the pool below usage deletes nothing. Writes are refused until
+  usage drops. Reads, trash, purge, moves and handover keep working. The warning before a
+  seat change is KyIdentity's. A test lowers the pool below usage and expects a move and a
+  handover to succeed and an upload to be refused.
 - **Per-workspace quota** (`drive_workspaces.quota`, the 10 GiB My files default at
   `peer.go:24` and `store.go:276`, 1 GiB for suite groups at `suitegroups.go:18`) is not
   enforced in multi-tenant mode. The column stays for single-tenant, Enterprise included.
