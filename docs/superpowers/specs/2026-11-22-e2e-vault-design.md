@@ -159,9 +159,12 @@ about a vault's members or keys unless the vault log says so.
 
 - **Records.** The log is a hash-chained list of records, each signed by its author's
   signing key:
-  - `create` (generation 1). It marks the vault `personal` or `shared`, for good: a client
-    refuses any `add` record in a personal vault's log. The one way a personal vault gains a
-    member is escrow (Escrow), and that turns it shared;
+  - `create` (generation 1). It marks two things, for good:
+    - whether the vault is `personal` or `shared`: a client refuses any `add` record in a
+      personal vault's log;
+    - whether it is `escrowable`, which every vault on a single-tenant install is and no vault
+      on the multi-tenant service is: a client refuses any `escrow-access` record in a vault
+      that is not;
   - `add` (a member, with their key fingerprint);
   - `rotate` (generation n+1), and `remove` (a member, and generation n+1 in the same record);
   - on single-tenant, `escrow` (the escrow key's fingerprint) and `escrow-access` (Escrow).
@@ -225,16 +228,18 @@ so a shared vault's freshness rests on an independent **witness**.
 - **When a removal takes effect.** At the removal's checkpoint, for every device: a device
   the server withholds it from blocks at its next upload after that, or within the 5-minute
   reuse of a checkpoint it already held.
-- **Personal vaults** need no witness. Whether a vault is personal is read from its signed
-  `create` record, never from its current member list, and a personal vault can never gain a
-  member except by escrow. So no device can skip the witness by holding an out-of-date view.
-  Every vault created `shared` uses the witness, even while it has one member.
-  - An `escrow-access` record in a personal vault turns it `shared` from that record on, the
-    only change of kind a client accepts. Every device that has verified the record uses the
-    witness from then on.
-  - A device that has not seen it still skips the witness. It belongs to the vault's own
-    member, and the only new member is the escrow holder, who can already open every
-    generation. So nothing it uploads reaches anyone the escrow key could not already reach.
+- **Only a vault that can never gain a member skips the witness:** one whose signed `create`
+  record marks it both `personal` and not `escrowable`. That is a personal vault on the
+  multi-tenant service. It can never gain a member, so no device can skip the witness by
+  holding an out-of-date view.
+  - Every other vault uses the witness from creation, even while it has one member: every
+    shared vault, and every vault on a single-tenant install, personal ones included.
+  - On a single-tenant install, `escrow-access` can add the admin or a successor to a personal
+    vault, which may later add and remove members as in any shared vault. Its devices already
+    check the witness, so none of them depends on seeing that record before freshness
+    applies.
+  - The `create` record fixes both marks, so a client's decision never rests on the current
+    member list or on whether it has seen a later record.
 - **Upload records.** Every version carries a signed upload record, signed by the uploader.
   It holds:
   - the workspace, the file ID and the version's revision;
@@ -387,7 +392,11 @@ Each PR is shippable on its own, with vaults off until V3.
        key rotated, all withheld from one device of the first member: that device still asks
        the witness and blocks;
      - an `add` record in a personal vault's log, which is refused, and an `escrow-access`
-       record there, which turns it shared, so its next upload asks the witness;
+       record in a vault not marked `escrowable`, which is refused;
+     - on a single-tenant install, a personal vault where escrow added a member who then
+       added and removed another, with all of it withheld from one device of the original
+       member still holding the personal head: that device asks the witness before its next
+       upload and blocks;
      - a downloaded version whose ciphertext digest, or file or revision, differs from its
        signed upload record, which is refused, as is one with no valid upload record;
      - a witness that cannot be reached, which blocks uploads to shared vaults;
