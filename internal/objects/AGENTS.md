@@ -14,7 +14,7 @@ Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory bac
   - `Publish` fsyncs the file, renames it, then fsyncs the directory. If that last fsync fails, the new file is removed.
   - `Remove` deletes the named files, ignores missing ones, and fsyncs the directory.
   - The directory is created on the first `Create`.
-- `Open` returns an `Object` (`ReaderAt`, `Size`, `Close`), which is all the sealed-blob reader needs; a missing name is `fs.ErrNotExist`. `OpenFile` wraps a file outside any store (resumable-upload staging).
+- `Open` returns an `Object` (`ReaderAt`, `Size`, `Close`), which is all the sealed-blob reader needs; a missing name is `fs.ErrNotExist`. `OpenFile` wraps a file outside any store: only the single-tenant KYB1 format upgrade, which reads a blob file and its staged copy in place (`drive/upgrade.go`).
 - `List` reports every entry, drafts included (dot names), with its last write time; a store never written to lists nothing.
 - `Tree` (`DirTree`) is a set of Stores removed whole: resumable-upload staging, one `Sub` per session. `Sub` names follow the object-name rule, and a bad one yields a Store whose every call fails. `List` reports each Sub with its last change; `RemoveAll` deletes a Sub and its contents, and a missing one is already gone. `DirTree`'s subs are directories of its root, so staging stays `<data>/staging/<session>/<segment>`.
 - `Local` adds `Root()`, the directory itself. Only single-tenant maintenance jobs use it: legacy sealing, the KYB1 format upgrade (both rewrite a file in place), and Restic's bulk backup, which reads files.
