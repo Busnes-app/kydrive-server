@@ -4,6 +4,11 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Org polls never rewind their shared cursor (tenancy R3).** A stale concurrent response
+  can apply newer org rows but cannot lower `orgs_since`. Cursor reads/comparisons use
+  64-bit integers on PostgreSQL as on SQLite. Page rows and cursor still commit together;
+  single mode and the closed multi startup gate are unchanged.
+
 - **Replica key loading (tenancy R3/D13).** Multi-mode configuration now requires retained
   external deployment/device keys and refuses local key copies before creating any files.
   Missing, corrupt or public identity seeds are never replaced. Multi startup remains

@@ -3,10 +3,13 @@ package drive_test
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/store/migrations"
+	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
 func TestApplyOrgsMirrorsTheDirectory(t *testing.T) {
@@ -131,5 +134,81 @@ func TestDeletedOrgStaysDeleted(t *testing.T) {
 	var status string
 	if err := o.db.QueryRow(`SELECT status FROM drive_orgs WHERE id='org-x'`).Scan(&status); err != nil || status != "deleted" {
 		t.Fatalf("status %q (%v)", status, err)
+	}
+}
+
+// Independent database handles model replicas; no process-local poll lock protects this row.
+func TestOrgCursorNeverMovesBack(t *testing.T) {
+	cfg := testdb.Config(t)
+	first := testdb.Open(t, cfg)
+	if err := migrations.Run(t.Context(), first, cfg.Driver); err != nil {
+		t.Fatal(err)
+	}
+	a, err := drive.OpenMulti(t.Context(), first, testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := testdb.Open(t, cfg)
+	b, err := drive.OpenMulti(t.Context(), second, testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(want int64) {
+		t.Helper()
+		for _, d := range []*drive.Store{a, b} {
+			if got, err := d.OrgsSince(t.Context()); err != nil || got != want {
+				t.Fatalf("cursor %d, want %d: %v", got, want, err)
+			}
+		}
+	}
+	check(0)
+	// Decimal strings must compare numerically, not lexically. PostgreSQL INTEGER is
+	// only 32 bits; the suite revision cursor is int64 on both backends.
+	for _, next := range []int64{9, 10, 2, 10, 0} {
+		if _, err := a.ApplyOrgs(t.Context(), nil, next); err != nil {
+			t.Fatal(err)
+		}
+		if next == 9 {
+			check(9)
+		} else {
+			check(10)
+		}
+	}
+	const high int64 = 1 << 40
+	if _, err := a.ApplyOrgs(t.Context(), nil, high); err != nil {
+		t.Fatal(err)
+	}
+	check(high)
+	start := make(chan struct{})
+	failures := make(chan error, 2)
+	var wg sync.WaitGroup
+	for _, d := range []*drive.Store{a, b} {
+		wg.Go(func() {
+			<-start
+			for next := int64(1); next <= 12; next++ {
+				if _, err := d.ApplyOrgs(t.Context(), nil, next); err != nil {
+					failures <- err
+					return
+				}
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+	close(failures)
+	for err := range failures {
+		t.Fatal(err)
+	}
+	check(high)
+	// A failed page must publish neither its rows nor a later cursor.
+	if _, err := a.ApplyOrgs(t.Context(), []suitedir.Org{
+		{ID: "org-valid", Status: "active", Enabled: true, Revision: high + 1},
+		{ID: "org-invalid", Status: "invalid", Enabled: true, Revision: high + 2},
+	}, high+2); err == nil {
+		t.Fatal("invalid page accepted")
+	}
+	check(high)
+	if known, _, err := b.OrgActive(t.Context(), "org-valid"); err != nil || known {
+		t.Fatal("failed page left an org", err)
 	}
 }

@@ -364,7 +364,7 @@ const orgsSince = "orgs_since"
 // OrgsSince is the revision the next /api/suite/orgs poll asks for changes after.
 func (s *Store) OrgsSince(ctx context.Context) (int64, error) {
 	var since int64
-	err := s.db.QueryRowContext(ctx, `SELECT CAST(value AS INTEGER) FROM server_settings WHERE key=?`, orgsSince).Scan(&since)
+	err := s.db.QueryRowContext(ctx, `SELECT CAST(value AS BIGINT) FROM server_settings WHERE key=?`, orgsSince).Scan(&since)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -372,7 +372,8 @@ func (s *Store) OrgsSince(ctx context.Context) (int64, error) {
 }
 
 // ApplyOrgs mirrors a page of /api/suite/orgs into the registry and records next, in one
-// transaction. An older revision than the row's changes nothing. The seeded staff org is never
+// transaction. The cursor never moves backwards, including across replicas. An older revision
+// than the row's changes nothing. The seeded staff org is never
 // changed; staffNotActive reports that the directory listed it as anything but active.
 func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) (staffNotActive bool, err error) {
 	if !s.Multi() {
@@ -393,12 +394,15 @@ WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revisi
 			}
 		}
 		now := time.Now().UTC()
-		for k, v := range map[string]string{orgsSince: strconv.FormatInt(next, 10), OrgsFreshUntil: strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10)} {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, k, v, now); err != nil {
-				return err
-			}
+		// A sign-in can poll on another replica while the elected worker polls. An older
+		// response may still contain unapplied rows, but must never rewind the shared cursor.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?)
+ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at
+WHERE CAST(server_settings.value AS BIGINT)<CAST(excluded.value AS BIGINT)`, orgsSince, strconv.FormatInt(next, 10), now); err != nil {
+			return err
 		}
-		return nil
+		_, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, OrgsFreshUntil, strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10), now)
+		return err
 	})
 	return staffNotActive, err
 }
