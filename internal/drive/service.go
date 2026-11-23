@@ -58,14 +58,15 @@ func (s *Store) RevokeServiceToken(ctx context.Context, user, id string) error {
 		return ErrDenied
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
+		// Only the caller's org: another org's token takes the missing one's path.
 		var workspace string
-		if err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_service_tokens WHERE id=?`, id).Scan(&workspace); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT workspace FROM drive_service_tokens WHERE id=? AND org_id=`+userOrg("?"), id, user).Scan(&workspace); err != nil {
 			return ErrInvalid
 		}
 		if err := authorize(ctx, tx, user, workspace, 3); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE drive_service_tokens SET revoked=true WHERE id=?`, id)
+		_, err := tx.ExecContext(ctx, `UPDATE drive_service_tokens SET revoked=true WHERE id=? AND org_id=`+userOrg("?"), id, user)
 		if err != nil {
 			return err
 		}
