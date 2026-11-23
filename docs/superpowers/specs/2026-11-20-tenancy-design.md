@@ -853,7 +853,7 @@ that member's My files at once, inside the org:
 | Two replicas racing a job | Purge twice, or let two indexers write | One elected worker runs every job (R3), and every job is idempotent. The purge already is (Lifecycle, `deleted`). |
 | Staff, or a stolen staff account | Read customer content | No admin route opens an item, and administration grants no rank (`access.go:16`). Handover stays within one org and is audited in that org's log. Staff do see the org directory and workspace names (residual, as in T). |
 | Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`), except inside an end-to-end vault (D15). Otherwise residual, unchanged. |
-| Deleted customer | Have their data kept | The purge removes rows, blobs, caches and index refs, rebuilds the vocabulary, and destroys the org key last, so anything it missed is unreadable (D14). A restore suspends every org until a full poll, and purges again what KyIdentity reports deleted. Backups keep the wrapped key and copies until their retention ends (residual, question 5). |
+| Deleted customer | Have their data kept | The purge removes rows, blobs and caches, deletes the org's index rows and per-org vocabulary by org ID (multi mode, step 4), and destroys the org key last, so anything it missed is unreadable (D14). A restore suspends every org until a full poll, and purges again what KyIdentity reports deleted. Backups keep the wrapped key and copies until their retention ends (residual, question 5). |
 
 ## Phased build plan
 
@@ -1116,8 +1116,10 @@ the release before. No R step starts before the owner approves this amendment.
 - **Shared pair secret.** A stolen KyPost pair secret reaches every org's users whose
   subjects it can name, though only the three peer actions.
 - **Staff see directories and workspace names**, never file names or content.
-- **The search index** (a file on SQLite, tables on PostgreSQL) shows word-frequency and co-occurrence patterns across orgs to
-  whoever reads it, as it does across users today (root `AGENTS.md`).
+- **The search index** (a file on SQLite, tables on PostgreSQL) shows word-frequency and
+  co-occurrence patterns to whoever reads it, as it does across users today (root
+  `AGENTS.md`). In multi mode its term hashes are keyed per org (D14), so the patterns stay
+  within each org and cannot be linked across orgs.
 - **Euro-Office and the server read plaintext**, as today, outside end-to-end vaults (D15).
 
 ## Questions, settled by the owner on 2026-11-20

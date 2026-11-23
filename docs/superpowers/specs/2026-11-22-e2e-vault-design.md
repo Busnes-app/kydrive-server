@@ -47,27 +47,38 @@ client's core is Go (`kydrive-desktop/core`), so it uses the same library. The A
 has no age implementation today, so choosing or writing one is part of V4 (unverified:
 which Kotlin implementation supports the hybrid recipient).
 
+Signatures are hybrid too: Ed25519 and ML-DSA-65 together, and a signature counts only when
+both verify. ML-DSA is Go's `crypto/mldsa`, which the Go 1.27 toolchain the repositories
+build with provides. Using it moves the client module's `go` line to 1.27 (unverified:
+whether that suits every client build). Android needs an ML-DSA implementation as well (V4).
+
 | Key | Made where | Held by | Opens |
 |---|---|---|---|
-| User key, an age hybrid identity per user | The user's first device that opens a vault | Each of the user's devices, in the OS keystore. The server holds a copy encrypted to the recovery key. | Vault keys wrapped to the user |
+| User key, an age hybrid identity and a hybrid signing key per user | The user's first device that opens a vault | Each of the user's devices, in the OS keystore. The server holds a copy encrypted to the recovery key. | Vault keys wrapped to the user. The signing half signs the user's vault log records. |
 | Recovery key, an age hybrid identity | The same device, shown once as text and a QR code | The user, offline | The server's copy of the user key |
 | Vault key, an age hybrid identity per vault | The creating member's device | The server, as one copy wrapped to each member's user key and, on single-tenant, one wrapped to the escrow key | The vault's files and names |
-| Escrow key, an age hybrid identity per install (single-tenant only) | The org admin's device | The admin, offline | Every vault key wrapped to it |
+| Escrow key, an age hybrid identity and a hybrid signing key per install (single-tenant only) | The org admin's device | The admin, offline | Every vault key wrapped to it. The signing half signs an escrow access record. |
 
 - **Files.** Each file version is an age file encrypted to the vault key's recipient. The
   client uploads it through the existing upload paths as opaque bytes. The server then seals
   it at rest as it seals any blob (KYB2, `sealed.go:19-23`), under the deployment key or the
   org key, so a purge's crypto-shredding covers vault ciphertext too.
-- **Names.** A name is encrypted by the client under a key derived from the vault key, and
-  stored in the name column. The client also sends `name_hmac`, an HMAC of the name under
-  another key derived from the vault key. The live-name unique index then works without
-  plaintext (`names.go:19`, `drive_live_names`).
+- **Names.** A name is encrypted by the client under a key derived from the vault key. The
+  client also sends `name_hmac`, an HMAC of the name under another key derived from the vault
+  key.
+
+  For a vault item, the server's name sealing (`names.go:67`, `seal`) takes the client's
+  ciphertext as the name and seals it again under its own name key, so the org key's
+  crypto-shredding covers vault names too. It stores the client's `name_hmac` unchanged
+  instead of computing one, so the live-name unique index (`names.go:19`,
+  `drive_live_names`) works without plaintext. `open` returns the client's ciphertext.
 - **Sizes.** Quota counts the ciphertext, which is what the server stores.
 
 ## Server changes
 
 - **Schema** (both backends):
-  - `drive_user_keys(user_id, public_key, fingerprint, recovery_copy, created)`;
+  - `drive_user_keys(user_id, public_key, signing_key, fingerprint, recovery_copy, created)`,
+    the fingerprint covering both public keys;
   - `drive_workspaces.vault` (boolean);
   - `drive_vault_keys(workspace, generation, previous, created)`: one row per vault key
     generation. `previous` is the generation before, encrypted to this one (Key generations);
@@ -76,7 +87,10 @@ which Kotlin implementation supports the hybrid recipient).
   - `drive_vault_escrow(workspace, generation, wrapped_key)`, one row per vault, wrapping the
     current generation to the escrow key;
   - `drive_versions.vault_generation`, the generation a vault version was encrypted under;
-  - `drive_escrow_key(public_key, fingerprint, created, created_by)`, single-tenant only.
+  - `drive_vault_log(workspace, seq, record, signer, signature)`, the vault log (The vault
+    log), which the server stores but cannot forge;
+  - `drive_escrow_key(public_key, signing_key, fingerprint, created, created_by)`,
+    single-tenant only.
 
   On the multi-tenant service every table is org-owned (tenancy D4).
 - **Rank.** Inside a vault, a member's rank comes only from their `drive_vault_members` row.
@@ -90,14 +104,17 @@ which Kotlin implementation supports the hybrid recipient).
   - editor sessions;
   - link and guest creation and opening;
   - KyPost peer paths;
-  - `handover.go`.
+  - `handover.go`;
+  - name sealing (`names.go`), which stores the client's ciphertext and `name_hmac` as above.
 
   A source scan in the style of `TestOrgSQLNamesOrgID` fails when a new content path omits
   the check.
-- **Membership.** Adding a member is a call from an existing member's client, carrying the
-  vault key wrapped to the new member's public key. The server checks that the caller is a
-  member and the target is an active account (in the caller's org on the multi-tenant
-  service). It cannot check that the wrap is correct.
+- **Membership.** Adding a member is a call from an existing member's client. It carries the
+  vault key wrapped to the new member's public key and a signed `add` record for the vault log.
+  The server checks that the caller is a member and the target is an active account (in the
+  caller's org on the multi-tenant service). It cannot check that the wrap is correct. Its
+  checks keep the rows consistent; the log, which clients verify, is what makes membership
+  trustworthy.
 
   Removing a member deletes their row at once, and the server stops serving them. A
   remaining member's client then rotates the vault key (Key generations). Files the removed
@@ -105,7 +122,8 @@ which Kotlin implementation supports the hybrid recipient).
 - **Key generations.** A rotation makes generation n+1 and uploads, in one call:
   - the `drive_vault_keys` row, with generation n encrypted to n+1's recipient as `previous`;
   - a wrap of n+1 for every remaining member;
-  - on single-tenant, n+1's escrow wrap.
+  - on single-tenant, n+1's escrow wrap;
+  - the signed `rotate` record for the vault log.
 
   The server accepts it only when the call names generation n as the current one and
   carries a wrap for every current member. Two rotations racing then cannot both win. New
@@ -115,8 +133,44 @@ which Kotlin implementation supports the hybrid recipient).
   by walking `previous` back, so every version stays readable, whatever generation it
   records. A member added later gets the current generation and so reads the whole history.
   A removed member holds no wrap past their last generation.
-- **Audit.** Vault creation, member changes, escrow registration and every escrow use are
+- **Audit.** Vault creation, member changes, escrow registration and every escrow access are
   audited, with no names.
+
+## The vault log
+
+The server is an adversary here, so its checks above only stop races. Clients trust nothing
+about a vault's members or keys unless the vault log says so.
+
+- **Records.** The log is a hash-chained list of records, each signed by its author's
+  signing key:
+  - `create` (generation 1);
+  - `add` and `remove` (a member, with their key fingerprint);
+  - `rotate` (generation n+1);
+  - on single-tenant, `escrow` (the escrow key's fingerprint) and `escrow-access` (Escrow).
+
+  Each record names the workspace, its `seq` and the hash of the record before it.
+  - A `create` or `rotate` record also holds the new generation's public recipient, the hash
+    of its encrypted `previous`, the full member list with fingerprints and, on single-tenant,
+    the escrow fingerprint.
+  - Every record but `escrow-access` must be signed by a member of the vault as the log stood
+    before it. In v1 every member may add, remove and rotate.
+- **What a client checks** before it uses a vault:
+  - it walks the log from `create`, or from the last record it trusted;
+  - it verifies every signature against the keys it has pinned;
+  - it checks that each signer was a member at that point.
+- **What a client refuses:**
+  - a record that fails any of those checks;
+  - a log shorter than, or forked from, the head it stored;
+  - a vault key whose public recipient differs from the one in its verified `create` or
+    `rotate` record.
+- **What a client does with it:**
+  - It encrypts new versions only to the newest verified generation.
+  - It wraps keys only to the members, and the escrow key, that the verified log names.
+  - It keeps the verified head (`seq` and hash) for each vault on the device, so a server
+    that rolls the log back, or shows two members two different logs, is caught.
+- **What this stops.** A malicious server cannot slip in a generation it knows, add a
+  member, or undo a removal, even while every pinned fingerprint stays the same. It can only
+  withhold records, which clients see as a vault that stops updating.
 
 ## Devices and recovery
 
@@ -140,9 +194,17 @@ which Kotlin implementation supports the hybrid recipient).
 - A vault made before the escrow key gets its escrow wrap of the current generation the
   next time a member's client opens it. The admin screen lists the vaults with no
   `drive_vault_escrow` row, or one behind the current generation.
-- **Using escrow.** The admin's desktop app opens the escrow-wrapped vault key locally. It
-  can then read the vault, or add a member by wrapping the vault key to them. This is the
-  vault's handover path for a leaver. Each use is audited and shown to the vault's members.
+- **Using escrow.** It takes two server events, and both are audited:
+  1. After step-up, the admin calls the vault's escrow-access route. The server returns the
+     escrow wrap and the vault log, and records the call as the escrow access.
+  2. The admin's desktop app opens the vault key locally, and then appends an
+     `escrow-access` record signed by the escrow key. That record adds the admin, or a
+     successor for a leaver's vault, as a member, wrapping the vault key to them.
+
+  From then on that person reads through the ordinary member routes. A non-member, admin or
+  not, has no route to a vault's ciphertext. The record is in the log, so every member's
+  client shows that escrow was used and by whom. The server cannot see the local unwrap
+  itself; the route call and the record are what it audits.
 - The multi-tenant service refuses to register an escrow key.
 
 ## Key authenticity
@@ -155,6 +217,9 @@ substitute its own and receive the next vault key wrapped to it. In v1:
   messaging apps show safety numbers.
 - The escrow fingerprint is pinned at first sight and shown in every client.
 
+Pinning covers the members' keys, and the vault log (above) covers everything signed with
+them. A server can still substitute a key the first time a client sees it.
+
 Key transparency (a signed, append-only log of public keys) is a later step, not v1.
 
 ## Threat model
@@ -164,6 +229,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 | Operator, staff, or anyone with the database, the storage and the deployment key | Read vault files or names | Only ciphertext and wrapped keys are on the server. No escrow on the multi-tenant service. |
 | The same, serving altered web code | Steal keys through the browser | The web app never handles vault keys or contents in v1. |
 | A malicious server at the moment a member is added | Get the vault key | Pinned keys, change warnings and fingerprint comparison. Residual for members who never compare. |
+| A malicious server | Hand clients a vault key it knows, add a member, or undo a removal | The vault log: clients use only generations and members from records signed by a member as the log stood before, and refuse rollback and forks. |
 | A removed member | Read new versions | Their row is deleted at once, and the vault key moves to a new generation they hold no wrap for (Key generations). They keep what they downloaded. |
 | A member's modified client | Leave escrow out | The server checks that an escrow wrap is present, not that it opens. Residual. |
 | Holder of the escrow key (single-tenant) | Read every vault | Intended: the org admin's recovery. Every use is audited and shown to members. |
@@ -180,6 +246,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **Escrow is honest-client only.** A modified client can create a vault the escrow key
   cannot open.
 - **Old versions stay readable to a removed member** if they downloaded them.
+- **A server can withhold vault log records.** Clients then see a vault that stops updating, never a forged one.
 
 ## Build plan
 
@@ -193,7 +260,14 @@ Each PR is shippable on its own, with vaults off until V3.
      the index or a preview;
    - a rotation refused when it names a stale generation or misses a current member's wrap;
    - after two rotations, a member added afterwards and the escrow key both open the first
-     version (in the client tests, V3).
+     version (in the client tests, V3);
+   - in the client protocol tests (V3), with every member fingerprint unchanged:
+     - a server-supplied generation that no member signed;
+     - a server-added member;
+     - a rolled-back log;
+     - a log forked between two members.
+
+     Each is refused before any content is encrypted to it.
 3. **V3. Desktop app:** user and recovery keys, vault create, sync, membership, rotation and
    fingerprint pinning, in `kydrive-desktop/core`. Vaults are turned on here, desktop only.
 4. **V4. Android:** the same, after the age library choice.
