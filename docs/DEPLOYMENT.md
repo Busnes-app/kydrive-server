@@ -41,6 +41,25 @@ To build from source instead, add the build overlay to every command, which tags
 
 The root Compose package serves KyDrive only. It binds HTTP to loopback for the existing HTTPS proxy. Euro-Office runs on Docker with `docker-compose.office.yml` (see [Docker setup](EURO-DOCKER.md)), or in Kubernetes. Use an explicit Docker-network bind address only when the proxy requires one. SQLite's WAL and durable flushes require a local filesystem with working file locks/fsync, not an SMB-mounted database. A NAS data share is not an independent backup; mount bulk storage from a separate failure domain. Trash and versions count toward quota until purged (see Retention and permanent delete). Restic snapshot pruning (Recovery screen, Document retention) is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design.
 
+### Moving to PostgreSQL
+
+`migrate-postgres` copies a single-tenant SQLite install into an empty PostgreSQL database. **Not for production yet:** on PostgreSQL, KyDrive's own backups and content search do not run until later releases. Move a test install, or one you back up yourself (`pg_dump` plus the data directory).
+
+1. Back up, then stop the server and keep its volumes: `docker compose stop app`. The command refuses while a server holds the SQLite database. Servers from this release on hold a lock on it; stop older ones yourself.
+2. Create an empty PostgreSQL database owned by the account KyDrive will use. Put its DSN in a private file, never on a command line: `(umask 077; echo 'KY_MIGRATE_POSTGRES_DSN=postgres://kydrive:<password>@<host>:5432/kydrive?sslmode=verify-full' > migration.env)`. Use `sslmode=verify-full` for a database on another host.
+3. Check, then copy. Both run with the SQLite install's own settings and data volume:
+
+   ```sh
+   set -a; . ./migration.env; set +a
+   docker compose run --rm --no-deps -e KY_MIGRATE_POSTGRES_DSN app /app/kydrive-server migrate-postgres -check
+   docker compose run --rm --no-deps -e KY_MIGRATE_POSTGRES_DSN app /app/kydrive-server migrate-postgres
+   ```
+
+   The command copies a private snapshot of the database, brought to this release's schema, in one transaction. It then compares every table's row count and content with the snapshot before it commits; `-check` does all of this, then rolls the copied rows back. It leaves KyDrive's schema in the database, with the few rows a first start writes (such as the key check and the tenancy setting); the real run replaces those. Drop the database if you abandon the move. It prints the rows copied per table. It refuses, keeping no rows, a target that holds data or tables KyDrive does not know, a source table it does not know, a different encryption key, and a value PostgreSQL would read differently (a boolean that is not 0 or 1, a malformed time). Times keep microseconds. The snapshot sits in a private `.postgres-migration-*` directory beside the database and is removed when the command ends; after a killed run, remove it by hand.
+4. Switch the install over: add a Compose overlay that sets `KY_DB_DRIVER: postgres` and `KY_DB_DSN: ${KY_DB_DSN}` for `app` (the base file pins SQLite), and put `KY_DB_DSN` in `.env`. Keep the same encryption key (`KY_ENCRYPTION_KEY` or `data/encryption.key`) and the data volume: files, the identity key and the search index stay there. Delete `migration.env`, then `docker compose up -d`.
+
+The command never writes the SQLite database or your settings. Until PostgreSQL has taken writes, going back is starting the SQLite install again; after that, going back loses those writes.
+
 ### Office networks and sign-in limits
 
 KyDrive limits sign-in failures per client address: 20 sign-ins a minute, 10 password changes a minute and 20 failed WebDAV app-password sign-ins a minute. Staff in one office usually share one public NAT address, so a busy morning can trip those limits for everyone there. List the office's networks, comma-separated (`203.0.113.0/24,2001:db8:1::/48`), in `KY_RATE_LIMIT_EXEMPT_NETWORKS`, or one per line under **Server settings → Office networks**; the two lists are combined. Requests from a listed network skip those per-address limits only, and only up to a shared office budget: all listed networks together get 200 sign-ins, 200 password changes and 200 failed WebDAV sign-ins a minute past the per-address windows, after which each office address meets its ordinary per-address window again. These still apply to them: the per-account windows (10 guesses at one account per 15 minutes, 5 password changes per account a minute), the CAPTCHA, step-up, KyIdentity sign-in with its MFA, and every per-address limit on agent tokens, device tokens, desktop linking, organisation links and guest links.

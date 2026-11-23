@@ -907,6 +907,22 @@ the release before. No R step starts before the owner approves this amendment.
       per-workspace transaction lock, so a cursor never passes a row that commits later.
     - Not ported until their own steps: content search (R2) and backups (R3) stay SQLite only,
       and their tests skip on PostgreSQL.
+  - R1b as built:
+    - `migrate-postgres` runs with the SQLite install's settings and reads the target only
+      from `KY_MIGRATE_POSTGRES_DSN`. It snapshots the database, upgrades the snapshot,
+      creates the schema by opening a store on the target, and copies every table in
+      `migrationTables` order in one transaction, comparing row counts and summed row hashes
+      before it commits. `-check` rolls the copy back.
+    - The rows a store open writes on an empty database (`drive_orgs`, `drive_key`,
+      `server_settings`) are replaced by the source's. Change rows keep their seq, and every
+      identity and serial sequence is set past the copied rows.
+    - The restore drill is `TestMigrateToPostgresKeepsEveryRow`: a source with a row in
+      every table, then a new audit row and change row on the copy. Only `audit_records` and
+      `drive_changes` take database-made IDs; every other table's keys come from the code.
+      The backup snapshot's use of `migrationTables` is R3's.
+    - A SQLite server now holds a lock on its database file while it runs (`LockSQLite`), as
+      the replica pattern's does, so a migration never copies a database being written.
+
 - **R2. Shared file storage and search.**
   - One storage root outside the data directory for `blobs/`, `staging/`, `view/`, `thumbs/`
     and `text/`. Object storage or a written shared-volume contract is question 13. Either way

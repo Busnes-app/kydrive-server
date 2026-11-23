@@ -72,6 +72,12 @@ type DatabaseConfig struct {
 	StaffOrg string `json:"-"`
 }
 
+// SQLitePath is the SQLite database file DSN names.
+func (d DatabaseConfig) SQLitePath() string {
+	path, _, _ := strings.Cut(strings.TrimPrefix(d.DSN, "file:"), "?")
+	return path
+}
+
 // SecurityConfig holds encryption keys, cookie secrets, and session settings.
 type SecurityConfig struct {
 	SessionSecret string `json:"session_secret"`
@@ -165,7 +171,7 @@ func LoadExisting() (*Config, error) {
 	if err != nil || cfg.Database.Driver != "sqlite" {
 		return cfg, err
 	}
-	path, _, _ := strings.Cut(strings.TrimPrefix(cfg.Database.DSN, "file:"), "?")
+	path := cfg.Database.SQLitePath()
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("no existing database at %s (check KY_DATA_DIR/KY_DB_DSN): %w", path, err)
 	}
@@ -234,7 +240,10 @@ func load(existing bool) (*Config, error) {
 	driver := strings.ToLower(getEnv("KY_DB_DRIVER", "sqlite"))
 	dataDir := getEnv("KY_DATA_DIR", "./data")
 	defaultDSN := fmt.Sprintf("%s/ky_server.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", dataDir)
-	if driver == "postgres" || driver == "postgresql" {
+	if driver == "sqlite3" {
+		driver = "sqlite"
+	}
+	if driver == "postgres" || driver == "postgresql" || driver == "pgx" {
 		driver = "postgres"
 		defaultDSN = "postgres://postgres:postgres@localhost:5432/ky_server?sslmode=disable"
 	}
