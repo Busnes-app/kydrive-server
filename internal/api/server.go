@@ -41,6 +41,7 @@ type recoveryClient interface {
 
 type Server struct {
 	davLocks   *dav.Locks   // one per server: WebDAV locks are single-instance
+	ready      readiness    // /readyz
 	mcp        http.Handler // /mcp, for AI agents
 	now        func() time.Time
 	editor     *editor.Client

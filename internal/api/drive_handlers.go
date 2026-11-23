@@ -91,6 +91,8 @@ func (s *Server) driveRoutes() {
 	s.mux.HandleFunc("GET /api/editor/download/{id}", s.editorDownload)
 	s.mux.HandleFunc("GET /api/editor/convert/{ticket}", s.editorConvertSource)
 	s.mux.HandleFunc("POST /api/editor/callback", s.editorCallback)
+	s.mux.HandleFunc("GET /livez", s.handleLivez)
+	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.store.Ping(r.Context()); err != nil {
 			s.writeError(w, 503, "Database unavailable")

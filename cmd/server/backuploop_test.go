@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
@@ -70,8 +71,8 @@ func TestComposeGracePeriodCoversTheShutdownBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stop_grace_period %q: %v", m[1], err)
 	}
-	if budget := shutdownTimeout + backupWaitTimeout; grace <= budget {
-		t.Errorf("stop_grace_period %s does not cover shutdownTimeout+backupWaitTimeout (%s)", grace, budget)
+	if budget := api.ReadyDrain + shutdownTimeout + backupWaitTimeout; grace <= budget {
+		t.Errorf("stop_grace_period %s does not cover ReadyDrain+shutdownTimeout+backupWaitTimeout (%s)", grace, budget)
 	}
 }
 
