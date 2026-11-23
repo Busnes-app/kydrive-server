@@ -1027,8 +1027,9 @@ the release before. No R step starts before the owner approves this amendment.
   - `drive_org_keys`, the wrap under the deployment key, and the `kydrive-org` stanza for
     blobs, view copies, staging, thumbnails and text. Name and search keys per org, and the
     replica key cache.
-  - Step 5's purge destroys the key last, and the multi-mode restore reset suspends every
-    org until a full poll.
+  - The org-wide purge is step 5's, so K adds no purge. Step 5 builds its key step (Lifecycle,
+    `deleted` step 5) and the multi-mode restore reset with it. K's own deliverable is the
+    sealing, so K ships and is tested on its own.
   - Tests:
     - A blob, cache file and name sealed for org A fail to open under org B's key, or with
       the stanza's org ID changed.
@@ -1038,11 +1039,8 @@ the release before. No R step starts before the owner approves this amendment.
     - Single-tenant sealing is byte-compatible with the release before (the upgrade tests),
       and an upgraded single-tenant install has no `drive_org_keys` row.
     - The same name in two orgs gets two `name_hmac` values.
-    - After a purge, a blob left on the storage on purpose cannot be opened.
-    - A purge deletes the org's index rows and vocabulary by org ID, and leaves none
-      behind, with the key already gone.
-    - A restore in multi mode serves no org before the first full poll, and purges again an
-      org the poll reports `deleted`.
+    - Deleting an org's `drive_org_keys` row makes its blobs, caches and names unopenable,
+      on every replica once the cache is evicted.
 5. **Quotas and lifecycle.**
    - The org pool in `fits`, failing closed.
    - Status enforcement, the retention pause, the editor revocation at suspension, the
@@ -1051,6 +1049,13 @@ the release before. No R step starts before the owner approves this amendment.
    - The capacity measurement (question 6), before PR 6 can enable the mode.
    - Amended 2026-11-22: built after R1 to R4, on both backends. The org pool check locks the
      org's row on PostgreSQL (Quotas). The purge and the leaver job run on the elected worker.
+   - Amended again 2026-11-22: built after K. The purge's step 4 deletes the index by org ID
+     and its step 5 destroys the org key (D14). The multi-mode restore reset suspends every
+     org until a full poll. Its tests:
+     - after a purge, a blob left on the storage on purpose cannot be opened;
+     - the org's index rows and vocabulary are gone, with the key already destroyed;
+     - a restore serves no org before the first full poll, and purges again an org the poll
+       reports `deleted`.
    - Tests: the quota on every path in the Quotas table, plus the source scan. Two parallel
      uploads with room for one. `TestSuspendedOrgServesNothing` for every credential type.
      Resume restores long-lived credentials. The purge leaves no row, blob, thumbnail, text

@@ -89,6 +89,8 @@ whether that suits every client build). Android needs an ML-DSA implementation a
   - `drive_versions.vault_generation`, the generation a vault version was encrypted under;
   - `drive_vault_log(workspace, seq, record, signer, signature)`, the vault log (The vault
     log), which the server stores but cannot forge;
+  - `drive_vault_heads(workspace, user_id, device, seq, hash, at, signature)`, each device's
+    latest signed head attestation (Freshness);
   - `drive_escrow_key(public_key, signing_key, fingerprint, created, created_by)`,
     single-tenant only.
 
@@ -169,8 +171,56 @@ about a vault's members or keys unless the vault log says so.
   - It keeps the verified head (`seq` and hash) for each vault on the device, so a server
     that rolls the log back, or shows two members two different logs, is caught.
 - **What this stops.** A malicious server cannot slip in a generation it knows, add a
-  member, or undo a removal, even while every pinned fingerprint stays the same. It can only
-  withhold records, which clients see as a vault that stops updating.
+  member, or undo a removal, even while every pinned fingerprint stays the same. It can still
+  withhold records from a device, which Freshness bounds.
+
+### Freshness
+
+Signatures cannot show a device that a newer record exists, so a server could keep one
+member's device on a generation another member has revoked. The removed member would read what
+that device then uploads. Against a server that carries every message this cannot be
+prevented outright, so v1 bounds it and makes it visible.
+
+- **Head attestations.** Each time a device verifies a vault's log, it signs its current head
+  (`seq`, hash and its clock time) and uploads it. The server keeps each device's latest
+  attestation.
+- **The rule.** In a vault with two or more members, a client encrypts a new version only
+  when two things hold:
+  - it holds an attestation, made within the last 24 hours, from a device of another current
+    member;
+  - that attestation names no head newer than the client's own.
+
+  If it does not, the client blocks the upload, saying it cannot confirm the vault is up to
+  date, and asks again later. It never falls back to the generation it has. A one-member vault
+  needs no attestation, since only its own devices write its log.
+- **When a removal takes effect.** It takes effect for a device as soon as the device
+  verifies the `remove` and `rotate` records. A device the server withholds them from goes on
+  encrypting under the old generation only while it still holds a fresh attestation, made
+  before the removal, from another member: at most 24 hours. After that it blocks. The remover's
+  own attestation names the new head, so a server that delivers it gives the removal away.
+- **Detection.** Every version records the head its uploader used, inside its signed upload
+  record. A member who sees a version encrypted under a generation that an earlier record
+  revoked is warned that the server withheld records, and so is the uploader the next time
+  their device catches up.
+
+### After a capsule restore
+
+A restore brings `drive_vault_log` back to the snapshot. Devices that saw later records then
+find a log shorter than their stored head, which they would otherwise refuse as a rollback.
+
+- **Replaying.** A device's client keeps the verified records, not just the head. When the
+  server's log is a prefix of its own, the client re-submits its later records, and for the
+  newest generation it re-wraps the key for every member those records name. Those records
+  carry their authors' signatures, so the server cannot change them. Every other device then
+  verifies the longer log as usual. A `remove` and `rotate` written after the snapshot are
+  restored this way, so a removed member stays removed.
+- **Until a member replays,** the vault is read-only on every device that is ahead of the
+  server. If no device holds the later records, the vault stays read-only, showing which
+  head is missing. There is no re-baseline: accepting a shorter log is exactly what a
+  rollback attack needs.
+- The restore reset (`ResetAfterRestore`) marks every vault as restored, so clients ask to
+  replay instead of reporting an attack. Files uploaded after the snapshot are lost with the
+  rest of the restore.
 
 ## Devices and recovery
 
@@ -246,7 +296,8 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **Escrow is honest-client only.** A modified client can create a vault the escrow key
   cannot open.
 - **Old versions stay readable to a removed member** if they downloaded them.
-- **A server can withhold vault log records.** Clients then see a vault that stops updating, never a forged one.
+- **A server can withhold vault log records from a device for up to 24 hours** (Freshness). During that time, the device's uploads are readable to a member removed in the meantime. Members are warned once any device catches up.
+- **Shared vaults need another member's device online once a day.** Without one, uploads to a shared vault block until one checks in.
 
 ## Build plan
 
@@ -265,9 +316,15 @@ Each PR is shippable on its own, with vaults off until V3.
      - a server-supplied generation that no member signed;
      - a server-added member;
      - a rolled-back log;
-     - a log forked between two members.
+     - a log forked between two members;
+     - a committed removal and rotation the server withholds from one device, which then
+       blocks new encryption once its newest attestation from another member is more than
+       24 hours old, and is warned when the records arrive.
 
      Each is refused before any content is encrypted to it.
+   - a restore to before a `remove` and `rotate`, after which a member's device replays both
+     records and the removed member stays removed; with no device holding them, the vault
+     stays read-only.
 3. **V3. Desktop app:** user and recovery keys, vault create, sync, membership, rotation and
    fingerprint pinning, in `kydrive-desktop/core`. Vaults are turned on here, desktop only.
 4. **V4. Android:** the same, after the age library choice.
