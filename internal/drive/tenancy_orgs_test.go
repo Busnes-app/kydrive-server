@@ -91,26 +91,29 @@ func TestStaleOrgMirrorServesNothing(t *testing.T) {
 	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
 		t.Fatalf("fresh mirror: %v %v", ok, err)
 	}
-	if _, err := o.db.Exec(`UPDATE server_settings SET value='1' WHERE key='orgs_fresh_until'`); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || ok {
-		t.Fatalf("stale mirror still serves a member: %v %v", ok, err)
-	}
-	if _, active, err := d.OrgActive(ctx, "org-a"); err != nil || active {
-		t.Fatalf("stale mirror reports org-a active: %v %v", active, err)
-	}
-	if orgs, err := d.ActiveOrgs(ctx); err != nil || len(orgs) != 1 || orgs[0] != drive.TestStaffOrg {
-		t.Fatalf("stale mirror lists %v (%v), want only the staff org", orgs, err)
-	}
-	if ok, err := d.ActivePrincipal(ctx, "staff"); err != nil || !ok {
-		t.Fatalf("staff stopped with the mirror: %v %v", ok, err)
-	}
-	if _, err := d.ApplyOrgs(ctx, nil, 0); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
-		t.Fatalf("a successful poll did not restore the member: %v %v", ok, err)
+	// An expired stamp, and none at all (as a restore leaves it).
+	for _, stale := range []string{`UPDATE server_settings SET value='1' WHERE key='orgs_fresh_until'`, `DELETE FROM server_settings WHERE key='orgs_fresh_until'`} {
+		if _, err := o.db.Exec(stale); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || ok {
+			t.Fatalf("%s: stale mirror still serves a member: %v %v", stale, ok, err)
+		}
+		if known, active, err := d.OrgActive(ctx, "org-a"); err != nil || !known || active {
+			t.Fatalf("%s: stale mirror reports org-a known=%v active=%v: %v", stale, known, active, err)
+		}
+		if orgs, err := d.ActiveOrgs(ctx); err != nil || len(orgs) != 1 || orgs[0] != drive.TestStaffOrg {
+			t.Fatalf("%s: stale mirror lists %v (%v), want only the staff org", stale, orgs, err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "staff"); err != nil || !ok {
+			t.Fatalf("%s: staff stopped with the mirror: %v %v", stale, ok, err)
+		}
+		if _, err := d.ApplyOrgs(ctx, nil, 0); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := d.ActivePrincipal(ctx, "a1"); err != nil || !ok {
+			t.Fatalf("%s: a successful poll did not restore the member: %v %v", stale, ok, err)
+		}
 	}
 }
 

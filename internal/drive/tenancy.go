@@ -202,7 +202,7 @@ const OrgsMaxAge = time.Hour
 // orgServing is true while org row $O is active and enabled and, unless it is the seeded
 // staff org or the single-tenant default org, the mirror is fresh. $O is a table alias.
 func orgServing(o string) string {
-	return o + `.status='active' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR CAST((SELECT value FROM server_settings WHERE key='` + OrgsFreshUntil + `') AS BIGINT)>unixepoch())`
+	return o + `.status='active' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR COALESCE(CAST((SELECT value FROM server_settings WHERE key='` + OrgsFreshUntil + `') AS BIGINT),0)>unixepoch())`
 }
 
 // sameOrg is true when workspace $W is in user $U's org. Both are column references.
