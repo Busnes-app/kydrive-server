@@ -63,9 +63,18 @@ whether that suits every client build). Android needs an ML-DSA implementation a
   client uploads it through the existing upload paths as opaque bytes. The server then seals
   it at rest as it seals any blob (KYB2, `sealed.go:19-23`), under the deployment key or the
   org key, so a purge's crypto-shredding covers vault ciphertext too.
-- **Names.** A name is encrypted by the client under a key derived from the vault key. The
-  client also sends `name_hmac`, an HMAC of the name under another key derived from the vault
-  key.
+- **Names.** A name is encrypted by the client under a name key derived from the current
+  generation's vault key. The row records that generation (`vault_generation` on
+  `drive_files` and `drive_folders`), so a client knows which key opens each name. A rename
+  re-encrypts under the current generation.
+
+  `name_hmac` is an HMAC of the name under the vault's **name-index key**: one random key made
+  at `create` and kept for the vault's life. Each generation's `drive_vault_keys` row carries it
+  as `name_index`, encrypted to that generation, so every member and the escrow key can read it. One
+  name has one `name_hmac` in every generation, so the live-name unique index and a
+  client's exists-already lookup work across rotations. The cost is that a removed member
+  who kept the name-index key can test whether a name they guess exists in the vault
+  (Residual risks).
 
   For a vault item, the server's name sealing (`names.go:67`, `seal`) takes the client's
   ciphertext as the name and seals it again under its own name key, so the org key's
@@ -79,9 +88,11 @@ whether that suits every client build). Android needs an ML-DSA implementation a
 - **Schema** (both backends):
   - `drive_user_keys(user_id, public_key, signing_key, fingerprint, recovery_copy, created)`,
     the fingerprint covering both public keys;
-  - `drive_workspaces.vault` (boolean);
-  - `drive_vault_keys(workspace, generation, previous, created)`: one row per vault key
-    generation. `previous` is the generation before, encrypted to this one (Key generations);
+  - `drive_workspaces.vault` (boolean), and `vault_generation` on `drive_files` and
+    `drive_folders`, the generation that sealed each name;
+  - `drive_vault_keys(workspace, generation, previous, name_index, created)`: one row per vault
+    key generation. `previous` is the generation before, and `name_index` the vault's
+    name-index key (Formats, Names), both encrypted to this one (Key generations);
   - `drive_vault_members(workspace, user_id, generation, wrapped_key, added_by, added)`, with
     one row per member, wrapping the current generation;
   - `drive_vault_escrow(workspace, generation, wrapped_key)`, one row per vault, wrapping the
@@ -145,7 +156,8 @@ about a vault's members or keys unless the vault log says so.
 
 - **Records.** The log is a hash-chained list of records, each signed by its author's
   signing key:
-  - `create` (generation 1);
+  - `create` (generation 1). It marks the vault `personal` or `shared`, for good: a client
+    refuses any `add` record in a personal vault's log;
   - `add` and `remove` (a member, with their key fingerprint);
   - `rotate` (generation n+1);
   - on single-tenant, `escrow` (the escrow key's fingerprint) and `escrow-access` (Escrow).
@@ -195,21 +207,22 @@ so a shared vault's freshness rests on an independent **witness**.
 - **Committing.** A client's `add`, `remove`, `rotate` or `escrow-access` takes effect only
   once the client has sent the new head to the witness and holds a checkpoint naming it. A
   removal is committed, and effective for everyone, at that checkpoint's time.
-- **The rule.** In a vault with two or more members, a client encrypts a new version only
-  when it holds a witness checkpoint that:
-  - is under 24 hours old (question 6);
-  - names exactly the head it has verified.
+- **The rule.** Before each upload to a shared vault, the client asks the witness for its
+  current checkpoint. It reuses one for at most 5 minutes, for a batch of uploads (question 6).
+  It encrypts only when that checkpoint names exactly the head it has verified.
 
   A checkpoint naming a newer head proves records are being withheld. Then, and whenever the
-  witness cannot be reached, the client blocks the upload, says it cannot confirm the vault is
-  up to date, and never falls back to the generation it has. The rule does not depend on what
-  other members' devices say, so a group the server keeps on an old head blocks as soon as
-  its checkpoint is older than the window, or at once if the witness has seen the removal.
-- **When a removal takes effect.** Every device either sees the removal or blocks within 24
-  hours of the removal's checkpoint. In practice it blocks at once, since the witness hands
-  every client the newer head the next time it asks.
-- **One-member vaults** need no witness, since only their own member's devices write the
-  log.
+  witness cannot be reached, the client blocks the upload and says it cannot confirm the vault
+  is up to date. There is no offline fallback, and it never falls back to the generation it
+  has. The rule does not depend on what other members' devices say, so a group the server
+  keeps on an old head blocks at its next upload.
+- **When a removal takes effect.** At the removal's checkpoint, for every device: a device
+  the server withholds it from blocks at its next upload after that, or within the 5-minute
+  reuse of a checkpoint it already held.
+- **Personal vaults** need no witness. Whether a vault is personal is read from its signed
+  `create` record, never from its current member list, and a personal vault can never gain a
+  member. So no device can skip the witness by holding an out-of-date view. Every vault created
+  `shared` uses the witness, even while it has one member.
 - **Detection.** Every version carries a signed upload record: the head its uploader used,
   its generation and the witness checkpoint it held, signed by the uploader. A member who
   sees a version encrypted under a generation an earlier committed record revoked is warned
@@ -220,12 +233,22 @@ so a shared vault's freshness rests on an independent **witness**.
 A restore brings `drive_vault_log` back to the snapshot. Devices that saw later records then
 find a log shorter than their stored head, which they would otherwise refuse as a rollback.
 
-- **Replaying.** A device's client keeps the verified records, not just the head. When the
-  server's log is a prefix of its own, the client re-submits its later records, and for the
-  newest generation it re-wraps the key for every member those records name. Those records
-  carry their authors' signatures, so the server cannot change them. Every other device then
-  verifies the longer log as usual. A `remove` and `rotate` written after the snapshot are
-  restored this way, so a removed member stays removed.
+- **Replaying.** A device's client keeps the verified records, and the `drive_vault_keys` rows
+  of every generation it has seen, not just the head. When the server's log is a prefix of its
+  own, the client replays in one call:
+  - its later records;
+  - the `drive_vault_keys` row of every later generation, each with its `previous`, whose hash
+    is in that generation's `rotate` record;
+  - a wrap of the newest generation for every member those records name, and on single-tenant
+    its escrow wrap.
+
+  The server accepts a replay only for a vault marked restored. It checks that the records
+  extend its log in order, that each is signed by a member as the log stood before it, and
+  that each key row matches its record's hash. The normal rotation check (current generation
+  named, a wrap per member) does not apply to replayed records. Every other device then
+  verifies the longer log as usual, and walks `previous` back from the newest generation to
+  every older one. A `remove` and `rotate` written after the snapshot are restored this way,
+  so a removed member stays removed.
 - **Until a member replays,** the vault is read-only on every device that is ahead of the
   server. If no device holds the later records, the vault stays read-only, showing which
   head is missing. There is no re-baseline: accepting a shorter log is exactly what a
@@ -308,7 +331,8 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **Escrow is honest-client only.** A modified client can create a vault the escrow key
   cannot open.
 - **Old versions stay readable to a removed member** if they downloaded them.
-- **A device the witness cannot update keeps its last checkpoint for up to 24 hours** (Freshness). If the server also withholds a removal from it during that time, and the device cannot reach the witness, its uploads are readable to the removed member. Members are warned once any device catches up.
+- **A removed member keeps the name-index key,** so they can test whether a name they guess exists in the vault, though not read names written after their removal.
+- **A checkpoint is reused for up to 5 minutes** (Freshness). A removal committed in that time reaches a device that already holds a checkpoint only at its next fetch, so a batch of uploads in those minutes can be readable to the removed member.
 - **Shared vaults depend on the witness.** While it cannot be reached, uploads to shared vaults block, and adding or removing members waits. Reading still works.
 - **The witness learns each vault log's activity:** when heads move, under an opaque ID.
 
@@ -333,15 +357,23 @@ Each PR is shippable on its own, with vaults off until V3.
      - a rolled-back log;
      - a log forked between two members;
      - a committed removal and rotation the server withholds from a group of devices that
-       keep signing statements for the old head: each blocks once its checkpoint passes 24
-       hours, or at once when the witness names the newer head, and is warned when the
-       records arrive;
+       keep signing statements for the old head: each blocks at its next upload, and is warned
+       when the records arrive;
+     - a device holding a 1-hour-old checkpoint for the old head, with the witness reachable
+       and the removal checkpointed: its upload blocks at once;
+     - a shared vault that went from one member to two, then had the second removed and the
+       key rotated, all withheld from one device of the first member: that device still asks
+       the witness and blocks;
+     - an `add` record in a personal vault's log, which is refused;
      - a witness that cannot be reached, which blocks uploads to shared vaults;
      - a witness asked to sign a head that does not extend its last one, which refuses.
 
      Each is refused before any content is encrypted to it.
    - a restore to before a `remove` and `rotate`, after which a member's device replays both
-     records and the removed member stays removed; with no device holding them, the vault
+     records and the key row, the removed member stays removed, and every member and the
+     escrow key still open the oldest version;
+   - a name written before a rotation and the same name checked after it: one `name_hmac`, so
+     the duplicate is refused; with no device holding them, the vault
      stays read-only.
 3. **V3. Desktop app:** user and recovery keys, vault create, sync, membership, rotation and
    fingerprint pinning, in `kydrive-desktop/core`. Vaults are turned on here, desktop only.
@@ -370,6 +402,6 @@ for one.
    by someone other than KyDrive's operators. An existing public C2SP witness may serve instead
    (unverified). Without an independent witness, shared vaults cannot promise timely
    revocation, and the spec would have to say so.
-6. **The checkpoint freshness window.** Recommendation: 24 hours. A shorter window shrinks
-   what a device cut off from the witness can expose, but blocks shared-vault uploads sooner
-   when the witness is unreachable.
+6. **How long a client may reuse a witness checkpoint.** Recommendation: 5 minutes, with no
+   offline fallback. Longer reuse means fewer witness requests on a busy sync, but a longer gap
+   after a removal.

@@ -1027,7 +1027,9 @@ the release before. No R step starts before the owner approves this amendment.
   | 4a (#160) | `recordTenancy`'s partial unique index on PostgreSQL, and `ApplyOrgs` and `OrgsSince` there (R1). The org poll under the elected worker in place of `orgsMu`, with a monotonic `orgs_since` (R3). The sign-in attempt limits it relies on move to R4. |
   | 4b | The suite-group reconcile under the elected worker (R3), and its tests on both backends (R1). |
 
-- **K. Per-org data keys** (D14, multi-tenant only), after R2 and before 5.
+- **K. Per-org data keys** (D14, multi-tenant only). It merges after R4 and before 5, in the
+  build order above. It depends only on R2 (where blobs live), so work on it may start once R2
+  merges.
   - `drive_org_keys`, the wrap under the deployment key, and the `kydrive-org` stanza for
     blobs, view copies, staging, thumbnails and text. Name and search keys per org, and the
     replica key cache.
