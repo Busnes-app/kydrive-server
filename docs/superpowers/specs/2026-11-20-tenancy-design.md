@@ -81,7 +81,7 @@ T "Tokens and suite contracts (multi-tenant)", **Downstream contract**, point by
 | 2 | Key every row by `org_id` | Every table in the inventory marked **O** gets `org_id` (D4). Derived tables (**D**) reach it through a foreign key. Platform tables (**P**) hold no customer data. | No `org_id` anywhere (`grep -rn org_id internal` finds none) | `TestEveryTableIsClassified`, `TestOrgOwnedTablesHaveOrgID` (see Isolation) |
 | 3 | Bind a local account to `(sub, org_id)`; refuse a known `sub` with a different `org_id` | `users.org_id` is set once, at account creation, from the token or webhook, and is immutable (trigger). A partial unique index on `(sso_provider, sso_subject)` for `kysignon` accounts, multi-tenant only and created by the mode-only DDL (see Triggers), makes `sub` resolve to one account. Callback, webhook, logout, suite group members and KyPost all compare the incoming `org_id` with the account's, and refuse a mismatch with the same answer as an unknown subject, plus an audit row `tenancy.org_mismatch`. | `DirectorySubject` resolves by subject alone (`sso_handlers.go:119`, `kysignon.go:92`, `kypost.go:334`, `suitegroups.go:215`); `idx_users_sso` is not unique (`migrations.go:50`) | A test per entry point: a known `sub` arrives with org B's ID |
 | 4 | Take the org only from a verified token, a signed webhook or a suite answer | D12, including its one exception (local staff administrators, from operator configuration). No route reads an org from a URL, form, cookie or header, except staff's org selection on `org` admin routes (see Admin surface), which applies only after the caller is proven staff. | n/a | `TestOrgSQLNamesOrgID`'s allowlist, plus review: the only `X-Ky-Org` reader is the admin middleware |
-| 5 | Stop serving an org whose status is not `active`; keep its data unless `deleted` | D11 and Lifecycle. Every principal resolution reads `drive_orgs` in the same statement as the user's status. | Principals check `users.status='active'` only (`access.go:20,22,43`, `apppasswords.go:223,248`, `devices.go:217,249`, `session.go:108`) | `TestSuspendedOrgServesNothing`: every credential type, before and after a status change |
+| 5 | Stop serving an org whose status is not `active`; keep its data unless `deleted` | D11 and Lifecycle. Ordinary principal resolution checks org status and freshness. The verified `export_only` amendment grants only the separate personal export during `deletion_scheduled` (Export). | Principals check `users.status='active'` only (`access.go:20,22,43`, `apppasswords.go:223,248`, `devices.go:217,249`, `session.go:108`) | `TestSuspendedOrgServesNothing`: every credential type, before and after a status change; `TestExportOnlyAdmissionAndLifecycle` for the separate exception |
 | 6 | Enforce its own quotas from `/api/suite/orgs` | D7, amended 2026-11-23: the suite-wide pool through KyIdentity's grants (`POST /api/suite/storage`) in `fits`, plus usage reports (Quotas). | `fits` checks one workspace (`store.go:682-692`) | Quota tests on every byte-adding path (see Quotas) |
 
 ## Inventory
@@ -747,6 +747,9 @@ change and KyDrive's.
 
 ### `suspended`, `deletion_scheduled`, or `enabled: false`
 
+Ordinary access follows the table below. Only an enabled `deletion_scheduled` org has the
+separate verified export-only exception described under Export.
+
 | What | Effect |
 |---|---|
 | Browser sessions | Refused through `activePrincipal`. KyIdentity also sends back-channel logouts for every client session (T "Suspension", step 3), which delete them (`sso_handlers.go:264-289`). |
@@ -897,23 +900,36 @@ deleted. Nothing any other member owns is deleted.
 
 ### Export
 
-- Owner decision (question 1): members export their own files while the org is active. The
-  deletion window is kept short, and KyDrive has no staff export.
-- **While active**, any member downloads what they can read: files, and folders as zips
-  (`drive_handlers.go:80`, capped by `KYDRIVE_MAX_ZIP_SIZE`, `config.go:332`). Unverified:
-  whether a workspace's root can be zipped in one request.
-- **Once deletion is scheduled**, the org is suspended and KyDrive serves it nothing. T's
-  export-only session "issues no codes or tokens and opens no suite or forward session" (T
-  "Views"), so it cannot reach KyDrive. T's staff export, offered when an account holder
-  cannot sign in, covers KyIdentity's data only.
-- **So the warning must come before scheduling.** A banner shown after scheduling arrives
-  too late, because KyDrive already refuses every credential by then. Deletion is scheduled
-  by the billing service (T `POST /orgs/{id}/schedule-deletion`), so the billing service
-  must warn first. Its cancellation confirmation, and the notice it mails the account
-  holder and members before it schedules deletion, must say to download files from KyDrive
-  first. The billing service is not built yet, so this is a requirement for its design. A
-  suspension for an unpaid bill also blocks downloads, so that notice must say the same
-  thing before it suspends.
+- **Active members** can still download what their normal grants let them read, including
+  folders as zips. The separate multi-tenant `GET /api/export` exports only their own My files.
+- **Scheduled deletion** follows T's amended `export_only` claim (2026-11-23), replacing the
+  earlier no-token exception. KyIdentity decides which members may receive the claim. KyDrive
+  requires an existing account bound to the token's `(sub, org_id)`, still active locally,
+  and a fresh, enabled `deletion_scheduled` org. It never provisions or reactivates a member
+  for export and never turns the claim into an ordinary session, even if the org is active.
+- **As built** (`internal/api/sso_handlers.go`, `internal/auth/session.go`): the separate
+  `sessions.export_only` flag (migration 13) lasts at most one hour and retains logout's
+  `sid`/`iat` binding. The callback redirects to `/api/export`. Only GET `/api/export`,
+  GET `/api/auth/me` (with `export_only:true`) and POST `/api/auth/logout` authenticate.
+  Ordinary Drive, editor, WebDAV, MCP, step-up and credential creation remain refused.
+  Each request checks account/org state and freshness; losing export eligibility ends the
+  session. Single-tenant installs ignore the claim, retain their existing response shapes
+  and have no `/api/export` route.
+- **Archive** (`internal/drive/export.go`, `internal/api/export.go`): one metadata snapshot
+  of the member's My files only, including folders, trash and all retained versions.
+  `manifest.json` records names, parent IDs, current revisions and version metadata;
+  `files/<file ID>/<revision>/<current name>` holds the bytes without duplicate-name
+  collisions. An empty account exports an empty manifest without creating a workspace.
+  Shared workspaces and other people's shared files are excluded; staff and client-supplied
+  IDs cannot expand the selection. The existing `KYDRIVE_MAX_ZIP_SIZE` cap counts every
+  version's logical bytes before streaming. Missing/corrupt bytes or a failed session
+  recheck before a version abort the stream, never produce a valid incomplete zip.
+- **Evidence:** `TestExportOnlySessionAndPersonalArchive` proves the archive and route
+  restrictions; `TestExportOnlyAdmissionAndLifecycle` covers mismatched/missing orgs,
+  no provisioning, active/suspended/deleted/disabled/stale orgs, inactive/erased members,
+  expiry and back-channel logout. `TestSingleTenantIgnoresExportOnlyClaim` pins single-mode parity.
+- There is no staff export. Billing notices must explain the export window and the final
+  deletion date. A suspended org without the restricted token remains unserved.
 
 ## Threat model
 
@@ -992,12 +1008,12 @@ the release before. No R step starts before the owner approves this amendment.
    - As built, in two PRs. 4a: the tokens, the webhook, the org poller, forced
      provisioning, the unique subject index and the installer refusal. 4b: suite groups per
      org, which needs a ky-primitives `suitedir.Groups` that takes an org (until then a
-     multi-tenant install does not read suite groups), and KyPost `org_id`. 4a departs from
-     the text above in four places:
-     - A back-channel logout by `sid` ends that login's sessions whatever org the token
-       names. Filtering by org would only let a mismatched token end less, and a logout only
-       takes access away. A subject-wide logout checks the org, logs a mismatch as an alert
-       and still applies, as above.
+     multi-tenant install does not read suite groups), and KyPost `org_id`. 4a and its merged follow-ups have these as-built details:
+     - Amended by #180: a back-channel logout by `sid` ends only that login's sessions
+       in the token's org, leaving and alerting on same-SID sessions in other orgs. Each
+       `jti` is spent in the revocation transaction, so a replay has no effect and a failed
+       revocation can be retried. A subject-wide logout checks the org, logs a mismatch as
+       an alert and still applies, as above.
      - The unique subject index is created with `IF NOT EXISTS` each time a multi-tenant
        store opens (`recordTenancy`), not by a versioned `initMultiTenant`. A single-tenant
        store never runs it.
@@ -1239,9 +1255,9 @@ the release before. No R step starts before the owner approves this amendment.
   PostgreSQL database. When it is down, every replica is unready. Its replication and failover
   are the operator's (the replica pattern).
 - **A capsule restore rolls back every org.** There is no per-org restore.
-- **No export after deletion is scheduled.** A member who did not download their files
-  before then cannot get them (question 1). The only warning is the billing service's,
-  before it schedules deletion (Export).
+- **Export ends at deletion.** A member who did not download their files
+  before then cannot get them. Billing must give the deletion date and explain the
+  personal export window before scheduling (Export).
 - **Backups outlive deletion.** A deleted org's blobs and rows stay in capsules and Restic
   snapshots until backup retention drops them. So does its wrapped key: anyone with a capsule
   and the custodian shares can still read the org. Per-org keys make everything outside the
@@ -1262,8 +1278,8 @@ the release before. No R step starts before the owner approves this amendment.
 
 ## Questions, settled by the owner on 2026-11-20
 
-1. **Export while deletion is scheduled.** Members export their own files while the org is
-   active. The deletion window is short, and there is no staff export (Export).
+1. **Export while deletion is scheduled.** Implemented against T's `export_only` amendment
+   (Export). Only members KyIdentity admits receive the restricted session; there is no staff export.
 2. **How KyDrive knows the staff org.** `KYDRIVE_STAFF_ORG`, recorded at first start and
    immutable like the mode.
 3. **Linked computers when an org is deleted.** Revoked without a wipe: the customer keeps

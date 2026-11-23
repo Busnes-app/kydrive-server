@@ -279,6 +279,8 @@ func leaver(t *testing.T, e *changeEnv) (string, []string) {
 // noChange lists every exported Store method that writes no change row, and why. A new method
 // fails TestEveryMutatorWritesAChange until it is classified here or added to mutators.
 var noChange = map[string]string{
+	"ExportPrincipal":         "read",
+	"PersonalExport":          "read; never creates a workspace",
 	"IssueViewTicket":         "viewing copies are not items",
 	"StoreViewCopy":           "viewing copies are not items",
 	"ViewTicket":              "read",

@@ -131,6 +131,9 @@ func TestMultiTenantStepUpChecksTheOrg(t *testing.T) {
 	if code := stepUp(map[string]any{"org_id": "org-b"}); code != http.StatusForbidden || m.mismatches(t, "step-up") != 2 {
 		t.Fatalf("step-up with another org: %d", code)
 	}
+	if code := stepUp(map[string]any{"org_id": "org-a", "export_only": true}); code != http.StatusForbidden {
+		t.Fatalf("export-only claim stepped up: %d", code)
+	}
 	if code := stepUp(map[string]any{"org_id": "org-a"}); code != http.StatusFound {
 		t.Fatalf("step-up in the account's org: %d", code)
 	}

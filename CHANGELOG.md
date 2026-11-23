@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Hosted members can export My files during scheduled deletion (tenancy groundwork).**
+  A verified KyIdentity `export_only` claim opens a separate session of at most one hour,
+  for existing members only. Its only product route, `GET /api/export`, downloads a zip of
+  their own files, trash and retained versions with a hierarchy manifest. Ordinary access,
+  shared-workspace access, editing and credential creation stay refused. Single-tenant
+  sign-in and routes are unchanged; multi-tenant startup remains disabled until its other gates pass.
+
 - **`/livez` and `/readyz` (tenancy R3).** `/livez` answers `{"status":"ok"}` without
   touching the database: use it for restarts. `/readyz` answers `{"status":"ready"}` while
   the server isn't stopping and the database answered a ping, and 503 `{"status":"unready"}`

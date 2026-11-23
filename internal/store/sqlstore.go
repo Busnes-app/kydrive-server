@@ -831,7 +831,7 @@ func (s *sessionStore) CreateSession(ctx context.Context, sess *Session, expecte
 		if !sess.StepUpAt.IsZero() {
 			stepUp = sess.StepUpAt
 		}
-		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID, stepUp)
+		_, err := tx.ExecContext(ctx, s.store.rebind(`INSERT INTO sessions (token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at, export_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`), sess.TokenHash, sess.UserID, sess.UserAgent, sess.IPAddress, sess.CreatedAt, sess.ExpiresAt, sess.SSOSID, stepUp, sess.ExportOnly)
 		return err
 	})
 	if err != nil {
@@ -1051,14 +1051,14 @@ func (u *userStore) revokePasswordGrants(ctx context.Context, tx *sql.Tx, userID
 
 func (s *sessionStore) GetSession(ctx context.Context, tokenHash string) (*Session, error) {
 	q := s.store.rebind(`
-SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at
+SELECT token_hash, user_id, user_agent, ip_address, created_at, expires_at, sso_sid, step_up_at, export_only
 FROM sessions WHERE token_hash = ?
 `)
 	var sess Session
 	var stepUp sql.NullTime
 	err := s.store.db.QueryRowContext(ctx, q, tokenHash).Scan(
 		&sess.TokenHash, &sess.UserID, &sess.UserAgent, &sess.IPAddress,
-		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID, &stepUp,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.SSOSID, &stepUp, &sess.ExportOnly,
 	)
 	sess.StepUpAt = stepUp.Time
 	if err != nil {

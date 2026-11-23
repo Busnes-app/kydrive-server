@@ -151,6 +151,7 @@ func claimsFromIDToken(idToken *oidc.IDToken) (*IdentityClaims, error) {
 		PreferredUsername string `json:"preferred_username"`
 		Role              string `json:"role"`
 		OrgID             string `json:"org_id"`
+		ExportOnly        bool   `json:"export_only"`
 		AuthTime          int64  `json:"auth_time"`
 	}
 	if err := idToken.Claims(&raw); err != nil || raw.Sub == "" {
@@ -167,5 +168,5 @@ func claimsFromIDToken(idToken *oidc.IDToken) (*IdentityClaims, error) {
 	if username == "" {
 		username = raw.Sub
 	}
-	return &IdentityClaims{Subject: raw.Sub, Email: raw.Email, Name: raw.Name, PreferredUsername: username, Role: raw.Role, OrgID: raw.OrgID, SessionID: raw.SID, IssuedAt: idToken.IssuedAt, AuthTime: authTime}, nil
+	return &IdentityClaims{Subject: raw.Sub, Email: raw.Email, Name: raw.Name, PreferredUsername: username, Role: raw.Role, OrgID: raw.OrgID, ExportOnly: raw.ExportOnly, SessionID: raw.SID, IssuedAt: idToken.IssuedAt, AuthTime: authTime}, nil
 }
