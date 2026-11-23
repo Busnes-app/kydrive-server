@@ -23,7 +23,7 @@ var (
 		"drive_link_users": "drive_links", "drive_suite_groups": "drive_workspaces",
 	}
 	PlatformTables = []string{
-		"schema_migrations", "server_settings", "sso_logouts", "sso_subject_logouts",
+		"schema_migrations", "server_settings", "sso_logout_tokens", "sso_logouts", "sso_subject_logouts",
 		"drive_schema", "drive_key", "drive_name_scrub", "drive_blob_retire", "drive_blob_kyb1",
 		"drive_orgs",
 	}

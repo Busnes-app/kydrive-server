@@ -100,6 +100,10 @@ func TestVerifyLogoutToken(t *testing.T) {
 			c["events"] = map[string]any{logoutEvent: nil}
 			return key
 		},
+		"no jti": func(h map[string]string, c map[string]any) *rsa.PrivateKey {
+			delete(c, "jti")
+			return key
+		},
 		"no sid or sub": func(h map[string]string, c map[string]any) *rsa.PrivateKey {
 			delete(c, "sid")
 			delete(c, "sub")

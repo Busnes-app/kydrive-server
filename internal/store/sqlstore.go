@@ -817,17 +817,38 @@ const SSOLogoutFence = 10 * time.Minute
 // DirectorySubject, a KySignOn subject also names the SCIM account with that subject.
 const ssoSubjectUser = `u.sso_subject = f.subject AND (u.sso_provider = f.provider OR (f.provider = 'kysignon' AND u.sso_provider = 'scim'))`
 
-func (s *sessionStore) EndSSOSession(ctx context.Context, sid string, fenceUntil time.Time) error {
+func (s *sessionStore) EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time) (int, error) {
 	now := time.Now().UTC()
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logouts WHERE expires_at <= ?`), now); err != nil {
-		return err
+		return 0, err
 	}
 	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logouts (sid, expires_at) VALUES (?, ?) ON CONFLICT (sid) DO UPDATE SET expires_at = excluded.expires_at`), sid, fenceUntil.UTC()); err != nil {
-		return err
+		return 0, err
 	}
-	return s.deleteSessions(ctx, func(tx *sql.Tx) error {
-		return s.store.drive.RevokeSSOEditors(ctx, tx, sid)
-	}, `sso_sid = ?`, sid)
+	if org == "" {
+		return 0, s.deleteSessions(ctx, func(tx *sql.Tx) error {
+			return s.store.drive.RevokeSSOEditors(ctx, tx, sid, "")
+		}, `sso_sid = ?`, sid)
+	}
+	var other int
+	if err := s.store.db.QueryRowContext(ctx, s.store.rebind(`SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.sso_sid = ? AND u.org_id <> ?`), sid, org).Scan(&other); err != nil {
+		return 0, err
+	}
+	return other, s.deleteSessions(ctx, func(tx *sql.Tx) error {
+		return s.store.drive.RevokeSSOEditors(ctx, tx, sid, org)
+	}, `sso_sid = ? AND user_id IN (SELECT id FROM users WHERE org_id = ?)`, sid, org)
+}
+
+func (s *sessionStore) SpendLogoutToken(ctx context.Context, jti string, expires time.Time) (bool, error) {
+	if _, err := s.store.db.ExecContext(ctx, s.store.rebind(`DELETE FROM sso_logout_tokens WHERE expires_at <= ?`), time.Now().UTC()); err != nil {
+		return false, err
+	}
+	res, err := s.store.db.ExecContext(ctx, s.store.rebind(`INSERT INTO sso_logout_tokens (jti, expires_at) VALUES (?, ?) ON CONFLICT (jti) DO NOTHING`), jti, expires.UTC())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // fenceSSOSubject commits a fence refusing the subject's logins issued before cutoff until

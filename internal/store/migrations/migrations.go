@@ -305,6 +305,13 @@ UPDATE users SET directory_rev = 0;`,
 		Postgres: `ALTER TABLE users RENAME COLUMN directory_ts TO directory_rev;
 UPDATE users SET directory_rev = 0;`,
 	},
+	{
+		// Back-channel logout tokens already spent, by jti, until each token expires.
+		Version:  12,
+		Name:     "logout_token_ledger",
+		SQLite:   `CREATE TABLE IF NOT EXISTS sso_logout_tokens (jti TEXT PRIMARY KEY, expires_at DATETIME NOT NULL);`,
+		Postgres: `CREATE TABLE IF NOT EXISTS sso_logout_tokens (jti TEXT PRIMARY KEY, expires_at TIMESTAMPTZ NOT NULL);`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

@@ -219,9 +219,13 @@ func (s *Store) RevokeUserCredentials(ctx context.Context, tx *sql.Tx, user stri
 
 // RevokeSSOEditors revokes, like RevokeUserEditors, the editor sessions opened through the
 // SSO login sid, whether or not its browser session still exists.
-func (s *Store) RevokeSSOEditors(ctx context.Context, tx *sql.Tx, sid string) error {
+// A non-empty org limits it to that org's accounts.
+func (s *Store) RevokeSSOEditors(ctx context.Context, tx *sql.Tx, sid, org string) error {
 	if sid == "" {
 		return nil
+	}
+	if org != "" {
+		return s.revokeEditors(ctx, tx, `sso_sid=? AND user_id IN (SELECT id FROM users WHERE org_id=?)`, sid, org)
 	}
 	return s.revokeEditors(ctx, tx, `sso_sid=?`, sid)
 }

@@ -298,10 +298,31 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 		s.writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	// A token acts once: a replay answers like the first delivery and changes nothing.
+	fresh, err := s.store.Sessions().SpendLogoutToken(r.Context(), claims.JTI, claims.Expires)
+	if err != nil {
+		log.Printf("sso: back-channel logout: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "logout failed")
+		return
+	}
+	if !fresh {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	rec := &store.AuditRecord{Action: "auth.sso_backchannel_logout", Resource: "session", IPAddress: s.requestIP(r)}
 	fenceUntil := time.Now().Add(store.SSOLogoutFence)
 	if claims.SessionID != "" {
-		err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, fenceUntil)
+		org := ""
+		if s.multi() {
+			org = claims.OrgID
+		}
+		var other int
+		other, err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, org, fenceUntil)
+		// A sid is one login of one account, so another org's session is a KyIdentity bug: it
+		// is left alone and reported.
+		if other > 0 {
+			log.Printf("ALERT sso: back-channel logout for sid in org %s also matched %d session(s) elsewhere; left them", claims.OrgID, other)
+		}
 	} else {
 		// iat has whole-second precision: round up so a login from that same second ends too.
 		err = s.store.Sessions().EndSSOSubject(r.Context(), "kysignon", claims.Subject, claims.IssuedAt.Add(time.Second), fenceUntil)

@@ -16,7 +16,9 @@ type LogoutClaims struct {
 	Subject   string
 	SessionID string
 	IssuedAt  time.Time
-	OrgID     string // multi-tenant KyIdentity only
+	OrgID     string    // multi-tenant KyIdentity only
+	JTI       string    // the token's own ID, spent once (store.SpendLogoutToken)
+	Expires   time.Time // when the token stops verifying, so its JTI can be forgotten
 }
 
 // verifyLogout checks a logout token per OpenID Connect Back-Channel Logout 1.0 §2.6:
@@ -38,18 +40,19 @@ func (f *oauthFlow) verifyLogout(ctx context.Context, raw string) (*LogoutClaims
 		Sub    string                     `json:"sub"`
 		SID    string                     `json:"sid"`
 		OrgID  string                     `json:"org_id"`
+		JTI    string                     `json:"jti"`
 		IAT    int64                      `json:"iat"`
 		Nonce  *json.RawMessage           `json:"nonce"`
 		Events map[string]json.RawMessage `json:"events"`
 	}
-	if err := token.Claims(&claims); err != nil || claims.Nonce != nil || claims.IAT == 0 || (claims.Sub == "" && claims.SID == "") {
+	if err := token.Claims(&claims); err != nil || claims.Nonce != nil || claims.IAT == 0 || claims.JTI == "" || len(claims.JTI) > 255 || (claims.Sub == "" && claims.SID == "") {
 		return nil, ErrInvalidLogoutToken
 	}
 	var event map[string]any
 	if err := json.Unmarshal(claims.Events[backchannelLogoutEvent], &event); err != nil || event == nil {
 		return nil, ErrInvalidLogoutToken
 	}
-	return &LogoutClaims{Subject: claims.Sub, SessionID: claims.SID, IssuedAt: time.Unix(claims.IAT, 0).UTC(), OrgID: claims.OrgID}, nil
+	return &LogoutClaims{Subject: claims.Sub, SessionID: claims.SID, IssuedAt: time.Unix(claims.IAT, 0).UTC(), OrgID: claims.OrgID, JTI: claims.JTI, Expires: token.Expiry.UTC()}, nil
 }
 
 // jwtType reads the protected header's typ; call it only after the signature verified.

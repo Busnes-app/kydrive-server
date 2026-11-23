@@ -110,6 +110,7 @@ func source(t *testing.T) (string, string) {
 		`INSERT INTO users(id,username,created_at,updated_at) VALUES('old','old',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
 		`INSERT INTO mfa_challenges(token_hash,user_id,expires_at) VALUES('mfa','owner',CURRENT_TIMESTAMP)`,
 		`INSERT INTO sso_logouts(sid,expires_at) VALUES('sid',CURRENT_TIMESTAMP)`,
+		`INSERT INTO sso_logout_tokens(jti,expires_at) VALUES('jti',CURRENT_TIMESTAMP)`,
 		`INSERT INTO sso_subject_logouts(provider,subject,cutoff,expires_at) VALUES('kysignon','s',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
 		`INSERT INTO drive_suite_groups(kyid,workspace,grp) VALUES('kyid','` + w.ID + `','team')`,
 		// Change seqs with gaps, as purged history leaves them.

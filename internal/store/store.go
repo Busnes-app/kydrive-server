@@ -80,7 +80,12 @@ type SessionStore interface {
 	// before cutoff and fences that subject's earlier logins until fenceUntil.
 	EndSSOSubject(ctx context.Context, provider, subject string, cutoff, fenceUntil time.Time) error
 	// EndSSOSession ends every session of an SSO login and fences its sid until fenceUntil.
-	EndSSOSession(ctx context.Context, sid string, fenceUntil time.Time) error
+	// A non-empty org limits it to accounts in that org, and returns how many of the sid's
+	// sessions it left because their account is elsewhere.
+	EndSSOSession(ctx context.Context, sid, org string, fenceUntil time.Time) (otherOrg int, err error)
+	// SpendLogoutToken records a logout token's jti until it expires, and reports false when
+	// it was already spent.
+	SpendLogoutToken(ctx context.Context, jti string, expires time.Time) (bool, error)
 	EndSession(ctx context.Context, tokenHash string) error
 	CleanExpiredSessions(ctx context.Context) error
 	CleanExpiredMFAChallenges(ctx context.Context) error

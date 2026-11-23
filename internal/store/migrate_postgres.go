@@ -29,7 +29,7 @@ import (
 var migrationTables = []string{
 	"drive_orgs", "drive_key", "server_settings",
 	"users", "groups", "group_members", "sessions", "audit_records", "mfa_challenges",
-	"sso_logouts", "sso_subject_logouts",
+	"sso_logouts", "sso_logout_tokens", "sso_subject_logouts",
 	"drive_workspaces", "drive_personal_workspaces", "drive_grants", "drive_suite_groups",
 	"drive_folders", "drive_files", "drive_versions", "drive_changes", "drive_change_floor",
 	"drive_events", "drive_shares", "drive_links", "drive_link_users", "drive_service_tokens",

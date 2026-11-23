@@ -43,7 +43,8 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES('h','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00','sid')`); err != nil {
 				return err
 			}
-			return st.Sessions().EndSSOSession(ctx, "sid", time.Now().Add(time.Minute))
+			_, err := st.Sessions().EndSSOSession(ctx, "sid", "", time.Now().Add(time.Minute))
+			return err
 		},
 		"subject-wide back-channel logout": func(st store.Store) error {
 			if err := drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET sso_provider='kysignon',sso_subject='worker-sub' WHERE id='worker'`); err != nil {
@@ -378,7 +379,8 @@ func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
 	loginAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 	for name, logout := range map[string]func(store.Store) error{
 		"sid": func(st store.Store) error {
-			return st.Sessions().EndSSOSession(ctx, "sid-old", time.Now().Add(time.Minute))
+			_, err := st.Sessions().EndSSOSession(ctx, "sid-old", "", time.Now().Add(time.Minute))
+			return err
 		},
 		"subject": func(st store.Store) error {
 			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", loginAt.Add(time.Second), time.Now().Add(time.Minute))
