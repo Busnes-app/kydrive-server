@@ -43,7 +43,8 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at,sso_sid) VALUES('h','worker','','',CURRENT_TIMESTAMP,'2999-01-01 00:00:00','sid')`); err != nil {
 				return err
 			}
-			return st.Sessions().EndSSOSession(ctx, "sid", time.Now().Add(time.Minute))
+			_, err := st.Sessions().EndSSOSession(ctx, "sid", "", time.Now().Add(time.Minute), store.LogoutToken{})
+			return err
 		},
 		"subject-wide back-channel logout": func(st store.Store) error {
 			if err := drive.ExecSQL(ctx, st.Drive(), `UPDATE users SET sso_provider='kysignon',sso_subject='worker-sub' WHERE id='worker'`); err != nil {
@@ -52,7 +53,7 @@ func TestAccountSecurityRevokesEditorSessions(t *testing.T) {
 			if err := drive.ExecSQL(ctx, st.Drive(), `INSERT INTO sessions(token_hash,user_id,user_agent,ip_address,created_at,expires_at) VALUES('h','worker','','','2000-01-01 00:00:00','2999-01-01 00:00:00')`); err != nil {
 				return err
 			}
-			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", time.Now(), time.Now().Add(time.Minute))
+			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", time.Now(), time.Now().Add(time.Minute), store.LogoutToken{})
 		},
 		"directory disable": func(st store.Store) error {
 			_, err := st.Users().ApplyDirectoryUser(ctx, &store.DirectoryUser{ID: "worker", Username: "worker", Email: "worker@local.test", Active: false})
@@ -378,10 +379,11 @@ func TestBackchannelLogoutRevokesEditorsOfPrunedSessions(t *testing.T) {
 	loginAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 	for name, logout := range map[string]func(store.Store) error{
 		"sid": func(st store.Store) error {
-			return st.Sessions().EndSSOSession(ctx, "sid-old", time.Now().Add(time.Minute))
+			_, err := st.Sessions().EndSSOSession(ctx, "sid-old", "", time.Now().Add(time.Minute), store.LogoutToken{})
+			return err
 		},
 		"subject": func(st store.Store) error {
-			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", loginAt.Add(time.Second), time.Now().Add(time.Minute))
+			return st.Sessions().EndSSOSubject(ctx, "kysignon", "worker-sub", loginAt.Add(time.Second), time.Now().Add(time.Minute), store.LogoutToken{})
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

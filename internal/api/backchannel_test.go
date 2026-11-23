@@ -360,3 +360,32 @@ func TestSSOFlowCookiesAreHostOnly(t *testing.T) {
 		t.Fatalf("planted flow cookies: %d %s", got.Code, got.Body.String())
 	}
 }
+
+// A logout token acts once: delivered again, it answers 200 as before, ends nothing new and
+// writes no second audit row.
+func TestBackchannelLogoutTokenActsOnce(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	f := newFakeKySignOn(t)
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer, "client", true
+	srv = api.NewServer(cfg, st)
+	ssoLogin(t, srv, f, "alice", "sid-1")
+	token := f.logoutToken(t, "alice", "sid-1")
+	for i := range 2 {
+		if w := postLogout(srv, token); w.Code != http.StatusOK {
+			t.Fatalf("delivery %d: %d %s", i+1, w.Code, w.Body.String())
+		}
+	}
+	recs, _, err := st.Audit().ListAuditRecords(context.Background(), 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, r := range recs {
+		if r.Action == "auth.sso_backchannel_logout" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d logout audit rows, want 1", n)
+	}
+}

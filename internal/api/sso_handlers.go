@@ -298,13 +298,26 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 		s.writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
+	// A token acts once, spent with the revocation it carries: a replay answers like the first
+	// delivery and changes nothing, and a failed revocation leaves it for the retry.
+	token := store.LogoutToken{JTI: claims.JTI, Expires: claims.Expires}
 	rec := &store.AuditRecord{Action: "auth.sso_backchannel_logout", Resource: "session", IPAddress: s.requestIP(r)}
 	fenceUntil := time.Now().Add(store.SSOLogoutFence)
 	if claims.SessionID != "" {
-		err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, fenceUntil)
+		org := ""
+		if s.multi() {
+			org = claims.OrgID
+		}
+		var other int
+		other, err = s.store.Sessions().EndSSOSession(r.Context(), claims.SessionID, org, fenceUntil, token)
+		// A sid is one login of one account, so another org's session is a KyIdentity bug: it
+		// is left alone and reported.
+		if other > 0 {
+			log.Printf("ALERT sso: back-channel logout for sid in org %s also matched %d session(s) elsewhere; left them", claims.OrgID, other)
+		}
 	} else {
 		// iat has whole-second precision: round up so a login from that same second ends too.
-		err = s.store.Sessions().EndSSOSubject(r.Context(), "kysignon", claims.Subject, claims.IssuedAt.Add(time.Second), fenceUntil)
+		err = s.store.Sessions().EndSSOSubject(r.Context(), "kysignon", claims.Subject, claims.IssuedAt.Add(time.Second), fenceUntil, token)
 		if user, lookupErr := store.DirectorySubject(r.Context(), s.store.Users(), claims.Subject); err == nil && lookupErr == nil {
 			rec.UserID = user.ID
 			// A subject is one account in one org, so a mismatch is a KyIdentity bug. The logout
@@ -313,6 +326,10 @@ func (s *Server) handleKySignOnBackchannelLogout(w http.ResponseWriter, r *http.
 				log.Printf("ALERT sso: back-channel logout for %s names another org", user.ID)
 			}
 		}
+	}
+	if errors.Is(err, store.ErrLogoutTokenSpent) {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 	if err != nil {
 		log.Printf("sso: back-channel logout: %v", err)

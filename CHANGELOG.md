@@ -11,6 +11,9 @@ Interface and behaviour changes, newest first.
   server keeps serving for 5 more seconds, so a load balancer takes it out before requests
   fail; a stop therefore takes 5 seconds longer. The Compose healthcheck and the Kubernetes
   probes now use them. `/healthz` is unchanged.
+- **Back-channel logout tokens act once.** A token must carry a `jti`; one already received
+  answers 200 and changes nothing. On a multi-tenant install a logout by session ID ends only
+  sessions in the token's org. KyIdentity's tokens already carry a `jti`.
 - **PostgreSQL: a write outside a transaction reruns on a serialization failure.** Before, two
   requests updating one row at once, such as two completions of one upload, could fail one with
   a database error instead of its normal answer. SQLite is unchanged.
