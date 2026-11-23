@@ -182,7 +182,7 @@ func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 // owner's peer folder (made or remade here), under the first free numbered name; the session
 // expires with the ticket. The last bytes publish the file and spend the ticket. f is nil
 // until then.
-func (s *Store) TicketUpload(ctx context.Context, staging string, blobs objects.Store, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
+func (s *Store) TicketUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
 	if !isPeer(ctx) {
 		return 0, nil, ErrDenied
 	}
@@ -238,7 +238,7 @@ func (s *Store) TicketUpload(ctx context.Context, staging string, blobs objects.
 
 // dropTicket discards a refused ticket's staged bytes, if any, and the ticket: switched off
 // or unpaired, nothing is published and nothing kept.
-func (s *Store) dropTicket(ctx context.Context, staging string, t Ticket) {
+func (s *Store) dropTicket(ctx context.Context, staging objects.Tree, t Ticket) {
 	if err := s.db.QueryRowContext(ctx, `SELECT session FROM drive_peer_tickets WHERE id=?`, t.ID).Scan(&t.Session); err == nil && t.Session != "" {
 		if err := s.dropUpload(ctx, staging, t.Session, nil); err != nil {
 			log.Printf("kypost ticket %s: staged bytes not removed: %v", t.ID, err)
@@ -250,7 +250,7 @@ func (s *Store) dropTicket(ctx context.Context, staging string, t Ticket) {
 }
 
 // ticketSession opens t's upload session and binds it to t; a concurrent first request loses.
-func (s *Store) ticketSession(ctx context.Context, staging string, t Ticket) (string, error) {
+func (s *Store) ticketSession(ctx context.Context, staging objects.Tree, t Ticket) (string, error) {
 	var u UploadSession
 	err := s.transaction(ctx, func(tx *sql.Tx) (err error) {
 		u.Workspace, u.Parent, err = s.peerFolder(ctx, tx, t.Owner)

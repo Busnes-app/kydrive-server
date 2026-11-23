@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/google/uuid"
 )
 
@@ -313,7 +314,7 @@ func CheckStaged(tmp string, key []byte, id string, size int64, digest string) e
 
 // ExpireUpload is one session's expiry, as ExpireUploads runs it after its selection.
 func ExpireUpload(ctx context.Context, s *Store, staging, id string, now int64) error {
-	return s.expireUpload(ctx, staging, id, now)
+	return s.expireUpload(ctx, objects.DirTree(staging), id, now)
 }
 
 // ClaimCompletion is CompleteUpload's claim, renewed every interval until release.

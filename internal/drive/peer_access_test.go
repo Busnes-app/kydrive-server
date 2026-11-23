@@ -105,7 +105,7 @@ func (e *peerEnv) save(t *testing.T, user, name, body string) drive.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, f, err := e.d.TicketUpload(e.peer, e.staging, objects.Dir(e.blobs), testKey, tk, 0, int64(len(body)), strings.NewReader(body))
+	_, f, err := e.d.TicketUpload(e.peer, objects.DirTree(e.staging), objects.Dir(e.blobs), testKey, tk, 0, int64(len(body)), strings.NewReader(body))
 	if err != nil || f == nil {
 		t.Fatalf("ticket upload: %v %v", f, err)
 	}
@@ -169,7 +169,7 @@ func TestPeerCannotReachAnythingElse(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			return d.CancelUpload(c, e.staging, "worker", u.ID)
+			return d.CancelUpload(c, objects.DirTree(e.staging), "worker", u.ID)
 		},
 		"Changes":  func(c context.Context) error { _, _, _, err := d.Changes(c, "worker", e.home, 0, 10); return err },
 		"Children": func(c context.Context) error { _, _, err := d.Children(c, "worker", e.home, e.attachments); return err },

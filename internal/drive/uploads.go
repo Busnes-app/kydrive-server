@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/objects"
@@ -148,7 +146,7 @@ func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, err
 
 // AppendUpload seals exactly length bytes of r as the segment starting at start, which must be
 // the session's received count. Concurrent appends at one offset: one wins, the rest ErrConflict.
-func (s *Store) AppendUpload(ctx context.Context, staging string, key []byte, user, id string, start, length int64, r io.Reader) (UploadSession, error) {
+func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, key []byte, user, id string, start, length int64, r io.Reader) (UploadSession, error) {
 	u, err := s.Upload(ctx, user, id)
 	if err != nil {
 		return u, err
@@ -159,12 +157,8 @@ func (s *Store) AppendUpload(ctx context.Context, staging string, key []byte, us
 	if length < 1 || length > u.Size-start {
 		return u, ErrInvalid
 	}
-	dir := filepath.Join(staging, id)
-	if err = os.MkdirAll(dir, 0o700); err != nil {
-		return u, err
-	}
-	path := filepath.Join(dir, uuid.NewString())
-	if err = writeSegment(dir, path, key, r, length); err != nil {
+	segments, name := staging.Sub(id), uuid.NewString()
+	if err = writeSegment(segments, name, key, r, length); err != nil {
 		return u, err
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
@@ -175,47 +169,38 @@ func (s *Store) AppendUpload(ctx context.Context, staging string, key []byte, us
 		if n, err := res.RowsAffected(); err != nil || n != 1 {
 			return cmp.Or(err, ErrConflict)
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_segments(session,start,path,size) VALUES(?,?,?,?)`, id, start, filepath.Base(path), length)
+		_, err = tx.ExecContext(ctx, `INSERT INTO drive_upload_segments(session,start,path,size) VALUES(?,?,?,?)`, id, start, name, length)
 		return err
 	})
 	if err != nil {
-		os.Remove(path)
+		segments.Remove(context.WithoutCancel(ctx), name)
 		return u, err
 	}
 	u.Received += length
 	return u, nil
 }
 
-func writeSegment(dir, path string, key []byte, r io.Reader, length int64) error {
-	f, err := os.CreateTemp(dir, ".part-*")
+// writeSegment seals exactly length bytes of r as segments' object name.
+func writeSegment(segments objects.Store, name string, key []byte, r io.Reader, length int64) error {
+	w, err := segments.Create(context.Background())
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-	n, err := seal(f, key, blobBinding(filepath.Base(path)), io.LimitReader(r, length+1))
+	defer w.Discard()
+	n, err := seal(w, key, blobBinding(name), io.LimitReader(r, length+1))
 	if err != nil {
 		return err
 	}
 	if n != length {
 		return fmt.Errorf("%w: chunk is %d bytes, not %d", ErrInvalid, n, length)
 	}
-	if err = f.Sync(); err != nil {
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(f.Name(), path); err != nil {
-		return err
-	}
-	return SyncDirectory(dir)
+	return w.Publish(name)
 }
 
 // CompleteUpload publishes a fully received session as a file version and removes it. It ignores
 // cancellation: a proxy that times out on a long re-seal drops the connection, and stopping then
 // would only make every Retry re-seal the whole file again. The size cap bounds the work.
-func (s *Store) CompleteUpload(ctx context.Context, staging string, blobs objects.Store, key []byte, user, id string) (File, error) {
+func (s *Store) CompleteUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, key []byte, user, id string) (File, error) {
 	ctx = context.WithoutCancel(ctx)
 	u, err := s.Upload(ctx, user, id)
 	if err != nil {
@@ -297,7 +282,7 @@ func rowsAffected(res sql.Result, err error) (int64, error) {
 	return res.RowsAffected()
 }
 
-func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, key []byte, id string) error {
+func (s *Store) readSegments(ctx context.Context, w io.Writer, staging objects.Tree, key []byte, id string) error {
 	rows, err := s.db.QueryContext(ctx, `SELECT path,size FROM drive_upload_segments WHERE session=? ORDER BY start`, id)
 	if err != nil {
 		return err
@@ -320,7 +305,7 @@ func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, k
 		return err
 	}
 	for _, g := range segments {
-		r, err := openFile(filepath.Join(staging, id, g.path), key, true, g.size, blobBinding(filepath.Base(g.path)))
+		r, err := openObject(staging.Sub(id), g.path, key, true, g.size, blobBinding(g.path))
 		if err != nil {
 			return err
 		}
@@ -334,7 +319,7 @@ func (s *Store) readSegments(ctx context.Context, w io.Writer, staging string, k
 }
 
 // CancelUpload discards the caller's session and its staged bytes.
-func (s *Store) CancelUpload(ctx context.Context, staging, user, id string) error {
+func (s *Store) CancelUpload(ctx context.Context, staging objects.Tree, user, id string) error {
 	if isPeer(ctx) {
 		return ErrDenied
 	}
@@ -357,7 +342,7 @@ func (s *Store) CancelUpload(ctx context.Context, staging, user, id string) erro
 
 // dropUpload removes a session and its staging; check, when set, runs first in the same
 // transaction and can refuse.
-func (s *Store) dropUpload(ctx context.Context, staging, id string, check func(*sql.Tx) error) error {
+func (s *Store) dropUpload(ctx context.Context, staging objects.Tree, id string, check func(*sql.Tx) error) error {
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		if check != nil {
 			if err := check(tx); err != nil {
@@ -373,12 +358,12 @@ func (s *Store) dropUpload(ctx context.Context, staging, id string, check func(*
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(staging, id))
+	return staging.RemoveAll(ctx, id)
 }
 
 // expireUpload drops one session only if the deleting transaction still finds it expired and
 // unclaimed, so a completion that claimed it after the selection keeps its bytes.
-func (s *Store) expireUpload(ctx context.Context, staging, id string, now int64) error {
+func (s *Store) expireUpload(ctx context.Context, staging objects.Tree, id string, now int64) error {
 	gone := false
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
 		gone = false
@@ -393,13 +378,13 @@ func (s *Store) expireUpload(ctx context.Context, staging, id string, now int64)
 	if err != nil || !gone {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(staging, id))
+	return staging.RemoveAll(ctx, id)
 }
 
 // ExpireUploads removes expired sessions, then staging directories with no session that are an
 // hour old (crash residue; the hour keeps a session that is starting up safe). Staging is not
 // user data.
-func (s *Store) ExpireUploads(ctx context.Context, staging string) (int, error) {
+func (s *Store) ExpireUploads(ctx context.Context, staging objects.Tree) (int, error) {
 	// A completion in progress holds its claim; expiring it would delete the bytes it is sealing.
 	now := time.Now().Unix()
 	expired, err := column(ctx, s.db, `SELECT id FROM drive_upload_sessions WHERE expires<=? AND completing<?`, now, now-int64(completionClaim/time.Second))
@@ -410,22 +395,18 @@ func (s *Store) ExpireUploads(ctx context.Context, staging string) (int, error) 
 	for _, id := range expired {
 		errs = append(errs, s.expireUpload(ctx, staging, id, now))
 	}
-	entries, err := os.ReadDir(staging)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		errs = append(errs, err)
-	}
 	cutoff := time.Now().Add(-time.Hour)
-	for _, e := range entries {
-		info, err := e.Info()
-		if err != nil || !e.IsDir() || info.ModTime().After(cutoff) {
-			continue
+	errs = append(errs, staging.List(ctx, func(name string, modified time.Time) error {
+		if modified.After(cutoff) {
+			return nil
 		}
 		var n int
-		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_upload_sessions WHERE id=?`, e.Name()).Scan(&n); err != nil || n > 0 {
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_upload_sessions WHERE id=?`, name).Scan(&n); err != nil || n > 0 {
 			errs = append(errs, err)
-			continue
+			return nil
 		}
-		errs = append(errs, os.RemoveAll(filepath.Join(staging, e.Name())))
-	}
+		errs = append(errs, staging.RemoveAll(ctx, name))
+		return nil
+	}))
 	return len(expired), errors.Join(errs...)
 }
