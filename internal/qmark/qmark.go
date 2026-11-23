@@ -94,22 +94,56 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return conn{cn.(*stdlib.Conn)}, nil
+	return &conn{Conn: cn.(*stdlib.Conn)}, nil
 }
 
 // conn is a pgx connection whose query entry points rebind; every other method is pgx's.
-type conn struct{ *stdlib.Conn }
+type conn struct {
+	*stdlib.Conn
+	inTx bool
+}
 
-func (c conn) Prepare(q string) (driver.Stmt, error) { return c.Conn.Prepare(Rebind(q)) }
-func (c conn) PrepareContext(ctx context.Context, q string) (driver.Stmt, error) {
+func (c *conn) Prepare(q string) (driver.Stmt, error) { return c.Conn.Prepare(Rebind(q)) }
+func (c *conn) PrepareContext(ctx context.Context, q string) (driver.Stmt, error) {
 	return c.Conn.PrepareContext(ctx, Rebind(q))
 }
-func (c conn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
-	return c.Conn.ExecContext(ctx, Rebind(q), args)
+
+// ExecContext reruns a statement outside a transaction while it fails with a serialization
+// failure or deadlock: PostgreSQL rolled it back whole, so a rerun is the same statement once.
+// Inside a transaction the error stands, and Retry reruns the transaction.
+func (c *conn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
+	q = Rebind(q)
+	if c.inTx {
+		return c.Conn.ExecContext(ctx, q, args)
+	}
+	var res driver.Result
+	err := Retry(ctx, func() (err error) {
+		res, err = c.Conn.ExecContext(ctx, q, args)
+		return err
+	})
+	return res, err
 }
-func (c conn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *conn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	return c.Conn.QueryContext(ctx, Rebind(q), args)
 }
+
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	t, err := c.Conn.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	c.inTx = true
+	return tx{t, c}, nil
+}
+
+// tx marks its connection as outside a transaction again once it ends.
+type tx struct {
+	driver.Tx
+	c *conn
+}
+
+func (t tx) Commit() error   { t.c.inTx = false; return t.Tx.Commit() }
+func (t tx) Rollback() error { t.c.inTx = false; return t.Tx.Rollback() }
 
 // Rebind numbers q's ? and ?NNN placeholders, skipping string literals, quoted identifiers, comments
 // and dollar-quoted bodies.

@@ -4,6 +4,9 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **PostgreSQL: a write outside a transaction reruns on a serialization failure.** Before, two
+  requests updating one row at once, such as two completions of one upload, could fail one with
+  a database error instead of its normal answer. SQLite is unchanged.
 - **`migrate-postgres` moves a single-tenant SQLite install to PostgreSQL (tenancy R1b).** It
   copies every table into an empty database in one transaction and checks each table's rows
   and content before it commits; `-check` rolls the copy back. The target DSN comes only from
