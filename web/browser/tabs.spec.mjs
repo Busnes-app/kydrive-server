@@ -34,7 +34,8 @@ test('settings tabs: arrows move between tabs, Enter or Space opens one', async 
   await expect(trash).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Enter');
   await expect(guest).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await guest.getAttribute('id'));
+  // Base UI keeps the outgoing panel mounted, inert, while its exit transition runs.
+  await expect(page.locator('[role=tabpanel]:not([inert])')).toHaveAttribute('aria-labelledby', await guest.getAttribute('id'));
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
   await expect(list.getByRole('tab', { name: 'System' })).toBeFocused();
