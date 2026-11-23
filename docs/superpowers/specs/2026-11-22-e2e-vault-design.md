@@ -69,8 +69,13 @@ which Kotlin implementation supports the hybrid recipient).
 - **Schema** (both backends):
   - `drive_user_keys(user_id, public_key, fingerprint, recovery_copy, created)`;
   - `drive_workspaces.vault` (boolean);
-  - `drive_vault_members(workspace, user_id, wrapped_key, added_by, added)`;
-  - `drive_vault_escrow(wrapped_key)` per vault;
+  - `drive_vault_keys(workspace, generation, previous, created)`: one row per vault key
+    generation. `previous` is the generation before, encrypted to this one (Key generations);
+  - `drive_vault_members(workspace, user_id, generation, wrapped_key, added_by, added)`, with
+    one row per member, wrapping the current generation;
+  - `drive_vault_escrow(workspace, generation, wrapped_key)`, one row per vault, wrapping the
+    current generation to the escrow key;
+  - `drive_versions.vault_generation`, the generation a vault version was encrypted under;
   - `drive_escrow_key(public_key, fingerprint, created, created_by)`, single-tenant only.
 
   On the multi-tenant service every table is org-owned (tenancy D4).
@@ -94,9 +99,22 @@ which Kotlin implementation supports the hybrid recipient).
   member and the target is an active account (in the caller's org on the multi-tenant
   service). It cannot check that the wrap is correct.
 
-  Removing a member deletes their row at once, and the server stops serving them. The
-  remaining members' clients then rotate the vault key for new versions. Files the removed
+  Removing a member deletes their row at once, and the server stops serving them. A
+  remaining member's client then rotates the vault key (Key generations). Files the removed
   member already downloaded stay readable to them.
+- **Key generations.** A rotation makes generation n+1 and uploads, in one call:
+  - the `drive_vault_keys` row, with generation n encrypted to n+1's recipient as `previous`;
+  - a wrap of n+1 for every remaining member;
+  - on single-tenant, n+1's escrow wrap.
+
+  The server accepts it only when the call names generation n as the current one and
+  carries a wrap for every current member. Two rotations racing then cannot both win. New
+  versions record n+1.
+
+  A member or the escrow key holds only the current generation. They reach every older one
+  by walking `previous` back, so every version stays readable, whatever generation it
+  records. A member added later gets the current generation and so reads the whole history.
+  A removed member holds no wrap past their last generation.
 - **Audit.** Vault creation, member changes, escrow registration and every escrow use are
   audited, with no names.
 
@@ -116,11 +134,12 @@ which Kotlin implementation supports the hybrid recipient).
 - The org admin generates the escrow key in the desktop app. The private key is exported
   once (file, text and QR code) and never sent to the server. Only the public key is
   uploaded, after step-up, and its fingerprint is shown to the admin and in every client.
-- While an escrow key exists, clients also wrap every vault key to it. The server refuses a
-  new vault or rotation that carries no escrow wrap. It can check that the wrap is present,
+- While an escrow key exists, clients also wrap every vault key generation to it. The server
+  refuses a new vault or rotation that carries no escrow wrap for the new generation. It can check that the wrap is present,
   not that it is correct (Residual risks).
-- A vault made before the escrow key gets its escrow wrap the next time a member's client
-  opens it. The admin screen lists vaults that still lack one.
+- A vault made before the escrow key gets its escrow wrap of the current generation the
+  next time a member's client opens it. The admin screen lists the vaults with no
+  `drive_vault_escrow` row, or one behind the current generation.
 - **Using escrow.** The admin's desktop app opens the escrow-wrapped vault key locally. It
   can then read the vault, or add a member by wrapping the vault key to them. This is the
   vault's handover path for a leaver. Each use is audited and shown to the vault's members.
@@ -145,7 +164,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 | Operator, staff, or anyone with the database, the storage and the deployment key | Read vault files or names | Only ciphertext and wrapped keys are on the server. No escrow on the multi-tenant service. |
 | The same, serving altered web code | Steal keys through the browser | The web app never handles vault keys or contents in v1. |
 | A malicious server at the moment a member is added | Get the vault key | Pinned keys, change warnings and fingerprint comparison. Residual for members who never compare. |
-| A removed member | Read new versions | Their row is deleted at once, and the vault key is rotated for new versions. They keep what they downloaded. |
+| A removed member | Read new versions | Their row is deleted at once, and the vault key moves to a new generation they hold no wrap for (Key generations). They keep what they downloaded. |
 | A member's modified client | Leave escrow out | The server checks that an escrow wrap is present, not that it opens. Residual. |
 | Holder of the escrow key (single-tenant) | Read every vault | Intended: the org admin's recovery. Every use is audited and shown to members. |
 | Thief of one unlocked device | Read the vaults that device opens | The OS keystore, and device revocation, which deletes the device's access. Residual while it is unlocked. |
@@ -168,9 +187,13 @@ Each PR is shippable on its own, with vaults off until V3.
 
 1. **V1. This spec, then an outside review of the protocol** (owner's choice of reviewer)
    before any code.
-2. **V2. Server:** schema, membership API, the plaintext-path refusals and their source
-   scan, quota on ciphertext, audit. Tests: every refused path, membership checks across
-   orgs, and a vault whose items never reach the index or a preview.
+2. **V2. Server:** schema, membership and rotation API, the plaintext-path refusals and their
+   source scan, quota on ciphertext, audit. Tests:
+   - every refused path, membership checks across orgs, and a vault whose items never reach
+     the index or a preview;
+   - a rotation refused when it names a stale generation or misses a current member's wrap;
+   - after two rotations, a member added afterwards and the escrow key both open the first
+     version (in the client tests, V3).
 3. **V3. Desktop app:** user and recovery keys, vault create, sync, membership, rotation and
    fingerprint pinning, in `kydrive-desktop/core`. Vaults are turned on here, desktop only.
 4. **V4. Android:** the same, after the age library choice.

@@ -504,7 +504,9 @@ step-up, so a device takes the approving user's org and can never change it.
 - **Names.** The name and name-HMAC keys are derived from the org key. The same name in two
   orgs then has two different `name_hmac` values. Uniqueness is per workspace, inside one
   org, so nothing else changes.
-- **Search.** The token, document and check keys and the sealed vocabulary become per org.
+- **Search.** The token, document and check keys and the sealed vocabulary become per org,
+  and the index's rows carry `org_id`, so a purge deletes an org's index by org ID without its
+  key (Lifecycle, `deleted` step 4).
   An org's term hashes then cannot be linked to another org's, which narrows the residual
   risk "The search index". The index lives where question 14 decides (R2); per-org keys
   apply either way.
@@ -712,11 +714,17 @@ crash halfway repeats safely.
    orphan sweeps then clear thumbnails and text within an hour (`drive_retention.go:86-95`).
    Staging is cleared by `ExpireUploads`.
 4. The search index drops the org's refs on its next keep scan, and a full vocabulary
-   rebuild is requested, so the org's words leave the sealed vocabulary.
+   rebuild is requested, so the org's words leave the sealed vocabulary. In multi mode
+   (D14), the index's rows carry `org_id` and each org has its own sealed vocabulary. This
+   step therefore deletes the org's index rows and its vocabulary by org ID. It needs no key
+   and no keep scan or rebuild. With the index in PostgreSQL (question 14) that happens in
+   the purge's transaction. With a per-replica index, each replica does it when it next sees
+   the org deleted.
 5. In the transaction that sets `purged=1`, the org's `drive_org_keys` row is deleted
    and every replica evicts the key (D14). Any file the steps above missed is then
    unreadable: a leftover blob on the shared storage, an object version the storage kept, or
-   a replica's cache. The key goes last, because step 4 still needs it for the index.
+   a replica's cache. No step reads the org's data after this, step 4 included, since it
+   deletes by org ID.
 6. `drive_orgs` keeps the tombstone (`status='deleted'`, `purged=1`), and a platform audit
    row records the org ID and row counts per table, with no names.
 
@@ -1031,6 +1039,8 @@ the release before. No R step starts before the owner approves this amendment.
       and an upgraded single-tenant install has no `drive_org_keys` row.
     - The same name in two orgs gets two `name_hmac` values.
     - After a purge, a blob left on the storage on purpose cannot be opened.
+    - A purge deletes the org's index rows and vocabulary by org ID, and leaves none
+      behind, with the key already gone.
     - A restore in multi mode serves no org before the first full poll, and purges again an
       org the poll reports `deleted`.
 5. **Quotas and lifecycle.**
