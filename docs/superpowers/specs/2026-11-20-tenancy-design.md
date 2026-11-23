@@ -724,7 +724,11 @@ crash halfway repeats safely.
    and every replica evicts the key (D14). Any file the steps above missed is then
    unreadable: a leftover blob on the shared storage, an object version the storage kept, or
    a replica's cache. No step reads the org's data after this, step 4 included, since it
-   deletes by org ID.
+   deletes by org ID. With the index in PostgreSQL (question 14), steps 4 and 5 commit
+   together. With a per-replica index, each replica deletes the org's rows when it next sees
+   the org deleted, which can be after the key is gone. Those rows are term hashes under the
+   destroyed key, so nothing can link them to words any more, but they take up space until
+   then.
 6. `drive_orgs` keeps the tombstone (`status='deleted'`, `purged=1`), and a platform audit
    row records the org ID and row counts per table, with no names.
 
@@ -853,7 +857,7 @@ that member's My files at once, inside the org:
 | Two replicas racing a job | Purge twice, or let two indexers write | One elected worker runs every job (R3), and every job is idempotent. The purge already is (Lifecycle, `deleted`). |
 | Staff, or a stolen staff account | Read customer content | No admin route opens an item, and administration grants no rank (`access.go:16`). Handover stays within one org and is audited in that org's log. Staff do see the org directory and workspace names (residual, as in T). |
 | Operator | Anything | Trusted with the database, the deployment key and the host. The server reads plaintext (root `AGENTS.md`), except inside an end-to-end vault (D15). Otherwise residual, unchanged. |
-| Deleted customer | Have their data kept | The purge removes rows, blobs and caches, deletes the org's index rows and per-org vocabulary by org ID (multi mode, step 4), and destroys the org key last, so anything it missed is unreadable (D14). A restore suspends every org until a full poll, and purges again what KyIdentity reports deleted. Backups keep the wrapped key and copies until their retention ends (residual, question 5). |
+| Deleted customer | Have their data kept | The purge removes rows, blobs and caches, deletes the org's index rows and per-org vocabulary by org ID (multi mode, step 4), and destroys the org key, so anything it missed is unreadable (D14). With the index in PostgreSQL that is all one transaction; with a per-replica index, a replica's rows can outlive the key until it next sees the org deleted (residual). A restore suspends every org until a full poll, and purges again what KyIdentity reports deleted. Backups keep the wrapped key and copies until their retention ends (residual, question 5). |
 
 ## Phased build plan
 

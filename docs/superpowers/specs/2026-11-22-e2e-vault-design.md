@@ -86,11 +86,11 @@ whether that suits every client build). Android needs an ML-DSA implementation a
     one row per member, wrapping the current generation;
   - `drive_vault_escrow(workspace, generation, wrapped_key)`, one row per vault, wrapping the
     current generation to the escrow key;
-  - `drive_versions.vault_generation`, the generation a vault version was encrypted under;
+  - `drive_versions.vault_generation`, the generation a vault version was encrypted under,
+    and `drive_versions.vault_upload`, the version's signed upload record (Freshness), stored
+    and returned with the version;
   - `drive_vault_log(workspace, seq, record, signer, signature)`, the vault log (The vault
     log), which the server stores but cannot forge;
-  - `drive_vault_heads(workspace, user_id, device, seq, hash, at, signature)`, each device's
-    latest signed head attestation (Freshness);
   - `drive_escrow_key(public_key, signing_key, fingerprint, created, created_by)`,
     single-tenant only.
 
@@ -176,32 +176,44 @@ about a vault's members or keys unless the vault log says so.
 
 ### Freshness
 
-Signatures cannot show a device that a newer record exists, so a server could keep one
-member's device on a generation another member has revoked. The removed member would read what
-that device then uploads. Against a server that carries every message this cannot be
-prevented outright, so v1 bounds it and makes it visible.
+Signatures cannot show a device that a newer record exists. A server that carries every
+message can keep a whole group of members on a head another member has moved past, and those
+members' own signed statements would only vouch for each other. The removed member would then
+read what they upload. Only a party the server cannot control can say which head is current,
+so a shared vault's freshness rests on an independent **witness**.
 
-- **Head attestations.** Each time a device verifies a vault's log, it signs its current head
-  (`seq`, hash and its clock time) and uploads it. The server keeps each device's latest
-  attestation.
+- **The witness** is a checkpoint service that clients reach directly, never through the
+  KyDrive server. It is operated apart from the KyDrive server, and on the hosted service
+  apart from our staff (question 5).
+  - It keeps, per vault log, the newest head it has seen: `seq` and hash, under an opaque log
+    ID, the hash of the `create` record. It learns no names, members or contents.
+  - It signs a checkpoint of that head with the time, and accepts a new head only if it
+    extends the old one: `seq` higher, with the client showing the records in between. So it
+    never signs a fork or a rollback.
+  - The checkpoint format follows C2SP's `tlog-checkpoint` and `tlog-witness` (unverified:
+    whether an existing public witness suits, or ours must be run apart).
+- **Committing.** A client's `add`, `remove`, `rotate` or `escrow-access` takes effect only
+  once the client has sent the new head to the witness and holds a checkpoint naming it. A
+  removal is committed, and effective for everyone, at that checkpoint's time.
 - **The rule.** In a vault with two or more members, a client encrypts a new version only
-  when two things hold:
-  - it holds an attestation, made within the last 24 hours, from a device of another current
-    member;
-  - that attestation names no head newer than the client's own.
+  when it holds a witness checkpoint that:
+  - is under 24 hours old (question 6);
+  - names exactly the head it has verified.
 
-  If it does not, the client blocks the upload, saying it cannot confirm the vault is up to
-  date, and asks again later. It never falls back to the generation it has. A one-member vault
-  needs no attestation, since only its own devices write its log.
-- **When a removal takes effect.** It takes effect for a device as soon as the device
-  verifies the `remove` and `rotate` records. A device the server withholds them from goes on
-  encrypting under the old generation only while it still holds a fresh attestation, made
-  before the removal, from another member: at most 24 hours. After that it blocks. The remover's
-  own attestation names the new head, so a server that delivers it gives the removal away.
-- **Detection.** Every version records the head its uploader used, inside its signed upload
-  record. A member who sees a version encrypted under a generation that an earlier record
-  revoked is warned that the server withheld records, and so is the uploader the next time
-  their device catches up.
+  A checkpoint naming a newer head proves records are being withheld. Then, and whenever the
+  witness cannot be reached, the client blocks the upload, says it cannot confirm the vault is
+  up to date, and never falls back to the generation it has. The rule does not depend on what
+  other members' devices say, so a group the server keeps on an old head blocks as soon as
+  its checkpoint is older than the window, or at once if the witness has seen the removal.
+- **When a removal takes effect.** Every device either sees the removal or blocks within 24
+  hours of the removal's checkpoint. In practice it blocks at once, since the witness hands
+  every client the newer head the next time it asks.
+- **One-member vaults** need no witness, since only their own member's devices write the
+  log.
+- **Detection.** Every version carries a signed upload record: the head its uploader used,
+  its generation and the witness checkpoint it held, signed by the uploader. A member who
+  sees a version encrypted under a generation an earlier committed record revoked is warned
+  that records were withheld, and so is the uploader once their device catches up.
 
 ### After a capsule restore
 
@@ -279,7 +291,7 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 | Operator, staff, or anyone with the database, the storage and the deployment key | Read vault files or names | Only ciphertext and wrapped keys are on the server. No escrow on the multi-tenant service. |
 | The same, serving altered web code | Steal keys through the browser | The web app never handles vault keys or contents in v1. |
 | A malicious server at the moment a member is added | Get the vault key | Pinned keys, change warnings and fingerprint comparison. Residual for members who never compare. |
-| A malicious server | Hand clients a vault key it knows, add a member, or undo a removal | The vault log: clients use only generations and members from records signed by a member as the log stood before, and refuse rollback and forks. |
+| A malicious server | Hand clients a vault key it knows, add a member, or undo a removal | The vault log: clients use only generations and members from records signed by a member as the log stood before, and refuse rollback and forks. In a shared vault, an upload also needs a fresh witness checkpoint naming the client's head (Freshness). |
 | A removed member | Read new versions | Their row is deleted at once, and the vault key moves to a new generation they hold no wrap for (Key generations). They keep what they downloaded. |
 | A member's modified client | Leave escrow out | The server checks that an escrow wrap is present, not that it opens. Residual. |
 | Holder of the escrow key (single-tenant) | Read every vault | Intended: the org admin's recovery. Every use is audited and shown to members. |
@@ -296,8 +308,9 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **Escrow is honest-client only.** A modified client can create a vault the escrow key
   cannot open.
 - **Old versions stay readable to a removed member** if they downloaded them.
-- **A server can withhold vault log records from a device for up to 24 hours** (Freshness). During that time, the device's uploads are readable to a member removed in the meantime. Members are warned once any device catches up.
-- **Shared vaults need another member's device online once a day.** Without one, uploads to a shared vault block until one checks in.
+- **A device the witness cannot update keeps its last checkpoint for up to 24 hours** (Freshness). If the server also withholds a removal from it during that time, and the device cannot reach the witness, its uploads are readable to the removed member. Members are warned once any device catches up.
+- **Shared vaults depend on the witness.** While it cannot be reached, uploads to shared vaults block, and adding or removing members waits. Reading still works.
+- **The witness learns each vault log's activity:** when heads move, under an opaque ID.
 
 ## Build plan
 
@@ -305,7 +318,9 @@ Each PR is shippable on its own, with vaults off until V3.
 
 1. **V1. This spec, then an outside review of the protocol** (owner's choice of reviewer)
    before any code.
-2. **V2. Server:** schema, membership and rotation API, the plaintext-path refusals and their
+2. **V2. Server and witness:** the witness service (checkpoints, extension check, its own
+   deployment), and on the server the schema, including `vault_upload` stored and returned with
+   each version, membership and rotation API, the plaintext-path refusals and their
    source scan, quota on ciphertext, audit. Tests:
    - every refused path, membership checks across orgs, and a vault whose items never reach
      the index or a preview;
@@ -317,9 +332,12 @@ Each PR is shippable on its own, with vaults off until V3.
      - a server-added member;
      - a rolled-back log;
      - a log forked between two members;
-     - a committed removal and rotation the server withholds from one device, which then
-       blocks new encryption once its newest attestation from another member is more than
-       24 hours old, and is warned when the records arrive.
+     - a committed removal and rotation the server withholds from a group of devices that
+       keep signing statements for the old head: each blocks once its checkpoint passes 24
+       hours, or at once when the witness names the newer head, and is warned when the
+       records arrive;
+     - a witness that cannot be reached, which blocks uploads to shared vaults;
+     - a witness asked to sign a head that does not extend its last one, which refuses.
 
      Each is refused before any content is encrypted to it.
    - a restore to before a `remove` and `rotate`, after which a member's device replays both
@@ -347,6 +365,11 @@ for one.
 4. **The outside protocol review before V2.** Recommendation: yes, for the key formats and the
    device-linking flow.
 
-5. **The freshness window (Freshness).** Recommendation: 24 hours. A shorter window shrinks
-   what a server-hidden removal can expose, but blocks uploads to a shared vault more often
-   when the other members' devices are offline.
+5. **Who runs the witness (Freshness)?** Recommendation: a small witness service of our own,
+   deployed on infrastructure and accounts separate from KyDrive's, with its signing key held
+   by someone other than KyDrive's operators. An existing public C2SP witness may serve instead
+   (unverified). Without an independent witness, shared vaults cannot promise timely
+   revocation, and the spec would have to say so.
+6. **The checkpoint freshness window.** Recommendation: 24 hours. A shorter window shrinks
+   what a device cut off from the witness can expose, but blocks shared-vault uploads sooner
+   when the witness is unreachable.
