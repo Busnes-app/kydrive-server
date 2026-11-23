@@ -899,7 +899,8 @@ the release before. No R step starts before the owner approves this amendment.
       the main store's included. Every drive and main-store transaction reruns on a
       serialization failure (`qmark.Retry`). This covers the quota check, a credential created
       while a password change or logout commits, and every other read-then-write the one
-      SQLite writer protected. A single statement outside a transaction is not rerun.
+      SQLite writer protected. A statement outside a transaction run through `Exec` reruns too
+      (`qmark`'s connection does it, amended 2026-11-23); a query read through `Query` does not.
     - A PostgreSQL start holds a database-wide advisory lock while it migrates and opens the
       store, so processes starting together create the schema once. Step 6 still owns the
       bootstrap administrator and its password file, which are written after the store opens.
