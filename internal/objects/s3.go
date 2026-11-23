@@ -85,17 +85,19 @@ func (st s3Store) key(name string) (string, error) {
 	return st.prefix + name, nil
 }
 
-func (st s3Store) Create(context.Context) (Draft, error) {
+func (st s3Store) Create(ctx context.Context) (Draft, error) {
 	f, err := os.CreateTemp(st.b.spool, ".upload-*")
 	if err != nil {
 		return nil, err
 	}
-	return &s3Draft{File: f, st: st}, nil
+	return &s3Draft{File: f, st: st, ctx: ctx}, nil
 }
 
+// s3Draft keeps Create's context, so cancelling it stops the PUT in Publish.
 type s3Draft struct {
 	*os.File
 	st   s3Store
+	ctx  context.Context
 	done bool
 }
 
@@ -112,7 +114,7 @@ func (w *s3Draft) Publish(name string) error {
 	if _, err = w.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	_, err = w.st.b.c.PutObject(context.Background(), &s3.PutObjectInput{
+	_, err = w.st.b.c.PutObject(w.ctx, &s3.PutObjectInput{
 		Bucket: aws.String(w.st.b.bucket), Key: aws.String(key), Body: w.File, ContentLength: aws.Int64(size),
 	})
 	return wrap("put", key, err)

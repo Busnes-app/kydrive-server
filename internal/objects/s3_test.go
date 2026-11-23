@@ -153,3 +153,26 @@ func TestNewBucketRefusesUnsafeConfig(t *testing.T) {
 		}
 	}
 }
+
+// Publish uploads under Create's context: once that is cancelled, the PUT stops and nothing is
+// published.
+func TestS3PublishHonoursCancellation(t *testing.T) {
+	b, err := objects.NewBucket(s3Config(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := b.Store(prefix(t))
+	ctx, cancel := context.WithCancel(context.Background())
+	w, err := st.Create(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(w, "never published")
+	cancel()
+	if err := w.Publish("cancelled"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Publish after cancel: %v", err)
+	}
+	if _, err := st.Open(context.Background(), "cancelled"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a cancelled object was published: %v", err)
+	}
+}
