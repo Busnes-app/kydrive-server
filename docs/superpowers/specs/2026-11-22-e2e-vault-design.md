@@ -163,8 +163,9 @@ about a vault's members or keys unless the vault log says so.
 - **Records.** The log is a hash-chained list of records, each signed by its author's
   signing key:
   - `create` (generation 1). It marks two things, for good:
-    - whether the vault is `personal` or `shared`: a client refuses any `add` record in a
-      personal vault's log;
+    - whether the vault is `personal` or `shared`. A client refuses an `add` record in a
+      personal vault's log unless an `escrow-access` record comes before it. That record turns
+      the vault shared from there on, so its members may then add and remove others;
     - whether it is `escrowable`, which every vault on a single-tenant install is and no vault
       on the multi-tenant service is: a client refuses any `escrow-access` record in a vault
       that is not;
@@ -395,8 +396,9 @@ Each PR is shippable on its own, with vaults off until V3.
      - a shared vault that went from one member to two, then had the second removed and the
        key rotated, all withheld from one device of the first member: that device still asks
        the witness and blocks;
-     - an `add` record in a personal vault's log, which is refused, and an `escrow-access`
-       record in a vault not marked `escrowable`, which is refused;
+     - an `add` record in a personal vault's log with no `escrow-access` before it, which is
+       refused, and an `escrow-access` record in a vault not marked `escrowable`, which is
+       refused;
      - on a single-tenant install, a personal vault where escrow added a member who then
        added and removed another, with all of it withheld from one device of the original
        member still holding the personal head: that device asks the witness before its next
