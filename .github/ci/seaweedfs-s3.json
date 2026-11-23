@@ -1,0 +1,1 @@
+{"identities":[{"name":"kydrive-ci","credentials":[{"accessKey":"kydrive-ci","secretKey":"kydrive-ci-secret-not-a-real-credential"}],"actions":["Admin","Read","Write","List","Tagging"]}]}

@@ -1,10 +1,10 @@
 # objects
 
 ## Purpose
-Stores KyDrive's named, immutable objects: blobs and the caches derived from them (thumbnails, document text, KyPost viewing copies). `Dir` keeps them as files in one directory. The hosted install's S3-compatible backend (tenancy spec R2) implements the same `Store`.
+Stores KyDrive's named, immutable objects: blobs and the caches derived from them (thumbnails, document text, KyPost viewing copies), and resumable-upload staging. `Dir` and `DirTree` keep them as files. `Bucket` keeps them in an S3-compatible bucket for the hosted install (tenancy spec R2); the server selects it in tenancy step 6, since single-tenant stays on files.
 
 ## Ownership
-Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory backend. Imports only the standard library.
+Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory backend. Imports the standard library and AWS's S3 client (`aws-sdk-go-v2/service/s3`, whose modules are all AWS's).
 
 ## Local Contracts
 - **Names.** A name is one path element that doesn't start with a dot. Callers choose names (blob IDs) and validate them first (`drive.BlobPath`). `Dir` refuses anything else with `fs.ErrInvalid`.
@@ -17,10 +17,17 @@ Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory bac
 - `Open` returns an `Object` (`ReaderAt`, `Size`, `Close`), which is all the sealed-blob reader needs; a missing name is `fs.ErrNotExist`. `OpenFile` wraps a file outside any store: only the single-tenant KYB1 format upgrade, which reads a blob file and its staged copy in place (`drive/upgrade.go`).
 - `List` reports every entry, drafts included (dot names), with its last write time; a store never written to lists nothing.
 - `Tree` (`DirTree`) is a set of Stores removed whole: resumable-upload staging, one `Sub` per session. `Sub` names follow the object-name rule, and a bad one yields a Store whose every call fails. `List` reports each Sub with its last change; `RemoveAll` deletes a Sub and its contents, and a missing one is already gone. `DirTree`'s subs are directories of its root, so staging stays `<data>/staging/<session>/<segment>`.
+- **S3 (`NewBucket`, `Bucket.Store(prefix)`, `Bucket.Tree(prefix)`):**
+  - The endpoint must be a bare `https://host[:port]`; `http` is accepted only for a loopback host (tests). A region, bucket, access key ID and secret are required. Credentials come from the config struct, never from the SDK's environment or file chain.
+  - A draft is a file in the bucket's private local spool directory, put whole on `Publish` (a PUT is atomic, so a reader never sees half an object).
+  - `Open` is a HEAD; reads are ranged GETs of at least 4 MiB (`readAhead`), pinned to the ETag the HEAD saw, so an object replaced meanwhile fails instead of mixing versions.
+  - A Tree's Sub is the key prefix `<prefix><name>/`; `List` dates a Sub by its newest object, and an empty Sub is not listed (S3 has no empty directories).
+  - Errors name the operation, the key and the service's error code, never a request or the secret; NotFound and NoSuchKey are `fs.ErrNotExist` (`TestS3ErrorsNeverCarryTheSecret`).
 - `Local` adds `Root()`, the directory itself. Only single-tenant maintenance jobs use it: legacy sealing, the KYB1 format upgrade (both rewrite a file in place), and Restic's bulk backup, which reads files.
 
 ## Verification
 - `go test ./internal/objects` runs `contract` against `Dir` and `treeContract` against `DirTree`; every new backend must pass the same functions.
+- With `KY_TEST_S3_ENDPOINT`, `KY_TEST_S3_BUCKET`, `KY_TEST_S3_ACCESS_KEY` and `KY_TEST_S3_SECRET_KEY` set, the same contracts run against S3. CI's `postgres` job starts SeaweedFS (pinned by digest; it checks signatures, so the wrong-secret test is real) from `.github/ci/seaweedfs-s3.json`.
 
 ## Child DOX Index
 None.

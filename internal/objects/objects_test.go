@@ -163,6 +163,15 @@ func treeContract(t *testing.T, tr objects.Tree) {
 		}
 	}
 	contract(t, tr.Sub("three"))
+	// A Sub with no objects may vanish from List (S3 has no empty directories), so the
+	// contract, which empties "three", is followed by one more object there.
+	w, err := tr.Sub("three").Create(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Publish("segment"); err != nil {
+		t.Fatal(err)
+	}
 	if got := subs(); !slices.Equal(got, []string{"one", "three", "two"}) {
 		t.Fatalf("subs %v", got)
 	}

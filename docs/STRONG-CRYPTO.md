@@ -95,6 +95,7 @@ with their own key and TLS policy. This guide makes no claim about them:
 - **Euro-Office Document Server** (`docker-compose.office.yml`, Kubernetes): its
   Node services and native converter make their own TLS connections, including
   downloads from and callbacks to KyDrive.
+- **Object storage** (hosted install, `internal/objects`): AWS's Go S3 client over HTTPS with Go's TLS, so it follows `GODEBUG=fips140=on` like the rest of the binary. Requests are SigV4-signed. Objects are KYB2-sealed before upload, so the provider stores ciphertext. Plain HTTP is refused except to a loopback host.
 - **Restic** (the image's Alpine package): bulk backups to `s3:https://` or
   `rest:https://` use Restic's TLS client and repository crypto. It inherits
   `GODEBUG`, but its behavior under it is Restic's.
