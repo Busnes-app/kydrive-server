@@ -190,9 +190,9 @@ func activePrincipal(user string) string {
 	return `EXISTS(SELECT 1 FROM users apu JOIN drive_orgs apo ON apo.id=apu.org_id WHERE apu.id=` + user + ` AND apu.status='active' AND ` + orgServing("apo") + `)`
 }
 
-// orgsFreshUntil is the server_settings key holding the unix time until which the last
+// OrgsFreshUntil is the server_settings key holding the unix time until which the last
 // successful org poll is trusted (OrgsMaxAge after it).
-const orgsFreshUntil = "orgs_fresh_until"
+const OrgsFreshUntil = "orgs_fresh_until"
 
 // OrgsMaxAge is how long the org mirror is trusted after the last successful poll. Past it
 // every org KyIdentity reports is served nothing, until a poll succeeds: an outage shorter
@@ -202,7 +202,7 @@ const OrgsMaxAge = time.Hour
 // orgServing is true while org row $O is active and enabled and, unless it is the seeded
 // staff org or the single-tenant default org, the mirror is fresh. $O is a table alias.
 func orgServing(o string) string {
-	return o + `.status='active' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR CAST((SELECT value FROM server_settings WHERE key='` + orgsFreshUntil + `') AS BIGINT)>unixepoch())`
+	return o + `.status='active' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR CAST((SELECT value FROM server_settings WHERE key='` + OrgsFreshUntil + `') AS BIGINT)>unixepoch())`
 }
 
 // sameOrg is true when workspace $W is in user $U's org. Both are column references.
@@ -389,7 +389,7 @@ WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revisi
 			}
 		}
 		now := time.Now().UTC()
-		for k, v := range map[string]string{orgsSince: strconv.FormatInt(next, 10), orgsFreshUntil: strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10)} {
+		for k, v := range map[string]string{orgsSince: strconv.FormatInt(next, 10), OrgsFreshUntil: strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10)} {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, k, v, now); err != nil {
 				return err
 			}
