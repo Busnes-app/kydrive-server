@@ -630,8 +630,15 @@ unverified until T's amendment lands.
     - the storage provider's backup copy.
 - **The check.** In `fits`, inside the write transaction: a write that adds n bytes to the
   org passes only if `drive_bytes + n + others_bytes <= pool_bytes`.
-  - `drive_bytes` is read in the same serializable transaction, so two KyDrive writes on any
-    replicas cannot both take the last bytes.
+  - **Concurrency.** On PostgreSQL every transaction is serializable (R1a as built, `qmark`),
+    and `fits` takes no row lock. It covers both checks:
+    - the org pool, since `drive_bytes` is read in the write's own transaction, so two
+      KyDrive writes on any replicas cannot both take the last bytes;
+    - the single-tenant per-workspace quota, which PostgreSQL installs have since R1.
+
+    `TestConcurrentPublishesKeepTheQuota` races eight uploads with room for one against the
+    workspace quota on both backends; step 5 adds the same test for the org pool. On SQLite
+    the one writer serialises them, as before.
   - The check uses the org's net change. Bytes that move between two workspaces of one org
     change nothing, so an over-pool org can still move files and receive a handover.
   - Every path that adds bytes ends there:
@@ -1126,8 +1133,8 @@ the release before. No R step starts before the owner approves this amendment.
      purge job, and the leaver rule (shared files to the account holder, the rest to the
      trash for 90 days).
    - The capacity measurement (question 6), before PR 6 can enable the mode.
-   - Amended 2026-11-22: built after R1 to R4, on both backends. The org pool check locks the
-     org's row on PostgreSQL (Quotas). The purge and the leaver job run on the elected worker.
+   - Amended 2026-11-22: built after R1 to R4, on both backends. The org pool check relies on serializable
+     transactions, not a row lock (Quotas, Concurrency). The purge and the leaver job run on the elected worker.
    - Amended again 2026-11-22: built after K. The purge's step 4 deletes the index by org ID
      and its step 5 destroys the org key (D14). The multi-mode restore reset suspends every
      org until a full poll. Its tests:
