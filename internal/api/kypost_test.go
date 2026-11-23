@@ -420,10 +420,10 @@ func uploadSmall(t *testing.T, w *kypostWorld, user, workspace string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = d.AppendUpload(ctx, w.cfg.Database.DataDir+"/staging", w.cfg.Security.EncryptionKey, user, u.ID, 0, 1, strings.NewReader("x")); err != nil {
+	if _, err = d.AppendUpload(ctx, objects.DirTree(w.cfg.Database.DataDir+"/staging"), w.cfg.Security.EncryptionKey, user, u.ID, 0, 1, strings.NewReader("x")); err != nil {
 		t.Fatal(err)
 	}
-	f, err := d.CompleteUpload(ctx, w.cfg.Database.DataDir+"/staging", objects.Dir(w.cfg.Database.DataDir+"/blobs"), w.cfg.Security.EncryptionKey, user, u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(w.cfg.Database.DataDir+"/staging"), objects.Dir(w.cfg.Database.DataDir+"/blobs"), w.cfg.Security.EncryptionKey, user, u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

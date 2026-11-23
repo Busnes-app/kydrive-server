@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 )
 
 // chunkLimit caps one resumable upload request body.
 const chunkLimit int64 = 64 << 20
 
-func (s *Server) stagingRoot() string { return filepath.Join(s.config.Database.DataDir, "staging") }
+func (s *Server) stagingRoot() objects.Tree {
+	return objects.DirTree(filepath.Join(s.config.Database.DataDir, "staging"))
+}
 
 func (s *Server) driveStartUpload(w http.ResponseWriter, r *http.Request) {
 	var in struct {

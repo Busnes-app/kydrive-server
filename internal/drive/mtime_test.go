@@ -71,7 +71,7 @@ func TestUploadSessionKeepsMtime(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An interrupted upload publishes nothing, so no mtime lands anywhere.
-	if _, err := d.CompleteUpload(ctx, staging, objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("incomplete upload completed: %v", err)
 	}
 	if files, err := d.Files(ctx, "worker", w.ID, false); err != nil || len(files) != 0 {
@@ -80,7 +80,7 @@ func TestUploadSessionKeepsMtime(t *testing.T) {
 	if _, err := appendChunk(d, staging, "worker", u.ID, 2, "cd"); err != nil {
 		t.Fatal(err)
 	}
-	f, err := d.CompleteUpload(ctx, staging, objects.Dir(blobs), testKey, "worker", u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
 	if err != nil || f.Mtime != "2021-06-07T08:09:10Z" {
 		t.Fatalf("published %+v %v", f, err)
 	}

@@ -137,3 +137,64 @@ func TestDirFilesAsBefore(t *testing.T) {
 		t.Fatalf("files after Publish: %v", entries)
 	}
 }
+
+// treeContract is what every Tree promises; each backend's test runs it.
+func treeContract(t *testing.T, tr objects.Tree) {
+	ctx := context.Background()
+	subs := func() []string {
+		var out []string
+		if err := tr.List(ctx, func(name string, _ time.Time) error { out = append(out, name); return nil }); err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got := subs(); len(got) != 0 {
+		t.Fatalf("a new tree lists %v", got)
+	}
+	for _, name := range []string{"one", "two"} {
+		w, err := tr.Sub(name).Create(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.WriteString(w, name)
+		if err := w.Publish("segment"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	contract(t, tr.Sub("three"))
+	if got := subs(); !slices.Equal(got, []string{"one", "three", "two"}) {
+		t.Fatalf("subs %v", got)
+	}
+	if err := tr.RemoveAll(ctx, "one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.RemoveAll(ctx, "never-there"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.Sub("one").Open(ctx, "segment"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a removed sub's object: %v", err)
+	}
+	if o, err := tr.Sub("two").Open(ctx, "segment"); err != nil {
+		t.Fatal("RemoveAll removed another sub:", err)
+	} else {
+		o.Close()
+	}
+	for _, bad := range []string{"", ".x", "a/b", ".."} {
+		if err := tr.RemoveAll(ctx, bad); err == nil {
+			t.Errorf("RemoveAll(%q)", bad)
+		}
+		if _, err := tr.Sub(bad).Create(ctx); err == nil {
+			t.Errorf("Sub(%q) took a draft", bad)
+		}
+	}
+}
+
+// A DirTree's subs are directories of root, as resumable-upload staging always was.
+func TestDirTree(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "staging")
+	treeContract(t, objects.DirTree(root))
+	if _, err := os.Stat(filepath.Join(root, "two", "segment")); err != nil {
+		t.Fatal("not staging/<sub>/<name>:", err)
+	}
+}
