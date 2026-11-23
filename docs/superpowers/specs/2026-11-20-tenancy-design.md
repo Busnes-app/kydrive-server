@@ -1114,7 +1114,10 @@ the release before. No R step starts before the owner approves this amendment.
     line and error from the S3 backend is scanned for the secret.
 - **R3. Replica plumbing**, porting the replica pattern's "Product rollout contract" (a) to (e).
   - `/livez`, and `/readyz` (a database ping, cached for one second, 503 while draining), with
-    its drain order on SIGTERM. Today there is `/healthz` (`drive_handlers.go:93`) and a 5 s
+    its drain order on SIGTERM. As built: `/readyz` turns 503 at SIGTERM, then every route
+    keeps serving for `api.ReadyDrain` (5 s) before today's shutdown; the backup wait is
+    unchanged, so `stop_grace_period` covers 5 s + 5 s + 17 min (`TestComposeGracePeriod...`).
+    Compose and Kubernetes probe `/readyz` (Kubernetes every second) and `/livez`. Today there is `/healthz` (`drive_handlers.go:93`) and a 5 s
     shutdown (`main.go:157`).
   - The shared-configuration fingerprint (`replica_config_fingerprint`, `accept-replica-config`)
     over the base's fields plus KyDrive's own: KySignOn, KyPost, Euro-Office, the storage

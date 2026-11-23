@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **`/livez` and `/readyz` (tenancy R3).** `/livez` answers `{"status":"ok"}` without
+  touching the database: use it for restarts. `/readyz` answers `{"status":"ready"}` while
+  the server isn't stopping and the database answered a ping, and 503 `{"status":"unready"}`
+  otherwise. The ping result is cached for one second. On SIGTERM, `/readyz` turns 503 and the
+  server keeps serving for 5 more seconds, so a load balancer takes it out before requests
+  fail; a stop therefore takes 5 seconds longer. The Compose healthcheck and the Kubernetes
+  probes now use them. `/healthz` is unchanged.
 - **PostgreSQL: a write outside a transaction reruns on a serialization failure.** Before, two
   requests updating one row at once, such as two completions of one upload, could fail one with
   a database error instead of its normal answer. SQLite is unchanged.

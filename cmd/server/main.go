@@ -304,6 +304,9 @@ func runServer() {
 
 	<-stop
 	log.Println("[KY-BASE] Shutting down gracefully...")
+	// /readyz turns 503 first, so a load balancer stops sending requests before they fail.
+	srv.Drain()
+	time.Sleep(api.ReadyDrain)
 	if err := closeSetup(); err != nil {
 		log.Print("Installer control shutdown failed")
 	}
