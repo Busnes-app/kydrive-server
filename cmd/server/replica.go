@@ -29,7 +29,10 @@ func replicaConfig(ctx context.Context, cfg *config.Config, st store.Store, acce
 	return st.UpdateReplicaConfig(ctx, current, accept)
 }
 
-func acceptReplicaConfig(ctx context.Context, out io.Writer) error {
+func acceptReplicaConfig(ctx context.Context, args []string, out io.Writer) error {
+	if len(args) != 0 {
+		return errors.New("accept-replica-config takes no arguments")
+	}
 	cfg, st, err := openExisting(ctx) // never mint retained keys; apply effective installer config
 	if err != nil {
 		return err

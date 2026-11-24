@@ -35,7 +35,7 @@ func main() {
 			}
 			return
 		case "accept-replica-config":
-			if err := acceptReplicaConfig(context.Background(), os.Stdout); err != nil {
+			if err := acceptReplicaConfig(context.Background(), os.Args[2:], os.Stdout); err != nil {
 				log.Fatal(err)
 			}
 			return
