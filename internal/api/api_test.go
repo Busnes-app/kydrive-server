@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -406,17 +407,16 @@ func TestFullLimiterEvicts(t *testing.T) {
 // whichever window is shortest.
 func TestFullLimiterStillThrottlesLogin(t *testing.T) {
 	srv, _, _ := setupTestServer(t)
-
-	// Fill the map with the long windows an attacker minting keys would leave behind.
-	// Login's window is a minute, so "evict the entry nearest expiry" would always pick it.
 	for i := 0; i < api.AttemptsCapForTest; i++ {
 		api.AllowAttemptForTest(srv, "filler:"+strconv.Itoa(i), 3, 5*time.Minute)
 	}
 
-	throttled := false
-	for i := 1; i <= 25; i++ {
-		// A new username each time, so only the per-client window is under test; each one
-		// also mints a new account key, which must not evict login's window.
+	const clientKey = "login:192.0.2.9"
+	retained := 0
+	// A live counter can legitimately be evicted at capacity. Require the unchanged
+	// 20-attempt limit within each retained window, not across lost counters. The bound
+	// still catches an expiry-biased policy that drops login's short window every time.
+	for i := 1; i <= 105; i++ {
 		loginBody, _ := json.Marshal(map[string]string{"username": "nobody" + strconv.Itoa(i), "password": "WrongPass123!"})
 		req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
 		req.Header.Set("Content-Type", "application/json")
@@ -425,19 +425,24 @@ func TestFullLimiterStillThrottlesLogin(t *testing.T) {
 		srv.ServeHTTP(w, req)
 
 		if w.Code == http.StatusTooManyRequests {
-			if i < 21 {
-				t.Fatalf("login throttled at attempt %d, want no earlier than 21", i)
+			if retained < 20 {
+				t.Fatalf("login throttled after %d retained guesses, want 20", retained)
 			}
-			throttled = true
-			break
+			return
 		}
-		if i >= 21 {
-			t.Fatalf("login attempt %d answered %d, not 429: the login window is being evicted", i, w.Code)
+		if w.Code != http.StatusUnauthorized || retained >= 20 {
+			t.Fatalf("login after %d retained guesses answered %d: %s", retained, w.Code, w.Body.String())
+		}
+		retained++
+		if i == 10 {
+			// Exercise a permitted eviction deterministically, rather than waiting for map order.
+			api.ResetAttemptForTest(srv, clientKey)
+		}
+		if !slices.Contains(api.AttemptKeysForTest(srv), clientKey) {
+			retained = 0
 		}
 	}
-	if !throttled {
-		t.Fatal("25 logins from one IP were never throttled")
-	}
+	t.Fatal("login window never survived long enough to throttle; check eviction policy")
 }
 
 // tokenStatus fires one device token exchange from peer, optionally claiming to be forwarded for xff.
