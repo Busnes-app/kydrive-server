@@ -172,3 +172,17 @@ itself, which reads plaintext by design. KyDrive is not end-to-end encrypted
 
 This case is updated when a trust boundary or a security requirement changes. A pull request that
 moves one must update this page in the same change.
+
+
+## Replica configuration groundwork
+
+Multi-mode PostgreSQL startup checks shared configuration before bootstrap (`cmd/server/replica.go`).
+`internal/config/replica.go` and `internal/editor/replica.go` store field-separated keyed checks,
+so copying the database alone cannot guess low-entropy configuration values. Independent
+first starts and acceptance serialize on the settings row; acceptance and its names-only
+audit commit together (`internal/store/replica.go`). Malformed records and immutable key or
+tenancy identity changes fail closed. Bulk settings omit the record and restore reset drops it.
+`TestReplicaConfigAtomic` exercises real independent PostgreSQL pools, mismatched first
+starts, old-replica refusal, upgrade fields and audit rollback. Single-mode tests require no
+coordination state. This groundwork does not establish replica/hosted readiness; S3 wiring,
+worker election, shared security state, backup and full acceptance remain required.

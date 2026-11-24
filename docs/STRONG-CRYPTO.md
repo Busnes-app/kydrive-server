@@ -17,6 +17,10 @@ the same Compose image/build, DNS and network overlays. A refused key is a reaso
 to replace that one credential, never to regenerate the deployment key, rotate
 the recovery pin or delete accounts.
 
+Replica configuration groundwork uses HMAC-SHA256 under the retained 32-byte deployment
+key, separated by product and field labels. Only checks are stored, never values;
+`accept-replica-config` cannot rotate the deployment or device identity key.
+
 ## Key rules in every mode
 
 | Boundary | Default | Smaller keys |

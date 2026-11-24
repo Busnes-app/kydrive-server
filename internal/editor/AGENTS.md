@@ -16,6 +16,8 @@ Own fixed-algorithm JWT authentication, editor configuration, restricted output 
 - Session revocation must be visible and retried if the editor refuses it. A successful command is not proof that readable content was recalled from a browser.
 - Local development may use explicit HTTP loopback/editor Docker URLs; deployed endpoints require HTTPS.
 
+- `ReplicaFingerprint` hashes effective validated origins and the signing secret under the deployment key without exporting the secret. Disabled editor fields are explicit; `FromEnv` remains the configuration parser.
+
 ## Work Guidance
 
 - The public origin constrains output URLs; optional internal origin changes transport only. HS256 is fixed; malformed command responses fail closed. HTTP is development-only.

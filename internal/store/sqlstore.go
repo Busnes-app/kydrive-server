@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/qmark"
@@ -97,7 +98,7 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 		// served until a poll succeeds.
 		// Nor is the erased list: it is read again from the start, so an erasure the backup
 		// predates is applied again.
-		for _, key := range []string{drive.OrgsFreshUntil, ErasedSince} {
+		for _, key := range []string{drive.OrgsFreshUntil, ErasedSince, config.ReplicaConfigSetting} {
 			if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM server_settings WHERE key=?`), key); err != nil {
 				return err
 			}
@@ -1480,7 +1481,9 @@ func (s *settingsStore) GetAllSettings(ctx context.Context) (map[string]string, 
 		if err := rows.Scan(&k, &v); err != nil {
 			return nil, err
 		}
-		settings[k] = v
+		if k != config.ReplicaConfigSetting {
+			settings[k] = v
+		}
 	}
 	return settings, rows.Err()
 }

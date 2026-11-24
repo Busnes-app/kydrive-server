@@ -31,6 +31,8 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 
 - `KY_READ_TIMEOUT` and `KY_WRITE_TIMEOUT` default to 5m and accept 15s–15m, supporting bounded streaming uploads. Production requires an explicit SCIM token when provisioning is enabled; SSO auto-provision defaults off.
 
+- `replica.go` fingerprints effective shared settings with product/field-separated HMAC-SHA256 under the retained deployment key. It includes key material, not secret-file paths; excludes host-local data, bind/pool/proxy/certificate paths and backup directories. `SESSION_TTL` names the fixed in-process setting, not a new environment variable. Unused legacy OIDC/SAML fields are not active integrations. Add actual shared storage settings when their configuration lands.
+
 ## Verification
 - `go test -v ./internal/config/...`
 - `go test -v ./internal/auth/ -run TestClientIP` (the helper that consumes the allowlist)
