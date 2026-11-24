@@ -33,13 +33,19 @@ func (s *SQLStore) WithReplicaLock(ctx context.Context, name string, work func(c
 		return false, err
 	}
 	// Discard the physical session even after acquisition errors or cancellation: a lock
-	// must never reach the pool. Closing it releases ownership without an unlock race.
+	// must never reach the pool. The server frees a closed session's lock only once its
+	// backend exits, so a held lock is also unlocked first, for the next owner to find free.
 	defer conn.Close()
 	defer conn.Raw(func(any) error { return driver.ErrBadConn })
 	var won bool
 	if err := conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock(3, hashtext(current_schema() || ':' || $1))`, name).Scan(&won); err != nil || !won {
 		return false, err
 	}
+	defer func() {
+		unlock, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer stop()
+		_, _ = conn.ExecContext(unlock, `SELECT pg_advisory_unlock_all()`) // a lost session needs none
+	}()
 	owned, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
