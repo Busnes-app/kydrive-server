@@ -3,14 +3,13 @@ package store_test
 import (
 	"context"
 	"encoding/json"
-	"maps"
+	stdmaps "maps"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
-	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
@@ -34,7 +33,7 @@ func TestReplicaConfigAtomic(t *testing.T) {
 	ctx := context.Background()
 	dbcfg := testdb.Config(t)
 	dbcfg.Tenancy = "multi"
-	dbcfg.StaffOrg = drive.TestStaffOrg
+	dbcfg.StaffOrg = "00000000-0000-0000-0000-000000000099"
 	open := func() store.Store {
 		st, err := store.Open(ctx, dbcfg, testdb.Key)
 		if err != nil {
@@ -46,7 +45,7 @@ func TestReplicaConfigAtomic(t *testing.T) {
 	a, b := open(), open()
 	cfg := config.Config{Database: dbcfg, Security: config.SecurityConfig{EncryptionKey: testdb.Key, SessionSecret: "first-session-secret"}}
 	fp := config.ReplicaFingerprint(&cfg)
-	other := maps.Clone(fp)
+	other := stdmaps.Clone(fp)
 	other["KY_SESSION_SECRET"] = config.ReplicaField(testdb.Key, "KY_SESSION_SECRET", "other-session-secret")
 	// Different first-start configurations race across real independent pools. Exactly one wins.
 	start := make(chan struct{})
@@ -111,7 +110,7 @@ func TestReplicaConfigAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A new field is learned without dropping a future/obsolete field.
-	newer := maps.Clone(other)
+	newer := stdmaps.Clone(other)
 	newer["KY_NEW_SHARED_FIELD"] = config.ReplicaField(testdb.Key, "KY_NEW_SHARED_FIELD", "value")
 	if _, err = a.UpdateReplicaConfig(ctx, newer, false); err != nil {
 		t.Fatal(err)
@@ -125,7 +124,7 @@ func TestReplicaConfigAtomic(t *testing.T) {
 		t.Fatal("new field lost")
 	}
 	for _, field := range []string{config.EncryptionKeyField, "KYDRIVE_IDENTITY_KEY_FILE", "KYDRIVE_STAFF_ORG", "KYDRIVE_TENANCY"} {
-		bad := maps.Clone(other)
+		bad := stdmaps.Clone(other)
 		bad[field] = config.ReplicaField(testdb.Key, field, "wrong")
 		if _, err = a.UpdateReplicaConfig(ctx, bad, true); err == nil {
 			t.Fatalf("accepted immutable %s", field)
