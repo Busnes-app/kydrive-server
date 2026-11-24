@@ -1151,8 +1151,10 @@ the release before. No R step starts before the owner approves this amendment.
     `cmd/server` starts today (`main.go:244-258`): editor revocations, retention and the purge,
     suite groups, the org poll, blob sealing, expiry cleanup, the search indexer and the backup
     schedule. Each replica still resolves the KyPost pairing for itself (`StartKyPost`,
-    `main.go:242`), since every replica needs the secret. `orgs_since` is written
-    monotonically.
+    `main.go:242`), since every replica needs the secret. As built: `ApplyOrgs` advances
+    `orgs_since` only when greater, in the org page's transaction, with int64 SQL casts on
+    both backends. Independent database handles test stale/repeated/concurrent pages,
+    large cursors and page rollback. The worker election remains unbuilt.
   - The `backup-run` lease for scheduled, manual and CLI runs. The PostgreSQL snapshot backup,
     restore through `migrate-postgres`, and `prepareRestoredDatabase` dropping KyDrive's
     session-like tables and the fingerprint.

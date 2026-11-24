@@ -45,6 +45,9 @@ func AllowAttemptForTest(s *Server, key string, limit int, window time.Duration)
 	return s.allowAttempt(key, limit, window)
 }
 
+// ResetAttemptForTest models eviction of one live counter without changing production policy.
+func ResetAttemptForTest(s *Server, key string) { s.resetAttempts(key) }
+
 // RegisterDetachedForTest registers one detached handler and returns its unregister func, so a
 // test can drive the counter without an HTTP request. Test-only.
 func RegisterDetachedForTest(s *Server) func() {
