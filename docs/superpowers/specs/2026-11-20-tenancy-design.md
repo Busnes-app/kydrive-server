@@ -1137,7 +1137,17 @@ the release before. No R step starts before the owner approves this amendment.
     shutdown (`main.go:157`).
   - The shared-configuration fingerprint (`replica_config_fingerprint`, `accept-replica-config`)
     over the base's fields plus KyDrive's own: KySignOn, KyPost, Euro-Office, the storage
-    root, the tenancy mode and the staff org.
+    root, the tenancy mode and the staff org. As built: presently loaded shared settings,
+    validated Euro-Office defaults and key material are fingerprinted with field-separated
+    HMAC-SHA256 under the retained deployment key (`internal/config/replica.go`,
+    `internal/editor/replica.go`). `UpdateReplicaConfig` serializes independent first starts
+    and explicit acceptance with a row lock; acceptance and names-only audit commit together.
+    Corrupt records and deployment/device key, tenancy or staff identity changes fail closed.
+    New fields merge without dropping unknown fields. Bulk settings hide the record and
+    restore reset removes it. Single-mode startup is a no-op; the multi loader gate stays
+    closed. The actual S3 storage-root/config fields must join the fingerprint when wiring
+    lands; this slice does not invent placeholder configuration. See Deployment's shared
+    configuration workflow and real-PG concurrency/rollback tests.
   - Keys from outside the data directory (D13). As built: the configuration boundary
     (`internal/config/replica_keys.go`, `config.go`) validates tenancy before creating keys.
     Multi mode requires an explicit `KY_ENCRYPTION_KEY` and reads an existing private
@@ -1146,7 +1156,7 @@ the release before. No R step starts before the owner approves this amendment.
     never mints either key. Server/operator refusal tests compare the whole key/data tree
     before and after missing, malformed, public or misplaced key input. Valid external
     keys still reach the closed multi-mode startup gate. Single mode keeps today's
-    create-once/load-retained behavior; fingerprints and other R3 mechanisms remain unbuilt.
+    create-once/load-retained behavior; other R3 mechanisms remain unbuilt.
   - One elected worker (`scheduled-worker`, a session advisory lock) runs every job
     `cmd/server` starts today (`main.go:244-258`): editor revocations, retention and the purge,
     suite groups, the org poll, blob sealing, expiry cleanup, the search indexer and the backup

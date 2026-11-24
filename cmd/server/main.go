@@ -34,6 +34,11 @@ func main() {
 				log.Fatal(err)
 			}
 			return
+		case "accept-replica-config":
+			if err := acceptReplicaConfig(context.Background(), os.Stdout); err != nil {
+				log.Fatal(err)
+			}
+			return
 		case "bulk-init":
 			cfg, err := config.LoadExisting()
 			if err != nil {
@@ -202,6 +207,10 @@ func runServer() {
 	defer st.Close()
 	if err := loadInstallerConfiguration(ctx, cfg, st); err != nil {
 		log.Fatal("Installer configuration refused: ", err)
+	}
+
+	if _, err := replicaConfig(ctx, cfg, st, false); err != nil {
+		log.Fatal("Replica configuration refused: ", err)
 	}
 
 	// Ensure default admin user exists if database is empty

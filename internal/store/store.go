@@ -41,6 +41,9 @@ type Store interface {
 	ApplyInstaller(context.Context, applysetup.Common, bool) (applysetup.Report, error)
 	InstallerAdministrator(context.Context, string) (bool, error)
 
+	// UpdateReplicaConfig checks or accepts multi-mode shared settings atomically with audit.
+	UpdateReplicaConfig(context.Context, map[string]string, bool) ([]string, error)
+
 	Driver() string
 	Ping(ctx context.Context) error
 	Close() error

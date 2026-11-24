@@ -83,3 +83,43 @@ The secret file must have mode 0600. Output contains a Secret and is protected a
 The optional [`docker-compose.office.yml` production editor service](EURO-DOCKER.md) packages the same pinned image for Docker, with private JWT input, persistent bundled services and explicit resource bounds. Kubernetes remains supported.
 
 Private-IP fetching stays disabled in the editor package (`ALLOW_PRIVATE_IP_ADDRESS=false`, `ALLOW_META_IP_ADDRESS=false`). If NAS DNS resolves privately, as on a LAN-only drive, Euro-Office cannot fetch `KYDRIVE_EDITOR_DRIVE_URL` until `ALLOW_PRIVATE_IP_ADDRESS=true`. That lifts the editor's private-address block for every fetch, so first constrain editor egress to the intended drive/proxy endpoints and record the explicit exception before enabling it. This delivery does not choose actual ingress/TLS or NAS filesystem settings without testing that infrastructure.
+
+
+## Shared replica configuration groundwork
+
+Multi-tenant startup is still refused. This R3 slice implements the shared configuration
+check and `accept-replica-config` command for that future mode; it does not enable replicas,
+change single-mode behavior, or qualify a hosted service. Actual shared S3 configuration
+and its storage-root fingerprint must land before the startup gate opens. There is no
+shared disk fallback and no new replica-mode flag.
+
+Before bootstrap, a multi-mode PostgreSQL process compares its effective configuration
+(including installer-supplied settings and validated Euro-Office defaults) with the private
+`replica_config_fingerprint` row. It records HMAC-SHA256 checks under the retained deployment
+key, with a product and field label; raw values never enter the record. Fields cover the
+session/cookie, CAPTCHA, provisioning and KyIdentity settings, KyPost pairing, Euro-Office
+origins/secret, limits/search, backup schedule/private-recovery policy and tenancy/staff
+identity. Device identity and KyPost checks cover key/secret bytes, not host-specific file
+paths. `SESSION_TTL` is an internal fixed field, not an environment option.
+
+Data directory, database DSN/pools, bind address, trusted proxies, local backup directories,
+timeout tuning and certificate-file paths are host-local. Each replica keeps its own data
+directory. Unused inherited generic OIDC/SAML fields do not configure a working integration.
+Dynamic KyIdentity peer answers and admin settings already come from shared authorities.
+When a future release adds a shared configuration field, its first successful check adds it;
+older binaries leave unknown fields intact. This is not a schema downgrade guarantee.
+
+A mismatch reports only field names and refuses startup. For a deliberate mutable change,
+stop every replica, install the same configuration on every replica, then run
+`/app/kydrive-server accept-replica-config` once with that environment and retained keys
+before restarting. It loads existing configuration and records changed field names in
+`admin.replica_config_accepted` in the same transaction as the update. It cannot prove the
+other stopped hosts were updated; that remains the operator's responsibility. Deployment
+key, device identity key, tenancy mode and staff org are immutable here. A corrupt record
+also fails closed: restore a valid record rather than accepting over an unknown key check.
+The command currently reaches the same closed multi-mode loader gate as startup.
+
+The private row is omitted from all bulk settings responses (including administrators).
+Restore reset removes it atomically with restored grants, so a restored database must
+establish its configuration again before serving. This does not implement PostgreSQL
+backup/restore or remove any other R3/R4/hosted qualification gate.

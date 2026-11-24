@@ -68,7 +68,7 @@ func restoreStore(t *testing.T) (*SQLStore, drive.File) {
 	if err := s.Settings().SetSetting(ctx, "installer.integration", "retained-config-reference"); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{drive.OrgsFreshUntil, ErasedSince} {
+	for _, key := range []string{drive.OrgsFreshUntil, ErasedSince, config.ReplicaConfigSetting} {
 		if err := s.Settings().SetSetting(ctx, key, "99999999999"); err != nil {
 			t.Fatal(err)
 		}
@@ -112,7 +112,7 @@ func TestResetAfterRestore(t *testing.T) {
 			t.Fatal("editor key epoch was reused", epoch, previousEpoch, err)
 		}
 		previousEpoch = epoch
-		for _, key := range []string{drive.OrgsFreshUntil, ErasedSince} {
+		for _, key := range []string{drive.OrgsFreshUntil, ErasedSince, config.ReplicaConfigSetting} {
 			if value, err := s.Settings().GetSetting(ctx, key); err == nil || value != "" {
 				t.Fatal("a restore kept "+key, value, err)
 			}

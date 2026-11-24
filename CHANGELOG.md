@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Shared configuration checks (tenancy R3 groundwork).** Multi-mode PostgreSQL replicas
+  compare keyed fingerprints before bootstrap; explicit `accept-replica-config` records
+  changed field names with its update atomically. Retained deployment/device keys and the
+  tenancy/staff identity cannot be rotated this way. Single-mode startup is unchanged.
+  Multi startup remains refused; shared-storage wiring and remaining R3/R4 gates are pending.
+
 - **Org polls never rewind their shared cursor (tenancy R3).** A stale concurrent response
   can apply newer org rows but cannot lower `orgs_since`. Cursor reads/comparisons use
   64-bit integers on PostgreSQL as on SQLite. Page rows and cursor still commit together;
