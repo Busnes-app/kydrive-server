@@ -136,7 +136,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `docs/` — operator restore runbook, local acceptance and UI evidence assets, release verification and the assurance case.
 - `CONTRIBUTING.md` (root-owned) — contribution process, test policy and the coding standard with the CI step enforcing each.
 - `internal/config/` — environment parsing, durable secrets and configuration validation.
-- `internal/store/` — base identity repositories, atomic group replacement and SQLite initialization.
+- `internal/store/` — base identity repositories, atomic group replacement, PostgreSQL replica coordination and SQLite initialization.
 - `internal/drive/` — workspace/file domain, immutable blob publication, grants and editor/service sessions.
 - `internal/dav/` — WebDAV file system over the drive store for app-password clients.
 - `internal/editor/` — Euro-Office JWT, scoped output fetching and revocation commands.
