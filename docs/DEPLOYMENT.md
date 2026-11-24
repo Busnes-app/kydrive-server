@@ -125,11 +125,15 @@ establish its configuration again before serving. This does not implement Postgr
 backup/restore or remove any other R3/R4/hosted qualification gate.
 
 
-The R3 internal session-lock primitive now exists for future scheduled-worker and
-backup-run adoption. It reserves a PostgreSQL session for the callback, cancels that
-callback's context after session loss and discards the physical connection on every exit.
-Use direct database connections or session pooling; transaction pooling cannot retain
-session ownership. Job queries use ordinary pool connections in addition to the reserved
-one. Callers must honor cancellation and tolerate interrupted external effects. This
-primitive alone provides no exactly-once or stale-writer fence. Scheduled jobs and backup
-paths have not adopted it, and all current multi-mode startup/acceptance gates remain.
+In multi mode on PostgreSQL, replicas coordinate through two session locks. The replica
+holding `scheduled-worker` runs every background job (editor revocations, retention and
+purge, suite groups, the org poll, blob sealing, expired-row cleanup, the search indexer and
+the backup schedule); the others retry every 10 seconds, and a new holder waits 3 seconds
+before starting so a worker that lost its session has stopped its jobs. Scheduled, manual
+and CLI (`deposit`) backups each take `backup-run`; a second one anywhere is refused as
+already in progress (409 on the admin route). A lock lives on a reserved session, so use
+direct database connections or session pooling, never transaction pooling, and allow at
+least three connections per replica (`KY_DB_MAX_OPEN_CONNS`; multi mode raises a lower
+value to 3). Neither lock is an exactly-once or stale-writer fence: jobs are idempotent, and
+a deposit already sealing or uploading when its session dies finishes. Multi-mode startup
+and acceptance gates all remain.

@@ -7,13 +7,26 @@ import (
 	"time"
 )
 
+// ErrNotReplicated is WithReplicaLock's refusal outside multi-tenant PostgreSQL.
+var ErrNotReplicated = errors.New("replica locks require multi-tenant PostgreSQL")
+
+// OnOneReplica runs work under the named replica lock in multi-tenant PostgreSQL, where a
+// contender gets (false, nil), and directly with ctx everywhere else.
+func OnOneReplica(ctx context.Context, st Store, name string, work func(context.Context) error) (bool, error) {
+	won, err := st.WithReplicaLock(ctx, name, work)
+	if errors.Is(err, ErrNotReplicated) {
+		return true, work(ctx)
+	}
+	return won, err
+}
+
 // WithReplicaLock reserves one PostgreSQL session for the whole callback. A contender
 // returns (false, nil) without running work. Callbacks use the ordinary pool (at least
 // one further connection), honor cancellation and tolerate interrupted external effects.
 // Direct connections or session pooling are required; transaction pooling is unsafe.
 func (s *SQLStore) WithReplicaLock(ctx context.Context, name string, work func(context.Context) error) (bool, error) {
 	if s.driver != "postgres" || !s.drive.Multi() {
-		return false, errors.New("replica locks require multi-tenant PostgreSQL")
+		return false, ErrNotReplicated
 	}
 	conn, err := s.db.Conn(ctx)
 	if err != nil {

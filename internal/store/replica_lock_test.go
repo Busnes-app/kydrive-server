@@ -168,3 +168,30 @@ func TestReplicaLockCancelsAfterBackendLoss(t *testing.T) {
 		t.Fatal("standby did not acquire after loss", won, err)
 	}
 }
+
+// Both locks held still leave a connection for queries, however small the configured pool.
+func TestReplicaLocksLeaveAQueryConnection(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("session locks require PostgreSQL")
+	}
+	cfg := testdb.Config(t)
+	cfg.Tenancy, cfg.StaffOrg = "multi", "00000000-0000-0000-0000-000000000099"
+	cfg.MaxOpenConns = 1
+	st, err := store.Open(t.Context(), cfg, testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	won, err := st.WithReplicaLock(ctx, "scheduled-worker", func(ctx context.Context) error {
+		won, err := st.WithReplicaLock(ctx, "backup-run", st.Ping)
+		if !won && err == nil {
+			err = errors.New("backup-run not acquired")
+		}
+		return err
+	})
+	if !won || err != nil {
+		t.Fatal("query starved under both locks:", won, err)
+	}
+}

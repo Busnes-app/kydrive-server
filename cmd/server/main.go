@@ -261,22 +261,11 @@ func runServer() {
 		log.Fatal("KyDrive requires SQLite")
 	}
 	srv.StartKyPost(ctx)
-	editorDone := make(chan struct{})
-	go func() { defer close(editorDone); srv.RunEditorRevocations(ctx) }()
-	retentionDone := make(chan struct{})
-	go func() { defer close(retentionDone); srv.RunRetention(ctx) }()
-	suiteGroupsDone := make(chan struct{})
-	go func() { defer close(suiteGroupsDone); srv.RunSuiteGroups(ctx) }()
-	suiteOrgsDone := make(chan struct{})
-	go func() { defer close(suiteOrgsDone); srv.RunSuiteOrgs(ctx) }()
-	sealingDone := make(chan struct{})
-	go func() { defer close(sealingDone); srv.RunBlobSealing(ctx) }()
-	cleanupDone := make(chan struct{})
-	go func() { defer close(cleanupDone); cleanExpiredLoop(ctx, st) }()
-	searchDone := make(chan struct{})
-	go func() { defer close(searchDone); srv.RunSearchIndex(ctx) }()
-	backupDone := make(chan struct{})
-	go backupLoop(ctx, cfg, st, backupDone)
+	jobsDone := startJobs(ctx, st, srv.RunEditorRevocations, srv.RunRetention, srv.RunSuiteGroups,
+		srv.RunSuiteOrgs, srv.RunBlobSealing, func(ctx context.Context) { cleanExpiredLoop(ctx, st) },
+		srv.RunSearchIndex, func(ctx context.Context) { backupLoop(ctx, cfg, st) })
+	editorDone, retentionDone, suiteGroupsDone, suiteOrgsDone := jobsDone[0], jobsDone[1], jobsDone[2], jobsDone[3]
+	sealingDone, cleanupDone, searchDone, backupDone := jobsDone[4], jobsDone[5], jobsDone[6], jobsDone[7]
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	httpServer := &http.Server{
@@ -452,18 +441,22 @@ func runBackup(ctx context.Context, cfg *config.Config, st store.Store) (recover
 		return recoveryclient.Result{}, err
 	}
 	client := recoveryclient.NewClient(recoveryclient.Options{AllowPrivate: cfg.Backup.AllowPrivateRecovery})
-	return recoveryclient.Run(ctx, rc, backup.Settings(ctx, st.Settings()),
-		func() (recoveryclient.Payload, error) {
-			return backup.Collect(ctx, cfg, appversion.String(), backup.PurposeDeposit)
-		}, client)
+	var res recoveryclient.Result
+	err = backup.OneRun(ctx, st, func(owned context.Context) error {
+		res, err = recoveryclient.Run(ctx, rc, backup.Settings(ctx, st.Settings()),
+			func() (recoveryclient.Payload, error) {
+				return backup.Collect(owned, cfg, appversion.String(), backup.PurposeDeposit)
+			}, client)
+		return err
+	})
+	return res, err
 }
 
 // backupLoop polls the admin's schedule once a minute; a change in the UI needs no restart
 // and a restart never loses its place, the last attempt is in the database. The wait and
 // payload collection honour shutdown; sealing and upload do not, and done is closed only once
 // the loop is between runs, so SIGTERM cannot land between KyRecovery storing a capsule and the receipt being written.
-func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done chan<- struct{}) {
-	defer close(done)
+func backupLoop(ctx context.Context, cfg *config.Config, st store.Store) {
 	// Built once: a deployment key that cannot seal is a configuration fault, not a run that
 	// might succeed next minute. Run never gets far enough to stamp the attempt, so retrying
 	// would log and audit a failure every tick forever.
@@ -490,18 +483,24 @@ func backupLoop(ctx context.Context, cfg *config.Config, st store.Store, done ch
 			continue
 		}
 		runCtx := context.WithoutCancel(ctx)
-		res, err := recoveryclient.Run(runCtx, rc, backup.Settings(runCtx, st.Settings()),
-			func() (recoveryclient.Payload, error) {
-				return backup.Collect(ctx, cfg, appversion.String(), backup.PurposeDeposit)
-			}, client)
-		if errors.Is(err, recoveryclient.ErrNotPaired) || errors.Is(err, recoveryclient.ErrNoDestination) {
-			continue // never configured; nothing to report
-		}
-		recordRun(runCtx, st, "system", res, err)
-		if err == nil {
-			// Cancellable: restic leaves a repository consistent when killed mid-prune.
-			pruneBulk(ctx, runCtx, cfg, st)
-			checkBulk(ctx, runCtx, cfg, st)
+		err = backup.OneRun(ctx, st, func(owned context.Context) error {
+			res, err := recoveryclient.Run(runCtx, rc, backup.Settings(runCtx, st.Settings()),
+				func() (recoveryclient.Payload, error) {
+					return backup.Collect(owned, cfg, appversion.String(), backup.PurposeDeposit)
+				}, client)
+			if errors.Is(err, recoveryclient.ErrNotPaired) || errors.Is(err, recoveryclient.ErrNoDestination) {
+				return nil // never configured; nothing to report
+			}
+			recordRun(runCtx, st, "system", res, err)
+			if err == nil {
+				// Cancellable: restic leaves a repository consistent when killed mid-prune.
+				pruneBulk(owned, runCtx, cfg, st)
+				checkBulk(owned, runCtx, cfg, st)
+			}
+			return nil
+		})
+		if err != nil && ctx.Err() == nil {
+			log.Printf("[BACKUP] scheduled run skipped: %s", recoveryclient.AuditSafe(err.Error()))
 		}
 	}
 }

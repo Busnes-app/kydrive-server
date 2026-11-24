@@ -311,9 +311,13 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings := backup.Settings(ctx, s.store.Settings())
-	res, err := recoveryclient.Run(ctx, rc, settings, func() (recoveryclient.Payload, error) {
-		return backup.Collect(s.collecting, s.config, appversion.String(), backup.PurposeDeposit)
-	}, s.recovery)
+	var res recoveryclient.Result
+	err = backup.OneRun(s.collecting, s.store, func(collecting context.Context) error {
+		res, err = recoveryclient.Run(ctx, rc, settings, func() (recoveryclient.Payload, error) {
+			return backup.Collect(collecting, s.config, appversion.String(), backup.PurposeDeposit)
+		}, s.recovery)
+		return err
+	})
 
 	action, outcome, details := recoveryclient.Outcome(res, err)
 	details["outcome"] = outcome
