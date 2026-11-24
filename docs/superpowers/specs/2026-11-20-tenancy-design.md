@@ -1138,7 +1138,15 @@ the release before. No R step starts before the owner approves this amendment.
   - The shared-configuration fingerprint (`replica_config_fingerprint`, `accept-replica-config`)
     over the base's fields plus KyDrive's own: KySignOn, KyPost, Euro-Office, the storage
     root, the tenancy mode and the staff org.
-  - Keys from outside the data directory (D13). Multi mode refuses a minted key.
+  - Keys from outside the data directory (D13). As built: the configuration boundary
+    (`internal/config/replica_keys.go`, `config.go`) validates tenancy before creating keys.
+    Multi mode requires an explicit `KY_ENCRYPTION_KEY` and reads an existing private
+    `KYDRIVE_IDENTITY_KEY_FILE` outside `KY_DATA_DIR`, checking resolved ancestry even for
+    a fresh data directory. It refuses local `encryption.key`/`identity.key` copies and
+    never mints either key. Server/operator refusal tests compare the whole key/data tree
+    before and after missing, malformed, public or misplaced key input. Valid external
+    keys still reach the closed multi-mode startup gate. Single mode keeps today's
+    create-once/load-retained behavior; fingerprints and other R3 mechanisms remain unbuilt.
   - One elected worker (`scheduled-worker`, a session advisory lock) runs every job
     `cmd/server` starts today (`main.go:244-258`): editor revocations, retention and the purge,
     suite groups, the org poll, blob sealing, expiry cleanup, the search indexer and the backup

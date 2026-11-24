@@ -249,6 +249,19 @@ func load(existing bool) (*Config, error) {
 	}
 	dsn := getEnv("KY_DB_DSN", defaultDSN)
 
+	// Validate tenancy before any key can be created. Multi mode always reads retained,
+	// externally provisioned keys, even while the remaining startup gates are closed.
+	tenancy := getEnv("KYDRIVE_TENANCY", "single")
+	if tenancy != "single" && tenancy != "multi" {
+		return nil, fmt.Errorf("KYDRIVE_TENANCY must be single or multi, not %q", tenancy)
+	}
+	multi := tenancy == "multi"
+	if multi {
+		if err := replicaKeyPaths(dataDir); err != nil {
+			return nil, fmt.Errorf("KYDRIVE_TENANCY=multi: %w", err)
+		}
+	}
+
 	sessionSecret := getEnv("KY_SESSION_SECRET", "")
 	if env == "production" && sessionSecret == "" {
 		return nil, fmt.Errorf("KY_SESSION_SECRET is required in production")
@@ -268,6 +281,9 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("KY_ENCRYPTION_KEY: %w", err)
 	}
+	if multi && !ok {
+		return nil, fmt.Errorf("KY_ENCRYPTION_KEY is required in multi mode; retain the deployment key outside KY_DATA_DIR")
+	}
 	keyPath := filepath.Join(dataDir, "encryption.key")
 	if !ok && existing {
 		if encryptionKey, err = keyfile.Load(keyPath, 32); err != nil {
@@ -283,9 +299,12 @@ func load(existing bool) (*Config, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fmt.Errorf("encryption key: %w", statErr)
 	}
-	identityKey, err := loadIdentityKey(dataDir, existing)
+	identityKey, err := loadIdentityKey(dataDir, existing || multi)
 	if err != nil {
 		return nil, err
+	}
+	if multi && identityKey == nil {
+		return nil, fmt.Errorf("KYDRIVE_IDENTITY_KEY_FILE must hold an existing identity key in multi mode; no key is created")
 	}
 	tlsCertFile := getEnv("KYDRIVE_TLS_CERT_FILE", "")
 	if tlsCertFile != "" && !filepath.IsAbs(tlsCertFile) {
@@ -346,13 +365,8 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// KYDRIVE_TENANCY: the drive store records the mode at first start and refuses another.
-	switch tenancy := getEnv("KYDRIVE_TENANCY", "single"); tenancy {
-	case "single":
-	case "multi":
+	if multi {
 		return nil, fmt.Errorf("KYDRIVE_TENANCY=multi is not available in this release")
-	default:
-		return nil, fmt.Errorf("KYDRIVE_TENANCY must be single or multi, not %q", tenancy)
 	}
 	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
 	if fontsDir != "" {
