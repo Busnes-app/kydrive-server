@@ -123,3 +123,13 @@ The private row is omitted from all bulk settings responses (including administr
 Restore reset removes it atomically with restored grants, so a restored database must
 establish its configuration again before serving. This does not implement PostgreSQL
 backup/restore or remove any other R3/R4/hosted qualification gate.
+
+
+The R3 internal session-lock primitive now exists for future scheduled-worker and
+backup-run adoption. It reserves a PostgreSQL session for the callback, cancels that
+callback's context after session loss and discards the physical connection on every exit.
+Use direct database connections or session pooling; transaction pooling cannot retain
+session ownership. Job queries use ordinary pool connections in addition to the reserved
+one. Callers must honor cancellation and tolerate interrupted external effects. This
+primitive alone provides no exactly-once or stale-writer fence. Scheduled jobs and backup
+paths have not adopted it, and all current multi-mode startup/acceptance gates remain.

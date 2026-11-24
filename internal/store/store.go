@@ -44,6 +44,9 @@ type Store interface {
 	// UpdateReplicaConfig checks or accepts multi-mode shared settings atomically with audit.
 	UpdateReplicaConfig(context.Context, map[string]string, bool) ([]string, error)
 
+	// WithReplicaLock owns a multi-mode PostgreSQL session through work; loss cancels its context.
+	WithReplicaLock(context.Context, string, func(context.Context) error) (bool, error)
+
 	Driver() string
 	Ping(ctx context.Context) error
 	Close() error

@@ -1164,8 +1164,16 @@ the release before. No R step starts before the owner approves this amendment.
     `main.go:242`), since every replica needs the secret. As built: `ApplyOrgs` advances
     `orgs_since` only when greater, in the org page's transaction, with int64 SQL casts on
     both backends. Independent database handles test stale/repeated/concurrent pages,
-    large cursors and page rollback. The worker election remains unbuilt.
-  - The `backup-run` lease for scheduled, manual and CLI runs. The PostgreSQL snapshot backup,
+    large cursors and page rollback. As built: `store.WithReplicaLock` supplies the
+    multi-PG session-lock boundary (`internal/store/replica_lock.go`), schema/name scoped,
+    with no callback on contention, context cancellation after session loss and physical
+    connection discard on every exit. Real-PG tests use independent pools, callback
+    errors/panic, cancellation while work finishes and actual backend termination/takeover.
+    It requires direct connections or session pooling; callbacks use the ordinary pool
+    and honor cancellation. Job adoption/election remains unbuilt; this is neither
+    exactly-once execution nor an external-effect fence.
+  - The `backup-run` lease for scheduled, manual and CLI runs (the session-lock primitive
+    above is built; backup caller adoption is pending). The PostgreSQL snapshot backup,
     restore through `migrate-postgres`, and `prepareRestoredDatabase` dropping KyDrive's
     session-like tables and the fingerprint.
 - **R4. State in the database**: every row of the in-memory table above (WebDAV locks,

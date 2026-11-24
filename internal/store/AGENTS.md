@@ -4,7 +4,7 @@
 Provides the unified Database Abstraction Layer (DAL) supporting pluggable backends (SQLite zero-CGO default and PostgreSQL enterprise) with automated dialect-aware migrations.
 
 ## Ownership
-Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `AuditStore`, `SettingsStore`), dialect translations, and schema migrations.
+Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `AuditStore`, `SettingsStore`), dialect translations, schema migrations and PostgreSQL replica coordination.
 
 ## Local Contracts
 - `ApplyInstaller` creates only missing issuer-bound SCIM accounts, dedicated roles and owned configuration references; one transaction includes every ownership record and audit. Foreign accounts and drift are refused. Check/resume never create resources or audit rows. `InstallerAdministrator` identifies installer-created dedicated accounts without altering existing mixed-use accounts.
@@ -38,8 +38,11 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 
 - `UpdateReplicaConfig` is multi-mode PostgreSQL only. INSERT-if-absent then a row lock serializes independent first starts/checks/acceptance; fingerprint and explicit acceptance audit are one transaction. Malformed records and immutable deployment/device key, tenancy or staff changes fail closed. New fields merge without dropping unknown ones. `GetAllSettings` omits the private record; exact-key coordination reads retain it. Restore removes it. `TestReplicaConfigAtomic` needs real PostgreSQL.
 
+- `WithReplicaLock` is multi-mode PostgreSQL only. A dedicated session holds a schema/name-scoped advisory lock through the callback; contention returns false without calling it. The physical session is discarded on every exit, including acquisition errors/panic, so locks never return to the pool. A one-second probe cancels the callback context on session loss; voluntary release waits for the callback to return. Callers honor cancellation, tolerate interrupted external effects, and use ordinary pool connections for their queries. Direct connections/session pooling only; transaction pooling is unsafe. This primitive does not elect jobs or serialize backups until their callers adopt it.
+
 ## Verification
 - `go test -v ./internal/store/...`
+- With `KY_TEST_POSTGRES_DSN` set, `go test -race -count=1 ./internal/store -run TestReplicaLock` checks independent-pool exclusion, distinct names, release after error/panic, cancellation without premature release, backend loss and takeover. The existing PostgreSQL CI leg runs these cases; default SQLite verifies the single-mode refusal.
 
 ## Child DOX Index
 None.

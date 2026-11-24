@@ -4,6 +4,11 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **PostgreSQL session-lock primitive (tenancy R3 groundwork).** Internal replica jobs
+  can reserve one session for exclusive named ownership; session loss cancels their
+  context and every exit discards the connection. Single-mode calls are refused.
+  Scheduled jobs and backup runs have not adopted it yet; multi startup stays disabled.
+
 - **Shared configuration checks (tenancy R3 groundwork).** Multi-mode PostgreSQL replicas
   compare keyed fingerprints before bootstrap; explicit `accept-replica-config` records
   changed field names with its update atomically. Retained deployment/device keys and the

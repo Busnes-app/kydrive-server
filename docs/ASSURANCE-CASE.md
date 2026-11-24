@@ -186,3 +186,13 @@ tenancy identity changes fail closed. Bulk settings omit the record and restore 
 starts, old-replica refusal, upgrade fields and audit rollback. Single-mode tests require no
 coordination state. This groundwork does not establish replica/hosted readiness; S3 wiring,
 worker election, shared security state, backup and full acceptance remain required.
+
+
+The R3 session-lock boundary (`internal/store/replica_lock.go`) keeps named ownership
+on a reserved PostgreSQL session, never a pooled connection after return. A one-second
+probe cancels work on session loss; voluntary release waits for the callback to finish.
+Real independent-pool tests cover contention, distinct names, error/panic cleanup,
+backend termination, cancellation and takeover. The method refuses single mode and has
+no production caller yet. This is groundwork for the elected worker/backup-run lease,
+not exactly-once execution or fencing of an external write already in flight. Job/backup
+adoption and startup qualification remain required.
