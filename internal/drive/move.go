@@ -60,7 +60,7 @@ func (s *Store) moveFile(ctx context.Context, user string, f File, expected int6
 			if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(size),0) FROM drive_versions WHERE file_id=?`, id).Scan(&size); err != nil {
 				return err
 			}
-			if err := fits(ctx, tx, to.Workspace, size); err != nil {
+			if err := moveFits(ctx, tx, to.Workspace, size); err != nil {
 				return err
 			}
 			// Shares and links were granted within the source; they would revive if the file came back.

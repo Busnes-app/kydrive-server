@@ -51,3 +51,11 @@ settings: `KY_DB_DRIVER=sqlite`, `KY_DATA_DIR=/private/opened/data`. It creates 
 multi-tenant schema the snapshot records, copies and verifies every row, and keeps change
 sequence numbers. Single-tenant PostgreSQL still has no KyDrive backup, and multi-mode
 startup stays refused; this restores the database, not the shared object storage.
+
+The restore reset drops every org's storage grant, so no org adds bytes until KyIdentity
+grants again. The restored report sequences are older than the ones KyIdentity holds, so it
+answers the next reports `stale`; KyDrive keeps no grant for those orgs and stops reporting
+them (logged `ALERT storage pool`). Never change a sequence by hand: list them with
+`kydrive-server storage-seq` (org, KyDrive's sequence, KyIdentity's), then run
+`kydrive-server storage-seq -org <org ID> -past <KyIdentity's sequence>` for each. The next
+report applies, and the org writes again once it is answered.

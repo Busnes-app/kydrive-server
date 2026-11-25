@@ -10,7 +10,7 @@ import (
 // new (SQLite moves over by migrate-postgres), so it starts at the latest version; an entry
 // appended to schema needs its PostgreSQL form here too, and TestPostgresSchemaIsCurrent fails
 // until it has one.
-const postgresVersion = 29
+const postgresVersion = 30
 
 // postgresTables is every drive table at postgresVersion without org_id, which
 // tenancySchema adds as on SQLite. SQLite's INTEGER is 64-bit, so it is BIGINT here.
@@ -122,7 +122,7 @@ func (s *Store) createPostgres(ctx context.Context) error {
 // postgresSchema is the drive schema at postgresVersion.
 func postgresSchema() string {
 	pg := dialect{pg: true}
-	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg)
+	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg)
 }
 
 // dialect spells what the two backends write differently: triggers and IS NOT between values.

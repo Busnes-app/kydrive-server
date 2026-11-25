@@ -78,8 +78,8 @@ func setupMultiServer(t *testing.T) *multiAPI {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec(`INSERT INTO drive_orgs(id,status) VALUES('org-a','active'),('org-b','active')`)
-	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`) // as a successful poll leaves it
+	exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES('org-a','active',1099511627776,99999999999),('org-b','active',1099511627776,99999999999)`) // grants as an answered report leaves them
+	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`)                                                  // as a successful poll leaves it
 	users := [][4]string{{"staff", "admin", "active", testStaffOrg}}
 	for _, o := range []string{"a", "b"} {
 		users = append(users, [4]string{o + "1", "user", "active", "org-" + o}, [4]string{o + "2", "user", "active", "org-" + o}, [4]string{o + "-gone", "user", "active", "org-" + o})

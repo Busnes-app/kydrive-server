@@ -108,6 +108,11 @@ func main() {
 				log.Fatal(err)
 			}
 			return
+		case "storage-seq":
+			if err := storageSeq(context.Background(), os.Args[2:], os.Stdout); err != nil {
+				log.Fatal("storage-seq: ", err)
+			}
+			return
 		case "rename-local-admin":
 			fs := flag.NewFlagSet("rename-local-admin", flag.ExitOnError)
 			from := fs.String("from", "", "existing local administrator username")
@@ -263,9 +268,10 @@ func runServer() {
 	srv.StartKyPost(ctx)
 	jobsDone := startJobs(ctx, st, srv.RunEditorRevocations, srv.RunRetention, srv.RunSuiteGroups,
 		srv.RunSuiteOrgs, srv.RunBlobSealing, func(ctx context.Context) { cleanExpiredLoop(ctx, st) },
-		srv.RunSearchIndex, func(ctx context.Context) { backupLoop(ctx, cfg, st) })
+		srv.RunSearchIndex, func(ctx context.Context) { backupLoop(ctx, cfg, st) }, srv.RunStoragePool)
 	editorDone, retentionDone, suiteGroupsDone, suiteOrgsDone := jobsDone[0], jobsDone[1], jobsDone[2], jobsDone[3]
 	sealingDone, cleanupDone, searchDone, backupDone := jobsDone[4], jobsDone[5], jobsDone[6], jobsDone[7]
+	storagePoolDone := jobsDone[8]
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	httpServer := &http.Server{
@@ -340,6 +346,11 @@ func runServer() {
 	case <-suiteOrgsDone:
 	case <-waitCtx.Done():
 		log.Print("Suite org shutdown timed out")
+	}
+	select {
+	case <-storagePoolDone:
+	case <-waitCtx.Done():
+		log.Print("Storage pool shutdown timed out")
 	}
 	select {
 	case <-sealingDone:

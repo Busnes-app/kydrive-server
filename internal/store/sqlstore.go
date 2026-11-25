@@ -103,6 +103,11 @@ func (s *SQLStore) ResetAfterRestore(ctx context.Context) error {
 				return err
 			}
 		}
+		// Restored storage grants are old: KyIdentity may have replaced them since. Every org asks
+		// again; a restored sequence answered stale waits for the operator (drive.AdvanceReportSeq).
+		if _, err := tx.ExecContext(ctx, `UPDATE drive_orgs SET grant_ceiling=NULL,grant_expires=0,report_inflight=0,report_due=1`); err != nil {
+			return err
+		}
 		// A new opener must not reuse a document key held by an editor from before restoration.
 		// A random positive 56-bit epoch also separates repeated restores of the same capsule.
 		epoch, err := strconv.ParseInt(crypto.RandomHex(7), 16, 64)

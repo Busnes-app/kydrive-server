@@ -763,16 +763,16 @@ const usedBytes = `SELECT COALESCE((SELECT SUM(v.size) FROM drive_versions v JOI
 // viewBytes, closed with a workspace and ")", sums its unrevoked viewing copies.
 const viewBytes = `(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE revoked=0 AND workspace=`
 
-// fits returns ErrQuota unless workspace can take extra more bytes of retained versions.
-func fits(ctx context.Context, q queryer, workspace string, extra int64) error {
-	var used, quota int64
-	if err := q.QueryRowContext(ctx, `SELECT quota,COALESCE((`+usedBytes+`),0) FROM drive_workspaces WHERE id=?`, workspace, workspace).Scan(&quota, &used); err != nil {
-		return err
-	}
-	if used > quota || extra > quota-used {
-		return ErrQuota
-	}
-	return nil
+// fits returns ErrQuota unless workspace can take extra more bytes of retained versions: its
+// quota, or in multi-tenant mode its org's pool grant (pool.go).
+func fits(ctx context.Context, q execQueryer, workspace string, extra int64) error {
+	return quotaFits(ctx, q, workspace, extra, true)
+}
+
+// moveFits checks bytes moving into workspace from another workspace of the same org: its
+// quota in single-tenant mode, nothing in multi-tenant mode (the org's net change is 0).
+func moveFits(ctx context.Context, q execQueryer, workspace string, extra int64) error {
+	return quotaFits(ctx, q, workspace, extra, false)
 }
 
 func uniqueViolation(err error) bool {

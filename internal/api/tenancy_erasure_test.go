@@ -84,7 +84,7 @@ func TestUserErasedIsFinal(t *testing.T) {
 // failed read stops the poll before the orgs.
 func TestErasedListIsApplied(t *testing.T) {
 	m, f := multiSSO(t)
-	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status) VALUES(?,'active')`, erasedOrg); err != nil {
+	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES(?,'active',1099511627776,99999999999)`, erasedOrg); err != nil {
 		t.Fatal(err)
 	}
 	for _, u := range [][2]string{{"fay", erasedOrg}, {"gus", "org-a"}} {

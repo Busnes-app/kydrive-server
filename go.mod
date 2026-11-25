@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	filippo.io/age v1.3.2
-	github.com/Busnes-app/ky-primitives v0.10.2-0.20261123170311-b1501fc7c0cd
+	github.com/Busnes-app/ky-primitives v0.10.2-0.20261124022836-b5f5853be771
 	github.com/aws/aws-sdk-go-v2 v1.47.8
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.9
 	github.com/aws/smithy-go v1.28.8

@@ -79,6 +79,9 @@ func restoreStore(t *testing.T) (*SQLStore, drive.File) {
 func TestResetAfterRestore(t *testing.T) {
 	ctx := context.Background()
 	s, file := restoreStore(t)
+	if _, err := s.db.ExecContext(ctx, `UPDATE drive_orgs SET grant_ceiling=5,grant_expires=99999999999,report_inflight=1`); err != nil {
+		t.Fatal(err)
+	}
 	var previousEpoch int64
 	for attempt := 1; attempt <= 2; attempt++ {
 		if err := s.ResetAfterRestore(ctx); err != nil {
@@ -106,6 +109,10 @@ func TestResetAfterRestore(t *testing.T) {
 		}
 		if value, err := s.Settings().GetSetting(ctx, "installer.integration"); err != nil || value != "retained-config-reference" {
 			t.Fatal("integration configuration changed", value, err)
+		}
+		var grants int
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_orgs WHERE grant_ceiling IS NOT NULL OR grant_expires<>0 OR report_inflight<>0`).Scan(&grants); err != nil || grants != 0 {
+			t.Fatal("a restore kept storage grants", grants, err)
 		}
 		var epoch int64
 		if err := s.db.QueryRowContext(ctx, `SELECT editor_epoch FROM drive_files WHERE id=?`, file.ID).Scan(&epoch); err != nil || epoch <= 0 || epoch == previousEpoch {

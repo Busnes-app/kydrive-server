@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **The org storage pool (multi-tenant, tenancy D7).** In multi mode a write that adds bytes
+  fits only within the org's unexpired grant from KyIdentity (`POST /api/suite/storage`),
+  checked in the write's transaction; the per-workspace quota is not enforced there. Moves,
+  handovers and anything that frees bytes always pass, so an org over its pool can still tidy
+  up. The elected worker reports each org's drive bytes (versions plus viewing copies) and
+  renews grants; a grant lasts at most 15 minutes from when its report was frozen. A stale
+  answer (a restored database) stops that org's reports until `storage-seq` advances its
+  sequence. Single-tenant quotas are unchanged; multi startup stays refused.
 - **Multi-tenant PostgreSQL backups and restore (tenancy R3).** A multi-mode deposit
   snapshots PostgreSQL from one read-only transaction into the capsule's usual SQLite
   member, recording its tenancy; `restore-reset` and `migrate-postgres` keep that tenancy, so
