@@ -59,6 +59,7 @@ func (s *Server) RunSuiteOrgs(ctx context.Context) {
 				log.Printf("suite orgs: %v", err) // suitedir errors carry no secret
 			}
 		}
+		s.purgeLifecycle(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -68,6 +69,29 @@ func (s *Server) RunSuiteOrgs(ctx context.Context) {
 }
 
 var errNoSuite = errors.New("KySignOn is not configured")
+
+// purgeLifecycle purges the orgs recorded deleted and carries out recorded erasures, then
+// removes the blobs they left. It runs after every org poll, failed ones included, since both
+// act on what the registry already holds.
+func (s *Server) purgeLifecycle(ctx context.Context) {
+	d := s.store.Drive()
+	for _, p := range []struct {
+		what  string
+		purge func(context.Context) ([]string, []string, error)
+	}{{"org purge", d.PurgeOrgs}, {"member erasure", d.EraseMembers}} {
+		what := p.what
+		blobs, views, err := p.purge(ctx)
+		if err != nil && ctx.Err() == nil {
+			log.Printf("%s: %v", what, err)
+		}
+		if err := drive.RemoveBlobs(s.blobRoot(), blobs); err != nil {
+			log.Printf("%s blob cleanup: %v", what, err)
+		}
+		if err := drive.RemoveBlobs(s.viewRoot(), views); err != nil {
+			log.Printf("%s viewing copy cleanup: %v", what, err)
+		}
+	}
+}
 
 // pollOrgs applies KyIdentity's erasures, then the orgs changed since the last poll. A failed
 // call changes nothing. Erasures come first, so a fresh org mirror means they are applied.

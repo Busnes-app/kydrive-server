@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Org purge and Delete everything (multi-tenant, tenancy step 5).** An org KyIdentity
+  reports deleted is purged after the next poll: every row and blob it held goes, one
+  workspace at a time, and only its tombstone and a platform event with counts stay. A member's
+  Delete everything hands each shared item in their My files, with its subtree and shares, to
+  the active member with the strongest access to it (then the longest-standing), and deletes
+  everything else of theirs, account included; it waits while the org is not active. A restore
+  replays erasures, since the erased list is read again from the start.
 - **The org storage pool (multi-tenant, tenancy D7).** In multi mode a write that adds bytes
   fits only within the org's unexpired grant from KyIdentity (`POST /api/suite/storage`),
   checked in the write's transaction; the per-workspace quota is not enforced there. Moves,
