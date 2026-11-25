@@ -355,7 +355,9 @@ func TestMigrationTablesAreCompleteAndInOrder(t *testing.T) {
 	tables := strs(t, testdb.Open(t, lite), `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
 	db := testdb.Open(t, pg)
 	for _, side := range [][]string{tables, strs(t, db, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`)} {
-		side = slices.DeleteFunc(side, func(s string) bool { return slices.Contains(store.SchemaTables, s) })
+		side = slices.DeleteFunc(side, func(s string) bool {
+			return slices.Contains(store.SchemaTables, s) || slices.Contains(store.SharedTables, s)
+		})
 		slices.Sort(side)
 		if want := slices.Sorted(slices.Values(store.MigrationTables)); !slices.Equal(side, want) {
 			t.Errorf("tables %v, migrationTables %v", side, want)

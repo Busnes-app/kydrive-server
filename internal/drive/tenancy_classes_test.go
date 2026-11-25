@@ -27,4 +27,7 @@ var (
 		"drive_schema", "drive_key", "drive_name_scrub", "drive_blob_retire", "drive_blob_kyb1",
 		"drive_orgs", "drive_erasures",
 	}
+	// SharedStateTables are platform tables on PostgreSQL only: the replicas' short-lived
+	// security state (store.Shared), keyed by limit, key or token, never by org.
+	SharedStateTables = []string{"shared_windows", "shared_spent", "shared_tickets"}
 )

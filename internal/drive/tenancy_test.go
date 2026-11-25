@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,6 +69,9 @@ func TestEveryTableIsClassified(t *testing.T) {
 	for _, n := range drive.PlatformTables {
 		add(n, "platform")
 	}
+	for _, n := range drive.SharedStateTables {
+		add(n, "platform")
+	}
 	tables := tables(t, db)
 	present := map[string]bool{}
 	for _, n := range tables {
@@ -77,7 +81,9 @@ func TestEveryTableIsClassified(t *testing.T) {
 		}
 	}
 	for n := range class {
-		if !present[n] && n != "drive_name_scrub" { // gone once names are scrubbed (names.go)
+		// drive_name_scrub is gone once names are scrubbed (names.go); the shared tables exist
+		// on PostgreSQL only.
+		if !present[n] && n != "drive_name_scrub" && (testdb.Postgres() || !slices.Contains(drive.SharedStateTables, n)) {
 			t.Errorf("classified table %s does not exist", n)
 		}
 	}
