@@ -29,5 +29,5 @@ var (
 	}
 	// SharedStateTables are platform tables on PostgreSQL only: the replicas' short-lived
 	// security state (store.Shared), keyed by limit, key or token, never by org.
-	SharedStateTables = []string{"shared_windows", "shared_spent", "shared_tickets"}
+	SharedStateTables = []string{"shared_windows", "shared_spent", "shared_tickets", "shared_dav_locks"}
 )
