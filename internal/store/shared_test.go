@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"errors"
+	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -179,5 +181,36 @@ func TestSharedDAVLocksAcrossReplicas(t *testing.T) {
 	}
 	if err := la.Unlock(ctx, token); !errors.Is(err, webdav.ErrNoSuchLock) {
 		t.Fatalf("a lock whose timeout passed while held, once released: %v", err)
+	}
+}
+
+// Confirm considers only the first davTokens distinct presented tokens, in one query per name,
+// so a request with a huge If header cannot hold the table's lock for long.
+func TestSharedDAVConfirmIsBounded(t *testing.T) {
+	a, _, _ := replicaLockStores(t)
+	ctx := t.Context()
+	l := a.Shared().DavLocks()
+	token, err := l.Create(ctx, webdav.LockDetails{Root: "/ws/f.txt", Duration: time.Minute, ZeroDepth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	many := make([]string, 0, 100001)
+	for i := range 100000 {
+		many = append(many, fmt.Sprintf("bogus-%d", i))
+	}
+	start := time.Now()
+	if _, err := l.Confirm(ctx, "/ws/f.txt", "", append(many, token)); !errors.Is(err, webdav.ErrConfirmationFailed) {
+		t.Fatalf("a token past the first 32 distinct ones: %v", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("100 001 tokens took %v", d)
+	}
+	repeated := append(slices.Repeat([]string{"bogus"}, 100000), token)
+	release, err := l.Confirm(ctx, "/ws/f.txt", "", repeated)
+	if err != nil {
+		t.Fatalf("a repeated token used up the cap: %v", err)
+	}
+	if err := release(ctx); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"time"
 
 	"golang.org/x/net/webdav"
@@ -29,8 +30,17 @@ type DavLocks struct{ shared *Shared }
 
 func (s *Shared) DavLocks() *DavLocks { return &DavLocks{s} }
 
+// davTokens is how many presented tokens Confirm considers, in order. A client presents one
+// or two; more only lengthen work done under the table's one lock.
+const davTokens = 32
+
 func (l *DavLocks) tx(ctx context.Context, work func(*sql.Tx) error) error {
 	return l.shared.readCommitted(ctx, func(tx *sql.Tx) error {
+		// Bounds every statement here, the wait for the table's lock included, so no request
+		// holds or queues for it long.
+		if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = 5000`); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive dav locks'))`); err != nil {
 			return err
 		}
@@ -77,30 +87,33 @@ OR (NOT zero_depth AND (root = '/' OR starts_with($1, root || '/'))))`, d.Root, 
 	return token, nil
 }
 
-// Confirm finds, for each of name0 and name1 that is not "", the first presented token whose
-// unheld lock covers it, and holds those locks until release. Any name left uncovered is
-// webdav.ErrConfirmationFailed.
+// Confirm finds, for each of name0 and name1 that is not "", the first of the first davTokens
+// distinct presented tokens whose unheld lock covers it, and holds those locks until release.
+// Any name left uncovered is webdav.ErrConfirmationFailed.
 func (l *DavLocks) Confirm(ctx context.Context, name0, name1 string, tokens []string) (release func(context.Context) error, err error) {
+	var candidates []string
+	for _, t := range tokens {
+		if t != "" && !slices.Contains(candidates, t) {
+			candidates = append(candidates, t)
+			if len(candidates) == davTokens {
+				break
+			}
+		}
+	}
 	var held []string
 	err = l.tx(ctx, func(tx *sql.Tx) error {
 		for _, name := range []string{name0, name1} {
 			if name == "" {
 				continue
 			}
-			found := ""
-			for _, token := range tokens {
-				var covers bool
-				if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM shared_dav_locks WHERE token = $1 AND held_until <= `+dbMillis+`
-AND (root = $2 OR (NOT zero_depth AND (root = '/' OR starts_with($2, root || '/')))))`, token, name).Scan(&covers); err != nil {
-					return err
-				}
-				if covers {
-					found = token
-					break
-				}
-			}
-			if found == "" {
+			var found string
+			err := tx.QueryRowContext(ctx, `SELECT token FROM shared_dav_locks WHERE token = ANY($1) AND held_until <= `+dbMillis+`
+AND (root = $2 OR (NOT zero_depth AND (root = '/' OR starts_with($2, root || '/'))))
+ORDER BY array_position($1, token) LIMIT 1`, candidates, name).Scan(&found)
+			if errors.Is(err, sql.ErrNoRows) {
 				return webdav.ErrConfirmationFailed
+			} else if err != nil {
+				return err
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE shared_dav_locks SET held_until = `+dbMillis+` + $2 WHERE token = $1`, found, davHold.Milliseconds()); err != nil {
 				return err
