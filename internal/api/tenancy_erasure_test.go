@@ -119,3 +119,44 @@ func TestErasedListIsApplied(t *testing.T) {
 		t.Fatalf("a failed erased read still polled the orgs: %v, %d polls", err, f.polls-polls)
 	}
 }
+
+// An applied erasure deletes the account, and a restore from before it erases it again: the
+// reset makes the next poll read the erased list from the start.
+func TestRestoreReplaysErasures(t *testing.T) {
+	m, f := multiSSO(t)
+	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES(?,'active',1099511627776,99999999999)`, erasedOrg); err != nil {
+		t.Fatal(err)
+	}
+	create := func() {
+		t.Helper()
+		if w := hook(t, m.srv, "user.created", scimBody("fay", true, 1, erasedOrg)); w.Code != http.StatusOK {
+			t.Fatalf("create fay: %d %s", w.Code, w.Body)
+		}
+	}
+	create()
+	f.erased = fmt.Sprintf(`{"subjects":[{"sub":"fay","org_id":%q,"revision":5}]}`, erasedOrg)
+	ctx := context.Background()
+	erase := func(what string) {
+		t.Helper()
+		if err := api.PollOrgsForTest(m.srv, ctx); err != nil {
+			t.Fatal(err)
+		}
+		api.PurgeLifecycleForTest(m.srv, ctx)
+		if s := m.state(t, "fay"); s != "" {
+			t.Fatalf("%s: fay is %q", what, s)
+		}
+	}
+	erase("first erasure")
+	// The restored database predates the erasure: the account is back and the record is not.
+	if _, err := m.db.Exec(`DELETE FROM drive_erasures WHERE subject='fay'`); err != nil {
+		t.Fatal(err)
+	}
+	create()
+	if err := m.st.ResetAfterRestore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	erase("after the restore")
+	if f.asked[len(f.asked)-1] != "0" {
+		t.Fatalf("the read after the restore asked since %v", f.asked)
+	}
+}

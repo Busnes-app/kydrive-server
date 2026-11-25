@@ -126,3 +126,6 @@ func ReportStorageForTest(s *Server, ctx context.Context) error { return s.repor
 
 // PollOrgsForTest runs one /api/suite/orgs poll.
 func PollOrgsForTest(s *Server, ctx context.Context) error { return s.pollOrgs(ctx) }
+
+// PurgeLifecycleForTest runs the org purge and erasures that follow each org poll.
+func PurgeLifecycleForTest(s *Server, ctx context.Context) { s.purgeLifecycle(ctx) }

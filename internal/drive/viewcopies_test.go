@@ -378,3 +378,24 @@ func TestExpiredOpenViewCopyIsDropped(t *testing.T) {
 		t.Fatalf("undeliverable drop kept past the grace: %+v", drops)
 	}
 }
+
+// A ticket revoked after it was read (a purge or erasure revoking every copy) takes no bytes.
+func TestRevokedViewTicketTakesNoBytes(t *testing.T) {
+	st, _, root := fixture(t)
+	d, ctx := st.Drive(), context.Background()
+	peer := drive.WithPeer(ctx, livePeer)
+	token, _, err := d.IssueViewTicket(peer, "worker", "Report.DOCX", int64(len(docx)), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := d.ViewTicket(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := drive.ExecTx(ctx, d, `UPDATE drive_view_copies SET revoked=1 WHERE id=?`, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(docx)); !errors.Is(err, drive.ErrNotFound) {
+		t.Fatalf("a revoked ticket stored its bytes: %v", err)
+	}
+}

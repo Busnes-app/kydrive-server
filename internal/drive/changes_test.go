@@ -307,6 +307,8 @@ var noChange = map[string]string{
 	"ApplyReports":            "storage grants are not items",
 	"StaleReports":            "read",
 	"AdvanceReportSeq":        "storage reports are not items",
+	"PurgeOrgs":               "a deleted org's workspaces and change logs go whole; nobody is served",
+	"EraseMembers":            "the member's My files and its change log go; items handed on write their changes (handOn)",
 	"ApplyOrgs":               "the org registry is not items",
 	"AgentTokenUser":          "credential bookkeeping",
 	"AppPasswordUser":         "credential bookkeeping",
