@@ -12,15 +12,6 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 )
 
-func (o *orgs) count(t *testing.T, q string, args ...any) int {
-	t.Helper()
-	n, err := drive.QueryInt(o.ctx, o.d, q, args...)
-	if err != nil {
-		t.Fatal(q, err)
-	}
-	return n
-}
-
 // orgLeft is every row org-b still holds: each org-owned table by org_id, and each derived
 // table through its parent.
 func (o *orgs) orgLeft(t *testing.T, org string) map[string]int {
@@ -192,6 +183,9 @@ func TestEraseHandsSharedItemsOn(t *testing.T) {
 		o.count(t, `SELECT COUNT(*) FROM drive_files WHERE id=? AND parent=? AND workspace=?`, inside.ID, shared.ID, heirs) != 1 {
 		t.Fatal("the shared folder did not move under a handover folder in a2's My files")
 	}
+	if o.count(t, `SELECT COUNT(*) FROM drive_changes WHERE workspace=? AND item IN (?,?)`, heirs, shared.ID, inside.ID) != 2 {
+		t.Fatal("the successor's change feed misses the moved items")
+	}
 	if o.count(t, `SELECT COUNT(*) FROM drive_shares WHERE workspace=? AND created_by='a2' AND resource_id IN (?,?)`, heirs, shared.ID, inside.ID) != 3 {
 		t.Fatal("shares did not move with the items")
 	}
@@ -248,4 +242,22 @@ func (o *orgs) str(t *testing.T, q string, args ...any) string {
 		t.Fatal(q, err)
 	}
 	return s.String
+}
+
+// A purge whose last transaction rolls back returns no viewing-copy blobs: the rows that name
+// them are still there.
+func TestOrgPurgeKeepsBlobsOfARolledBackStep(t *testing.T) {
+	o := poolOrgs(t)
+	o.exec(t, `INSERT INTO drive_view_copies(id,user_id,workspace,name,size,pairing,ticket_expires,expires,blob,org_id) VALUES('vc-b','b1',?,'n',1,'p',0,0,'view-blob','org-b')`, o.personalB)
+	if testdb.Postgres() {
+		o.exec(t, `CREATE FUNCTION fail_purge() RETURNS trigger LANGUAGE plpgsql AS $t$BEGIN RAISE EXCEPTION 'boom'; END$t$`)
+		o.exec(t, `CREATE TRIGGER fail_purge BEFORE UPDATE OF purged ON drive_orgs FOR EACH ROW EXECUTE FUNCTION fail_purge()`)
+	} else {
+		o.exec(t, `CREATE TRIGGER fail_purge BEFORE UPDATE OF purged ON drive_orgs BEGIN SELECT RAISE(ABORT,'boom'); END`)
+	}
+	o.exec(t, `UPDATE drive_orgs SET status='deleted' WHERE id='org-b'`)
+	_, views, err := o.d.PurgeOrgs(o.ctx)
+	if err == nil || len(views) != 0 || o.count(t, `SELECT COUNT(*) FROM drive_view_copies WHERE id='vc-b'`) != 1 {
+		t.Fatalf("a rolled-back purge returned %v (%v)", views, err)
+	}
 }

@@ -181,7 +181,10 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 		}
 		return platformEvent(ctx, tx, "platform.org_purged", fmt.Sprintf("org:%s workspaces=%d%s", org, len(workspaces), counts))
 	})
-	return blobs, views, err
+	if err != nil {
+		return blobs, nil, err // the rolled-back rows still name the viewing copies
+	}
+	return blobs, views, nil
 }
 
 // EraseMembers carries out every recorded Delete everything (drive_erasures) whose account is
@@ -414,7 +417,7 @@ ORDER BY x.resource_id,CASE x.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 EL
 					}
 				}
 			}
-			if err := s.moveSubtree(ctx, tx, workspace, target, folder, root, kinds[root], sub, heir); err != nil {
+			if err := s.moveSubtree(ctx, tx, workspace, target, folder, root, kinds, sub, heir); err != nil {
 				return 0, err
 			}
 			moved++
@@ -426,10 +429,10 @@ ORDER BY x.resource_id,CASE x.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 EL
 	return moved, nil
 }
 
-// moveSubtree moves root (of kind) and its subtree sub from workspace into folder of target,
+// moveSubtree moves root and its subtree sub (kinds names each item's kind) from workspace into folder of target,
 // with the subtree's shares and organisation links, now owned by heir; guest links are revoked
 // and editor sessions closed, as on any move.
-func (s *Store) moveSubtree(ctx context.Context, tx *sql.Tx, workspace, target, folder, root, kind string, sub []string, heir string) error {
+func (s *Store) moveSubtree(ctx context.Context, tx *sql.Tx, workspace, target, folder, root string, kinds map[string]string, sub []string, heir string) error {
 	in := strings.TrimSuffix(strings.Repeat("?,", len(sub)), ",")
 	args := func(first ...any) []any {
 		for _, id := range sub {
@@ -454,5 +457,15 @@ func (s *Store) moveSubtree(ctx context.Context, tx *sql.Tx, workspace, target, 
 			return err
 		}
 	}
-	return change(ctx, tx, workspace, kind, root)
+	// The source loses the root; the successor's feed gains every moved item, so a synced
+	// client sees the whole tree.
+	if err := change(ctx, tx, workspace, kinds[root], root); err != nil {
+		return err
+	}
+	for _, id := range sub {
+		if err := change(ctx, tx, target, kinds[id], id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
