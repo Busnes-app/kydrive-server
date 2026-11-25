@@ -331,6 +331,15 @@ CREATE INDEX IF NOT EXISTS shared_spent_expiry ON shared_spent(expires_at);
 CREATE TABLE IF NOT EXISTS shared_tickets (id TEXT PRIMARY KEY, blob TEXT NOT NULL, sealed BOOLEAN NOT NULL, size BIGINT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL, expires_at BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS shared_tickets_expiry ON shared_tickets(expires_at);`,
 	},
+	{
+		// The replicas' WebDAV lock table (store.DavLocks). held_until marks a lock one
+		// request holds; both times are database milliseconds. SQLite keeps x/net's memory table.
+		Version: 15,
+		Name:    "shared_dav_locks",
+		Postgres: `CREATE TABLE IF NOT EXISTS shared_dav_locks (token TEXT PRIMARY KEY, root TEXT NOT NULL, zero_depth BOOLEAN NOT NULL, owner_xml TEXT NOT NULL, expires_at BIGINT NOT NULL, held_until BIGINT NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS shared_dav_locks_root ON shared_dav_locks(root);
+CREATE INDEX IF NOT EXISTS shared_dav_locks_expiry ON shared_dav_locks(expires_at);`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

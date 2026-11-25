@@ -41,7 +41,7 @@ type recoveryClient interface {
 }
 
 type Server struct {
-	davLocks   *dav.Locks   // one per server: WebDAV locks are single-instance
+	davLocks   *dav.Locks   // per server, or shared by the replicas in multi-tenant PostgreSQL
 	ready      readiness    // /readyz
 	mcp        http.Handler // /mcp, for AI agents
 	now        func() time.Time
@@ -193,6 +193,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	}
 	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
 	if s.shared != nil {
+		s.davLocks = dav.NewSharedLocks(s.shared.DavLocks(), cfg.Security.EncryptionKey)
 		// A salt stays spent through its expiry second, the last one verifyPoW accepts.
 		s.powSpent.Spend = func(salt string, expires int64) bool { return s.spend("pow", salt, time.Unix(expires+1, 0)) }
 	}
