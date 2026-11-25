@@ -332,3 +332,43 @@ func TestRestoreRefusesASplitDatabaseMissingAPart(t *testing.T) {
 		t.Fatal("an incomplete split produced a database", err)
 	}
 }
+
+// A multi-tenant capsule (a PostgreSQL snapshot) resets in the tenancy it records.
+func TestRestoreResetKeepsAMultiTenantDatabasesTenancy(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	key := bytes.Repeat([]byte{7}, 32)
+	path := filepath.Join(dir, "ky_server.db")
+	st, err := store.Open(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: path, Tenancy: "multi", StaffOrg: "00000000-0000-0000-0000-000000000099"}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = raw.ExecContext(ctx, `INSERT INTO users(id,username,role,status,sso_provider,created_at,updated_at,org_id) VALUES('u','u','user','active','local',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000-0000-0000-0000-000000000099')`)
+	if err := errors.Join(err, raw.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Sessions().CreateSession(ctx, &store.Session{TokenHash: "restored", UserID: "u", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "encryption.key"), []byte(hex.EncodeToString(key)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := resetRestored(ctx, dir); err != nil {
+		t.Fatal(err)
+	}
+	st, err = store.Open(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: path, Tenancy: "multi", StaffOrg: "00000000-0000-0000-0000-000000000099"}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.Sessions().GetSession(ctx, "restored"); err == nil {
+		t.Fatal("the restored session survived the reset")
+	}
+}

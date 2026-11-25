@@ -15,6 +15,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/keyfile"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -58,6 +59,11 @@ func resetRestored(ctx context.Context, dataDir string) error {
 	}
 	var tables int
 	err = check.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('users','schema_migrations','drive_schema','drive_files','drive_versions')`).Scan(&tables)
+	// A multi-tenant capsule (a PostgreSQL snapshot) reopens in the tenancy it records.
+	var tenancy drive.Tenancy
+	if err == nil && tables == 5 {
+		tenancy, err = store.RecordedTenancy(ctx, check)
+	}
 	if err := errors.Join(err, check.Close()); err != nil {
 		return fmt.Errorf("inspect restored database: %w", err)
 	}
@@ -68,7 +74,7 @@ func resetRestored(ctx context.Context, dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("load restored deployment key: %w", err)
 	}
-	st, err := store.Open(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: path, DataDir: dataDir}, key)
+	st, err := store.Open(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: path, DataDir: dataDir, Tenancy: tenancy.Mode, StaffOrg: tenancy.StaffOrg}, key)
 	if err != nil {
 		return err
 	}

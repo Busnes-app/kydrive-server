@@ -43,7 +43,7 @@ The root Compose package serves KyDrive only. It binds HTTP to loopback for the 
 
 ### Moving to PostgreSQL
 
-`migrate-postgres` copies a single-tenant SQLite install into an empty PostgreSQL database. **Not for production yet:** on PostgreSQL, KyDrive's own backups and content search do not run until later releases. Move a test install, or one you back up yourself (`pg_dump` plus the data directory).
+`migrate-postgres` copies a single-tenant SQLite install into an empty PostgreSQL database, in the tenancy the database records (a restored multi-tenant capsule becomes a multi-tenant database: RESTORE.md). **Not for production yet:** on single-tenant PostgreSQL, KyDrive's own backups and content search do not run until later releases. Move a test install, or one you back up yourself (`pg_dump` plus the data directory).
 
 1. Back up, then stop the server and keep its volumes: `docker compose stop app`. The command refuses while a server holds the SQLite database. Servers from this release on hold a lock on it; stop older ones yourself.
 2. Create an empty PostgreSQL database owned by the account KyDrive will use. Put its DSN in a private file, never on a command line: `(umask 077; echo 'KY_MIGRATE_POSTGRES_DSN=postgres://kydrive:<password>@<host>:5432/kydrive?sslmode=verify-full' > migration.env)`. Use `sslmode=verify-full` for a database on another host.
