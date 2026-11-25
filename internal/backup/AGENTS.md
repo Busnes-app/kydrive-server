@@ -19,8 +19,10 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
   `kydrive-server:setting:kyrecovery_token`, domain-separated so a row copied from another
   setting will not open.
 - `Collect` snapshots SQLite with the lib's `SQLiteSnapshot` (`VACUUM INTO`; the store runs in
-  WAL mode, so a plain file read misses uncheckpointed commits) and returns
-  `ErrNoDatabaseSnapshot` for any other driver, so a capsule without a consistent database is
+  WAL mode, so a plain file read misses uncheckpointed commits), multi-tenant PostgreSQL with
+  `store.SnapshotPostgres` into a private `<data dir>/snapshot-*` file (the same member, so
+  drills and restore are unchanged), and returns `ErrNoDatabaseSnapshot` for any other driver
+  or mode (single-tenant PostgreSQL included), so a capsule without a consistent database is
   never sealed. A snapshot over `capsule.MaxFileBytes` (64 MiB, `dbPartBytes`) is sealed as
   ordered members `data/ky_server.db.000-of-NNN` ... each within it; one that fits stays the
   single `data/ky_server.db` member. The bulk manifest is split the same way

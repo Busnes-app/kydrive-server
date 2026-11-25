@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Multi-tenant PostgreSQL backups and restore (tenancy R3).** A multi-mode deposit
+  snapshots PostgreSQL from one read-only transaction into the capsule's usual SQLite
+  member, recording its tenancy; `restore-reset` and `migrate-postgres` keep that tenancy, so
+  a capsule restores into an empty PostgreSQL database row for row. Single-tenant SQLite and
+  PostgreSQL backups are unchanged; multi startup stays refused.
+
 - **One replica runs the jobs and one backup runs at a time (tenancy R3).** In multi-mode
   PostgreSQL only the `scheduled-worker` lock holder runs background jobs, and a standby
   takes them over when it loses its session; scheduled, manual and CLI deposits take the

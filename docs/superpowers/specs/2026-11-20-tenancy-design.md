@@ -1181,9 +1181,20 @@ the release before. No R step starts before the owner approves this amendment.
     wraps the scheduled run (with its bulk prune and check), the admin route and CLI
     `deposit`; a contender gets `recoveryclient.ErrInProgress` (409 on the route) without
     collecting. Session loss cancels collection; sealing and upload already under way
-    finish. The PostgreSQL snapshot backup,
-    restore through `migrate-postgres`, and `prepareRestoredDatabase` dropping KyDrive's
-    session-like tables and the fingerprint.
+    finish.
+  - The PostgreSQL snapshot backup. As built: in multi mode `backup.Collect` calls
+    `store.SnapshotPostgres`, which reads every table in one REPEATABLE READ READ ONLY
+    transaction, on a connection of its own, into a private SQLite file in the recorded
+    tenancy, checks each table's count and row digests, then SQLite's integrity and
+    foreign-key checks, and seals it as `data/ky_server.db`. The copy drops the SQLite
+    triggers and recreates them after: a deleted org's unpurged rows passed them when written.
+    `migrate-postgres` restores it into an empty database in the tenancy the file records,
+    with the PostgreSQL triggers disabled for the copy in multi mode, and `restore-reset`
+    opens it in that tenancy. `TestPostgresSnapshotRestoresEveryRow` compares every table
+    row for row after the round trip, with writes during the snapshot excluded. Single-tenant
+    PostgreSQL still refuses a deposit. `ResetAfterRestore` is KyDrive's
+    `prepareRestoredDatabase`: it drops the session-like tables and the fingerprint. The
+    Restic bulk from shared storage remains unbuilt.
 - **R4. State in the database**: every row of the in-memory table above (WebDAV locks,
   Euro-Office thumbnail tickets, sign-in and per-IP attempt windows, device-signature nonces,
   spent CAPTCHA challenges, the KyPost replay cache), on PostgreSQL only. SQLite keeps the

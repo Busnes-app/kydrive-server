@@ -340,7 +340,7 @@ func (s *Server) handleRunBackup(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, recoveryclient.ErrNotPaired):
 			s.writeError(w, http.StatusPreconditionFailed, "No recovery key")
 		case errors.Is(err, backup.ErrNoDatabaseSnapshot):
-			// Only SQLite can be snapshotted, so on any other driver no capsule can be made at
+			// Only SQLite and multi-tenant PostgreSQL can be snapshotted; elsewhere no capsule can be made at
 			// all. A configuration fact the operator must read, not a server fault.
 			s.writeError(w, http.StatusPreconditionFailed, err.Error())
 		case errors.Is(err, recoveryclient.ErrNoDestination):

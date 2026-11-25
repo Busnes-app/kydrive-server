@@ -38,5 +38,16 @@ For an upgrade, stop the only writer, take a successful complete backup, retain 
 Retain every Restic snapshot referenced by a retained capsule. Bulk pruning is opt-in, off by default, never forgets the newest KY_BACKUP_KEEP deposit snapshots. KyRecovery-held capsules older than the policy may name forgotten snapshots: set the policy to outlive KyRecovery's retention. An append-only rest-server or Object Lock repository refuses prune by design; prune it from a trusted machine with credentials that may delete, never from the drive host. With pruning off, purged and retention-expired files remain in older snapshots until those snapshots are retired. The same holds for a purged shared workspace: a full restore from a capsule taken before its purge brings it back, live if the capsule predates its deletion or under Workspaces > Deleted workspaces otherwise; there is no per-workspace restore. A capsule naming a forgotten snapshot fails the bulk restore; restore from a newer capsule. Backup retention, independent destination and recovery objectives must be chosen for the actual deployment; the local fixture establishes mechanics, not a representative production restore-time objective.
 
 Replica groundwork: restore reset also deletes the private `replica_config_fingerprint`
-row. A future multi-mode startup records its effective configuration afresh; current
-multi-mode and PostgreSQL backup/restore gates remain closed.
+row. A future multi-mode startup records its effective configuration afresh.
+
+## Restoring a multi-tenant PostgreSQL deployment
+
+A multi-tenant deposit snapshots PostgreSQL from one read-only transaction into the usual
+`data/ky_server.db` member, recording its tenancy and staff org, so steps 1 to 4 and the
+drill are as above. `restore` and `restore-reset` keep that tenancy. Instead of step 5's
+SQLite switch, copy the opened database into an empty PostgreSQL database with
+`migrate-postgres` (DEPLOYMENT.md, "Moving to PostgreSQL"), run from the opened directory's
+settings: `KY_DB_DRIVER=sqlite`, `KY_DATA_DIR=/private/opened/data`. It creates the
+multi-tenant schema the snapshot records, copies and verifies every row, and keeps change
+sequence numbers. Single-tenant PostgreSQL still has no KyDrive backup, and multi-mode
+startup stays refused; this restores the database, not the shared object storage.

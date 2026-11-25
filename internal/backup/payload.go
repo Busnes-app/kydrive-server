@@ -19,6 +19,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/capsule"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/config"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 	_ "modernc.org/sqlite"
 )
 
@@ -67,10 +68,16 @@ func Collect(ctx context.Context, cfg *config.Config, appVersion string, purpose
 		ctx, cancel = context.WithTimeout(ctx, cfg.Backup.CollectTimeout)
 		defer cancel()
 	}
-	if strings.ToLower(cfg.Database.Driver) != "sqlite" {
+	var dbBytes []byte
+	var err error
+	switch driver := strings.ToLower(cfg.Database.Driver); {
+	case driver == "sqlite":
+		dbBytes, err = snapshotSQLite(ctx, cfg.Database.DSN, cfg.Database.DataDir)
+	case driver == "postgres" && cfg.Database.Tenancy == "multi":
+		dbBytes, err = snapshotPostgres(ctx, cfg)
+	default:
 		return recoveryclient.Payload{}, fmt.Errorf("%w: %s", ErrNoDatabaseSnapshot, cfg.Database.Driver)
 	}
-	dbBytes, err := snapshotSQLite(ctx, cfg.Database.DSN, cfg.Database.DataDir)
 	if err != nil {
 		return recoveryclient.Payload{}, err
 	}
@@ -174,6 +181,21 @@ func snapshotSQLite(ctx context.Context, dsn, dataDir string) ([]byte, error) {
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "ky_server.db")
 	if err := recoveryclient.SQLiteSnapshot(ctx, db, path); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNoDatabaseSnapshot, err)
+	}
+	return os.ReadFile(path)
+}
+
+// snapshotPostgres copies a multi-tenant PostgreSQL database into the SQLite file a capsule
+// carries, from one transaction, so drills and restores work as on SQLite.
+func snapshotPostgres(ctx context.Context, cfg *config.Config) ([]byte, error) {
+	dir, err := os.MkdirTemp(cfg.Database.DataDir, "snapshot-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, dbName)
+	if err := store.SnapshotPostgres(ctx, cfg.Database.DSN, path, cfg.Security.EncryptionKey); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNoDatabaseSnapshot, err)
 	}
 	return os.ReadFile(path)

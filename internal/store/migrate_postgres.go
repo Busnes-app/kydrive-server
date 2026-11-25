@@ -93,6 +93,10 @@ func MigrateToPostgres(ctx context.Context, source, dsn string, key []byte, chec
 	if err != nil {
 		return report, err
 	}
+	tenancy, err := RecordedTenancy(ctx, src.db)
+	if err != nil {
+		return report, err
+	}
 	defer os.RemoveAll(dir)
 	defer src.Close()
 
@@ -114,10 +118,10 @@ func MigrateToPostgres(ctx context.Context, source, dsn string, key []byte, chec
 	if err := checkTarget(ctx, db); err != nil {
 		return report, err
 	}
-	if _, err := newSQLStore(ctx, db, "postgres", key, drive.Tenancy{Mode: drive.TenancySingle}); err != nil {
+	if _, err := newSQLStore(ctx, db, "postgres", key, tenancy); err != nil {
 		return report, fmt.Errorf("create the PostgreSQL schema: %w", err)
 	}
-	if err := copyAll(ctx, src.db, db, &report); err != nil {
+	if err := copyAll(ctx, src.db, db, tenancy.Mode == drive.TenancyMulti, &report); err != nil {
 		return report, err
 	}
 	return report, nil
@@ -157,7 +161,12 @@ func upgradedSnapshot(ctx context.Context, source string, key []byte) (_ *SQLSto
 	if err := recoveryclient.SQLiteSnapshot(ctx, original, snapshot); err != nil {
 		return nil, "", errors.New("cannot snapshot the SQLite database")
 	}
-	st, err := openSQLite(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: snapshot}, key)
+	// A restored multi-tenant capsule opens in the tenancy it records.
+	tenancy, err := RecordedTenancy(ctx, original)
+	if err != nil {
+		return nil, "", errors.New("cannot read the SQLite database's tenancy")
+	}
+	st, err := openSQLite(ctx, config.DatabaseConfig{Driver: "sqlite", DSN: snapshot, Tenancy: tenancy.Mode, StaffOrg: tenancy.StaffOrg}, key)
 	if err != nil {
 		return nil, "", fmt.Errorf("upgrade the snapshot: %w", err)
 	}
@@ -186,7 +195,7 @@ func checkTarget(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func copyAll(ctx context.Context, src, db *sql.DB, report *MigrationReport) error {
+func copyAll(ctx context.Context, src, db *sql.DB, multi bool, report *MigrationReport) error {
 	for side, q := range map[*sql.DB]string{
 		src: `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
 		db:  `SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`,
@@ -220,9 +229,19 @@ func copyAll(ctx context.Context, src, db *sql.DB, report *MigrationReport) erro
 			return err
 		}
 	}
-	// Change rows keep their seq: a desktop client's cursor is one.
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE drive_changes DISABLE TRIGGER drive_changes_in_order`); err != nil {
-		return err
+	// Change rows keep their seq: a desktop client's cursor is one. A multi-tenant copy
+	// (a restored capsule) also skips the org triggers, as its snapshot did: a deleted org
+	// not yet purged keeps rows they would refuse now.
+	triggers := map[string]string{"drive_changes": "drive_changes_in_order"}
+	if multi {
+		for _, t := range migrationTables {
+			triggers[t] = "USER"
+		}
+	}
+	for t, which := range triggers {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE `+quote(t)+` DISABLE TRIGGER `+which); err != nil {
+			return err
+		}
 	}
 	for _, table := range migrationTables {
 		columns, err := targetColumns(ctx, tx, table)
@@ -242,8 +261,10 @@ func copyAll(ctx context.Context, src, db *sql.DB, report *MigrationReport) erro
 		}
 		report.Rows[table] = n
 	}
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE drive_changes ENABLE TRIGGER drive_changes_in_order`); err != nil {
-		return err
+	for t, which := range triggers {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE `+quote(t)+` ENABLE TRIGGER `+which); err != nil {
+			return err
+		}
 	}
 	if err := advanceSequences(ctx, tx); err != nil {
 		return err
@@ -283,7 +304,7 @@ func advanceSequences(ctx context.Context, tx *sql.Tx) error {
 
 type column struct{ name, kind string }
 
-func targetColumns(ctx context.Context, tx *sql.Tx, table string) ([]column, error) {
+func targetColumns(ctx context.Context, tx querier, table string) ([]column, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=? ORDER BY ordinal_position`, table)
 	if err != nil {
 		return nil, err
@@ -300,7 +321,7 @@ func targetColumns(ctx context.Context, tx *sql.Tx, table string) ([]column, err
 	return out, rows.Err()
 }
 
-func sameColumns(ctx context.Context, src *sql.DB, table string, columns []column) error {
+func sameColumns(ctx context.Context, src querier, table string, columns []column) error {
 	rows, err := src.QueryContext(ctx, `SELECT * FROM `+quote(table)+` LIMIT 0`)
 	if err != nil {
 		return err
@@ -320,7 +341,7 @@ func sameColumns(ctx context.Context, src *sql.DB, table string, columns []colum
 	return nil
 }
 
-func copyTable(ctx context.Context, src *sql.DB, tx *sql.Tx, table string, columns []column) (int64, *big.Int, error) {
+func copyTable(ctx context.Context, src querier, tx *sql.Tx, table string, columns []column) (int64, *big.Int, error) {
 	list := columnList(columns)
 	rows, err := src.QueryContext(ctx, `SELECT `+list+` FROM `+quote(table))
 	if err != nil {
@@ -354,7 +375,7 @@ func copyTable(ctx context.Context, src *sql.DB, tx *sql.Tx, table string, colum
 	return n, sum, rows.Err()
 }
 
-func digest(ctx context.Context, tx *sql.Tx, table string, columns []column) (int64, *big.Int, error) {
+func digest(ctx context.Context, tx querier, table string, columns []column) (int64, *big.Int, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT `+columnList(columns)+` FROM `+quote(table))
 	if err != nil {
 		return 0, nil, err
@@ -449,7 +470,7 @@ func parseTime(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func names(ctx context.Context, db *sql.DB, q string) ([]string, error) {
+func names(ctx context.Context, db querier, q string) ([]string, error) {
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
