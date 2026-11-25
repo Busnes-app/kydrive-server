@@ -32,9 +32,11 @@ func stepUpCode(w *httptest.ResponseRecorder) string {
 func TestStepUpGuardsSessionOutlivingCredentials(t *testing.T) {
 	srv, st, _ := setupTestServer(t)
 	ctx := context.Background()
+	user := loginAs(t, srv, st, "stepper", "admin")
+	// After the sign-in that set the step-up time, so at(d) is at least d past it however slowly
+	// a loaded host runs the setup.
 	start := time.Now()
 	at := func(d time.Duration) { api.SetClockForTest(srv, func() time.Time { return start.Add(d) }) }
-	user := loginAs(t, srv, st, "stepper", "admin")
 	w, err := st.Drive().CreateWorkspace(ctx, "usr_stepper", "Steps", 8<<20)
 	if err == nil {
 		err = st.Groups().ReplaceGroup(ctx, &store.Group{ID: "steppers", DisplayName: "Steppers", Members: []string{"usr_stepper"}}, true)
