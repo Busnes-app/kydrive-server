@@ -706,6 +706,24 @@ The contract is KyIdentity's `POST /api/suite/storage` (T #290, `docs/SUITE-DIRE
   usage drops. Reads, trash, purge, moves and handover keep working. The warning before a
   seat change is KyIdentity's. A test lowers the pool below usage and expects a move and a
   handover to succeed and an upload to be refused.
+- **As built (step 5, pool enforcement; `internal/drive/pool.go`, schema 30).** The check,
+  the counting, reporting and failing closed are as above, with two changes that follow
+  KyIdentity's contract (T "The check an app makes", "After a restore") and KyCalendar's:
+  - **Sequence after a restore.** KyDrive never moves its own sequence above a `stale`
+    answer. It keeps the grant it holds until expiry and stops reporting that org; the
+    operator runs `storage-seq -org <id> -past <seq>` (`docs/RESTORE.md`). The restore reset
+    drops every grant.
+  - **Unanswered report.** While a report is unanswered, growth stops at its frozen snapshot,
+    so the grant its answer replaces is never spent twice. During a KyIdentity outage, growth
+    therefore stops at the next report (within about 60 s while the org is writing, and once the
+    grant is half expired otherwise) instead of at the grant's expiry. Reads, moves, deletes and
+    handovers are unaffected.
+  - The `seq` is a column, `drive_orgs.report_seq`, raised in a serializable transaction, not a
+    PostgreSQL sequence object; one elected worker sends reports, and an overlapping one resends
+    the same frozen report.
+  - Not built yet: the admin views of `storage.pool_bytes`/`over_since` (the poll still mirrors
+    `quotas.storage_bytes`), and `PeerFree` still answers KyPost from the workspace quota; the
+    pool check refuses the ticket anyway.
 - **Per-workspace quota** (`drive_workspaces.quota`, the 10 GiB My files default at
   `peer.go:24` and `store.go:276`, 1 GiB for suite groups at `suitegroups.go:18`) is not
   enforced in multi-tenant mode. The column stays for single-tenant, Enterprise included.

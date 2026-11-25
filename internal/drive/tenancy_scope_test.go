@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store/migrations"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
@@ -23,6 +24,9 @@ type orgs struct {
 	ctx            context.Context
 	d              *drive.Store
 	db             *sql.DB
+	cfg            config.DatabaseConfig
+	t              *testing.T // poolOrgs' tests
+	puts           int
 	root           string
 	teamA, teamB   drive.Workspace
 	fileA, fileB   drive.File
@@ -45,7 +49,7 @@ func multiTenant(t *testing.T) *orgs {
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := &orgs{ctx: ctx, d: d, db: db, root: t.TempDir(), groupA: "group-a", groupB: "group-b"}
+	o := &orgs{ctx: ctx, d: d, db: db, cfg: cfg, root: t.TempDir(), groupA: "group-a", groupB: "group-b"}
 	exec := func(q string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(q, args...); err != nil {
@@ -53,6 +57,8 @@ func multiTenant(t *testing.T) *orgs {
 		}
 	}
 	exec(`INSERT INTO drive_orgs(id,status) VALUES('org-a','active'),('org-b','active')`)
+	grant(t, db, "org-a", 1<<40)
+	grant(t, db, "org-b", 1<<40)
 	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`) // as a successful poll leaves it
 	for _, u := range [][4]string{
 		{"staff", "admin", "active", drive.TestStaffOrg},

@@ -388,7 +388,7 @@ func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) 
 			}
 			// A deleted org stays deleted: no later answer brings it back.
 			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,revision,enabled,storage_bytes) VALUES(?,?,?,?,?)
-ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes
+ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes,report_due=1
 WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
 				return err
 			}

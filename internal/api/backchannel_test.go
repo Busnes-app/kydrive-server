@@ -39,6 +39,7 @@ type fakeKySignOn struct {
 	erased     string            // the /api/suite/erased answer, else none
 	asked      []string          // each /api/suite/erased call's since
 	down       bool              // /api/suite/erased fails
+	stored     int               // reports in /api/suite/storage calls, each answered ok
 }
 
 func newFakeKySignOn(t *testing.T) *fakeKySignOn {
@@ -81,6 +82,23 @@ func newFakeKySignOn(t *testing.T) *fakeKySignOn {
 				w.WriteHeader(http.StatusBadGateway)
 			}
 			_, _ = w.Write([]byte(body))
+		case "/api/suite/storage":
+			var req struct {
+				Reports []struct {
+					OrgID string `json:"org_id"`
+					Used  int64  `json:"used_bytes"`
+					Seq   int64  `json:"seq"`
+					Want  int64  `json:"want_bytes"`
+				} `json:"reports"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			var out []map[string]any
+			for _, x := range req.Reports {
+				f.stored++
+				out = append(out, map[string]any{"org_id": x.OrgID, "result": "ok", "seq": x.Seq, "ceiling_bytes": x.Used + x.Want,
+					"ttl_seconds": 900, "pool_bytes": 1 << 40, "org_used_bytes": x.Used, "over_since": nil})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"results": out})
 		case "/api/suite/orgs":
 			f.polls++
 			_, _ = w.Write([]byte(f.orgs))

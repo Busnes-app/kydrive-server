@@ -312,3 +312,20 @@ func TestSingleTenantKyPostIgnoresTheOrg(t *testing.T) {
 		t.Fatalf("status with org_id: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// A storage report pass sends every org's report even when one org cannot be reported, and
+// records the grants KyIdentity answers.
+func TestStorageReportsSurviveABadOrg(t *testing.T) {
+	m, f := multiSSO(t)
+	const bad, good = "00000000-0000-4000-8000-00000000000a", "00000000-0000-4000-8000-00000000000b"
+	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,report_seq) VALUES(?,'active',9223372036854775807),(?,'active',0)`, bad, good); err != nil {
+		t.Fatal(err)
+	}
+	err := api.ReportStorageForTest(m.srv, context.Background())
+	if err == nil || !strings.Contains(err.Error(), bad) {
+		t.Fatalf("the bad org's failure was not reported: %v", err)
+	}
+	if f.stored != 1 || m.count(t, `SELECT COUNT(*) FROM drive_orgs WHERE id=? AND grant_ceiling=? AND report_inflight=0`, good, 1<<30) != 1 {
+		t.Fatalf("%d reports sent; the good org has no grant (%v)", f.stored, err)
+	}
+}

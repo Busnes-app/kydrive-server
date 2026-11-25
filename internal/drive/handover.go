@@ -162,7 +162,7 @@ func (s *Store) handover(ctx context.Context, user, source string, to Target, op
 		if files+folders == 0 {
 			return fmt.Errorf("%w: nothing to hand over", ErrConflict)
 		}
-		if err = fits(ctx, tx, target, size); err != nil {
+		if err = moveFits(ctx, tx, target, size); err != nil {
 			return err
 		}
 		if err = s.handoverFolder(ctx, tx, folder, target, owner); err != nil {
