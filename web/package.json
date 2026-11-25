@@ -14,7 +14,7 @@
   "dependencies": {
     "@base-ui/react": "1.9.0",
     "@excalidraw/excalidraw": "0.18.1",
-    "lucide-react": "^1.76.0",
+    "lucide-react": "^1.77.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
