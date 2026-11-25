@@ -43,6 +43,15 @@ var migrationTables = []string{
 // schemaTables record schema versions; each side has its own, at the same versions.
 var schemaTables = []string{"schema_migrations", "drive_schema", "drive_name_scrub"}
 
+// sharedTables are the replicas' short-lived shared state (Shared), on PostgreSQL only. No
+// copy carries them: a restore starts with fresh windows and spent keys, as a SQLite one does.
+var sharedTables = []string{"shared_windows", "shared_spent", "shared_tickets"}
+
+// uncopied reports whether table is one no copy compares or carries.
+func uncopied(table string) bool {
+	return slices.Contains(schemaTables, table) || slices.Contains(sharedTables, table)
+}
+
 // openedTables are the ones a store open fills on an empty database. The copy replaces
 // their rows with the source's.
 var openedTables = []string{"drive_orgs", "drive_key", "server_settings"}
@@ -181,7 +190,7 @@ func checkTarget(ctx context.Context, db *sql.DB) error {
 		return errors.New("cannot read the PostgreSQL target's tables")
 	}
 	for _, table := range tables {
-		if slices.Contains(schemaTables, table) || slices.Contains(openedTables, table) {
+		if uncopied(table) || slices.Contains(openedTables, table) {
 			continue
 		}
 		if !slices.Contains(migrationTables, table) {
@@ -204,7 +213,7 @@ func copyAll(ctx context.Context, src, db *sql.DB, multi bool, report *Migration
 		if err != nil {
 			return err
 		}
-		tables = slices.DeleteFunc(tables, func(t string) bool { return slices.Contains(schemaTables, t) })
+		tables = slices.DeleteFunc(tables, uncopied)
 		if missing := setDiff(tables, migrationTables); len(missing) > 0 {
 			return fmt.Errorf("migrate-postgres does not know tables %v: this release cannot migrate them", missing)
 		}

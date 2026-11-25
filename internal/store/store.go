@@ -46,6 +46,8 @@ type Store interface {
 
 	// WithReplicaLock owns a multi-mode PostgreSQL session through work; loss cancels its context.
 	WithReplicaLock(context.Context, string, func(context.Context) error) (bool, error)
+	// Shared is the replicas' shared security state; nil outside multi-tenant PostgreSQL.
+	Shared() *Shared
 
 	Driver() string
 	Ping(ctx context.Context) error

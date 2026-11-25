@@ -103,6 +103,9 @@ func (s *Server) kickKyPost() {
 func (s *Server) newKyPost() {
 	s.kypost.kick = make(chan struct{}, 1)
 	s.kypost.replay = syncauth.NewMemoryReplay(syncauth.DefaultWindow, 10000)
+	if s.shared != nil {
+		s.kypost.replay = sharedReplay{s, "kypost", syncauth.DefaultWindow}
+	}
 	s.kypost.reason = kypostPending
 	if d := s.config.Drive; d.KyPostURL != "" {
 		s.kypost.peer.Store(&kypostPeer{URL: d.KyPostURL, Secret: d.KyPostSecret, Source: kypostSourceEnvironment})

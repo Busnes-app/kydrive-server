@@ -8,10 +8,12 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
 // convertible are the formats the Document Server renders a first page of.
@@ -38,6 +40,12 @@ func (s *Server) newTicket(f drive.File) string {
 	raw := make([]byte, 16)
 	rand.Read(raw)
 	id := hex.EncodeToString(raw)
+	if s.shared != nil {
+		// No file name leaves memory: the Document Server reads the type from the request.
+		t := store.Ticket{Blob: f.Blob, Digest: f.Digest, Name: "document" + path.Ext(f.Name), Sealed: f.Sealed, Size: f.Size}
+		s.onShared("ticket", func(ctx context.Context) error { return s.shared.PutTicket(ctx, id, t, ticketLife) })
+		return id // unstored, it is a ticket the fetch cannot find
+	}
 	now := time.Now()
 	s.ticketsMu.Lock()
 	defer s.ticketsMu.Unlock()
@@ -51,6 +59,15 @@ func (s *Server) newTicket(f drive.File) string {
 }
 
 func (s *Server) ticket(id string) (drive.File, bool) {
+	if s.shared != nil {
+		var t store.Ticket
+		var ok bool
+		live := s.onShared("ticket", func(ctx context.Context) (err error) {
+			t, ok, err = s.shared.GetTicket(ctx, id)
+			return err
+		})
+		return drive.File{Blob: t.Blob, Digest: t.Digest, Name: t.Name, Sealed: t.Sealed, Size: t.Size}, live && ok
+	}
 	s.ticketsMu.Lock()
 	defer s.ticketsMu.Unlock()
 	t, ok := s.tickets[id]
@@ -58,6 +75,10 @@ func (s *Server) ticket(id string) (drive.File, bool) {
 }
 
 func (s *Server) dropTicket(id string) {
+	if s.shared != nil {
+		s.onShared("ticket", func(ctx context.Context) error { return s.shared.DropTicket(ctx, id) })
+		return
+	}
 	s.ticketsMu.Lock()
 	delete(s.tickets, id)
 	s.ticketsMu.Unlock()
