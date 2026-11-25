@@ -918,7 +918,7 @@ deleted. Nothing any other member owns is deleted.
 
 - **As built (step 5, `internal/drive/orgpurge.go`).** Both purges run after every org poll
   on the elected worker, not only hourly, so Delete everything happens within about a minute.
-  - The org purge follows steps 0 to 3 and 6. Step 4 (the search index by org ID) and step 5
+  - The org purge follows steps 0 to 3 and 6. Step 0 also revokes the org's viewing copies, and the last step waits until every opened copy's Euro-Office drop is acknowledged, so no viewer keeps a copy a purge dropped silently. Delete everything waits the same way for the member's copies. Step 4 (the search index by org ID) and step 5
     (destroying the org key) wait for R2's per-org index and step K. Until then, the org's
     words stay in the shared vocabulary until a rebuild.
   - The erase rule is as above. "The item's share records" are the records on the topmost

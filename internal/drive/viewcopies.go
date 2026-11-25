@@ -156,7 +156,7 @@ func (s *Store) StoreViewCopy(ctx context.Context, st objects.Store, key []byte,
 				return err
 			}
 			now := time.Now().Unix()
-			res, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET blob=?,token_hash=NULL WHERE id=? AND token_hash=? AND blob='' AND ticket_expires>? AND expires>?`, v.Blob, c.ID, tokenHash(token), now, now)
+			res, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET blob=?,token_hash=NULL WHERE id=? AND token_hash=? AND blob='' AND revoked=0 AND ticket_expires>? AND expires>?`, v.Blob, c.ID, tokenHash(token), now, now)
 			if err != nil {
 				return err
 			}

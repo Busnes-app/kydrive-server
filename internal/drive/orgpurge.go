@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -54,6 +55,20 @@ func purgeWorkspace(ctx context.Context, tx *sql.Tx, workspace string) ([]string
 	blobs, err := unreferenced(ctx, tx, candidates)
 	return blobs, counts + rest, err
 }
+
+// revokeViewsIn revokes, in a transaction of its own, the viewing copies where selects (one ?,
+// arg). A revoked copy is never opened or served again (viewCopy, StoreViewCopy need
+// revoked=0); an opened one keeps its row, and its blob, until PendingViewDrops' drop is
+// acknowledged (dropped=1), so the purge waiting on it cannot discard an undelivered drop.
+func (s *Store) revokeViewsIn(ctx context.Context, where, arg string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE drive_view_copies SET revoked=1 WHERE revoked=0 AND `+where, arg)
+		return err
+	})
+}
+
+// viewDropPending, with the org as ?, counts its opened copies whose drop is not yet acknowledged.
+const viewDropPending = `SELECT COUNT(*) FROM drive_view_copies WHERE revoked=1 AND dropped=0 AND login_at>0 AND org_id=?`
 
 // revokeEditorsIn revokes the open editor sessions on the files files selects (one ?, arg),
 // closing their documents, in a transaction of its own.
@@ -134,6 +149,9 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 	if err := s.revokeEditorsIn(ctx, `SELECT f.id FROM drive_files f JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id=?`, org); err != nil {
 		return nil, nil, err
 	}
+	if err := s.revokeViewsIn(ctx, `org_id=?`, org); err != nil {
+		return nil, nil, err
+	}
 	deleted := `SELECT 1 FROM drive_orgs WHERE id=? AND status='deleted' AND purged=0 AND seeded=0`
 	var waiting error
 	for _, w := range workspaces {
@@ -169,6 +187,10 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 			return err
 		}
 		// No workspace can appear meanwhile: <table>_org_exists refuses rows in a deleted org.
+		var pending int
+		if err := tx.QueryRowContext(ctx, viewDropPending, org).Scan(&pending); err != nil || pending > 0 {
+			return cmp.Or(err, errOpenDrops) // purged waits for a later pass
+		}
 		var err error
 		if views, err = column(ctx, tx, `SELECT blob FROM drive_view_copies WHERE org_id=? AND blob<>''`, org); err != nil {
 			return err
@@ -186,6 +208,9 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 		}
 		return platformEvent(ctx, tx, "platform.org_purged", fmt.Sprintf("org:%s workspaces=%d%s", org, len(workspaces), counts))
 	})
+	if errors.Is(err, errOpenDrops) {
+		return blobs, nil, nil
+	}
 	if err != nil {
 		return blobs, nil, err // the rolled-back rows still name the viewing copies
 	}
@@ -231,18 +256,22 @@ JOIN drive_orgs o ON o.id=e.org_id WHERE o.status='active' AND o.enabled=1 ORDER
 		}
 		// First, committed on its own: end every editor on their My files, so the drops the
 		// purge waits for are on their way.
-		if err := s.revokeEditorsIn(ctx, `SELECT f.id FROM drive_files f JOIN drive_personal_workspaces p ON p.workspace=f.workspace WHERE p.owner=?`, p[1]); err != nil {
+		err := s.revokeEditorsIn(ctx, `SELECT f.id FROM drive_files f JOIN drive_personal_workspaces p ON p.workspace=f.workspace WHERE p.owner=?`, p[1])
+		if err == nil {
+			err = s.revokeViewsIn(ctx, `user_id=?`, p[1])
+		}
+		if err != nil {
 			errs = append(errs, fmt.Errorf("erase %s: %w", p[1], err))
 			continue
 		}
 		var b, v []string
-		err := s.transaction(ctx, func(tx *sql.Tx) error {
+		err = s.transaction(ctx, func(tx *sql.Tx) error {
 			var err error
 			b, v, err = s.erase(ctx, tx, p[0], p[1])
 			return err
 		})
 		if errors.Is(err, errOpenDrops) {
-			continue // My files still has editor sessions to drop; a later pass erases it
+			continue // an editor session or viewing copy still waits for its drop; a later pass erases it
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("erase %s: %w", p[1], err))
@@ -263,6 +292,10 @@ AND EXISTS(SELECT 1 FROM drive_orgs o WHERE o.id=u.org_id AND o.status='active' 
 	}
 	if err != nil {
 		return nil, nil, err
+	}
+	var pending int
+	if err := tx.QueryRowContext(ctx, viewDropPending+` AND user_id=?`, org, user).Scan(&pending); err != nil || pending > 0 {
+		return nil, nil, cmp.Or(err, errOpenDrops)
 	}
 	var mine string
 	err = tx.QueryRowContext(ctx, `SELECT workspace FROM drive_personal_workspaces WHERE owner=?`, user).Scan(&mine)

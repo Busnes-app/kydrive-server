@@ -336,3 +336,72 @@ func TestFailingOrgPurgeDoesNotBlockTheNext(t *testing.T) {
 		t.Fatal("org-b waited behind org-a's failure")
 	}
 }
+
+// openView gives user an opened viewing copy, as Euro-Office shows it, and returns its ID.
+func (o *orgs) openView(t *testing.T, user, workspace, org string) string {
+	t.Helper()
+	id := "view-" + user
+	o.exec(t, `INSERT INTO drive_view_copies(id,user_id,workspace,name,size,pairing,ticket_expires,expires,blob,login_at,sso_sid,org_id) VALUES(?,?,?,'n',1,'p',0,?,?,?,'sid',?)`,
+		id, user, workspace, time.Now().Add(time.Hour).Unix(), "blob-"+id, time.Now().Unix(), org)
+	return id
+}
+
+// viewWaits asserts copy id is revoked, still holds its blob, is pending a drop and is not
+// served, and that done is still false.
+func (o *orgs) viewWaits(t *testing.T, id, what string, done bool) {
+	t.Helper()
+	if o.count(t, `SELECT COUNT(*) FROM drive_view_copies WHERE id=? AND revoked=1 AND dropped=0 AND blob=?`, id, "blob-"+id) != 1 || done {
+		t.Fatalf("%s: the copy's revocation is not pending, or the purge completed", what)
+	}
+	if _, err := o.d.ViewDownload(o.ctx, id); err == nil {
+		t.Fatalf("%s: a revoked copy is still served", what)
+	}
+}
+
+// An org purge with an opened viewing copy revokes it at once and waits, keeping its row and
+// blob, until its drop is acknowledged; a failed drop keeps it waiting.
+func TestOrgPurgeWaitsForViewDrops(t *testing.T) {
+	o := poolOrgs(t)
+	id := o.openView(t, "b1", o.personalB, "org-b")
+	o.exec(t, `UPDATE drive_orgs SET status='deleted' WHERE id='org-b'`)
+	purged := func() bool { return o.count(t, `SELECT purged FROM drive_orgs WHERE id='org-b'`) == 1 }
+	_, views, err := o.d.PurgeOrgs(o.ctx)
+	noErr(t, "first pass", err)
+	o.viewWaits(t, id, "first pass", purged() || len(views) > 0)
+	noErr(t, "failed drop", o.d.MarkViewDropped(o.ctx, id, false))
+	_, views, err = o.d.PurgeOrgs(o.ctx)
+	noErr(t, "after a failed drop", err)
+	o.viewWaits(t, id, "after a failed drop", purged() || len(views) > 0)
+	noErr(t, "drop", o.d.MarkViewDropped(o.ctx, id, true))
+	_, views, err = o.d.PurgeOrgs(o.ctx)
+	noErr(t, "after the drop", err)
+	if !purged() || !slices.Contains(views, "blob-"+id) || o.count(t, `SELECT COUNT(*) FROM drive_view_copies WHERE id=?`, id) != 0 {
+		t.Fatalf("not completed after the drop: views %v", views)
+	}
+}
+
+// A member's erasure waits the same way, and does not hold up the next member's.
+func TestEraseWaitsForViewDrops(t *testing.T) {
+	o, _, _, _, _ := eraseFixture(t)
+	mine := o.str(t, `SELECT workspace FROM drive_personal_workspaces WHERE owner='a1'`)
+	id := o.openView(t, "a1", mine, "org-a")
+	o.exec(t, `UPDATE users SET sso_provider='kysignon',sso_subject='sub-b1' WHERE id='b1'`)
+	o.exec(t, `INSERT INTO drive_erasures(subject,org_id,revision) VALUES('sub-b1','org-b',2)`)
+	erased := func() bool { return o.count(t, `SELECT COUNT(*) FROM users WHERE id='a1'`) == 0 }
+	_, views, err := o.d.EraseMembers(o.ctx)
+	noErr(t, "first pass", err)
+	o.viewWaits(t, id, "first pass", erased() || len(views) > 0)
+	if o.count(t, `SELECT COUNT(*) FROM users WHERE id='b1'`) != 0 {
+		t.Fatal("b1 waited behind a1's pending drop")
+	}
+	noErr(t, "failed drop", o.d.MarkViewDropped(o.ctx, id, false))
+	_, views, err = o.d.EraseMembers(o.ctx)
+	noErr(t, "after a failed drop", err)
+	o.viewWaits(t, id, "after a failed drop", erased() || len(views) > 0)
+	noErr(t, "drop", o.d.MarkViewDropped(o.ctx, id, true))
+	_, views, err = o.d.EraseMembers(o.ctx)
+	noErr(t, "after the drop", err)
+	if !erased() || !slices.Contains(views, "blob-"+id) || o.count(t, `SELECT COUNT(*) FROM drive_view_copies WHERE id=?`, id) != 0 {
+		t.Fatalf("not completed after the drop: views %v", views)
+	}
+}
