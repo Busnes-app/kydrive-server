@@ -1,7 +1,6 @@
 package drive
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -164,10 +163,7 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 			}
 			return err
 		}
-		var left int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_workspaces WHERE org_id=?`, org).Scan(&left); err != nil || left > 0 {
-			return cmp.Or(err, fmt.Errorf("%w: a workspace was added during the purge", ErrConflict))
-		}
+		// No workspace can appear meanwhile: <table>_org_exists refuses rows in a deleted org.
 		var err error
 		if views, err = column(ctx, tx, `SELECT blob FROM drive_view_copies WHERE org_id=? AND blob<>''`, org); err != nil {
 			return err
