@@ -676,3 +676,18 @@ func TestFailedCopyPublishesNothing(t *testing.T) {
 		t.Fatalf("damaged copy published %d versions", n)
 	}
 }
+
+// One infinite-depth lock on a folder covers both ends of a MOVE inside it: with its token the
+// move succeeds, without it the folder stays locked.
+func TestMoveInsideALockedFolder(t *testing.T) {
+	e := setup(t)
+	dir := e.org() + "/Locked"
+	e.want(e.do("worker", "MKCOL", dir+"/", nil), 201, "mkcol")
+	e.want(e.do("worker", "PUT", dir+"/a.txt", strings.NewReader("x")), 201, "put")
+	lock := e.do("worker", "LOCK", dir+"/", strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`), "Timeout", "Second-60")
+	e.want(lock, 200, "lock the folder")
+	token := lock.Header().Get("Lock-Token")
+	e.want(e.do("worker", "MOVE", dir+"/a.txt", nil, "Destination", dir+"/c.txt"), 423, "move without the token")
+	e.want(e.do("worker", "MOVE", dir+"/a.txt", nil, "Destination", dir+"/b.txt", "If", "("+token+")"), 201, "move with the folder's token")
+	e.want(e.do("worker", "UNLOCK", dir+"/", nil, "Lock-Token", token), 204, "unlock")
+}

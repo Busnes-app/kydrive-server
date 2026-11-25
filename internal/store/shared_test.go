@@ -157,7 +157,15 @@ func TestSharedDAVLocksAcrossReplicas(t *testing.T) {
 	if _, err := lb.Create(ctx, webdav.LockDetails{Root: "/ws/folder-2", Duration: time.Minute, ZeroDepth: true}); err != nil {
 		t.Fatalf("a sibling sharing the prefix: %v", err)
 	}
-	release, err := lb.Confirm(ctx, "/ws/folder/inner.txt", "", []string{"nope", token})
+	// One infinite lock covers both ends of a MOVE inside it.
+	release, err := lb.Confirm(ctx, "/ws/folder/a.txt", "/ws/folder/b.txt", []string{token})
+	if err != nil {
+		t.Fatalf("a move inside a locked folder with its token: %v", err)
+	}
+	if err := release(ctx); err != nil {
+		t.Fatal(err)
+	}
+	release, err = lb.Confirm(ctx, "/ws/folder/inner.txt", "", []string{"nope", token})
 	if err != nil {
 		t.Fatal(err)
 	}

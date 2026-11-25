@@ -115,12 +115,13 @@ ORDER BY array_position($1, token) LIMIT 1`, candidates, name).Scan(&found)
 			} else if err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE shared_dav_locks SET held_until = `+dbMillis+` + $2 WHERE token = $1`, found, davHold.Milliseconds()); err != nil {
-				return err
+			if !slices.Contains(held, found) { // one lock may cover both names, as for a MOVE inside it
+				held = append(held, found)
 			}
-			held = append(held, found)
 		}
-		return nil
+		// Both names are resolved before either lock is held, as in memLS.
+		_, err := tx.ExecContext(ctx, `UPDATE shared_dav_locks SET held_until = `+dbMillis+` + $2 WHERE token = ANY($1)`, held, davHold.Milliseconds())
+		return err
 	})
 	if err != nil {
 		return nil, err
