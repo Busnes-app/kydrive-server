@@ -279,6 +279,9 @@ func runServer() {
 		Handler:      srv,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
+		// Clients send a few KB of headers; the default 1 MB only feeds per-header work such as
+		// WebDAV If lists.
+		MaxHeaderBytes: 64 << 10,
 	}
 
 	// Graceful shutdown channel

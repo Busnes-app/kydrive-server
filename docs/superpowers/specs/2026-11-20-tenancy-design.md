@@ -1234,7 +1234,10 @@ the release before. No R step starts before the owner approves this amendment.
   `shared_tickets`, and `shared_dav_locks`: x/net's memLS rules on one table, tokens signed
   under a key derived from the deployment key, a lock without a timeout (the one x/net takes
   around a write without `If`) and a request's hold bounded at one hour, so a replica that
-  dies mid-request blocks the item no longer than a crashed client's LOCK. The tickets keep the in-memory semantics: a ticket stays valid
+  dies mid-request blocks the item no longer than a crashed client's LOCK. Lock rows hold no
+  names (migration 16): each path part is a keyed hash over the path up to it, and the root and
+  owner a refresh echoes are sealed under a key derived from the deployment key. One request
+  makes at most 8 calls on the table, and the server caps headers at 64 KB. The tickets keep the in-memory semantics: a ticket stays valid
   until its conversion returns or two minutes pass, not single use, because the fetch also needs the
   Document Server's signed token. A ticket stores no file name. A shared-state failure refuses.
   The tables are in neither the snapshot nor `migrate-postgres`: a restore starts with fresh

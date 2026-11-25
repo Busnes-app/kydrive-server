@@ -340,6 +340,13 @@ CREATE INDEX IF NOT EXISTS shared_tickets_expiry ON shared_tickets(expires_at);`
 CREATE INDEX IF NOT EXISTS shared_dav_locks_root ON shared_dav_locks(root);
 CREATE INDEX IF NOT EXISTS shared_dav_locks_expiry ON shared_dav_locks(expires_at);`,
 	},
+	{
+		// Lock rows now hold keyed hashes of names, and owner_xml holds the root and owner
+		// sealed (internal/dav requestLocks). Rows from before go; clients lock again.
+		Version:  16,
+		Name:     "shared_dav_locks_hashed",
+		Postgres: `DELETE FROM shared_dav_locks;`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

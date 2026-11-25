@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"log"
 	"path"
 	"strconv"
@@ -14,6 +16,7 @@ import (
 
 	"golang.org/x/net/webdav"
 
+	"github.com/Busnes-app/kydrive-server/internal/crypto"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
@@ -27,6 +30,8 @@ type Locks struct {
 	ls     webdav.LockSystem
 	shared SharedLocks
 	key    []byte
+	names  []byte // keys the shared table's names
+	seal   []byte // seals what a refresh echoes
 }
 
 func NewLocks() *Locks {
@@ -48,7 +53,12 @@ type SharedLocks interface {
 func NewSharedLocks(shared SharedLocks, deploymentKey []byte) *Locks {
 	h := hmac.New(sha256.New, deploymentKey)
 	h.Write([]byte("kydrive webdav lock tokens v1"))
-	return &Locks{shared: shared, key: h.Sum(nil)}
+	names, err1 := crypto.DeriveKey(deploymentKey, "kydrive webdav lock names v1")
+	seal, err2 := crypto.DeriveKey(deploymentKey, "kydrive webdav lock details v1")
+	if err := errors.Join(err1, err2); err != nil {
+		panic(err) // HKDF to 32 bytes cannot fail
+	}
+	return &Locks{shared: shared, key: h.Sum(nil), names: names, seal: seal}
 }
 
 // view is one request's LockSystem.
@@ -63,29 +73,63 @@ type view struct {
 func (l *Locks) view(ctx context.Context, f *FS, method string) *view {
 	ls := l.ls
 	if l.shared != nil {
-		ls = requestLocks{l.shared, ctx}
+		ls = &requestLocks{Locks: l, ctx: ctx}
 	}
 	return &view{Locks: l, ls: ls, fs: f, ctx: ctx, method: method}
 }
 
+// sharedCalls bounds one request's calls on the shared table: x/net confirms once per If
+// list, and a client needs one or two.
+const sharedCalls = 8
+
 // requestLocks is SharedLocks as a webdav.LockSystem for one request. The table keeps
 // database time, so x/net's now is unused. A release or unlock outlives a cancelled request:
-// otherwise a client that hung up would leave its lock held.
+// otherwise a client that hung up would leave its lock held. The table sees only keyed
+// hashes of names and sealed details.
 type requestLocks struct {
-	shared SharedLocks
-	ctx    context.Context
+	*Locks
+	ctx   context.Context
+	calls int
 }
 
-func (r requestLocks) after() (context.Context, context.CancelFunc) {
+func (r *requestLocks) spend() error {
+	if r.calls++; r.calls > sharedCalls {
+		return webdav.ErrConfirmationFailed
+	}
+	return nil
+}
+
+// hide maps a clean absolute path to one of keyed hashes, each over the path up to it, so
+// the table's prefix checks still hold.
+func (r *requestLocks) hide(name string) string {
+	if name == "/" {
+		return name
+	}
+	var b strings.Builder
+	var sum []byte
+	for _, part := range strings.Split(name[1:], "/") {
+		h := hmac.New(sha256.New, r.names)
+		h.Write(sum)
+		h.Write([]byte(part))
+		sum = h.Sum(nil)
+		b.WriteString("/" + hex.EncodeToString(sum[:16]))
+	}
+	return b.String()
+}
+
+func (r *requestLocks) after() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(r.ctx), 10*time.Second)
 }
 
-func (r requestLocks) Confirm(_ time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
+func (r *requestLocks) Confirm(_ time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
+	if err := r.spend(); err != nil {
+		return nil, err
+	}
 	if name0 != "" {
-		name0 = path.Clean("/" + name0)
+		name0 = r.hide(path.Clean("/" + name0))
 	}
 	if name1 != "" {
-		name1 = path.Clean("/" + name1)
+		name1 = r.hide(path.Clean("/" + name1))
 	}
 	tokens := make([]string, len(conditions))
 	for i, c := range conditions {
@@ -104,16 +148,42 @@ func (r requestLocks) Confirm(_ time.Time, name0, name1 string, conditions ...we
 	}, nil
 }
 
-func (r requestLocks) Create(_ time.Time, d webdav.LockDetails) (string, error) {
-	d.Root = path.Clean("/" + d.Root)
+// Create stores the root's hash, and the root and owner sealed to it in OwnerXML.
+func (r *requestLocks) Create(_ time.Time, d webdav.LockDetails) (string, error) {
+	if err := r.spend(); err != nil {
+		return "", err
+	}
+	plain, _ := json.Marshal([2]string{path.Clean("/" + d.Root), d.OwnerXML})
+	d.Root = r.hide(path.Clean("/" + d.Root))
+	sealed, err := crypto.EncryptAESGCMAAD(plain, r.seal, []byte(d.Root))
+	if err != nil {
+		return "", err
+	}
+	d.OwnerXML = sealed
 	return r.shared.Create(r.ctx, d)
 }
 
-func (r requestLocks) Refresh(_ time.Time, token string, d time.Duration) (webdav.LockDetails, error) {
-	return r.shared.Refresh(r.ctx, token, d)
+func (r *requestLocks) Refresh(_ time.Time, token string, d time.Duration) (webdav.LockDetails, error) {
+	if err := r.spend(); err != nil {
+		return webdav.LockDetails{}, err
+	}
+	ld, err := r.shared.Refresh(r.ctx, token, d)
+	if err != nil {
+		return ld, err
+	}
+	var plain [2]string
+	b, err := crypto.DecryptAESGCMAAD(ld.OwnerXML, r.seal, []byte(ld.Root))
+	if err == nil {
+		err = json.Unmarshal(b, &plain)
+	}
+	ld.Root, ld.OwnerXML = plain[0], plain[1]
+	return ld, err
 }
 
-func (r requestLocks) Unlock(_ time.Time, token string) error {
+func (r *requestLocks) Unlock(_ time.Time, token string) error {
+	if err := r.spend(); err != nil {
+		return err
+	}
 	ctx, cancel := r.after()
 	defer cancel()
 	return r.shared.Unlock(ctx, token)

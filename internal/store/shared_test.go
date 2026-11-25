@@ -260,3 +260,31 @@ func TestSharedSweepWaitsForTheDAVLockTable(t *testing.T) {
 		t.Fatalf("the sweep left an expired lock: %d %v", left, err)
 	}
 }
+
+// Confirm refuses when a lock it chose is not then held: here a trigger drops the update.
+func TestSharedDAVConfirmNeedsEveryChosenLockHeld(t *testing.T) {
+	a, _, db := replicaLockStores(t)
+	ctx := t.Context()
+	l := a.Shared().DavLocks()
+	token, err := l.Create(ctx, webdav.LockDetails{Root: "/ws/g.txt", Duration: time.Minute, ZeroDepth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE FUNCTION skip_dav_hold() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+CREATE TRIGGER skip_dav_hold BEFORE UPDATE ON shared_dav_locks FOR EACH ROW EXECUTE FUNCTION skip_dav_hold()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.Confirm(ctx, "/ws/g.txt", "", []string{token}); err == nil {
+		t.Fatal("Confirm succeeded without holding the lock it chose")
+	}
+	if _, err := db.Exec(`DROP TRIGGER skip_dav_hold ON shared_dav_locks; DROP FUNCTION skip_dav_hold()`); err != nil {
+		t.Fatal(err)
+	}
+	release, err := l.Confirm(ctx, "/ws/g.txt", "", []string{token})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := release(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
