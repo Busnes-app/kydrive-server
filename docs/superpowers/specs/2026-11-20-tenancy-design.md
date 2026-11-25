@@ -1227,11 +1227,14 @@ the release before. No R step starts before the owner approves this amendment.
   Euro-Office thumbnail tickets, sign-in and per-IP attempt windows, device-signature nonces,
   spent CAPTCHA challenges, the KyPost replay cache), on PostgreSQL only. SQLite keeps the
   in-memory versions. The expiry sweeps run on the elected worker.
-  As built (all but the WebDAV locks; `internal/store/shared.go`, store migration 14,
+  As built (`internal/store/shared.go` and `davlocks.go`, store migrations 14 and 15,
   PostgreSQL only): `store.Shared` holds `shared_windows` (every `allowAttempt` key: sign-in,
   per-IP and office budgets, one upsert per key with database time), `shared_spent` (unique
   on kind and ID: PoW salts, KyPost event IDs with `Forget` kept, and `device:<id>` nonces)
-  and `shared_tickets`. The tickets keep the in-memory semantics: a ticket stays valid
+  `shared_tickets`, and `shared_dav_locks`: x/net's memLS rules on one table, tokens signed
+  under a key derived from the deployment key, a lock without a timeout (the one x/net takes
+  around a write without `If`) and a request's hold bounded at one hour, so a replica that
+  dies mid-request blocks the item no longer than a crashed client's LOCK. The tickets keep the in-memory semantics: a ticket stays valid
   until its conversion returns or two minutes pass, not single use, because the fetch also needs the
   Document Server's signed token. A ticket stores no file name. A shared-state failure refuses.
   The tables are in neither the snapshot nor `migrate-postgres`: a restore starts with fresh

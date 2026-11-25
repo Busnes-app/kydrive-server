@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -24,7 +25,8 @@ type env struct {
 	t      *testing.T
 	st     store.Store
 	blobs  string
-	locks  *dav.Locks
+	locks  [2]*dav.Locks // two replicas' lock tables: requests alternate between them
+	n      atomic.Int32
 	team   drive.Workspace
 	shared drive.Workspace // another workspace also named "Organization", as an older install may hold
 }
@@ -48,7 +50,17 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
-	e := &env{t: t, st: st, blobs: t.TempDir(), locks: dav.NewLocks()}
+	e := &env{t: t, st: st, blobs: t.TempDir()}
+	e.locks[0] = dav.NewLocks()
+	e.locks[1] = e.locks[0]
+	if testdb.Postgres() {
+		// On PostgreSQL the replicas' table is shared: every lock test sends each request to
+		// the other replica than the last.
+		raw := testdb.Open(t, cfg)
+		for i := range e.locks {
+			e.locks[i] = dav.NewSharedLocks(store.NewShared(raw).DavLocks(), testdb.Key)
+		}
+	}
 	for i, w := range []*drive.Workspace{&e.team, &e.shared} {
 		if *w, err = st.Drive().CreateWorkspace(ctx, "admin", "Organization"+strings.Repeat(" copy", i), 1<<20); err != nil {
 			t.Fatal(err)
@@ -89,7 +101,7 @@ func (e *env) do(user, method, path string, body io.Reader, headers ...string) *
 		e.t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, objects.Dir(e.blobs), testdb.Key, 1<<20, mtime), e.locks)
+	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, objects.Dir(e.blobs), testdb.Key, 1<<20, mtime), e.locks[e.n.Add(1)%2])
 	return w
 }
 

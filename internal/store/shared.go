@@ -14,6 +14,10 @@ import (
 // unique key. The elected worker's Sweep removes what has expired.
 type Shared struct{ db *sql.DB }
 
+// NewShared is the shared state on db, a PostgreSQL database store.Open migrated. Servers
+// take theirs from Store.Shared; tests use this to run the tables without a multi-tenant drive.
+func NewShared(db *sql.DB) *Shared { return &Shared{db} }
+
 // Shared is nil outside multi-tenant PostgreSQL, where the server keeps this state in memory.
 func (s *SQLStore) Shared() *Shared {
 	if s.driver != "postgres" || s.drive == nil || !s.drive.Multi() {
@@ -139,7 +143,11 @@ func (s *Shared) DropTicket(ctx context.Context, id string) error {
 // Sweep deletes every expired row. The elected worker runs it.
 func (s *Shared) Sweep(ctx context.Context) error {
 	for _, table := range sharedTables {
-		if _, err := s.exec(ctx, `DELETE FROM `+table+` WHERE expires_at <= `+dbMillis); err != nil {
+		expired := `expires_at <= ` + dbMillis
+		if table == "shared_dav_locks" {
+			expired = davExpired
+		}
+		if _, err := s.exec(ctx, `DELETE FROM `+table+` WHERE `+expired); err != nil {
 			return err
 		}
 	}

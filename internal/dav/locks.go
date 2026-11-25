@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +24,9 @@ const maxLock = time.Hour
 // Locks is the server's one lock table. Each request sees it through a view that names locks
 // by workspace ID, not by the user's display names, and signs tokens to the user.
 type Locks struct {
-	ls  webdav.LockSystem
-	key []byte
+	ls     webdav.LockSystem
+	shared SharedLocks
+	key    []byte
 }
 
 func NewLocks() *Locks {
@@ -32,16 +35,88 @@ func NewLocks() *Locks {
 	return &Locks{ls: webdav.NewMemLS(), key: key}
 }
 
+// SharedLocks is a lock table every replica sees (store.DavLocks).
+type SharedLocks interface {
+	Create(context.Context, webdav.LockDetails) (string, error)
+	Confirm(ctx context.Context, name0, name1 string, tokens []string) (func(context.Context) error, error)
+	Refresh(context.Context, string, time.Duration) (webdav.LockDetails, error)
+	Unlock(context.Context, string) error
+}
+
+// NewSharedLocks keeps locks in shared and signs tokens under a key derived from the
+// deployment key, so a token one replica issued is honoured by every other.
+func NewSharedLocks(shared SharedLocks, deploymentKey []byte) *Locks {
+	h := hmac.New(sha256.New, deploymentKey)
+	h.Write([]byte("kydrive webdav lock tokens v1"))
+	return &Locks{shared: shared, key: h.Sum(nil)}
+}
+
 // view is one request's LockSystem.
 type view struct {
 	*Locks
+	ls     webdav.LockSystem
 	fs     *FS
 	ctx    context.Context
 	method string
 }
 
 func (l *Locks) view(ctx context.Context, f *FS, method string) *view {
-	return &view{Locks: l, fs: f, ctx: ctx, method: method}
+	ls := l.ls
+	if l.shared != nil {
+		ls = requestLocks{l.shared, ctx}
+	}
+	return &view{Locks: l, ls: ls, fs: f, ctx: ctx, method: method}
+}
+
+// requestLocks is SharedLocks as a webdav.LockSystem for one request. The table keeps
+// database time, so x/net's now is unused. A release or unlock outlives a cancelled request:
+// otherwise a client that hung up would leave its lock held.
+type requestLocks struct {
+	shared SharedLocks
+	ctx    context.Context
+}
+
+func (r requestLocks) after() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(r.ctx), 10*time.Second)
+}
+
+func (r requestLocks) Confirm(_ time.Time, name0, name1 string, conditions ...webdav.Condition) (func(), error) {
+	if name0 != "" {
+		name0 = path.Clean("/" + name0)
+	}
+	if name1 != "" {
+		name1 = path.Clean("/" + name1)
+	}
+	tokens := make([]string, len(conditions))
+	for i, c := range conditions {
+		tokens[i] = c.Token
+	}
+	release, err := r.shared.Confirm(r.ctx, name0, name1, tokens)
+	if err != nil {
+		return nil, err
+	}
+	return func() {
+		ctx, cancel := r.after()
+		defer cancel()
+		if err := release(ctx); err != nil {
+			log.Printf("dav: release locks: %v", err)
+		}
+	}, nil
+}
+
+func (r requestLocks) Create(_ time.Time, d webdav.LockDetails) (string, error) {
+	d.Root = path.Clean("/" + d.Root)
+	return r.shared.Create(r.ctx, d)
+}
+
+func (r requestLocks) Refresh(_ time.Time, token string, d time.Duration) (webdav.LockDetails, error) {
+	return r.shared.Refresh(r.ctx, token, d)
+}
+
+func (r requestLocks) Unlock(_ time.Time, token string) error {
+	ctx, cancel := r.after()
+	defer cancel()
+	return r.shared.Unlock(ctx, token)
 }
 
 // internal maps a display path to /<workspace ID>/<rest>, so two users' same-named

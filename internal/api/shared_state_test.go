@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,5 +139,34 @@ func TestSharedStateFailureRefuses(t *testing.T) {
 	}
 	if code := exemptCall(t, m.srv, "POST", "/api/auth/login", `{}`, "198.51.100.25:1", "", nil).Code; code != http.StatusTooManyRequests {
 		t.Fatalf("login with the windows table gone answered %d, want 429", code)
+	}
+}
+
+// A WebDAV lock taken through one replica holds on the other: a write there without the
+// token waits (423), the token one replica signed is honoured by the other, and either
+// replica releases it.
+func TestReplicasShareDAVLocks(t *testing.T) {
+	m, b := twoReplicas(t)
+	_, secret, err := m.st.Drive().CreateAppPassword(context.Background(), "a1", "Laptop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/dav/Team/Plans/plan.txt"
+	lock := davRequest(m.srv, "LOCK", path, "a1", secret, strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>`), "Timeout", "Second-60")
+	if lock.Code != http.StatusOK {
+		t.Fatalf("lock: %d %s", lock.Code, lock.Body.String())
+	}
+	token := lock.Header().Get("Lock-Token")
+	if got := davRequest(b, "PUT", path, "a1", secret, strings.NewReader("no token")); got.Code != http.StatusLocked {
+		t.Fatalf("write without the token on the other replica: %d, want 423", got.Code)
+	}
+	if got := davRequest(b, "PUT", path, "a1", secret, strings.NewReader("v2"), "If", "("+token+")"); got.Code != http.StatusCreated && got.Code != http.StatusNoContent {
+		t.Fatalf("write with the token on the other replica: %d %s", got.Code, got.Body.String())
+	}
+	if got := davRequest(b, "UNLOCK", path, "a1", secret, nil, "Lock-Token", token); got.Code != http.StatusNoContent {
+		t.Fatalf("unlock on the other replica: %d", got.Code)
+	}
+	if got := davRequest(m.srv, "PUT", path, "a1", secret, strings.NewReader("v3")); got.Code != http.StatusCreated && got.Code != http.StatusNoContent {
+		t.Fatalf("write after the unlock: %d", got.Code)
 	}
 }

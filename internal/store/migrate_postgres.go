@@ -45,7 +45,7 @@ var schemaTables = []string{"schema_migrations", "drive_schema", "drive_name_scr
 
 // sharedTables are the replicas' short-lived shared state (Shared), on PostgreSQL only. No
 // copy carries them: a restore starts with fresh windows and spent keys, as a SQLite one does.
-var sharedTables = []string{"shared_windows", "shared_spent", "shared_tickets"}
+var sharedTables = []string{"shared_windows", "shared_spent", "shared_tickets", "shared_dav_locks"}
 
 // uncopied reports whether table is one no copy compares or carries.
 func uncopied(table string) bool {
