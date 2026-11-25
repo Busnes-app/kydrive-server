@@ -20,6 +20,7 @@ import (
 
 	"github.com/Busnes-app/ky-primitives/netallow"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/dav"
@@ -60,6 +61,9 @@ type Server struct {
 	ticketsMu  sync.Mutex
 	tickets    map[string]convertTicket // Document Server fetches for thumbnails
 	attempts   map[string]attemptWindow
+	// shared replaces attempts, tickets, deviceNonces, powSpent and the KyPost replay guard
+	// in multi-tenant PostgreSQL, where every replica must see them (store.Shared).
+	shared *store.Shared
 	// deviceNonces holds each signing device's replay guard (devicesig.go), by device ID.
 	deviceNonces sync.Map
 	powSpent     auth.PoWSpent
@@ -185,8 +189,13 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 		attempts: make(map[string]attemptWindow),
 		tickets:  make(map[string]convertTicket),
 		now:      time.Now,
+		shared:   st.Shared(),
 	}
 	s.collecting, s.stopCollecting = context.WithCancel(context.Background())
+	if s.shared != nil {
+		// A salt stays spent through its expiry second, the last one verifyPoW accepts.
+		s.powSpent.Spend = func(salt string, expires int64) bool { return s.spend("pow", salt, time.Unix(expires+1, 0)) }
+	}
 
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
 	s.openSearch()
@@ -201,7 +210,67 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 // waits only for those sealing or uploading.
 func (s *Server) StopBackupCollection() { s.stopCollecting() }
 
+// sharedTimeout bounds one shared-state statement. Limits and keys are checked on paths
+// without a request context to hand, so each gets its own.
+const sharedTimeout = 5 * time.Second
+
+// onShared runs one shared-state call. A failure is logged; callers treat it as a refusal
+// (the replica pattern: a counter-store failure never admits).
+func (s *Server) onShared(what string, call func(context.Context) error) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), sharedTimeout)
+	defer cancel()
+	if err := call(ctx); err != nil {
+		log.Printf("shared state %s: %v", what, err)
+		return false
+	}
+	return true
+}
+
+// spend records a one-time key on the shared state and reports whether it was unspent.
+func (s *Server) spend(kind, id string, until time.Time) bool {
+	var fresh bool
+	return s.onShared("spend", func(ctx context.Context) (err error) {
+		fresh, err = s.shared.Spend(ctx, kind, id, until)
+		return err
+	}) && fresh
+}
+
+// sharedReplay is a syncauth replay guard on the shared state: an ID of kind is held through
+// at+window, on every replica.
+type sharedReplay struct {
+	s      *Server
+	kind   string
+	window time.Duration
+}
+
+func (g sharedReplay) Check(id string, at time.Time) error {
+	var fresh bool
+	if !g.s.onShared("replay", func(ctx context.Context) (err error) {
+		fresh, err = g.s.shared.Spend(ctx, g.kind, id, at.Add(g.window+time.Millisecond))
+		return err
+	}) {
+		return errSharedState
+	}
+	if !fresh {
+		return syncauth.ErrReplay
+	}
+	return nil
+}
+
+func (g sharedReplay) Forget(id string) {
+	g.s.onShared("forget", func(ctx context.Context) error { return g.s.shared.Unspend(ctx, g.kind, id) })
+}
+
+var errSharedState = errors.New("shared state unavailable")
+
 func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool {
+	if s.shared != nil {
+		var ok bool
+		return s.onShared("limit", func(ctx context.Context) (err error) {
+			ok, err = s.shared.Take(ctx, key, limit, window)
+			return err
+		}) && ok
+	}
 	now := s.now()
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
@@ -215,6 +284,13 @@ func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool 
 
 // attemptsExceeded reports, without counting, whether key already reached limit in its window.
 func (s *Server) attemptsExceeded(key string, limit int) bool {
+	if s.shared != nil {
+		var over bool
+		return !s.onShared("limit", func(ctx context.Context) (err error) {
+			over, err = s.shared.Exceeded(ctx, key, limit)
+			return err
+		}) || over
+	}
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
 	w, ok := s.attempts[key]
@@ -225,6 +301,10 @@ func (s *Server) attemptsExceeded(key string, limit int) bool {
 // window refunded to nothing is dropped, so refunded requests leave no key behind to crowd
 // live windows out of the map.
 func (s *Server) refundAttempt(key string) {
+	if s.shared != nil {
+		s.onShared("refund", func(ctx context.Context) error { return s.shared.Refund(ctx, key) })
+		return
+	}
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
 	w, ok := s.attempts[key]
@@ -239,6 +319,10 @@ func (s *Server) refundAttempt(key string) {
 }
 
 func (s *Server) resetAttempts(key string) {
+	if s.shared != nil {
+		s.onShared("reset", func(ctx context.Context) error { return s.shared.Reset(ctx, key) })
+		return
+	}
 	s.attemptsMu.Lock()
 	delete(s.attempts, key)
 	s.attemptsMu.Unlock()

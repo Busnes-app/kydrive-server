@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -130,3 +132,11 @@ func PollOrgsForTest(s *Server, ctx context.Context) error { return s.pollOrgs(c
 
 // PurgeLifecycleForTest runs the org purge and erasures that follow each org poll.
 func PurgeLifecycleForTest(s *Server, ctx context.Context) { s.purgeLifecycle(ctx) }
+
+// KyPostReplayForTest is s's KyPost replay guard.
+func KyPostReplayForTest(s *Server) syncauth.Replay { return s.kypost.replay }
+
+// NewTicketForTest, TicketForTest and DropTicketForTest are s's conversion tickets.
+func NewTicketForTest(s *Server, f drive.File) string       { return s.newTicket(f) }
+func TicketForTest(s *Server, id string) (drive.File, bool) { return s.ticket(id) }
+func DropTicketForTest(s *Server, id string)                { s.dropTicket(id) }

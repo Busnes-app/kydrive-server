@@ -108,11 +108,14 @@ func verifyPoW(solutionBase64, signingSecret string) (*PoWSolution, bool) {
 }
 
 // PoWSpent remembers verified salts until their challenge expires, so each solution buys one
-// attempt. In memory, like the login limiter: valid for the single-instance server only.
+// attempt. In memory, like the login limiter, unless Spend is set.
 type PoWSpent struct {
 	mu    sync.Mutex
 	spent map[string]int64 // salt -> challenge expiry
 	prune int64
+	// Spend, when set, records a verified salt in place of the map and reports whether it was
+	// unspent. Replicas share it.
+	Spend func(salt string, expires int64) bool
 }
 
 // Verify accepts a valid solution once.
@@ -120,6 +123,9 @@ func (p *PoWSpent) Verify(solutionBase64, signingSecret string) bool {
 	sol, ok := verifyPoW(solutionBase64, signingSecret)
 	if !ok {
 		return false
+	}
+	if p.Spend != nil {
+		return p.Spend(sol.Salt, sol.ExpiresAt)
 	}
 	now := time.Now().Unix()
 	p.mu.Lock()

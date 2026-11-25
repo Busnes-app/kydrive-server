@@ -318,6 +318,19 @@ UPDATE users SET directory_rev = 0;`,
 		SQLite:   `ALTER TABLE sessions ADD COLUMN export_only BOOLEAN NOT NULL DEFAULT false;`,
 		Postgres: `ALTER TABLE sessions ADD COLUMN export_only BOOLEAN NOT NULL DEFAULT false;`,
 	},
+	{
+		// The state replicas share (store.Shared): rate-limit windows, spent one-time keys and
+		// conversion tickets, each with an indexed expiry in database milliseconds. SQLite keeps
+		// these in memory.
+		Version: 14,
+		Name:    "shared_state",
+		Postgres: `CREATE TABLE IF NOT EXISTS shared_windows (key TEXT PRIMARY KEY, hits BIGINT NOT NULL, expires_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS shared_windows_expiry ON shared_windows(expires_at);
+CREATE TABLE IF NOT EXISTS shared_spent (kind TEXT NOT NULL, id TEXT NOT NULL, expires_at BIGINT NOT NULL, PRIMARY KEY (kind, id));
+CREATE INDEX IF NOT EXISTS shared_spent_expiry ON shared_spent(expires_at);
+CREATE TABLE IF NOT EXISTS shared_tickets (id TEXT PRIMARY KEY, blob TEXT NOT NULL, sealed BOOLEAN NOT NULL, size BIGINT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL, expires_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS shared_tickets_expiry ON shared_tickets(expires_at);`,
+	},
 }
 
 // endUnboundSSOLogins ends, once in migration 9, the SSO sessions and MFA challenges of

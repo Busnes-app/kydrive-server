@@ -73,7 +73,7 @@ func SnapshotPostgres(ctx context.Context, dsn, dest string, key []byte) error {
 		if err != nil {
 			return err
 		}
-		tables = slices.DeleteFunc(tables, func(t string) bool { return slices.Contains(schemaTables, t) })
+		tables = slices.DeleteFunc(tables, uncopied)
 		if d := append(setDiff(tables, migrationTables), setDiff(migrationTables, tables)...); len(d) > 0 {
 			return fmt.Errorf("the PostgreSQL and SQLite schemas differ in tables %v: back up with the release that runs the database", d)
 		}

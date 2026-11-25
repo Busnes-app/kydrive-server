@@ -89,9 +89,12 @@ func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *ecdsa.Publ
 	if !ok || !ecdsa.VerifyASN1(key, sum[:], sig) {
 		return errDeviceSignature
 	}
-	guard, ok := s.deviceNonces.Load(id)
-	if !ok {
-		guard, _ = s.deviceNonces.LoadOrStore(id, syncauth.NewMemoryReplay(2*deviceSkew, deviceNonces))
+	var guard any = sharedReplay{s, "device:" + id, 2 * deviceSkew}
+	if s.shared == nil {
+		var ok bool
+		if guard, ok = s.deviceNonces.Load(id); !ok {
+			guard, _ = s.deviceNonces.LoadOrStore(id, syncauth.NewMemoryReplay(2*deviceSkew, deviceNonces))
+		}
 	}
 	// Held for 2*deviceSkew from now: a date accepted now stays acceptable for at most that long.
 	if err := guard.(syncauth.Replay).Check(nonce, time.Now()); err != nil {

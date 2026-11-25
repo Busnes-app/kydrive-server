@@ -402,6 +402,11 @@ func cleanExpiredLoop(ctx context.Context, st store.Store) {
 		if err := st.Sessions().CleanExpiredMFAChallenges(ctx); err != nil && ctx.Err() == nil {
 			log.Printf("expired MFA challenges cleanup: %v", err)
 		}
+		if sh := st.Shared(); sh != nil {
+			if err := sh.Sweep(ctx); err != nil && ctx.Err() == nil {
+				log.Printf("expired shared state cleanup: %v", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
