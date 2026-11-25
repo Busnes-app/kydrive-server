@@ -3,6 +3,7 @@ package drive_test
 import (
 	"database/sql"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -165,8 +166,12 @@ func eraseFixture(t *testing.T) (o *orgs, shared drive.Folder, inside, private, 
 func TestEraseHandsSharedItemsOn(t *testing.T) {
 	o, shared, inside, private, toGone := eraseFixture(t)
 	privateBlob := o.str(t, `SELECT blob FROM drive_versions WHERE file_id=?`, private.ID)
+	deep, err := o.d.AddFolder(o.ctx, "a1", shared.Workspace, shared.ID, "Deep")
+	noErr(t, "nested folder", err)
+	deepFile, err := o.d.Publish(o.ctx, "a1", drive.File{Workspace: shared.Workspace, Parent: deep.ID, Name: "deep.txt"}, blob(t, o.root, "deep"), 0)
+	noErr(t, "nested file", err)
 	o.exec(t, `UPDATE drive_orgs SET status='suspended' WHERE id='org-a'`)
-	_, _, err := o.d.EraseMembers(o.ctx)
+	_, _, err = o.d.EraseMembers(o.ctx)
 	noErr(t, "suspended", err)
 	if o.count(t, `SELECT COUNT(*) FROM users WHERE id='a1'`) != 1 {
 		t.Fatal("erased while the org was suspended")
@@ -182,6 +187,10 @@ func TestEraseHandsSharedItemsOn(t *testing.T) {
 	if o.count(t, `SELECT COUNT(*) FROM drive_folders f JOIN drive_folders h ON h.id=f.parent WHERE f.id=? AND f.workspace=? AND h.parent=''`, shared.ID, heirs) != 1 ||
 		o.count(t, `SELECT COUNT(*) FROM drive_files WHERE id=? AND parent=? AND workspace=?`, inside.ID, shared.ID, heirs) != 1 {
 		t.Fatal("the shared folder did not move under a handover folder in a2's My files")
+	}
+	if o.count(t, `SELECT COUNT(*) FROM drive_folders WHERE id=? AND parent=? AND workspace=?`, deep.ID, shared.ID, heirs)+
+		o.count(t, `SELECT COUNT(*) FROM drive_files WHERE id=? AND parent=? AND workspace=?`, deepFile.ID, deep.ID, heirs) != 2 {
+		t.Fatal("a nested folder or its file did not move with the shared folder")
 	}
 	if o.count(t, `SELECT COUNT(*) FROM drive_changes WHERE workspace=? AND item IN (?,?)`, heirs, shared.ID, inside.ID) != 2 {
 		t.Fatal("the successor's change feed misses the moved items")
@@ -259,5 +268,71 @@ func TestOrgPurgeKeepsBlobsOfARolledBackStep(t *testing.T) {
 	_, views, err := o.d.PurgeOrgs(o.ctx)
 	if err == nil || len(views) != 0 || o.count(t, `SELECT COUNT(*) FROM drive_view_copies WHERE id='vc-b'`) != 1 {
 		t.Fatalf("a rolled-back purge returned %v (%v)", views, err)
+	}
+}
+
+// A shared folder with more items than PostgreSQL binds parameters (65,535) is handed on whole:
+// no statement grows with the tree.
+func TestEraseHandsOnAHugeFolder(t *testing.T) {
+	o, shared, _, _, _ := eraseFixture(t)
+	const n = 70000
+	mine := o.str(t, `SELECT workspace FROM drive_folders WHERE id=?`, shared.ID)
+	o.exec(t, `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM k WHERE i<?)
+INSERT INTO drive_files(id,workspace,parent,name,revision,name_hmac) SELECT 'bulk-'||i,?,?,'n',1,'h-'||i FROM k`, n, mine, shared.ID)
+	_, _, err := o.d.EraseMembers(o.ctx)
+	noErr(t, "erase", err)
+	heirs, err := o.d.EnsurePersonalWorkspace(o.ctx, "a2")
+	noErr(t, "a2 My files", err)
+	if got := o.count(t, `SELECT COUNT(*) FROM drive_files WHERE workspace=? AND id LIKE 'bulk-%'`, heirs); got != n {
+		t.Fatalf("%d of %d files handed on", got, n)
+	}
+	if got := o.count(t, `SELECT COUNT(*) FROM drive_changes WHERE workspace=? AND item LIKE 'bulk-%'`, heirs); got != n {
+		t.Fatalf("%d of %d change rows in the successor's feed", got, n)
+	}
+}
+
+// One member whose erasure fails does not hold up the next: the error is returned, the next
+// erasure is done, and a later pass finishes the first.
+func TestFailingErasureDoesNotBlockTheNext(t *testing.T) {
+	o, _, _, _, _ := eraseFixture(t)
+	o.exec(t, `UPDATE users SET sso_provider='kysignon',sso_subject='sub-b1' WHERE id='b1'`)
+	o.exec(t, `INSERT INTO drive_erasures(subject,org_id,revision) VALUES('sub-b1','org-b',2)`)
+	if testdb.Postgres() {
+		o.exec(t, `CREATE FUNCTION keep_a1() RETURNS trigger LANGUAGE plpgsql AS $t$BEGIN IF OLD.id='a1' THEN RAISE EXCEPTION 'boom'; END IF; RETURN OLD; END$t$`)
+		o.exec(t, `CREATE TRIGGER keep_a1 BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION keep_a1()`)
+	} else {
+		o.exec(t, `CREATE TRIGGER keep_a1 BEFORE DELETE ON users WHEN OLD.id='a1' BEGIN SELECT RAISE(ABORT,'boom'); END`)
+	}
+	_, _, err := o.d.EraseMembers(o.ctx)
+	if err == nil || !strings.Contains(err.Error(), "a1") {
+		t.Fatalf("the failure was not reported: %v", err)
+	}
+	if o.count(t, `SELECT COUNT(*) FROM users WHERE id='b1'`) != 0 || o.count(t, `SELECT COUNT(*) FROM users WHERE id='a1'`) != 1 {
+		t.Fatal("b1 waited behind a1's failure, or a1's failed erasure half-committed")
+	}
+	o.exec(t, `DROP TRIGGER keep_a1`+map[bool]string{true: ` ON users`}[testdb.Postgres()])
+	_, _, err = o.d.EraseMembers(o.ctx)
+	noErr(t, "retry", err)
+	if o.count(t, `SELECT COUNT(*) FROM users WHERE id='a1'`) != 0 {
+		t.Fatal("the next pass did not finish a1")
+	}
+}
+
+// One org whose purge fails does not hold up the next.
+func TestFailingOrgPurgeDoesNotBlockTheNext(t *testing.T) {
+	o := poolOrgs(t)
+	if testdb.Postgres() {
+		o.exec(t, `CREATE FUNCTION keep_a() RETURNS trigger LANGUAGE plpgsql AS $t$BEGIN IF NEW.id='org-a' THEN RAISE EXCEPTION 'boom'; END IF; RETURN NEW; END$t$`)
+		o.exec(t, `CREATE TRIGGER keep_a BEFORE UPDATE OF purged ON drive_orgs FOR EACH ROW EXECUTE FUNCTION keep_a()`)
+	} else {
+		o.exec(t, `CREATE TRIGGER keep_a BEFORE UPDATE OF purged ON drive_orgs WHEN NEW.id='org-a' BEGIN SELECT RAISE(ABORT,'boom'); END`)
+	}
+	o.exec(t, `UPDATE drive_orgs SET status='deleted' WHERE id IN ('org-a','org-b')`)
+	_, _, err := o.d.PurgeOrgs(o.ctx)
+	if err == nil || !strings.Contains(err.Error(), "org-a") {
+		t.Fatalf("the failure was not reported: %v", err)
+	}
+	if o.count(t, `SELECT purged FROM drive_orgs WHERE id='org-b'`) != 1 || o.count(t, `SELECT purged FROM drive_orgs WHERE id='org-a'`) != 0 {
+		t.Fatal("org-b waited behind org-a's failure")
 	}
 }

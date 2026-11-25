@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -111,14 +112,18 @@ func (s *Store) PurgeOrgs(ctx context.Context) (blobs, views []string, err error
 	if err != nil {
 		return nil, nil, err
 	}
+	var errs []error // one org's failure never holds up the next; the next pass retries it
 	for _, org := range orgs {
+		if ctx.Err() != nil {
+			break
+		}
 		b, v, err := s.purgeOrg(ctx, org)
 		blobs, views = append(blobs, b...), append(views, v...)
 		if err != nil {
-			return blobs, views, fmt.Errorf("org %s: %w", org, err)
+			errs = append(errs, fmt.Errorf("org %s: %w", org, err))
 		}
 	}
-	return blobs, views, nil
+	return blobs, views, errors.Join(errs...)
 }
 
 func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string, err error) {
@@ -217,11 +222,18 @@ JOIN drive_orgs o ON o.id=e.org_id WHERE o.status='active' AND o.enabled=1 ORDER
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
+	// One member's failure never holds up the next: it is recorded, the rest go on, and the
+	// next pass (every org poll) tries it again from the start, since erase is idempotent.
+	var errs []error
 	for _, p := range todo {
+		if ctx.Err() != nil {
+			break
+		}
 		// First, committed on its own: end every editor on their My files, so the drops the
 		// purge waits for are on their way.
 		if err := s.revokeEditorsIn(ctx, `SELECT f.id FROM drive_files f JOIN drive_personal_workspaces p ON p.workspace=f.workspace WHERE p.owner=?`, p[1]); err != nil {
-			return blobs, views, err
+			errs = append(errs, fmt.Errorf("erase %s: %w", p[1], err))
+			continue
 		}
 		var b, v []string
 		err := s.transaction(ctx, func(tx *sql.Tx) error {
@@ -233,11 +245,12 @@ JOIN drive_orgs o ON o.id=e.org_id WHERE o.status='active' AND o.enabled=1 ORDER
 			continue // My files still has editor sessions to drop; a later pass erases it
 		}
 		if err != nil {
-			return blobs, views, fmt.Errorf("erase %s: %w", p[1], err)
+			errs = append(errs, fmt.Errorf("erase %s: %w", p[1], err))
+			continue
 		}
 		blobs, views = append(blobs, b...), append(views, v...)
 	}
-	return blobs, views, nil
+	return blobs, views, errors.Join(errs...)
 }
 
 func (s *Store) erase(ctx context.Context, tx *sql.Tx, subject, user string) (blobs, views []string, err error) {
@@ -406,18 +419,7 @@ ORDER BY x.resource_id,CASE x.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 EL
 		items := byHeir[heir]
 		slices.Sort(items)
 		for _, root := range items {
-			sub := []string{root}
-			for i := 0; i < len(sub); i++ {
-				if kinds[sub[i]] != "folder" {
-					continue
-				}
-				for id, p := range parents {
-					if p == sub[i] {
-						sub = append(sub, id)
-					}
-				}
-			}
-			if err := s.moveSubtree(ctx, tx, workspace, target, folder, root, kinds, sub, heir); err != nil {
+			if err := s.moveSubtree(ctx, tx, workspace, target, folder, root, kinds[root], heir); err != nil {
 				return 0, err
 			}
 			moved++
@@ -429,41 +431,74 @@ ORDER BY x.resource_id,CASE x.role WHEN 'manager' THEN 3 WHEN 'editor' THEN 2 EL
 	return moved, nil
 }
 
-// moveSubtree moves root and its subtree sub (kinds names each item's kind) from workspace into folder of target,
-// with the subtree's shares and organisation links, now owned by heir; guest links are revoked
-// and editor sessions closed, as on any move.
-func (s *Store) moveSubtree(ctx context.Context, tx *sql.Tx, workspace, target, folder, root string, kinds map[string]string, sub []string, heir string) error {
-	in := strings.TrimSuffix(strings.Repeat("?,", len(sub)), ",")
-	args := func(first ...any) []any {
-		for _, id := range sub {
-			first = append(first, id)
+// subtreeFolders, with {root} and {ws}, selects the folder {root} (if it is one) in {ws} and
+// every folder beneath it, through the parent links; subtreeFiles is the condition on
+// drive_files for every file in that subtree, or {root} itself. No statement's size depends on
+// the tree's (PostgreSQL binds at most 65,535 parameters).
+const (
+	subtreeFolders = `WITH RECURSIVE sub(id) AS (SELECT id FROM drive_folders WHERE id={root} AND workspace={ws} UNION SELECT d.id FROM drive_folders d JOIN sub ON d.parent=sub.id WHERE d.workspace={ws}) SELECT id FROM sub`
+	subtreeFiles   = `workspace={ws} AND (id={root} OR parent IN (` + subtreeFolders + `))`
+	subtreeItems   = `SELECT id FROM drive_files WHERE ` + subtreeFiles + ` UNION SELECT id FROM (` + subtreeFolders + `) folders`
+)
+
+// named numbers each {name} in q in order of first use (?1, ?2, …, the same number for a
+// repeat) and returns q with the values in that order, so every statement binds exactly the
+// parameters it uses.
+func named(q string, values map[string]any) (string, []any) {
+	var args []any
+	index := map[string]int{}
+	var b strings.Builder
+	for {
+		i := strings.IndexByte(q, '{')
+		if i < 0 {
+			b.WriteString(q)
+			return b.String(), args
 		}
-		return first
+		j := strings.IndexByte(q[i:], '}') + i
+		name := q[i+1 : j]
+		n, ok := index[name]
+		if !ok {
+			args = append(args, values[name])
+			n = len(args)
+			index[name] = n
+		}
+		fmt.Fprintf(&b, "%s?%d", q[:i], n)
+		q = q[j+1:]
 	}
-	for _, q := range []struct {
-		sql  string
-		lead []any
-	}{
-		{`UPDATE drive_links SET revoked=1 WHERE scope='guest' AND workspace=? AND resource_id IN (` + in + `)`, []any{workspace}},
-		{`UPDATE drive_links SET workspace=?,created_by=? WHERE workspace=? AND resource_id IN (` + in + `)`, []any{target, heir, workspace}},
-		{`UPDATE drive_shares SET workspace=?,created_by=? WHERE workspace=? AND resource_id IN (` + in + `)`, []any{target, heir, workspace}},
-		{`UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (` + in + `)`, nil},
-		{`UPDATE drive_editor_documents SET closed=true WHERE file_id IN (` + in + `)`, nil},
-		{`UPDATE drive_files SET editor_epoch=editor_epoch+1 WHERE id IN (` + in + `)`, nil},
-		{`UPDATE drive_folders SET workspace=?,parent=CASE WHEN id=? THEN ? ELSE parent END WHERE workspace=? AND id IN (` + in + `)`, []any{target, root, folder, workspace}},
-		{`UPDATE drive_files SET workspace=?,parent=CASE WHEN id=? THEN ? ELSE parent END WHERE workspace=? AND id IN (` + in + `)`, []any{target, root, folder, workspace}},
+}
+
+// moveSubtree moves root (of kind) and its subtree from workspace into folder of target, with
+// the subtree's shares and organisation links, now owned by heir; guest links are revoked and
+// editor sessions closed, as on any move. Every moved item gets a change row in target, so a
+// synced client sees the whole tree; the source gets one for root.
+func (s *Store) moveSubtree(ctx context.Context, tx *sql.Tx, workspace, target, folder, root, kind, heir string) error {
+	values := map[string]any{"root": root, "ws": workspace, "target": target, "folder": folder, "heir": heir, "now": time.Now().Unix()}
+	// Folders move last: the other statements find the subtree through them in workspace.
+	for _, q := range []string{
+		`UPDATE drive_links SET revoked=1 WHERE scope='guest' AND workspace={ws} AND resource_id IN (` + subtreeItems + `)`,
+		`UPDATE drive_links SET workspace={target},created_by={heir} WHERE workspace={ws} AND resource_id IN (` + subtreeItems + `)`,
+		`UPDATE drive_shares SET workspace={target},created_by={heir} WHERE workspace={ws} AND resource_id IN (` + subtreeItems + `)`,
+		`UPDATE drive_editor_sessions SET revoked=true WHERE revoked=false AND file_id IN (SELECT id FROM drive_files WHERE ` + subtreeFiles + `)`,
+		`UPDATE drive_editor_documents SET closed=true WHERE file_id IN (SELECT id FROM drive_files WHERE ` + subtreeFiles + `)`,
+		`UPDATE drive_files SET editor_epoch=editor_epoch+1,workspace={target},parent=CASE WHEN id={root} THEN {folder} ELSE parent END WHERE ` + subtreeFiles,
+		`UPDATE drive_folders SET workspace={target},parent=CASE WHEN id={root} THEN {folder} ELSE parent END WHERE workspace={ws} AND id IN (` + subtreeFolders + `)`,
 	} {
-		if _, err := tx.ExecContext(ctx, q.sql, args(q.lead...)...); err != nil {
+		q, args := named(q, values)
+		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 			return err
 		}
 	}
-	// The source loses the root; the successor's feed gains every moved item, so a synced
-	// client sees the whole tree.
-	if err := change(ctx, tx, workspace, kinds[root], root); err != nil {
+	if err := change(ctx, tx, workspace, kind, root); err != nil {
 		return err
 	}
-	for _, id := range sub {
-		if err := change(ctx, tx, target, kinds[id], id); err != nil {
+	// Now in target, the same subtree.
+	values["ws"] = target
+	for _, q := range []string{
+		`INSERT INTO drive_changes(workspace,kind,item,created,org_id) SELECT CAST({ws} AS TEXT),'folder',id,CAST({now} AS BIGINT),` + workspaceOrg("{ws}") + ` FROM (` + subtreeFolders + `) folders`,
+		`INSERT INTO drive_changes(workspace,kind,item,created,org_id) SELECT CAST({ws} AS TEXT),'file',id,CAST({now} AS BIGINT),` + workspaceOrg("{ws}") + ` FROM drive_files WHERE ` + subtreeFiles,
+	} {
+		q, args := named(q, values)
+		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 			return err
 		}
 	}
