@@ -14,6 +14,9 @@ import (
 	"testing/iotest"
 	"time"
 
+	"golang.org/x/net/webdav"
+
+	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/objects"
@@ -23,6 +26,7 @@ import (
 
 type env struct {
 	t      *testing.T
+	cfg    config.DatabaseConfig
 	st     store.Store
 	blobs  string
 	locks  [2]*dav.Locks // two replicas' lock tables: requests alternate between them
@@ -50,7 +54,7 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
-	e := &env{t: t, st: st, blobs: t.TempDir()}
+	e := &env{t: t, cfg: cfg, st: st, blobs: t.TempDir()}
 	e.locks[0] = dav.NewLocks()
 	e.locks[1] = e.locks[0]
 	if testdb.Postgres() {
@@ -690,4 +694,79 @@ func TestMoveInsideALockedFolder(t *testing.T) {
 	e.want(e.do("worker", "MOVE", dir+"/a.txt", nil, "Destination", dir+"/c.txt"), 423, "move without the token")
 	e.want(e.do("worker", "MOVE", dir+"/a.txt", nil, "Destination", dir+"/b.txt", "If", "("+token+")"), 201, "move with the folder's token")
 	e.want(e.do("worker", "UNLOCK", dir+"/", nil, "Lock-Token", token), 204, "unlock")
+}
+
+// countingLocks is a shared table that confirms nothing and counts its calls.
+type countingLocks struct{ calls atomic.Int32 }
+
+func (c *countingLocks) Create(context.Context, webdav.LockDetails) (string, error) {
+	c.calls.Add(1)
+	return "", webdav.ErrLocked
+}
+
+func (c *countingLocks) Confirm(context.Context, string, string, []string) (func(context.Context) error, error) {
+	c.calls.Add(1)
+	return nil, webdav.ErrConfirmationFailed
+}
+
+func (c *countingLocks) Refresh(context.Context, string, time.Duration) (webdav.LockDetails, error) {
+	c.calls.Add(1)
+	return webdav.LockDetails{}, webdav.ErrNoSuchLock
+}
+
+func (c *countingLocks) Unlock(context.Context, string) error {
+	c.calls.Add(1)
+	return webdav.ErrNoSuchLock
+}
+
+// x/net confirms once per If list; on the shared table one request makes a bounded number of
+// calls however many lists it sends.
+func TestSharedLockCallsPerRequestAreBounded(t *testing.T) {
+	e := setup(t)
+	e.want(e.do("worker", "PUT", e.org()+"/f.txt", strings.NewReader("x")), 201, "put")
+	table := &countingLocks{}
+	e.locks[0] = dav.NewSharedLocks(table, testdb.Key)
+	e.locks[1] = e.locks[0]
+	e.want(e.do("worker", "PUT", e.org()+"/f.txt", strings.NewReader("y"), "If", strings.Repeat("(<urn:x>) ", 500)), 412, "put with 500 If lists")
+	if n := table.calls.Load(); n > 8 {
+		t.Fatalf("one request made %d shared lock calls", n)
+	}
+}
+
+// The shared table holds no file, folder or workspace name and no owner text, while locking,
+// confirming on the other replica, refreshing, a MOVE inside the locked folder and unlocking
+// all still work.
+func TestSharedLockRowsHoldNoNames(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("PostgreSQL only: SQLite keeps locks in memory")
+	}
+	e := setup(t)
+	dir := e.org() + "/Quarterly%20Secrets/Board%20Minutes"
+	e.want(e.do("worker", "MKCOL", e.org()+"/Quarterly%20Secrets/", nil), 201, "mkcol")
+	e.want(e.do("worker", "MKCOL", dir+"/", nil), 201, "mkcol nested")
+	e.want(e.do("worker", "PUT", dir+"/plan.txt", strings.NewReader("x")), 201, "put")
+	lock := e.do("worker", "LOCK", dir+"/", strings.NewReader(`<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype><D:owner>Mallory Oswald Laptop</D:owner></D:lockinfo>`), "Timeout", "Second-60")
+	e.want(lock, 200, "lock")
+	token := lock.Header().Get("Lock-Token")
+	raw := testdb.Open(t, e.cfg)
+	defer raw.Close()
+	var row string
+	if err := raw.QueryRow(`SELECT string_agg(row_to_json(l)::text, ' ') FROM shared_dav_locks l`).Scan(&row); err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"Quarterly", "Secrets", "Board", "Minutes", "plan", "Mallory", "Oswald", e.team.ID} {
+		if strings.Contains(row, secret) {
+			t.Fatalf("lock row holds %q: %s", secret, row)
+		}
+	}
+	e.want(e.do("worker", "PUT", dir+"/plan.txt", strings.NewReader("no token")), 423, "put without the token")
+	e.want(e.do("worker", "PUT", dir+"/plan.txt", strings.NewReader("y"), "If", "("+token+")"), 201, "put with the token on the other replica")
+	refresh := e.do("worker", "LOCK", dir+"/", nil, "If", "("+token+")", "Timeout", "Second-600")
+	e.want(refresh, 200, "refresh")
+	if body := refresh.Body.String(); !strings.Contains(body, "Mallory Oswald Laptop") || !strings.Contains(body, "Board Minutes") {
+		t.Fatalf("refresh lost the root or owner:\n%s", body)
+	}
+	e.want(e.do("worker", "MOVE", dir+"/plan.txt", nil, "Destination", dir+"/moved.txt", "If", "("+token+")"), 201, "move inside the locked folder")
+	e.want(e.do("worker", "UNLOCK", dir+"/", nil, "Lock-Token", token), 204, "unlock")
+	e.want(e.do("worker", "PUT", dir+"/moved.txt", strings.NewReader("z")), 201, "put after unlock")
 }

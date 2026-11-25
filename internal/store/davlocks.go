@@ -26,6 +26,7 @@ const davExpired = `expires_at <= ` + dbMillis + ` AND held_until <= ` + dbMilli
 // below; a request that presents a token holds that lock until it ends, and a held lock
 // cannot be presented again, refreshed or released. Each call is one transaction under one
 // advisory lock: lock traffic is light, and the conflict check must see every other write.
+// Names are opaque here: internal/dav passes keyed hashes and a sealed OwnerXML.
 type DavLocks struct{ shared *Shared }
 
 func (s *Shared) DavLocks() *DavLocks { return &DavLocks{s} }
