@@ -50,6 +50,13 @@ func signIn(t *testing.T, srv *api.Server, peer, xff string, i int) int {
 	return exemptCall(t, srv, "POST", "/api/auth/login", body, peer, xff, nil).Code
 }
 
+// holdClock stops srv's clock, so a loop of a few hundred hashed sign-ins stays inside one
+// one-minute window however slowly a loaded host runs it.
+func holdClock(srv *api.Server) {
+	now := time.Now()
+	api.SetClockForTest(srv, func() time.Time { return now })
+}
+
 // limited reports whether 25 sign-ins from peer reach a 429.
 func limited(t *testing.T, srv *api.Server, peer string) bool {
 	t.Helper()
@@ -413,12 +420,15 @@ func TestOfficeBudgetFitsTheLimiter(t *testing.T) {
 func TestOfficeBudgetFallsBackToThePerIPLimit(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
 	srv, st, _ := setupTestServer(t)
+	holdClock(srv)
 	admin := loginAs(t, srv, st, "alice", "admin")
 
+	// The per-IP limit runs before the body is read, so an empty body spends the same budget
+	// without a password hash per attempt.
 	n := api.OfficeBudgetForTest + 20
 	for i := 1; i <= n; i++ {
-		if code := signIn(t, srv, officePeer, "", i); code == http.StatusTooManyRequests {
-			t.Fatalf("office attempt %d throttled, want the budget of %d and then a window of 20", i, api.OfficeBudgetForTest)
+		if code := exemptCall(t, srv, "POST", "/api/auth/login", `{}`, officePeer, "", nil).Code; code != http.StatusBadRequest {
+			t.Fatalf("office attempt %d answered %d, want 400 through the budget of %d and then a window of 20", i, code, api.OfficeBudgetForTest)
 		}
 	}
 	if code := signIn(t, srv, officePeer, "", n+1); code != http.StatusTooManyRequests {
@@ -439,6 +449,7 @@ func TestOfficeBudgetFallsBackToThePerIPLimit(t *testing.T) {
 func TestOfficeDAVBudgetFallsBackToThePerIPLimit(t *testing.T) {
 	t.Setenv("KY_RATE_LIMIT_EXEMPT_NETWORKS", officeRange)
 	srv, _, _ := setupTestServer(t)
+	holdClock(srv)
 	n := api.OfficeBudgetForTest + 20
 	for i := 1; i <= n; i++ {
 		if code := davBasic(srv, officePeer, fmt.Sprintf("stale%d", i), "wrong"); code != http.StatusUnauthorized {

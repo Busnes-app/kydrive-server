@@ -55,7 +55,8 @@ func RegisterDetachedForTest(s *Server) func() {
 	return s.detached.done
 }
 
-// SetClockForTest replaces the clock /mcp signs agents in by, so a test can age a token. Test-only.
+// SetClockForTest replaces the server's clock (agent tokens, step-up, rate-limit windows), so a
+// test can age a token or hold a window still. Test-only.
 func SetClockForTest(s *Server, now func() time.Time) { s.now = now }
 
 // Tool errors and limits the MCP tests compare against. Test-only.

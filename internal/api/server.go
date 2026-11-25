@@ -202,7 +202,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 func (s *Server) StopBackupCollection() { s.stopCollecting() }
 
 func (s *Server) allowAttempt(key string, limit int, window time.Duration) bool {
-	now := time.Now()
+	now := s.now()
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
 	if _, known := s.attempts[key]; !known && len(s.attempts) >= attemptsCap {
@@ -218,7 +218,7 @@ func (s *Server) attemptsExceeded(key string, limit int) bool {
 	s.attemptsMu.Lock()
 	defer s.attemptsMu.Unlock()
 	w, ok := s.attempts[key]
-	return ok && time.Now().Before(w.reset) && w.count >= limit
+	return ok && s.now().Before(w.reset) && w.count >= limit
 }
 
 // refundAttempt returns one attempt allowAttempt counted that the request did not spend. A

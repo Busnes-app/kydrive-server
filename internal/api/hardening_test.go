@@ -91,6 +91,27 @@ func TestLoginLockoutIsPerClient(t *testing.T) {
 	}
 }
 
+// Rate-limit windows run on the server's clock, so a test can hold or pass one at will instead
+// of racing the wall clock on a loaded host.
+func TestLimiterWindowsFollowTheServerClock(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+	start := time.Now()
+	api.SetClockForTest(srv, func() time.Time { return start })
+	hit := func() int {
+		return exemptCall(t, srv, "POST", "/api/auth/login", `{}`, "198.51.100.8:1", "", nil).Code
+	}
+	for i := 0; i < 20; i++ {
+		hit()
+	}
+	if code := hit(); code != http.StatusTooManyRequests {
+		t.Fatalf("attempt 21 answered %d, want 429", code)
+	}
+	api.SetClockForTest(srv, func() time.Time { return start.Add(61 * time.Second) })
+	if code := hit(); code != http.StatusBadRequest {
+		t.Fatalf("a minute later the window answered %d, want 400", code)
+	}
+}
+
 func solvePoW(t *testing.T, srv *api.Server) string {
 	t.Helper()
 	w := httptest.NewRecorder()
