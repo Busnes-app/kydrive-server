@@ -212,7 +212,9 @@ func (s *Store) ApplyReports(ctx context.Context, results []suitedir.StorageResu
 				if r.TTLSeconds <= 0 || r.TTLSeconds > GrantTTL {
 					return fmt.Errorf("drive: storage grant for %s: ttl %d", r.OrgID, r.TTLSeconds)
 				}
-				_, err = tx.ExecContext(ctx, `UPDATE drive_orgs SET grant_ceiling=?,grant_expires=report_sent+?,report_inflight=0 WHERE id=? AND seeded=0 AND report_inflight=1 AND report_seq=? AND report_used<=? AND ?-report_used<=report_want`, r.CeilingBytes, r.TTLSeconds, r.OrgID, r.Seq, r.CeilingBytes, r.CeilingBytes)
+				// A ceiling outside [used, used+want] breaks the contract: no grant, fail closed,
+				// and the next pass reports again. Over the pool the grant is 0: ceiling=used.
+				_, err = tx.ExecContext(ctx, `UPDATE drive_orgs SET grant_ceiling=CASE WHEN report_used<=?1 AND ?1-report_used<=report_want THEN ?1 END,grant_expires=CASE WHEN report_used<=?1 AND ?1-report_used<=report_want THEN report_sent+?2 ELSE 0 END,report_inflight=0,report_due=CASE WHEN report_used<=?1 AND ?1-report_used<=report_want THEN report_due ELSE 1 END WHERE id=?3 AND seeded=0 AND report_inflight=1 AND report_seq=?4`, r.CeilingBytes, r.TTLSeconds, r.OrgID, r.Seq)
 			case "stale":
 				var res sql.Result
 				// The answer carries KyIdentity's sequence, at least the one sent.

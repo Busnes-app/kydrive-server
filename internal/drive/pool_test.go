@@ -319,3 +319,42 @@ func TestPoolOneBadOrgDoesNotStarveTheRest(t *testing.T) {
 		t.Fatalf("reports %+v", reports)
 	}
 }
+
+// Over the pool KyIdentity answers ok with no grant (ceiling = used): growth is refused, a
+// move still passes. An answer outside its report's bounds drops the grant rather than
+// leaving the report unanswered.
+func TestPoolDowngradeThroughAnAnswer(t *testing.T) {
+	o := poolOrgs(t)
+	mine, err := o.d.EnsurePersonalWorkspace(o.ctx, "a1")
+	noErr(t, "My files", err)
+	f, err := o.d.Publish(o.ctx, "a1", drive.File{Workspace: mine, Name: "mine.txt"}, blob(t, o.root, "mine"), 0)
+	noErr(t, "publish", err)
+	r, _ := o.freeze(t, true, "org-a")
+	o.apply(t, okAnswer(r, 0))
+	wantQuota(t, "upload with a zero grant", o.put("a1", o.teamA.ID, 1))
+	_, err = o.d.MoveFile(o.ctx, "a1", f.ID, f.Revision, drive.Location{Workspace: o.teamA.ID, Name: "mine.txt"})
+	noErr(t, "move with a zero grant", err)
+	if _, err := o.db.Exec(`UPDATE drive_orgs SET report_due=1 WHERE id='org-a'`); err != nil {
+		t.Fatal(err)
+	}
+	r, ok := o.freeze(t, true, "org-a")
+	if !ok {
+		t.Fatal("a due org was not reported")
+	}
+	below := okAnswer(r, 0)
+	below.CeilingBytes = r.UsedBytes - 1
+	o.apply(t, below)
+	if n := o.count(t, `SELECT COUNT(*) FROM drive_orgs WHERE id='org-a' AND grant_ceiling IS NULL AND report_inflight=0 AND report_due=1`); n != 1 {
+		t.Fatal("an answer below usage left the report unanswered or kept a grant")
+	}
+	wantQuota(t, "after a bad answer", o.put("a1", o.teamA.ID, 1))
+}
+
+func (o *orgs) count(t *testing.T, q string, args ...any) int {
+	t.Helper()
+	n, err := drive.QueryInt(o.ctx, o.d, q, args...)
+	if err != nil {
+		t.Fatal(q, err)
+	}
+	return n
+}
