@@ -21,8 +21,9 @@ func TestManualDepositWaitsForOtherReplicasBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer other.Close()
-	held, release := make(chan struct{}), make(chan struct{})
+	held, release, released := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	go func() {
+		defer close(released)
 		_, _ = other.WithReplicaLock(context.Background(), "backup-run", func(context.Context) error {
 			close(held)
 			<-release
@@ -36,6 +37,7 @@ func TestManualDepositWaitsForOtherReplicasBackup(t *testing.T) {
 		t.Fatalf("deposit during another replica's backup: %d %s", w.Code, w.Body.String())
 	}
 	close(release)
+	<-released
 	// Free again, the deposit reaches the run itself: this install has nowhere to put a capsule.
 	if w = m.call("staff", "", http.MethodPost, "/api/backup/deposit"); w.Code == http.StatusConflict {
 		t.Fatalf("deposit after release: %d %s", w.Code, w.Body.String())
