@@ -125,7 +125,8 @@ type PoolReport struct {
 // drive bytes changed, that has no grant, or whose grant has less than half its life left.
 // Each org freezes in its own transaction, so a pass never holds many orgs' sums at once.
 // Orgs come in ID order after after, so a caller pages with the last report's org. Staff and
-// deleted orgs are never reported.
+// deleted orgs are never reported. An org that fails is skipped and its error returned with
+// the reports.
 func (s *Store) BeginReports(ctx context.Context, full bool, after string) ([]PoolReport, error) {
 	if !s.Multi() {
 		return nil, ErrNotFound
@@ -135,19 +136,23 @@ func (s *Store) BeginReports(ctx context.Context, full bool, after string) ([]Po
 		return nil, err
 	}
 	var out []PoolReport
+	var errs []error
 	for _, org := range orgs {
-		if len(out) == 500 {
+		if len(out) == 500 || ctx.Err() != nil {
 			break
 		}
+		// One org that cannot be reported must not starve the others: its error is
+		// returned beside every report frozen, and the caller sends those.
 		r, ok, err := s.freezeReport(ctx, org)
 		if err != nil {
-			return out, err
+			errs = append(errs, fmt.Errorf("org %s: %w", org, err))
+			continue
 		}
 		if ok {
 			out = append(out, r)
 		}
 	}
-	return out, nil
+	return out, errors.Join(errs...)
 }
 
 // freezeReport returns org's unanswered report, or freezes a new one when it needs one.

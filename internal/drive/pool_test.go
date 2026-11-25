@@ -303,3 +303,19 @@ func TestOnlyFitsAddsBytes(t *testing.T) {
 		t.Fatalf("byte-adding inserts %v, want %v: a new one must call fits", found, want)
 	}
 }
+
+// One org that cannot be reported (an exhausted sequence) does not stop the others: its
+// error comes back beside their reports.
+func TestPoolOneBadOrgDoesNotStarveTheRest(t *testing.T) {
+	o := poolOrgs(t)
+	if _, err := o.db.Exec(`INSERT INTO drive_orgs(id,status,report_seq) VALUES('org-0','active',9223372036854775807)`); err != nil {
+		t.Fatal(err)
+	}
+	reports, err := o.d.BeginReports(o.ctx, true, "")
+	if err == nil || !strings.Contains(err.Error(), "org-0") {
+		t.Fatalf("no error for the unreportable org: %v", err)
+	}
+	if len(reports) != 2 || reports[0].OrgID != "org-a" || reports[1].OrgID != "org-b" {
+		t.Fatalf("reports %+v", reports)
+	}
+}
