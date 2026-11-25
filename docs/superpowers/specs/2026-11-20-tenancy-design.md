@@ -1170,10 +1170,18 @@ the release before. No R step starts before the owner approves this amendment.
     connection discard on every exit. Real-PG tests use independent pools, callback
     errors/panic, cancellation while work finishes and actual backend termination/takeover.
     It requires direct connections or session pooling; callbacks use the ordinary pool
-    and honor cancellation. Job adoption/election remains unbuilt; this is neither
-    exactly-once execution nor an external-effect fence.
-  - The `backup-run` lease for scheduled, manual and CLI runs (the session-lock primitive
-    above is built; backup caller adoption is pending). The PostgreSQL snapshot backup,
+    and honor cancellation. As built: `startJobs` (`cmd/server/worker.go`) runs every job
+    above only on the `scheduled-worker` holder, all on its lock's context; standbys retry
+    every 10 s, and a new holder waits 3 s, past a lost holder's session probe, before
+    starting. Single mode starts each job directly, as before. `TestOneReplicaRunsTheJobs`
+    (two pools, one database) checks one worker, no overlap, and takeover after the
+    holder's backend is terminated. This is neither exactly-once execution nor an
+    external-effect fence; every job is idempotent.
+  - The `backup-run` lease for scheduled, manual and CLI runs. As built: `backup.OneRun`
+    wraps the scheduled run (with its bulk prune and check), the admin route and CLI
+    `deposit`; a contender gets `recoveryclient.ErrInProgress` (409 on the route) without
+    collecting. Session loss cancels collection; sealing and upload already under way
+    finish. The PostgreSQL snapshot backup,
     restore through `migrate-postgres`, and `prepareRestoredDatabase` dropping KyDrive's
     session-like tables and the fingerprint.
 - **R4. State in the database**: every row of the in-memory table above (WebDAV locks,

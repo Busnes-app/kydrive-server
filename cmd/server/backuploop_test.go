@@ -27,7 +27,7 @@ func TestBackupLoopStopsWhenTheSealerCannotBeBuilt(t *testing.T) {
 
 	done := make(chan struct{})
 	// A nil store is safe only because the loop must return before it reads one.
-	go backupLoop(context.Background(), cfg, nil, done)
+	go func() { defer close(done); backupLoop(context.Background(), cfg, nil) }()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
@@ -46,7 +46,7 @@ func TestBackupLoopClosesDoneOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	done := make(chan struct{})
-	go backupLoop(ctx, cfg, nil, done)
+	go func() { defer close(done); backupLoop(ctx, cfg, nil) }()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):

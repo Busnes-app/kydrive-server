@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **One replica runs the jobs and one backup runs at a time (tenancy R3).** In multi-mode
+  PostgreSQL only the `scheduled-worker` lock holder runs background jobs, and a standby
+  takes them over when it loses its session; scheduled, manual and CLI deposits take the
+  `backup-run` lease, and a second is refused as in progress. The pool keeps at least three
+  connections in multi mode. Single mode is unchanged; multi startup stays refused.
+
 - **PostgreSQL session-lock primitive (tenancy R3 groundwork).** Internal replica jobs
   can reserve one session for exclusive named ownership; session loss cancels their
   context and every exit discards the connection. Single-mode calls are refused.

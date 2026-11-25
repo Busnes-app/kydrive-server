@@ -90,7 +90,12 @@ func openPostgres(ctx context.Context, cfg config.DatabaseConfig, key []byte) (S
 	}
 
 	// One connection more than one: the start lock below holds one while the store opens.
-	db.SetMaxOpenConns(max(maxOpen, 2))
+	// Multi mode also keeps the scheduled-worker and backup-run sessions, one each.
+	minOpen := 2
+	if cfg.Tenancy == "multi" {
+		minOpen = 3
+	}
+	db.SetMaxOpenConns(max(maxOpen, minOpen))
 	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(maxLifetime)
 

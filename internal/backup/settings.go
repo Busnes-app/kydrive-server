@@ -48,3 +48,14 @@ func RunConfig(cfg *config.Config, appVersion string) (recoveryclient.RunConfig,
 		BackupDir: cfg.Backup.Dir, Keep: cfg.Backup.Keep, Sealer: sealer,
 	}, nil
 }
+
+// OneRun runs a deposit under the backup-run lease, so across the replicas of a multi-tenant
+// install one deposit runs at a time; a contender gets recoveryclient.ErrInProgress without
+// running. Elsewhere it runs directly (recoveryclient still serializes within a process).
+func OneRun(ctx context.Context, st store.Store, run func(context.Context) error) error {
+	won, err := store.OnOneReplica(ctx, st, "backup-run", run)
+	if err == nil && !won {
+		return recoveryclient.ErrInProgress
+	}
+	return err
+}
