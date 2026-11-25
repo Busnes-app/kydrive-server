@@ -120,7 +120,13 @@ ORDER BY array_position($1, token) LIMIT 1`, candidates, name).Scan(&found)
 			}
 		}
 		// Both names are resolved before either lock is held, as in memLS.
-		_, err := tx.ExecContext(ctx, `UPDATE shared_dav_locks SET held_until = `+dbMillis+` + $2 WHERE token = ANY($1)`, held, davHold.Milliseconds())
+		res, err := tx.ExecContext(ctx, `UPDATE shared_dav_locks SET held_until = `+dbMillis+` + $2 WHERE token = ANY($1)`, held, davHold.Milliseconds())
+		if err == nil {
+			var n int64
+			if n, err = res.RowsAffected(); err == nil && n != int64(len(held)) {
+				err = errors.New("dav: a confirmed lock vanished before it was held")
+			}
+		}
 		return err
 	})
 	if err != nil {

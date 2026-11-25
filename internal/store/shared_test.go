@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -220,5 +221,42 @@ func TestSharedDAVConfirmIsBounded(t *testing.T) {
 	}
 	if err := release(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The sweep removes expired WebDAV locks only under the lock table's lock, so it never deletes
+// a lock between a confirmation choosing it and holding it.
+func TestSharedSweepWaitsForTheDAVLockTable(t *testing.T) {
+	a, _, db := replicaLockStores(t)
+	ctx := t.Context()
+	token, err := a.Shared().DavLocks().Create(ctx, webdav.LockDetails{Root: "/ws/s.txt", Duration: time.Minute, ZeroDepth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE shared_dav_locks SET expires_at = 1 WHERE token = $1`, token); err != nil {
+		t.Fatal(err)
+	}
+	busy, err := db.BeginTx(ctx, nil) // a confirmation in progress
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := busy.Exec(`SELECT pg_advisory_xact_lock(hashtext('kydrive dav locks'))`); err != nil {
+		t.Fatal(err)
+	}
+	short, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	_ = a.Shared().Sweep(short)
+	var left int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM shared_dav_locks WHERE token = $1`, token).Scan(&left); err != nil || left != 1 {
+		t.Fatalf("the sweep deleted a lock while the table was locked: %d %v", left, err)
+	}
+	if err := busy.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Shared().Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM shared_dav_locks WHERE token = $1`, token).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("the sweep left an expired lock: %d %v", left, err)
 	}
 }

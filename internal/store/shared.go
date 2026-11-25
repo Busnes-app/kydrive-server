@@ -143,13 +143,14 @@ func (s *Shared) DropTicket(ctx context.Context, id string) error {
 // Sweep deletes every expired row. The elected worker runs it.
 func (s *Shared) Sweep(ctx context.Context) error {
 	for _, table := range sharedTables {
-		expired := `expires_at <= ` + dbMillis
 		if table == "shared_dav_locks" {
-			expired = davExpired
+			continue
 		}
-		if _, err := s.exec(ctx, `DELETE FROM `+table+` WHERE `+expired); err != nil {
+		if _, err := s.exec(ctx, `DELETE FROM `+table+` WHERE expires_at <= `+dbMillis); err != nil {
 			return err
 		}
 	}
-	return nil
+	// Under the lock table's own lock, which deletes what has expired: a confirmation never
+	// loses the lock it is about to hold.
+	return s.DavLocks().tx(ctx, func(*sql.Tx) error { return nil })
 }
