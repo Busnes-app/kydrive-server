@@ -375,7 +375,12 @@ func (w *writeFile) publish(v drive.Version) (drive.File, error) {
 	t := w.target
 	v.Mtime = w.fs.mtime
 	for range 3 {
-		f, err := w.fs.store.Publish(w.ctx, w.fs.user, t, v, t.Revision)
+		var f drive.File
+		err := drive.RetryPool(w.ctx, func() error {
+			var perr error
+			f, perr = w.fs.store.Publish(w.ctx, w.fs.user, t, v, t.Revision)
+			return perr
+		})
 		if !errors.Is(err, drive.ErrConflict) || w.fs.IfMatch {
 			return f, err
 		}

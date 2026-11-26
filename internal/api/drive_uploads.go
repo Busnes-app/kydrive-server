@@ -33,7 +33,11 @@ func (s *Server) driveStartUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := drive.UploadSession{Workspace: r.PathValue("id"), Parent: in.Parent, Name: in.Name, File: in.File, Expected: in.Revision, Size: in.Size, Mtime: in.Mtime}
-	u, err := s.store.Drive().StartUpload(r.Context(), s.driveUser(r).ID, u, s.config.Drive.MaxFileSize)
+	err := drive.RetryPool(r.Context(), func() error {
+		var serr error
+		u, serr = s.store.Drive().StartUpload(r.Context(), s.driveUser(r).ID, u, s.config.Drive.MaxFileSize)
+		return serr
+	})
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -89,7 +93,12 @@ func (s *Server) driveCompleteUpload(w http.ResponseWriter, r *http.Request) {
 	// published and its 201 lost. Lift the write deadline; the size cap bounds the work. A
 	// dropped connection does not stop it either (CompleteUpload ignores cancellation).
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
-	f, err := s.store.Drive().CompleteUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.driveUser(r).ID, r.PathValue("sid"))
+	var f drive.File
+	err := drive.RetryPool(r.Context(), func() error {
+		var cerr error
+		f, cerr = s.store.Drive().CompleteUpload(r.Context(), s.stagingRoot(), s.blobRoot(), s.driveUser(r).ID, r.PathValue("sid"))
+		return cerr
+	})
 	if err != nil {
 		s.driveError(w, err)
 		return

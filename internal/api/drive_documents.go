@@ -62,7 +62,12 @@ func (s *Server) driveNewDocument(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	file, err := s.store.Drive().Publish(r.Context(), user, drive.File{Workspace: workspace, Parent: in.Parent, Name: name}, version, 0)
+	var file drive.File
+	err = drive.RetryPool(r.Context(), func() error {
+		var perr error
+		file, perr = s.store.Drive().Publish(r.Context(), user, drive.File{Workspace: workspace, Parent: in.Parent, Name: name}, version, 0)
+		return perr
+	})
 	if err != nil {
 		s.discardBlob(version.Blob)
 		if errors.Is(err, drive.ErrConflict) {
