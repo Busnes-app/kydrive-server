@@ -2,8 +2,8 @@
 
 Euro-Office may run on Docker or Kubernetes. This optional Compose service uses the
 same digest-pinned amd64 distribution as `deploy/render.py`. Production release
-still requires the provenance and integration gates in `EURO-PROVENANCE.md` and
-`ACCEPTANCE.md`; packaging alone does not establish readiness.
+still requires the provenance checks in [EURO-PROVENANCE.md](EURO-PROVENANCE.md) and
+the live integration checks below; packaging alone does not establish readiness.
 
 ## Configure and start
 

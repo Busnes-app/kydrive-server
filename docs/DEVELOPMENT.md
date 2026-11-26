@@ -21,9 +21,15 @@ Choose a random `KY_ADMIN_PASSWORD` in a private environment file before startin
 ```sh
 PATH=/path/containing/restic:$PATH go test -race -count=1 -timeout=20m ./...
 go vet ./...
-cd web && npm test && npm run build
+(cd web && npm test && npm run build)
 python -m unittest discover -s deploy -p '*_test.py'
 docker build --platform linux/amd64 -t kydrive-server:local .
 ```
 
-The browser shell and actual Euro-Office were exercised through the native T3 collaborative browser. Evidence and limits are in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`. Live identity, HTTPS, NAS storage, spreadsheet save/reopen and recovery drill evidence is recorded separately in `docs/PILOT.md`. Suite-wide one-prompt installation is not implemented.
+For browser and binary smoke checks against a local build (after building the web assets), run:
+
+```sh
+go build -o .browser/server ./cmd/server
+(cd web && npx playwright install chromium && npm run test:browser)
+./scripts/smoke-test.sh .browser/server
+```

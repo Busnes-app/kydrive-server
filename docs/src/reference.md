@@ -7,8 +7,7 @@ environment reference and supported deployment/distribution paths. Read the vers
 The links below open repository documents and need network access.
 
 - [Restore metadata and bulk files](https://github.com/Busnes-app/kydrive-server/blob/master/docs/RESTORE.md)
-- [Acceptance gates](https://github.com/Busnes-app/kydrive-server/blob/master/docs/ACCEPTANCE.md)
-- [Pilot evidence](https://github.com/Busnes-app/kydrive-server/blob/master/docs/PILOT.md)
+- [Desktop access](https://github.com/Busnes-app/kydrive-server/blob/master/docs/DESKTOP-ACCESS.md)
 - [Editor provenance](https://github.com/Busnes-app/kydrive-server/blob/master/docs/EURO-PROVENANCE.md)
 
 ## Detailed product guides
@@ -16,7 +15,7 @@ The links below open repository documents and need network access.
 - [Standalone installation](https://github.com/Busnes-app/kydrive-server/blob/master/INSTALL.md)
 - [Encryption at rest](https://github.com/Busnes-app/kydrive-server/blob/master/docs/RECOVERY-AND-ENCRYPTION.md)
 - [Clients and editor](https://github.com/Busnes-app/kydrive-server/blob/master/docs/CLIENTS-AND-EDITOR.md)
-- [production editor Compose overlay](https://github.com/Busnes-app/kydrive-server/blob/master/docs/EURO-DOCKER.md)
+- [Euro-Office on Docker](https://github.com/Busnes-app/kydrive-server/blob/master/docs/EURO-DOCKER.md)
 - [Development](https://github.com/Busnes-app/kydrive-server/blob/master/docs/DEVELOPMENT.md)
 - [Deployment](https://github.com/Busnes-app/kydrive-server/blob/master/docs/DEPLOYMENT.md)
 - [Permissions](https://github.com/Busnes-app/kydrive-server/blob/master/docs/PERMISSIONS.md)

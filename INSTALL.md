@@ -1,4 +1,4 @@
-# kydrive standalone installation
+# KyDrive standalone installation
 
 ## Before you start
 
@@ -69,8 +69,7 @@ preserve it and find the correct key instead of reinitializing.
 The capsule seals metadata/keys and references bulk snapshots; it is not a copy of every
 file. Complete both parts of [recovery](docs/RESTORE.md). For source builds select
 `docker-compose.yml` plus `docker-compose.build.yml` on **every** Compose command, build,
-and start the same overlay selection. See [NAS package](docs/DEPLOYMENT.md#nas-package),
-[pilot evidence](docs/PILOT.md) and [acceptance limits](docs/ACCEPTANCE.md).
+and start the same overlay selection. See [NAS package](docs/DEPLOYMENT.md#nas-package) and [Euro-Office on Docker](docs/EURO-DOCKER.md).
 
 ## Keep it recoverable
 

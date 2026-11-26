@@ -1,3 +1,0 @@
-inventory-00-before.csv -text
-# Preserve the immutable publisher's final blank line rather than rewrite its bytes.
-opus-round2.md whitespace=-blank-at-eof
