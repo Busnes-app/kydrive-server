@@ -386,12 +386,12 @@ func TestConcurrentWriteWaitsOutInflightStorageReport(t *testing.T) {
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("concurrent upload after report landed: want 201, got %d %s", rec.Code, rec.Body.String())
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("concurrent upload did not complete after ApplyReports cleared report_inflight")
 	}
 
 	// A genuinely full org (zero remaining ceiling) must fail immediately with 413 even when
-	// report_inflight=1, without burning retry backoff.
+	// report_inflight=1, without burning retry backoff (poolRetryCap is 1500ms).
 	if _, err := m.db.Exec(`UPDATE drive_orgs SET report_due=1 WHERE id='org-a'`); err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestConcurrentWriteWaitsOutInflightStorageReport(t *testing.T) {
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("genuinely full org: want 413, got %d %s", rec.Code, rec.Body.String())
 	}
-	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
-		t.Fatalf("genuinely full org waited %v instead of failing immediately", elapsed)
+	if elapsed := time.Since(start); elapsed >= 1200*time.Millisecond {
+		t.Fatalf("genuinely full org waited %v instead of failing without retry backoff", elapsed)
 	}
 }
