@@ -32,7 +32,7 @@ func startUpload(t *testing.T, d *drive.Store, user string, u drive.UploadSessio
 }
 
 func appendChunk(d *drive.Store, staging, user, id string, start int64, body string) (drive.UploadSession, error) {
-	return d.AppendUpload(context.Background(), objects.DirTree(staging), testKey, user, id, start, int64(len(body)), strings.NewReader(body))
+	return d.AppendUpload(context.Background(), objects.DirTree(staging), user, id, start, int64(len(body)), strings.NewReader(body))
 }
 
 func readFile(t *testing.T, blobs string, f drive.File) string {
@@ -41,7 +41,7 @@ func readFile(t *testing.T, blobs string, f drive.File) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, f.Sealed, f.Size)
+	r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), drive.Deployment(testKey), f.Sealed, f.Size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestUploadSessionRoundTrip(t *testing.T) {
 			t.Fatalf("chunk %d: %+v %v", i, got, err)
 		}
 	}
-	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestCompletionOutlivesACancelledRequest(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 	if err != nil || readFile(t, blobs, f) != "0123456789" {
 		t.Fatalf("completion on a cancelled request: %+v %v", f, err)
 	}
@@ -104,7 +104,7 @@ func TestEmptyUpload(t *testing.T) {
 	st, w, blobs := fixture(t)
 	d, staging := st.Drive(), t.TempDir()
 	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "empty.txt"})
-	if f, err := d.CompleteUpload(context.Background(), objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); err != nil || f.Size != 0 {
+	if f, err := d.CompleteUpload(context.Background(), objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); err != nil || f.Size != 0 {
 		t.Fatalf("%+v %v", f, err)
 	}
 }
@@ -114,14 +114,14 @@ func TestUploadResumeAfterDroppedChunk(t *testing.T) {
 	d, ctx, staging := st.Drive(), context.Background(), t.TempDir()
 	u := startUpload(t, d, "worker", drive.UploadSession{Workspace: w.ID, Name: "big.bin", Size: 10})
 	dropped := io.MultiReader(strings.NewReader("aaaaa"), iotest.ErrReader(io.ErrUnexpectedEOF))
-	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), testKey, "worker", u.ID, 0, 10, dropped); err == nil {
+	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), "worker", u.ID, 0, 10, dropped); err == nil {
 		t.Fatal("dropped chunk accepted")
 	}
 	if got, err := d.Upload(ctx, "worker", u.ID); err != nil || got.Received != 0 {
 		t.Fatalf("after drop: %+v %v", got, err)
 	}
 	// A body shorter than its declared length is a dropped chunk too.
-	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), testKey, "worker", u.ID, 0, 10, strings.NewReader("short")); !errors.Is(err, drive.ErrInvalid) {
+	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), "worker", u.ID, 0, 10, strings.NewReader("short")); !errors.Is(err, drive.ErrInvalid) {
 		t.Fatalf("short body: %v", err)
 	}
 	entries, _ := os.ReadDir(filepath.Join(staging, u.ID))
@@ -131,7 +131,7 @@ func TestUploadResumeAfterDroppedChunk(t *testing.T) {
 	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "0123456789"); err != nil {
 		t.Fatal(err)
 	}
-	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 	if err != nil || readFile(t, blobs, f) != "0123456789" {
 		t.Fatalf("%+v %v", f, err)
 	}
@@ -147,10 +147,10 @@ func TestUploadRejectsBadRanges(t *testing.T) {
 	if _, err := appendChunk(d, staging, "worker", u.ID, 0, "01234567890"); !errors.Is(err, drive.ErrInvalid) {
 		t.Fatalf("overrun accepted: %v", err)
 	}
-	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), testKey, "worker", u.ID, 0, 3, strings.NewReader("abcdef")); !errors.Is(err, drive.ErrInvalid) {
+	if _, err := d.AppendUpload(ctx, objects.DirTree(staging), "worker", u.ID, 0, 3, strings.NewReader("abcdef")); !errors.Is(err, drive.ErrInvalid) {
 		t.Fatalf("long body accepted: %v", err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("incomplete upload published: %v", err)
 	}
 }
@@ -219,7 +219,7 @@ func TestUploadCompleteRechecksAccess(t *testing.T) {
 	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "team", DisplayName: "Team", ExternalID: "external-team"}, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrDenied) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("lost access still published: %v", err)
 	}
 	files, err := drive.QueryInt(ctx, d, `SELECT COUNT(*) FROM drive_files`)
@@ -256,7 +256,7 @@ func TestUploadNewVersion(t *testing.T) {
 	if _, err = appendChunk(d, staging, "worker", u.ID, 0, "v2"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+	got, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 	if err != nil || got.ID != f.ID || got.Revision != 2 || readFile(t, blobs, got) != "v2" {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -272,7 +272,7 @@ func TestUploadOwnedByCreator(t *testing.T) {
 	if _, err := appendChunk(d, staging, "admin", u.ID, 0, "abcde"); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("append: %v", err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "admin", u.ID); !errors.Is(err, drive.ErrDenied) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "admin", u.ID); !errors.Is(err, drive.ErrDenied) {
 		t.Fatalf("complete: %v", err)
 	}
 	if err := d.CancelUpload(ctx, objects.DirTree(staging), "admin", u.ID); !errors.Is(err, drive.ErrDenied) {
@@ -305,7 +305,7 @@ func TestCancelWaitsForACompletionClaim(t *testing.T) {
 		t.Fatalf("cancel during a completion: %v", err)
 	}
 	// The web client keeps its session on exactly this message (Uploads.tsx).
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) || !strings.Contains(err.Error(), "already completing") {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); !errors.Is(err, drive.ErrConflict) || !strings.Contains(err.Error(), "already completing") {
 		t.Fatalf("second completion during a claim: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(staging, u.ID)); err != nil {
@@ -314,7 +314,7 @@ func TestCancelWaitsForACompletionClaim(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Hour).Unix(), u.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); err != nil {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); err != nil {
 		t.Fatalf("retry after the claim lapsed: %v", err)
 	}
 }
@@ -395,7 +395,7 @@ func TestUploadCompletionIsClaimed(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Unix(), u.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); !errors.Is(err, drive.ErrConflict) {
 		t.Fatalf("second completion: %v", err)
 	}
 	if entries, _ := os.ReadDir(blobs); len(entries) != 0 {
@@ -405,7 +405,7 @@ func TestUploadCompletionIsClaimed(t *testing.T) {
 	if err := drive.ExecSQL(ctx, d, `UPDATE drive_upload_sessions SET completing=? WHERE id=?`, time.Now().Add(-time.Hour).Unix(), u.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); err != nil {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); err != nil {
 		t.Fatalf("stale claim blocked completion: %v", err)
 	}
 }
@@ -423,7 +423,7 @@ func TestConcurrentCompletionsPublishOnce(t *testing.T) {
 	for range 4 {
 		wg.Go(func() {
 			<-start
-			_, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+			_, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 			errs <- err
 		})
 	}
@@ -458,7 +458,7 @@ func TestFailedCompletionReleasesClaim(t *testing.T) {
 	if _, err := d.Publish(ctx, "worker", drive.File{Workspace: w.ID, Name: "filler"}, blob(t, blobs, strings.Repeat("x", 96)), 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID); !errors.Is(err, drive.ErrQuota) {
+	if _, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID); !errors.Is(err, drive.ErrQuota) {
 		t.Fatalf("over quota: %v", err)
 	}
 	if n, err := drive.QueryInt(ctx, d, `SELECT completing FROM drive_upload_sessions WHERE id=?`, u.ID); err != nil || n != 0 {
@@ -527,7 +527,7 @@ func TestCompletionSucceedsWhenCleanupFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
-	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), testKey, "worker", u.ID)
+	f, err := d.CompleteUpload(ctx, objects.DirTree(staging), objects.Dir(blobs), "worker", u.ID)
 	if err != nil || f.Size != 5 {
 		t.Fatalf("published completion reported %v (size %d)", err, f.Size)
 	}

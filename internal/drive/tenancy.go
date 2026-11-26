@@ -166,14 +166,21 @@ func recordTenancy(ctx context.Context, db *sql.DB, t Tenancy) error {
 	return tx.Commit()
 }
 
-// seedStaffOrg gives a multi-tenant database its staff org row, active and seeded, which the
-// org poller never changes.
-func seedStaffOrg(ctx context.Context, db *sql.DB, t Tenancy) error {
-	if t.Mode != TenancyMulti {
+// seedStaffOrg gives a multi-tenant database its key table and its staff org row, active,
+// seeded and keyed, which the org poller never changes.
+func (s *Store) seedStaffOrg(ctx context.Context) error {
+	if !s.Multi() {
 		return nil
 	}
-	_, err := db.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,seeded) VALUES(?,'active',1) ON CONFLICT(id) DO NOTHING`, t.StaffOrg)
-	return err
+	return s.transaction(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, orgKeysDDL); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,seeded) VALUES(?,'active',1) ON CONFLICT(id) DO NOTHING`, s.tenancy.StaffOrg); err != nil {
+			return err
+		}
+		return s.createOrgKey(ctx, tx, s.tenancy.StaffOrg)
+	})
 }
 
 // asDenied reports a tenancy refusal as ErrDenied, the answer to any other cross-org access.
@@ -392,6 +399,9 @@ ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,
 WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
 				return err
 			}
+			if err := s.createOrgKey(ctx, tx, o.ID); err != nil {
+				return err
+			}
 		}
 		now := time.Now().UTC()
 		// A sign-in can poll on another replica while the elected worker polls. An older
@@ -404,6 +414,10 @@ WHERE CAST(server_settings.value AS BIGINT)<CAST(excluded.value AS BIGINT)`, org
 		_, err := tx.ExecContext(ctx, `INSERT INTO server_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, OrgsFreshUntil, strconv.FormatInt(now.Add(OrgsMaxAge).Unix(), 10), now)
 		return err
 	})
+	// A key leaves the cache when its org's status may have changed.
+	for _, o := range orgs {
+		s.orgKeys.evict(o.ID)
+	}
 	return staffNotActive, err
 }
 

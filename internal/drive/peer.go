@@ -149,7 +149,11 @@ func (s *Store) IssueTicket(ctx context.Context, user, name string, size, maxSiz
 		if live >= ticketsPerUser {
 			return ErrTicketLimit
 		}
-		stored, _, err := s.names.seal("drive_peer_tickets", t.ID, name)
+		n, err := s.namesOf(ctx, tx, userOrg("?"), user)
+		if err != nil {
+			return err
+		}
+		stored, _, err := n.seal("drive_peer_tickets", t.ID, name)
 		if err != nil {
 			return err
 		}
@@ -173,7 +177,11 @@ func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 	if err != nil {
 		return t, err
 	}
-	t.Name, err = s.names.open("drive_peer_tickets", t.ID, stored)
+	n, err := s.namesOf(ctx, s.db, userOrg("?"), t.Owner)
+	if err != nil {
+		return t, err
+	}
+	t.Name, err = n.open("drive_peer_tickets", t.ID, stored)
 	return t, err
 }
 
@@ -182,7 +190,7 @@ func (s *Store) Ticket(ctx context.Context, token string) (Ticket, error) {
 // owner's peer folder (made or remade here), under the first free numbered name; the session
 // expires with the ticket. The last bytes publish the file and spend the ticket. f is nil
 // until then.
-func (s *Store) TicketUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, key []byte, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
+func (s *Store) TicketUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, t Ticket, start, length int64, r io.Reader) (received int64, f *File, err error) {
 	if !isPeer(ctx) {
 		return 0, nil, ErrDenied
 	}
@@ -206,18 +214,18 @@ func (s *Store) TicketUpload(ctx context.Context, staging objects.Tree, blobs ob
 	}
 	var u UploadSession
 	if length > 0 {
-		u, err = s.AppendUpload(ctx, staging, key, t.Owner, t.Session, start, length, r)
+		u, err = s.AppendUpload(ctx, staging, t.Owner, t.Session, start, length, r)
 	} else {
 		u, err = s.Upload(ctx, t.Owner, t.Session)
 	}
 	if err != nil || u.Received < u.Size {
 		return u.Received, nil, err
 	}
-	file, err := s.CompleteUpload(ctx, staging, blobs, key, t.Owner, t.Session)
+	file, err := s.CompleteUpload(ctx, staging, blobs, t.Owner, t.Session)
 	for n := 2; errors.Is(err, errNameTaken) && n <= 100; n++ {
 		// Taken since the session opened: number it again.
 		if err = s.renameUpload(ctx, t.Session, numbered(t.Name, n)); err == nil {
-			file, err = s.CompleteUpload(ctx, staging, blobs, key, t.Owner, t.Session)
+			file, err = s.CompleteUpload(ctx, staging, blobs, t.Owner, t.Session)
 		}
 	}
 	if err != nil {
@@ -283,7 +291,11 @@ func (s *Store) ticketSession(ctx context.Context, staging objects.Tree, t Ticke
 
 // renameUpload gives a ticket's session a new name before its completion is retried.
 func (s *Store) renameUpload(ctx context.Context, id, name string) error {
-	stored, mac, err := s.names.seal("drive_upload_sessions", id, name)
+	n, err := s.namesOf(ctx, s.db, workspaceOrg("(SELECT workspace FROM drive_upload_sessions WHERE id=?)"), id)
+	if err != nil {
+		return err
+	}
+	stored, mac, err := n.seal("drive_upload_sessions", id, name)
 	if err != nil {
 		return err
 	}
@@ -301,12 +313,16 @@ func (s *Store) peerFolder(ctx context.Context, tx *sql.Tx, user string) (worksp
 	if err == nil || !errors.Is(err, sql.ErrNoRows) {
 		return workspace, folder, err
 	}
+	nk, err := s.namesOf(ctx, tx, workspaceOrg("?"), workspace)
+	if err != nil {
+		return "", "", err
+	}
 	for n := 1; folder == "" && n <= 100; n++ {
 		name := PeerFolderName
 		if n > 1 {
 			name = numbered(name, n)
 		}
-		err = tx.QueryRowContext(ctx, `SELECT id FROM drive_folders WHERE workspace=? AND parent='' AND name_hmac=? AND trashed=false`, workspace, s.names.hmac(name)).Scan(&folder)
+		err = tx.QueryRowContext(ctx, `SELECT id FROM drive_folders WHERE workspace=? AND parent='' AND name_hmac=? AND trashed=false`, workspace, nk.hmac(name)).Scan(&folder)
 		if errors.Is(err, sql.ErrNoRows) {
 			f := Folder{ID: uuid.NewString(), Workspace: workspace, Name: name}
 			// A file holding the name is a conflict: try the next number.

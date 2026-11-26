@@ -44,6 +44,7 @@ type GuestListing struct {
 	UploadOnly bool        `json:"upload_only"`
 	Path       []GuestItem `json:"path"` // folders from the link's folder down to the one listed
 	Items      []GuestItem `json:"items"`
+	Keys       Keys        `json:"-"` // what an upload through the link is sealed under
 }
 
 // CreateGuestLink returns a guest link and its token, which is not stored. maxLife is the
@@ -199,6 +200,9 @@ func (s *Store) GuestView(ctx context.Context, token, secret, folder string) (Gu
 		return GuestListing{}, err
 	}
 	out := GuestListing{Kind: g.kind, UploadOnly: g.uploadOnly, Path: []GuestItem{}, Items: []GuestItem{}}
+	if out.Keys, err = s.KeysFor(ctx, g.workspace); err != nil {
+		return GuestListing{}, err
+	}
 	if g.kind == "file" {
 		files, err := s.queryFiles(ctx, s.db, `f.id=? AND f.trashed=false`, g.root)
 		if err != nil || len(files) == 0 {

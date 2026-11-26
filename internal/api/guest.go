@@ -219,7 +219,7 @@ func (s *Server) guestUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, r.Body, uploadLimit)
+	v, err := drive.WriteBlob(s.blobRoot(), view.Keys, r.Body, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return

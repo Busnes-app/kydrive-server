@@ -97,7 +97,7 @@ func (w *mcpWorld) folder(t *testing.T, workspace, parent, name string) string {
 // file publishes body as name under parent, as alice.
 func (w *mcpWorld) file(t *testing.T, workspace, parent, name string, body []byte) drive.File {
 	t.Helper()
-	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), drive.Deployment(w.cfg.Security.EncryptionKey), bytes.NewReader(body), 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

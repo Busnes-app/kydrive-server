@@ -61,7 +61,11 @@ func TestExportOnlySessionAndPersonalArchive(t *testing.T) {
 	}
 	publish := func(file drive.File, text string, revision int64) drive.File {
 		t.Helper()
-		v, err := drive.WriteBlob(objects.Dir(filepath.Join(m.cfg.Database.DataDir, "blobs")), m.cfg.Security.EncryptionKey, strings.NewReader(text), 1024)
+		k, err := d.KeysFor(ctx, ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := drive.WriteBlob(objects.Dir(filepath.Join(m.cfg.Database.DataDir, "blobs")), k, strings.NewReader(text), 1024)
 		if err != nil {
 			t.Fatal(err)
 		}

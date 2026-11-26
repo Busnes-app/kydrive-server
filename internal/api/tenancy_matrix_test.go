@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Busnes-app/ky-primitives/password"
+	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -27,6 +28,24 @@ import (
 )
 
 const testStaffOrg = "5ea1f000-0000-4000-8000-000000000001"
+
+// recordOrgs records active orgs as the poll does (with their data keys), granted as an
+// answered report leaves them.
+func recordOrgs(t *testing.T, d *drive.Store, db *sql.DB, ids ...string) {
+	t.Helper()
+	var orgs []suitedir.Org
+	for _, id := range ids {
+		orgs = append(orgs, suitedir.Org{ID: id, Status: suitedir.OrgActive, Revision: 1, Enabled: true})
+	}
+	if _, err := d.ApplyOrgs(context.Background(), orgs, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if _, err := db.Exec(`UPDATE drive_orgs SET grant_ceiling=1099511627776,grant_expires=99999999999 WHERE id=?`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 // multiAPI is a multi-tenant server with a staff administrator and orgs A and B. Each org has
 // two members in a group that manages a shared workspace holding a folder and a file, which
@@ -78,8 +97,8 @@ func setupMultiServer(t *testing.T) *multiAPI {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES('org-a','active',1099511627776,99999999999),('org-b','active',1099511627776,99999999999)`) // grants as an answered report leaves them
-	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`)                                                  // as a successful poll leaves it
+	recordOrgs(t, st.Drive(), raw, "org-a", "org-b")
+	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value`) // as a successful poll leaves it
 	users := [][4]string{{"staff", "admin", "active", testStaffOrg}}
 	for _, o := range []string{"a", "b"} {
 		users = append(users, [4]string{o + "1", "user", "active", "org-" + o}, [4]string{o + "2", "user", "active", "org-" + o}, [4]string{o + "-gone", "user", "active", "org-" + o})
@@ -102,7 +121,11 @@ func setupMultiServer(t *testing.T) *multiAPI {
 			t.Fatal(err)
 		}
 		ids["folder"] = folder.ID
-		v, err := drive.WriteBlob(objects.Dir(filepath.Join(dir, "blobs")), cfg.Security.EncryptionKey, strings.NewReader("secret plan of "+org), 1024)
+		k, err := d.KeysFor(ctx, ids["workspace"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := drive.WriteBlob(objects.Dir(filepath.Join(dir, "blobs")), k, strings.NewReader("secret plan of "+org), 1024)
 		if err != nil {
 			t.Fatal(err)
 		}

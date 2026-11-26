@@ -119,7 +119,7 @@ func (s *Server) serveDAV(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 	}
-	fs := dav.New(s.store.Drive(), id, s.blobRoot(), s.config.Security.EncryptionKey, s.config.Drive.MaxFileSize, mtime)
+	fs := dav.New(s.store.Drive(), id, s.blobRoot(), s.config.Drive.MaxFileSize, mtime)
 	if r.Method == http.MethodGet {
 		w = s.steady(w) // a long download is cut only when it stalls
 	}

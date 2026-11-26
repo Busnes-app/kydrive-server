@@ -172,6 +172,6 @@ func (s *Store) describe(ctx context.Context, item SharedItem) (SharedItem, erro
 	if err != nil {
 		return item, err
 	}
-	item.Name, err = s.names.open(table, item.ID, stored)
+	item.Name, err = s.wsNames(ctx, s.db).open(table, item.ID, item.Workspace, stored)
 	return item, err
 }

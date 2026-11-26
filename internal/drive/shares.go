@@ -249,10 +249,7 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 		if err = rows.Scan(&i.Kind, &i.ID, &i.Workspace, &i.Role, &stored, &i.Parent, &i.WorkspaceName); err != nil {
 			return nil, err
 		}
-		table := map[string]string{"file": "drive_files", "folder": "drive_folders"}[i.Kind]
-		if i.Name, err = s.names.open(table, i.ID, stored); err != nil {
-			return nil, err
-		}
+		i.Name = stored
 		if prev, ok := best[i.ID]; !ok || Rank(i.Role) > Rank(prev.Role) {
 			best[i.ID] = i
 		}
@@ -260,8 +257,14 @@ func (s *Store) SharedWithMe(ctx context.Context, user string) ([]SharedItem, er
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	rows.Close()
 	out := make([]SharedItem, 0, len(best))
+	nk := s.wsNames(ctx, s.db)
 	for _, i := range best {
+		table := map[string]string{"file": "drive_files", "folder": "drive_folders"}[i.Kind]
+		if i.Name, err = nk.open(table, i.ID, i.Workspace, i.Name); err != nil {
+			return nil, err
+		}
 		out = append(out, i)
 	}
 	slices.SortFunc(out, func(a, b SharedItem) int {
@@ -331,6 +334,6 @@ func (s *Store) FolderChildren(ctx context.Context, user, id string) (Folder, []
 	if err != nil {
 		return f, nil, nil, err
 	}
-	f.Name, err = s.names.open("drive_folders", id, stored)
+	f.Name, err = s.wsNames(ctx, s.db).open("drive_folders", id, f.Workspace, stored)
 	return f, folders, files, err
 }

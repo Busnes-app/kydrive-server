@@ -235,7 +235,7 @@ func (s *Store) handoverFolder(ctx context.Context, tx *sql.Tx, id, workspace, o
 		if n > 1 {
 			name = fmt.Sprintf("%s (%d)", base, n)
 		}
-		stored, mac, err := s.names.seal("drive_folders", id, name)
+		stored, mac, err := s.sealName(ctx, tx, "drive_folders", id, workspace, name)
 		if err != nil {
 			return err
 		}

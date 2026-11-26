@@ -34,7 +34,7 @@ var (
 	// Credential checks, callbacks, session-only exports, the operator CLI and background workers
 	// are never reached through the peer routes.
 	peerUnreachable = []string{
-		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
+		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
 		"PurgeDeletedWorkspaces", "ReconcileSuiteGroups", "RedeemLink", "RedeemPhone", "RevocationStatus", "RevokeSSOEditors", "RevokeUserCredentials", "RevokeUserEditors",
@@ -106,7 +106,7 @@ func (e *peerEnv) save(t *testing.T, user, name, body string) drive.File {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, f, err := e.d.TicketUpload(e.peer, objects.DirTree(e.staging), objects.Dir(e.blobs), testKey, tk, 0, int64(len(body)), strings.NewReader(body))
+	_, f, err := e.d.TicketUpload(e.peer, objects.DirTree(e.staging), objects.Dir(e.blobs), tk, 0, int64(len(body)), strings.NewReader(body))
 	if err != nil || f == nil {
 		t.Fatalf("ticket upload: %v %v", f, err)
 	}

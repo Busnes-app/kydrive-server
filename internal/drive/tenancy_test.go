@@ -72,6 +72,9 @@ func TestEveryTableIsClassified(t *testing.T) {
 	for _, n := range drive.SharedStateTables {
 		add(n, "platform")
 	}
+	for n := range drive.MultiTenantTables {
+		add(n, "multi-tenant")
+	}
 	tables := tables(t, db)
 	present := map[string]bool{}
 	for _, n := range tables {
@@ -83,7 +86,7 @@ func TestEveryTableIsClassified(t *testing.T) {
 	for n := range class {
 		// drive_name_scrub is gone once names are scrubbed (names.go); the shared tables exist
 		// on PostgreSQL only.
-		if !present[n] && n != "drive_name_scrub" && (testdb.Postgres() || !slices.Contains(drive.SharedStateTables, n)) {
+		if !present[n] && n != "drive_name_scrub" && drive.MultiTenantTables[n] == "" && (testdb.Postgres() || !slices.Contains(drive.SharedStateTables, n)) {
 			t.Errorf("classified table %s does not exist", n)
 		}
 	}
@@ -352,6 +355,10 @@ func TestTenancyUpgradeKeepsEveryRow(t *testing.T) {
 	var version int
 	if err := db.QueryRow(`SELECT MAX(version) FROM drive_schema`).Scan(&version); err != nil || version != drive.SchemaVersion {
 		t.Fatalf("schema version %d, %v", version, err)
+	}
+	// Per-org keys are multi-tenant only: a single-tenant install keeps the deployment key.
+	if slices.Contains(tables(t, db), "drive_org_keys") {
+		t.Fatal("an upgraded single-tenant install has a drive_org_keys table")
 	}
 
 	d := st.Drive()

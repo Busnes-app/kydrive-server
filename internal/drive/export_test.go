@@ -355,3 +355,24 @@ func NameFree(ctx context.Context, s *Store, org, name string) error {
 func RecordEvent(ctx context.Context, s *Store, user, action, resource string) error {
 	return s.transaction(ctx, func(tx *sql.Tx) error { return event(ctx, tx, user, action, resource) })
 }
+
+// CreateOrgKey gives org a data key, as recording it from the poll does.
+func CreateOrgKey(ctx context.Context, s *Store, org string) error {
+	return s.transaction(ctx, func(tx *sql.Tx) error { return s.createOrgKey(ctx, tx, org) })
+}
+
+// OrgKeys is org's Keys, through the replica's cache.
+func OrgKeys(ctx context.Context, s *Store, org string) (Keys, error) {
+	k, err := s.unwrap(ctx, s.db, org)
+	return k.keys, err
+}
+
+// ExpireOrgKeys ages out every key s has cached, as orgKeyLife does.
+func ExpireOrgKeys(s *Store) {
+	s.orgKeys.mu.Lock()
+	defer s.orgKeys.mu.Unlock()
+	for o, k := range s.orgKeys.m {
+		k.until = time.Time{}
+		s.orgKeys.m[o] = k
+	}
+}

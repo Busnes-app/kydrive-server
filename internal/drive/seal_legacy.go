@@ -71,7 +71,7 @@ func (s *Store) sealCopy(ctx context.Context, root string, key []byte, id string
 		return want, err
 	}
 	defer f.Close()
-	v, err := WriteBlob(objects.Dir(root), key, f, want.Size+1)
+	v, err := WriteBlob(objects.Dir(root), Deployment(key), f, want.Size+1)
 	if err != nil {
 		return v, err
 	}

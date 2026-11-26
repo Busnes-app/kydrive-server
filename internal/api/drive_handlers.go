@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -428,7 +429,7 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, r.Body, uploadLimit)
+	v, err := s.writeBlob(r.Context(), f.Workspace, r.Body, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -444,13 +445,26 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // openBlob opens f's current bytes.
-func (s *Server) openBlob(f drive.File) (io.ReadSeekCloser, error) {
-	return drive.OpenBlob(s.blobRoot(), f.Blob, s.config.Security.EncryptionKey, f.Sealed, f.Size)
+func (s *Server) openBlob(ctx context.Context, f drive.File) (io.ReadSeekCloser, error) {
+	k, err := s.store.Drive().KeysFor(ctx, f.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	return drive.OpenBlob(s.blobRoot(), f.Blob, k, f.Sealed, f.Size)
+}
+
+// writeBlob seals r as a new blob for workspace.
+func (s *Server) writeBlob(ctx context.Context, workspace string, r io.Reader, limit int64) (drive.Version, error) {
+	k, err := s.store.Drive().KeysFor(ctx, workspace)
+	if err != nil {
+		return drive.Version{}, err
+	}
+	return drive.WriteBlob(s.blobRoot(), k, r, limit)
 }
 
 // openFile opens f's current bytes, answering the request itself when it cannot.
-func (s *Server) openFile(w http.ResponseWriter, f drive.File) (io.ReadSeekCloser, bool) {
-	file, err := s.openBlob(f)
+func (s *Server) openFile(ctx context.Context, w http.ResponseWriter, f drive.File) (io.ReadSeekCloser, bool) {
+	file, err := s.openBlob(ctx, f)
 	if err != nil {
 		log.Printf("serve blob %s: %v", f.Blob, err)
 		s.writeError(w, 503, "Document bytes unavailable")
@@ -460,7 +474,7 @@ func (s *Server) openFile(w http.ResponseWriter, f drive.File) (io.ReadSeekClose
 }
 
 func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, f drive.File) {
-	file, ok := s.openFile(w, f)
+	file, ok := s.openFile(r.Context(), w, f)
 	if !ok {
 		return
 	}
@@ -697,7 +711,7 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer output.Close()
-	v, err := drive.WriteBlob(s.blobRoot(), s.config.Security.EncryptionKey, output, uploadLimit)
+	v, err := s.writeBlob(r.Context(), f.Workspace, output, uploadLimit)
 	if err != nil {
 		s.driveError(w, err)
 		return

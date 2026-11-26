@@ -16,11 +16,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// WriteBlob seals r under key, bound to a new blob ID, into a draft in st and publishes it only
+// WriteBlob seals r under k, bound to a new blob ID, into a draft in st and publishes it only
 // after a durable flush. Digest and Size describe the plaintext.
-func WriteBlob(st objects.Store, key []byte, r io.Reader, limit int64) (Version, error) {
+func WriteBlob(st objects.Store, k Keys, r io.Reader, limit int64) (Version, error) {
 	id := uuid.NewString()
-	v, err := writeObject(st, key, id, blobBinding(id), r, limit)
+	v, err := writeObject(st, k, id, blobBinding(id), r, limit)
 	if err != nil {
 		return v, err
 	}
@@ -28,8 +28,8 @@ func WriteBlob(st objects.Store, key []byte, r io.Reader, limit int64) (Version,
 	return v, nil
 }
 
-// writeObject seals r under key and bind as st's object name.
-func writeObject(st objects.Store, key []byte, name, bind string, r io.Reader, limit int64) (Version, error) {
+// writeObject seals r under k and bind as st's object name.
+func writeObject(st objects.Store, k Keys, name, bind string, r io.Reader, limit int64) (Version, error) {
 	var v Version
 	if limit < 1 {
 		return v, ErrInvalid
@@ -40,7 +40,7 @@ func writeObject(st objects.Store, key []byte, name, bind string, r io.Reader, l
 	}
 	defer w.Discard()
 	h := sha256.New()
-	n, err := seal(w, key, bind, io.TeeReader(io.LimitReader(r, limit+1), h))
+	n, err := seal(w, k, bind, io.TeeReader(io.LimitReader(r, limit+1), h))
 	if err != nil {
 		return v, err
 	}
@@ -76,7 +76,7 @@ func stage(root string, key []byte, bind string, r io.Reader, limit int64) (stri
 		}
 	}()
 	h := sha256.New()
-	n, err := seal(f, key, bind, io.TeeReader(io.LimitReader(r, limit+1), h))
+	n, err := seal(f, Deployment(key), bind, io.TeeReader(io.LimitReader(r, limit+1), h))
 	if err != nil {
 		return "", v, err
 	}

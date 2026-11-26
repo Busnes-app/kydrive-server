@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"filippo.io/age"
 	"github.com/Busnes-app/kydrive-server/internal/objects"
@@ -26,6 +27,10 @@ import (
 // KiB plaintext under HKDF-SHA256(deployment key, salt, "kydrive:blob"); nonce = 11-byte
 // big-endian chunk index || final flag; the header is every chunk's AAD.
 //
+// Multi-tenant (D14): the stanza is "kydrive-org" with the org ID and the salt as arguments,
+// and wraps the file key under HKDF-SHA256(org data key, salt, "kydrive:kyb2:org:<org>:" +
+// binding). Each mode refuses the other's stanza; multi refuses KYB1 and plaintext.
+//
 // Both seal empty plaintext as one empty final chunk.
 const (
 	blobMagic   = "KYB2"
@@ -35,13 +40,32 @@ const (
 	blobChunk   = 64 << 10
 	blobTag     = 16
 	stanzaType  = "kydrive"
+	orgStanza   = "kydrive-org"
 )
+
+// Keys seals stored files: under the deployment key on a single-tenant install, under one
+// org's data key on a multi-tenant one (Store.KeysFor).
+type Keys struct {
+	key []byte
+	org string // "" on a single-tenant install
+}
+
+// Deployment is the single-tenant Keys: the deployment key itself.
+func Deployment(key []byte) Keys { return Keys{key: key} }
 
 var errSealed = errors.New("sealed blob failed authentication")
 
-// SealedSize is the on-disk size of a KYB2 blob holding plain bytes.
+// SealedSize is the on-disk size of a single-tenant KYB2 blob holding plain bytes.
 func SealedSize(plain int64) int64 {
 	return int64(blobHeader) + plain + chunks(plain)*blobTag
+}
+
+// sealedSize is SealedSize for blobs sealed under k: an org stanza adds "-org " and the org.
+func (k Keys) sealedSize(plain int64) int64 {
+	if k.org == "" {
+		return SealedSize(plain)
+	}
+	return SealedSize(plain) + int64(len("-org ")+len(k.org))
 }
 
 func sealedSizeV1(plain int64) int64 {
@@ -64,15 +88,19 @@ func cacheBinding(id string) string { return "kydrive:kyb2:cache:" + id }
 
 // fileKey is the age recipient and identity of one binding.
 type fileKey struct {
-	key  []byte
+	Keys
 	bind string
 }
 
 func (k fileKey) aead(salt []byte) (cipher.AEAD, error) {
 	if len(k.key) != 32 {
-		return nil, errors.New("blob encryption requires a 32-byte deployment key")
+		return nil, errors.New("blob encryption requires a 32-byte key")
 	}
-	wrap, err := hkdf.Key(sha256.New, k.key, salt, k.bind, 32)
+	bind := k.bind
+	if k.org != "" {
+		bind = "kydrive:kyb2:org:" + k.org + ":" + bind
+	}
+	wrap, err := hkdf.Key(sha256.New, k.key, salt, bind, 32)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +120,22 @@ func (k fileKey) Wrap(key []byte) ([]*age.Stanza, error) {
 		return nil, err
 	}
 	body := a.Seal(nil, make([]byte, a.NonceSize()), key, nil)
-	return []*age.Stanza{{Type: stanzaType, Args: []string{base64.RawStdEncoding.EncodeToString(salt)}, Body: body}}, nil
+	st := &age.Stanza{Type: stanzaType, Args: []string{base64.RawStdEncoding.EncodeToString(salt)}, Body: body}
+	if k.org != "" {
+		st.Type, st.Args = orgStanza, []string{k.org, st.Args[0]}
+	}
+	return []*age.Stanza{st}, nil
 }
 
 func (k fileKey) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
-	if len(stanzas) != 1 || stanzas[0].Type != stanzaType || len(stanzas[0].Args) != 1 {
+	want, args := stanzaType, []string{}
+	if k.org != "" {
+		want, args = orgStanza, []string{k.org}
+	}
+	if len(stanzas) != 1 || stanzas[0].Type != want || len(stanzas[0].Args) != len(args)+1 || !slices.Equal(stanzas[0].Args[:len(args)], args) {
 		return nil, age.ErrIncorrectIdentity
 	}
-	salt, err := base64.RawStdEncoding.Strict().DecodeString(stanzas[0].Args[0])
+	salt, err := base64.RawStdEncoding.Strict().DecodeString(stanzas[0].Args[len(args)])
 	if err != nil || len(salt) != 16 {
 		return nil, errSealed
 	}
@@ -116,11 +152,11 @@ func (k fileKey) Unwrap(stanzas []*age.Stanza) ([]byte, error) {
 
 // seal writes r sealed under key and bind to w and returns the plaintext length. Only io.EOF
 // ends the data: an io.ErrUnexpectedEOF from r (net/http's truncated body) is a failed read.
-func seal(w io.Writer, key []byte, bind string, r io.Reader) (int64, error) {
+func seal(w io.Writer, k Keys, bind string, r io.Reader) (int64, error) {
 	if _, err := io.WriteString(w, blobMagic); err != nil {
 		return 0, err
 	}
-	enc, err := age.Encrypt(w, fileKey{key, bind})
+	enc, err := age.Encrypt(w, fileKey{k, bind})
 	if err != nil {
 		return 0, err
 	}
@@ -147,24 +183,24 @@ type sealedBlob struct {
 // exactly the size its format gives; its last chunk is authenticated before OpenBlob returns
 // and every other chunk before any of its bytes are read. A KYB2 blob opens only under the
 // file name (blob ID) it was written for.
-func OpenBlob(st objects.Store, id string, key []byte, sealed bool, size int64) (io.ReadSeekCloser, error) {
+func OpenBlob(st objects.Store, id string, k Keys, sealed bool, size int64) (io.ReadSeekCloser, error) {
 	if size < 0 {
 		return nil, ErrInvalid
 	}
 	if _, err := BlobPath("", id); err != nil {
 		return nil, err
 	}
-	return openObject(st, id, key, sealed, size, blobBinding(id))
+	return openObject(st, id, k, sealed, size, blobBinding(id))
 }
 
 // openObject opens st's object name as bound to bind. A sealed object of size -1 takes the
 // size it proves.
-func openObject(st objects.Store, name string, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
+func openObject(st objects.Store, name string, k Keys, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
 	f, err := st.Open(context.Background(), name)
 	if err != nil {
 		return nil, err
 	}
-	return closeOnError(openSealed(f, key, sealed, size, bind))(f)
+	return closeOnError(openSealed(f, k, sealed, size, bind))(f)
 }
 
 // openFile opens path, a file outside any Store, as bound to bind.
@@ -173,7 +209,7 @@ func openFile(path string, key []byte, sealed bool, size int64, bind string) (io
 	if err != nil {
 		return nil, err
 	}
-	return closeOnError(openSealed(f, key, sealed, size, bind))(f)
+	return closeOnError(openSealed(f, Deployment(key), sealed, size, bind))(f)
 }
 
 func closeOnError(r io.ReadSeekCloser, err error) func(io.Closer) (io.ReadSeekCloser, error) {
@@ -191,8 +227,11 @@ type ageBlob struct {
 	io.Closer
 }
 
-func openSealed(f objects.Object, key []byte, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
+func openSealed(f objects.Object, k Keys, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
 	disk := f.Size()
+	if k.org != "" && !sealed {
+		return nil, errSealed
+	}
 	if !sealed {
 		if disk != size {
 			return nil, fmt.Errorf("blob size %d differs from %d", disk, size)
@@ -205,17 +244,20 @@ func openSealed(f objects.Object, key []byte, sealed bool, size int64, bind stri
 	}
 	switch string(magic) {
 	case blobMagic:
-		if size >= 0 && disk != SealedSize(size) || disk < SealedSize(0) {
+		if size >= 0 && disk != k.sealedSize(size) || disk < k.sealedSize(0) {
 			return nil, errSealed
 		}
 		body := disk - int64(len(blobMagic))
-		ra, n, err := age.DecryptReaderAt(io.NewSectionReader(f, int64(len(blobMagic)), body), body, fileKey{key, bind})
-		if err != nil || disk != SealedSize(n) {
+		ra, n, err := age.DecryptReaderAt(io.NewSectionReader(f, int64(len(blobMagic)), body), body, fileKey{k, bind})
+		if err != nil || disk != k.sealedSize(n) {
 			return nil, errSealed
 		}
 		return ageBlob{io.NewSectionReader(ra, 0, n), f}, nil
 	case blobMagicV1:
-		return openV1(f, key, size, disk)
+		if k.org != "" {
+			return nil, errSealed
+		}
+		return openV1(f, k.key, size, disk)
 	}
 	return nil, errSealed
 }

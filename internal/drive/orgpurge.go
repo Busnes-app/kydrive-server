@@ -203,11 +203,16 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 			}
 			counts += c
 		}
+		// Destroying the key makes whatever the steps above missed unreadable (D14).
+		if _, err := tx.ExecContext(ctx, `DELETE FROM drive_org_keys WHERE org_id=?`, org); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE drive_orgs SET purged=1,grant_ceiling=NULL,grant_expires=0,report_inflight=0 WHERE id=?`, org); err != nil {
 			return err
 		}
 		return platformEvent(ctx, tx, "platform.org_purged", fmt.Sprintf("org:%s workspaces=%d%s", org, len(workspaces), counts))
 	})
+	s.orgKeys.evict(org)
 	if errors.Is(err, errOpenDrops) {
 		return blobs, nil, nil
 	}

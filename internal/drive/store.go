@@ -28,8 +28,10 @@ var (
 type Store struct {
 	db      *sql.DB
 	pg      bool // opened by qmark: PostgreSQL
-	names   names
+	key     []byte
+	names   names // the deployment key's: single-tenant names
 	tenancy Tenancy
+	orgKeys orgKeys
 }
 type Workspace struct {
 	Kind         string `json:"kind"`
@@ -112,6 +114,11 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if pg && version != len(schema) {
 		return nil, errors.New("drive: a PostgreSQL drive starts at the latest schema")
 	}
+	if t.Mode == TenancyMulti {
+		if err = refuseBeforeOrgKeys(ctx, db, pg); err != nil {
+			return nil, err
+		}
+	}
 	if !pg {
 		_, err = db.ExecContext(ctx, `
  CREATE UNIQUE INDEX IF NOT EXISTS drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';
@@ -140,11 +147,11 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if err = recordTenancy(ctx, db, t); err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, pg: pg, names: n, tenancy: t}
+	s := &Store{db: db, pg: pg, key: key, names: n, tenancy: t}
 	if err = s.migrateTo(ctx, version); err != nil {
 		return nil, err
 	}
-	if err = seedStaffOrg(ctx, db, t); err != nil {
+	if err = s.seedStaffOrg(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -507,7 +514,7 @@ func (s *Store) addFolder(ctx context.Context, tx *sql.Tx, user string, f Folder
 	if err := parentOK(ctx, tx, f.Workspace, f.Parent); err != nil {
 		return err
 	}
-	stored, mac, err := s.names.seal("drive_folders", f.ID, f.Name)
+	stored, mac, err := s.sealName(ctx, tx, "drive_folders", f.ID, f.Workspace, f.Name)
 	if err != nil {
 		return err
 	}
@@ -531,19 +538,40 @@ const fileColumns = `f.id,f.workspace,f.parent,f.name,f.revision,f.trashed,v.siz
 // versionMtime reads a version's mtime, falling back to its creation time.
 const versionMtime = `CASE v.mtime WHEN '' THEN v.created ELSE v.mtime END`
 
-func (s *Store) scanFile(row interface{ Scan(...any) error }) (File, error) {
+// scanFile reads fileColumns, the name still sealed: openFiles decrypts it.
+func scanFile(row interface{ Scan(...any) error }) (File, error) {
 	var f File
 	err := row.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Revision, &f.Trashed, &f.Size, &f.Digest, &f.Blob, &f.Sealed, &f.Modified, &f.Mtime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrDenied
 	}
-	if err == nil {
-		f.Name, err = s.names.open("drive_files", f.ID, f.Name)
-	}
 	return f, err
 }
+
+// openFiles decrypts the names scanFile read, through q once their rows are closed.
+func (s *Store) openFiles(ctx context.Context, q queryer, files []File) error {
+	n := s.wsNames(ctx, q)
+	for i, f := range files {
+		var err error
+		if files[i].Name, err = n.open("drive_files", f.ID, f.Workspace, f.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// scanOpenFile is one file of fileColumns from row, read through q, name decrypted.
+func (s *Store) scanOpenFile(ctx context.Context, q queryer, row interface{ Scan(...any) error }) (File, error) {
+	f, err := scanFile(row)
+	if err != nil {
+		return f, err
+	}
+	one := []File{f}
+	err = s.openFiles(ctx, q, one)
+	return one[0], err
+}
 func (s *Store) File(ctx context.Context, user, id string, need int) (File, error) {
-	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_files f ON f.id=? JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+sameOrg("q.u", "f.workspace"), user, id))
+	f, err := s.scanOpenFile(ctx, s.db, s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM (SELECT CAST(? AS TEXT) AS u) q JOIN drive_files f ON f.id=? JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+sameOrg("q.u", "f.workspace"), user, id))
 	if err != nil {
 		return f, err
 	}
@@ -726,7 +754,7 @@ func (s *Store) publishTX(ctx context.Context, tx *sql.Tx, user string, f File, 
 		return err
 	}
 	if expected == 0 {
-		stored, mac, err := s.names.seal("drive_files", f.ID, f.Name)
+		stored, mac, err := s.sealName(ctx, tx, "drive_files", f.ID, f.Workspace, f.Name)
 		if err != nil {
 			return err
 		}

@@ -98,7 +98,7 @@ func (s *Store) IssueViewTicket(ctx context.Context, user, name string, size, ma
 		if live >= viewCopiesPerUser {
 			return ErrTicketLimit
 		}
-		stored, _, err := s.names.seal("drive_view_copies", c.ID, name)
+		stored, _, err := s.sealName(ctx, tx, "drive_view_copies", c.ID, ws, name)
 		if err != nil {
 			return err
 		}
@@ -119,22 +119,22 @@ func (s *Store) ViewTicket(ctx context.Context, token string) (ViewCopy, error) 
 // viewCopy finds a live copy, matched by where, whose owner is an active principal.
 func (s *Store) viewCopy(ctx context.Context, where string, args ...any) (ViewCopy, error) {
 	var c ViewCopy
-	var stored string
-	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,name,blob,pairing,size,expires FROM drive_view_copies WHERE revoked=0 AND `+activePrincipal("user_id")+` AND `+where, args...).Scan(&c.ID, &c.Owner, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
+	var stored, ws string
+	err := s.db.QueryRowContext(ctx, `SELECT id,user_id,workspace,name,blob,pairing,size,expires FROM drive_view_copies WHERE revoked=0 AND `+activePrincipal("user_id")+` AND `+where, args...).Scan(&c.ID, &c.Owner, &ws, &stored, &c.Blob, &c.Pairing, &c.Size, &c.Expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
 	if err != nil {
 		return c, err
 	}
-	c.Name, err = s.names.open("drive_view_copies", c.ID, stored)
+	c.Name, err = s.wsNames(ctx, s.db).open("drive_view_copies", c.ID, ws, stored)
 	return c, err
 }
 
 // StoreViewCopy (a peer context, under the pairing that issued the ticket) seals exactly
 // c.Size bytes of r into root and spends the ticket. Bytes that do not look like the name's
 // type are ErrUnsupported; a wrong length is ErrInvalid.
-func (s *Store) StoreViewCopy(ctx context.Context, st objects.Store, key []byte, c ViewCopy, token string, r io.Reader) error {
+func (s *Store) StoreViewCopy(ctx context.Context, st objects.Store, c ViewCopy, token string, r io.Reader) error {
 	if p, _ := ctx.Value(peerKey{}).(Peer); !isPeer(ctx) || p.Pairing == "" || p.Pairing != c.Pairing {
 		return ErrPeerGone
 	}
@@ -145,6 +145,10 @@ func (s *Store) StoreViewCopy(ctx context.Context, st objects.Store, key []byte,
 	}
 	if !viewSniffs(ext, head) {
 		return ErrUnsupported
+	}
+	key, err := s.UserKeys(ctx, c.Owner)
+	if err != nil {
+		return err
 	}
 	v, err := WriteBlob(st, key, io.MultiReader(bytes.NewReader(head), r), c.Size)
 	if errors.Is(err, ErrTooLarge) || (err == nil && v.Size != c.Size) {

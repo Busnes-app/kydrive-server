@@ -16,6 +16,7 @@ type ZipEntry struct {
 	Sealed   bool
 	Size     int64
 	Modified time.Time
+	Keys     Keys // what Blob is sealed under
 }
 
 // FolderTree lists a live folder and everything live beneath it, read in one transaction,
@@ -38,7 +39,15 @@ func (s *Store) FolderTree(ctx context.Context, user, folder string) (string, []
 		if err = authorizeItem(ctx, tx, user, workspace, folder, "", 1); err != nil {
 			return err
 		}
-		if name, err = s.names.open("drive_folders", folder, stored); err != nil {
+		nk, err := s.namesOf(ctx, tx, workspaceOrg("?"), workspace)
+		if err != nil {
+			return err
+		}
+		keys, err := s.keysOf(ctx, tx, workspaceOrg("?"), workspace)
+		if err != nil {
+			return err
+		}
+		if name, err = nk.open("drive_folders", folder, stored); err != nil {
 			return err
 		}
 		tree, err := subtree(ctx, tx, folder, `d.trashed=false`)
@@ -52,7 +61,7 @@ func (s *Store) FolderTree(ctx context.Context, user, folder string) (string, []
 			if err = tx.QueryRowContext(ctx, `SELECT parent,name FROM drive_folders WHERE id=?`, id).Scan(&n.parent, &stored); err != nil {
 				return err
 			}
-			if n.name, err = s.names.open("drive_folders", id, stored); err != nil {
+			if n.name, err = nk.open("drive_folders", id, stored); err != nil {
 				return err
 			}
 			nodes[id] = n
@@ -75,10 +84,10 @@ func (s *Store) FolderTree(ctx context.Context, user, folder string) (string, []
 				return err
 			}
 			for rows.Next() {
-				var e ZipEntry
+				e := ZipEntry{Keys: keys}
 				var file, created string
 				if err = rows.Scan(&file, &stored, &e.Blob, &e.Sealed, &e.Size, &created); err == nil {
-					stored, err = s.names.open("drive_files", file, stored)
+					stored, err = nk.open("drive_files", file, stored)
 				}
 				if err != nil {
 					rows.Close()

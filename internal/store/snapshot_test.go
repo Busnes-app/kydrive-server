@@ -3,11 +3,15 @@ package store_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/objects"
@@ -37,9 +41,12 @@ func multiPostgres(t *testing.T) (config.DatabaseConfig, store.Store, *sql.DB, s
 			t.Fatal(q, err)
 		}
 	}
-	exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES('org-a','active',1099511627776,99999999999),('org-b','active',1099511627776,99999999999)`) // grants as an answered report leaves them
-	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`)                                                  // as a successful poll leaves it
 	d := st.Drive()
+	// Recorded as the poll records them (with their keys), granted as an answered report leaves them.
+	if _, err := d.ApplyOrgs(ctx, []suitedir.Org{{ID: "org-a", Status: suitedir.OrgActive, Revision: 1, Enabled: true}, {ID: "org-b", Status: suitedir.OrgActive, Revision: 1, Enabled: true}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	exec(`UPDATE drive_orgs SET grant_ceiling=1099511627776,grant_expires=99999999999 WHERE id IN ('org-a','org-b')`)
 	root := t.TempDir()
 	var fileA string
 	for _, o := range []string{"a", "b"} {
@@ -50,7 +57,11 @@ func multiPostgres(t *testing.T) (config.DatabaseConfig, store.Store, *sql.DB, s
 		ws := "ws-" + o
 		exec(`INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,'Team',1048576,?)`, ws, org)
 		exec(`INSERT INTO drive_grants VALUES(?,?,'manager')`, ws, group)
-		v, err := drive.WriteBlob(objects.Dir(filepath.Join(root, "blobs")), testdb.Key, strings.NewReader("plan of "+org), 1024)
+		k, err := d.KeysFor(ctx, ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := drive.WriteBlob(objects.Dir(filepath.Join(root, "blobs")), k, strings.NewReader("plan of "+org), 1024)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,8 +86,13 @@ func multiPostgres(t *testing.T) (config.DatabaseConfig, store.Store, *sql.DB, s
 // dump is every row of every migrated table, as PostgreSQL renders it, in a stable order.
 func dump(t *testing.T, db *sql.DB) map[string]string {
 	t.Helper()
+	return dumpTables(t, db, store.CopiedTables(true))
+}
+
+func dumpTables(t *testing.T, db *sql.DB, tables []string) map[string]string {
+	t.Helper()
 	out := map[string]string{}
-	for _, table := range store.MigrationTables {
+	for _, table := range tables {
 		var rows string
 		if err := db.QueryRow(`SELECT COALESCE(string_agg(r,E'\n' ORDER BY r),'') FROM (SELECT row_to_json(t)::text r FROM "` + table + `" t) s`).Scan(&rows); err != nil {
 			t.Fatal(table, err)
@@ -92,7 +108,7 @@ func TestPostgresSnapshotRestoresEveryRow(t *testing.T) {
 	ctx := context.Background()
 	srcCfg, _, src, fileA := multiPostgres(t)
 	want := dump(t, src)
-	if want["drive_files"] == "" || !strings.Contains(want["drive_orgs"], `"deleted"`) {
+	if want["drive_files"] == "" || !strings.Contains(want["drive_orgs"], `"deleted"`) || strings.Count(want["drive_org_keys"], "org_id") != 3 {
 		t.Fatal("fixture lacks a file or the deleted org")
 	}
 
@@ -125,7 +141,7 @@ func TestPostgresSnapshotRestoresEveryRow(t *testing.T) {
 	}
 	restored := testdb.Open(t, target)
 	got := dump(t, restored)
-	for _, table := range store.MigrationTables {
+	for _, table := range store.CopiedTables(true) {
 		if got[table] != want[table] {
 			t.Errorf("%s differs after the round trip:\n got %s\nwant %s", table, got[table], want[table])
 		}
@@ -151,5 +167,67 @@ func TestPostgresSnapshotRestoresEveryRow(t *testing.T) {
 	if st, err := store.Open(ctx, single, testdb.Key); err == nil {
 		st.Close()
 		t.Fatal("a single-tenant server opened the restored multi-tenant database")
+	}
+	// The capsule brought org A's key back; a poll reporting A deleted destroys it again.
+	if _, err := st.Drive().ApplyOrgs(ctx, []suitedir.Org{{ID: "org-a", Status: suitedir.OrgDeleted, Revision: 2, Enabled: true}}, 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.Drive().PurgeOrgs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var keys int
+	if err := restored.QueryRow(`SELECT COUNT(*) FROM drive_org_keys WHERE org_id IN ('org-a','org-b')`).Scan(&keys); err != nil || keys != 0 {
+		t.Fatalf("%d purged org keys left after the restore's purge, %v", keys, err)
+	}
+}
+
+// beforeOrgKeys makes db what the release before per-org keys left: the same multi-tenant
+// schema and rows, without drive_org_keys.
+func beforeOrgKeys(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`DROP TABLE drive_org_keys`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func tableNames(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	return strs(t, db, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema() ORDER BY 1`)
+}
+
+// A multi-tenant database from before per-org keys holds names and blobs sealed under the
+// deployment key: opening it is refused before anything is written.
+func TestMultiTenantDatabaseBeforeOrgKeysIsRefused(t *testing.T) {
+	ctx := context.Background()
+	cfg, st, db, _ := multiPostgres(t)
+	st.Close()
+	beforeOrgKeys(t, db)
+	tables, rows := tableNames(t, db), dumpTables(t, db, store.MigrationTables)
+	if _, err := store.Open(ctx, cfg, testdb.Key); !errors.Is(err, drive.ErrBeforeOrgKeys) {
+		t.Fatalf("open: %v, want ErrBeforeOrgKeys", err)
+	}
+	if got := tableNames(t, db); !slices.Equal(got, tables) {
+		t.Fatalf("tables changed: %v, were %v", got, tables)
+	}
+	if got := dumpTables(t, db, store.MigrationTables); fmt.Sprint(got) != fmt.Sprint(rows) {
+		t.Fatal("rows changed")
+	}
+}
+
+// So is a capsule of one: migrate-postgres refuses it before touching the target.
+func TestCapsuleBeforeOrgKeysIsRefused(t *testing.T) {
+	ctx := context.Background()
+	srcCfg, _, _, _ := multiPostgres(t)
+	path := filepath.Join(t.TempDir(), "ky_server.db")
+	if err := store.SnapshotPostgres(ctx, srcCfg.DSN, path, testdb.Key); err != nil {
+		t.Fatal(err)
+	}
+	beforeOrgKeys(t, testdb.Open(t, config.DatabaseConfig{Driver: "sqlite", DSN: path}))
+	target := testdb.Config(t)
+	if _, err := store.MigrateToPostgres(ctx, path, target.DSN, testdb.Key, false); !errors.Is(err, drive.ErrBeforeOrgKeys) {
+		t.Fatalf("restore: %v, want ErrBeforeOrgKeys", err)
+	}
+	if got := tableNames(t, testdb.Open(t, target)); len(got) != 0 {
+		t.Fatalf("the target was written: %v", got)
 	}
 }

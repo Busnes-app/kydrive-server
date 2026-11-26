@@ -40,7 +40,7 @@ func readable(t *testing.T, d *drive.Store, root string, ids ...string) {
 		}
 		for _, v := range vs {
 			path, _ := drive.BlobPath(root, v.Blob)
-			r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), testKey, v.Sealed, v.Size)
+			r, err := drive.OpenBlob(objects.Dir(filepath.Dir(path)), filepath.Base(path), drive.Deployment(testKey), v.Sealed, v.Size)
 			if err != nil {
 				t.Fatalf("%s r%d: %v", id, v.Revision, err)
 			}

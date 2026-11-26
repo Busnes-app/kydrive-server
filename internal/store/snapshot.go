@@ -65,6 +65,7 @@ func SnapshotPostgres(ctx context.Context, dsn, dest string, key []byte) error {
 	}
 	out := opened.(*SQLStore)
 	defer out.Close()
+	migrationTables := copiedTables(tenancy.Mode == drive.TenancyMulti)
 	for side, q := range map[querier]string{
 		src:    `SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`,
 		out.db: `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
@@ -78,7 +79,7 @@ func SnapshotPostgres(ctx context.Context, dsn, dest string, key []byte) error {
 			return fmt.Errorf("the PostgreSQL and SQLite schemas differ in tables %v: back up with the release that runs the database", d)
 		}
 	}
-	if err := copyIntoSQLite(ctx, src, out.db); err != nil {
+	if err := copyIntoSQLite(ctx, src, out.db, migrationTables); err != nil {
 		return err
 	}
 	var integrity string
@@ -100,7 +101,7 @@ func SnapshotPostgres(ctx context.Context, dsn, dest string, key []byte) error {
 // triggers are dropped for the copy and recreated after it: they check new rows, and these
 // rows passed them when PostgreSQL took them (an org deleted but not yet purged keeps rows
 // no trigger would admit now).
-func copyIntoSQLite(ctx context.Context, src querier, dst *sql.DB) error {
+func copyIntoSQLite(ctx context.Context, src querier, dst *sql.DB, migrationTables []string) error {
 	tx, err := dst.BeginTx(ctx, nil)
 	if err != nil {
 		return err

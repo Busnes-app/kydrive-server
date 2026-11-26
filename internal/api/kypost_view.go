@@ -118,7 +118,7 @@ func (s *Server) handleViewUpload(w http.ResponseWriter, r *http.Request) {
 		s.ticketRefuse(w, http.StatusBadRequest, "size_mismatch")
 		return
 	}
-	err = d.StoreViewCopy(s.peerContext(r.Context(), p), s.viewRoot(), s.config.Security.EncryptionKey, c, token, http.MaxBytesReader(w, r.Body, c.Size+1))
+	err = d.StoreViewCopy(s.peerContext(r.Context(), p), s.viewRoot(), c, token, http.MaxBytesReader(w, r.Body, c.Size+1))
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		s.ticketRefuse(w, http.StatusConflict, "sharing_off")
@@ -207,7 +207,11 @@ func (s *Server) viewDownload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrNotFound)
 		return
 	}
-	file, err := drive.OpenBlob(s.viewRoot(), c.Blob, s.config.Security.EncryptionKey, true, c.Size)
+	key, err := s.store.Drive().UserKeys(r.Context(), c.Owner)
+	var file io.ReadSeekCloser
+	if err == nil {
+		file, err = drive.OpenBlob(s.viewRoot(), c.Blob, key, true, c.Size)
+	}
 	if err != nil {
 		log.Printf("viewing copy %s: %v", c.ID, err)
 		s.writeError(w, 503, "Viewing copy unavailable")
