@@ -21,15 +21,15 @@ Choose a random `KY_ADMIN_PASSWORD` in a private environment file before startin
 ```sh
 PATH=/path/containing/restic:$PATH go test -race -count=1 -timeout=20m ./...
 go vet ./...
-cd web && npm test && npm run build
+(cd web && npm test && npm run build)
 python -m unittest discover -s deploy -p '*_test.py'
 docker build --platform linux/amd64 -t kydrive-server:local .
 ```
 
-For browser and binary smoke checks against a local build, run:
+For browser and binary smoke checks against a local build (after building the web assets), run:
 
 ```sh
 go build -o .browser/server ./cmd/server
-cd web && npx playwright install chromium && npm run test:browser
+(cd web && npx playwright install chromium && npm run test:browser)
 ./scripts/smoke-test.sh .browser/server
 ```
