@@ -7,7 +7,7 @@
 
 Open-source personal and shared drive for the Ky suite. KyIdentity owns people and groups; KyDrive owns workspace permissions. Euro-Office is the first editor integration. The drive stores arbitrary files and exposes a workspace-scoped service API for other suite applications.
 
-Initial deployment: one `linux/amd64` Docker container on the NAS, Euro-Office in Kubernetes. The same drive image and SQLite/filesystem model also run on a single Kubernetes persistent volume. Verified pilot deployment evidence and remaining gates are in [PILOT.md](docs/PILOT.md).
+Deployment options include a single `linux/amd64` Docker container (for a NAS or Linux host) with Euro-Office on Docker or Kubernetes, or a single-instance Kubernetes deployment; see [Deployment](docs/DEPLOYMENT.md).
 
 ## Scope
 
@@ -65,9 +65,12 @@ Euro-Office can also run on Docker with the optional [production editor Compose 
 
 - [Development](docs/DEVELOPMENT.md) — Local development, Verification. <a id="local-development"></a><a id="verification"></a>
 - [Deployment](docs/DEPLOYMENT.md) — NAS package, Kubernetes rendering. <a id="nas-package"></a><a id="upgrading"></a><a id="kubernetes-rendering"></a>
+- [Standalone installation](INSTALL.md) — Quick-start Compose setup and operator checklist.
 - [Permissions](docs/PERMISSIONS.md) — Identity and permissions, Sharing, Leavers, Retention and permanent delete. <a id="identity-and-permissions"></a><a id="sharing"></a><a id="leavers"></a><a id="retention-and-permanent-delete"></a>
 - [Clients and editor](docs/CLIENTS-AND-EDITOR.md) — Previews, WebDAV, Linked computers, AI agents, Editor. <a id="previews"></a><a id="webdav"></a><a id="linked-computers"></a><a id="editor"></a>
+- [Desktop access](docs/DESKTOP-ACCESS.md) — WebDAV clients (`rclone`, Cyberduck, and OS mounts).
 - [Recovery and encryption](docs/RECOVERY-AND-ENCRYPTION.md) — Encryption at rest, Recovery. <a id="encryption-at-rest"></a><a id="recovery"></a>
+- [Restore runbook](docs/RESTORE.md) — Restore sealed metadata capsules and bound Restic bulk snapshots.
 - [Verifying releases](docs/VERIFYING-RELEASES.md) — Check a release image's signature and source commit, and rebuild its binary to the same bytes.
 - [Assurance case](docs/ASSURANCE-CASE.md) — Threat model, trust boundaries, and why the security requirements are met.
 - [Key strength and TLS profile](docs/STRONG-CRYPTO.md) — Key-size rules, the optional `GODEBUG=fips140=on` overlay, the HTTPS edge and what stays out of scope.

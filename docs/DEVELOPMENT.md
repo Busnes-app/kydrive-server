@@ -26,4 +26,10 @@ python -m unittest discover -s deploy -p '*_test.py'
 docker build --platform linux/amd64 -t kydrive-server:local .
 ```
 
-The browser shell and actual Euro-Office were exercised through the native T3 collaborative browser. Evidence and limits are in `docs/ACCEPTANCE.md` and `UI-VERIFICATION.md`. Live identity, HTTPS, NAS storage, spreadsheet save/reopen and recovery drill evidence is recorded separately in `docs/PILOT.md`. Suite-wide one-prompt installation is not implemented.
+For browser and binary smoke checks against a local build, run:
+
+```sh
+go build -o .browser/server ./cmd/server
+cd web && npx playwright install chromium && npm run test:browser
+./scripts/smoke-test.sh .browser/server
+```
