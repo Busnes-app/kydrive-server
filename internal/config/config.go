@@ -365,8 +365,14 @@ func load(existing bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if multi {
+	issuer := getEnv("KY_KYSIGNON_ISSUER", "")
+	if multi && !multiTenantBuild {
 		return nil, fmt.Errorf("KYDRIVE_TENANCY=multi is not available in this release")
+	}
+	if multiTenantBuild && (multi || issuer != "") {
+		if err := testIssuer(issuer); err != nil {
+			return nil, err
+		}
 	}
 	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
 	if fontsDir != "" {
@@ -389,6 +395,8 @@ func load(existing bool) (*Config, error) {
 			Driver:          driver,
 			DSN:             dsn,
 			DataDir:         dataDir,
+			Tenancy:         tenancy,
+			StaffOrg:        getEnv("KYDRIVE_STAFF_ORG", ""),
 			MaxOpenConns:    envInt("KY_DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    envInt("KY_DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: 15 * time.Minute,
@@ -408,7 +416,7 @@ func load(existing bool) (*Config, error) {
 		},
 		SSO: SSOConfig{
 			Enabled:            envBool("KY_SSO_ENABLED", true),
-			KySignOnIssuer:     getEnv("KY_KYSIGNON_ISSUER", ""),
+			KySignOnIssuer:     issuer,
 			KySignOnClientID:   getEnv("KY_KYSIGNON_CLIENT_ID", ""),
 			KySignOnSecret:     getEnv("KY_KYSIGNON_SECRET", ""),
 			KySignOnHMACSecret: kysignonHMAC,
@@ -598,4 +606,19 @@ func KyPostURL(raw string) (string, error) {
 		return "", errors.New("must be https://host with no path or credentials")
 	}
 	return strings.TrimSuffix(raw, "/"), nil
+}
+
+// testIssuer refuses an issuer outside the reserved .test domain (RFC 2606). The
+// end-to-end test build applies it at startup so a test image deployed by mistake
+// against a real issuer cannot serve.
+func testIssuer(issuer string) error {
+	u, err := url.Parse(issuer)
+	host := ""
+	if err == nil {
+		host = strings.ToLower(u.Hostname())
+	}
+	if err != nil || u.Scheme != "https" || !strings.HasSuffix(host, ".test") || len(host) <= len(".test") {
+		return fmt.Errorf("this end-to-end test build serves only an https KY_KYSIGNON_ISSUER under .test, got %q", issuer)
+	}
+	return nil
 }

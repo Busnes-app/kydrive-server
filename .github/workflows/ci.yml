@@ -115,6 +115,7 @@ jobs:
         with:
           node-version: 26
       - run: scripts/check-no-binaries.sh
+      - run: scripts/check-test-build-tag.sh
       # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high
       - name: profile preserves Compose configuration
@@ -143,6 +144,8 @@ jobs:
       - run: python -m unittest discover -s deploy -p '*_test.py'
       - run: go build -o kydrive-server ./cmd/server && scripts/smoke-test.sh
       - run: docker build --platform linux/amd64 --build-arg SOURCE_REVISION="$GITHUB_SHA" -t kydrive-server:ci .
+      - name: Image is a release build
+        run: scripts/check-release-image.sh kydrive-server:ci
       - if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: docker save kydrive-server:ci | gzip > tested-image.tar.gz
       - if: github.event_name == 'push' && github.ref == 'refs/heads/master'

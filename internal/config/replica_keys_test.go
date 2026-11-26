@@ -53,7 +53,7 @@ func TestMultiKeyRefusalNeverCreatesFiles(t *testing.T) {
 				writeKey(t, identity, strings.Repeat("34", 32))
 				t.Setenv("KYDRIVE_IDENTITY_KEY_FILE", identity)
 			}, "outside KY_DATA_DIR"},
-			{"external keys with closed startup gate", func(*testing.T, string, string) {}, "multi is not available"},
+			{"external keys with closed startup gate", func(*testing.T, string, string) {}, gateRefusalWant()},
 		} {
 			t.Run(load.name+"/"+tc.name, func(t *testing.T) {
 				root := t.TempDir()
