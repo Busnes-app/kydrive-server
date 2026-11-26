@@ -120,7 +120,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 
 ## Verification
 - `python3 scripts/accept-office-compose.py` runs the optional editor image in a disposable bounded Compose project: unsafe JWT refusal, readiness and volume persistence after recreation; no Drive editing or production provenance claim.
-- `PATH=/path/to/restic:$PATH go test -race -count=1 -timeout=20m ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable. CI repeats the race suite with `GODEBUG=fips140=on` (the supported strong-key profile) and runs `python3 docs/check-strong-crypto-compose.py`.
+- `PATH=/path/to/restic:$PATH go test -race -count=1 -timeout=20m ./...`, `go vet ./...`, `go mod verify`; Restic-backed tests require the executable. CI repeats the race suite with `GODEBUG=fips140=on` (the supported strong-key profile), runs `python3 docs/check-strong-crypto-compose.py`, and runs `scripts/check-pqc-tls.sh` (refuses `CurvePreferences` in non-test Go code and `tlsmlkem` overrides outside tests/docs, and asserts `X25519MLKEM768` via `pqtls.RequireHybrid` in default and FIPS modes).
 - Full Go suites use a fresh run (`-count=1`) and a 20-minute per-package timeout in CI and Makefile targets. The real-password API suite can exceed Go's ten-minute default; preserve its assertions and password parameters.
 - `go test -race ./cmd/server -run '^TestInstallerPreparation$' -count=1` checks native
   metadata staging/check/resume and input refusal without UI rendering or a running server.
