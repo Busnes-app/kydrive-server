@@ -73,7 +73,7 @@ func newSearchWorld(t *testing.T) *searchWorld {
 // put publishes body as user, a new file (f.ID empty) or a new version of f.
 func (w *searchWorld) put(t *testing.T, user string, f drive.File, body []byte) drive.File {
 	t.Helper()
-	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), w.cfg.Security.EncryptionKey, bytes.NewReader(body), 64<<20)
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(w.cfg.Database.DataDir, "blobs")), drive.Deployment(w.cfg.Security.EncryptionKey), bytes.NewReader(body), 64<<20)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store/migrations"
 	"github.com/Busnes-app/kydrive-server/internal/testdb"
 	"github.com/google/uuid"
@@ -57,6 +58,11 @@ func multiTenant(t *testing.T) *orgs {
 		}
 	}
 	exec(`INSERT INTO drive_orgs(id,status) VALUES('org-a','active'),('org-b','active')`)
+	for _, org := range []string{"org-a", "org-b"} {
+		if err := drive.CreateOrgKey(ctx, d, org); err != nil {
+			t.Fatal(err)
+		}
+	}
 	grant(t, db, "org-a", 1<<40)
 	grant(t, db, "org-b", 1<<40)
 	exec(`INSERT INTO server_settings(key,value,updated_at) VALUES('orgs_fresh_until','99999999999',CURRENT_TIMESTAMP)`) // as a successful poll leaves it
@@ -79,7 +85,7 @@ func multiTenant(t *testing.T) *orgs {
 		w := drive.Workspace{ID: uuid.NewString(), Name: "Team"}
 		exec(`INSERT INTO drive_workspaces(id,name,quota,org_id) VALUES(?,?,?,?)`, w.ID, w.Name, 1<<20, org)
 		exec(`INSERT INTO drive_grants VALUES(?,?,'manager')`, w.ID, group)
-		f, err := d.Publish(ctx, group[len(group)-1:]+"1", drive.File{Workspace: w.ID, Name: "plan.txt"}, blob(t, o.root, "plan"), 0)
+		f, err := d.Publish(ctx, group[len(group)-1:]+"1", drive.File{Workspace: w.ID, Name: "plan.txt"}, o.blob(t, w.ID, "plan"), 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,11 +110,25 @@ func multiTenant(t *testing.T) *orgs {
 	if o.leaverA, err = d.EnsurePersonalWorkspace(ctx, "a-gone"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = d.Publish(ctx, "a-gone", drive.File{Workspace: o.leaverA, Name: "notes.txt"}, blob(t, o.root, "notes"), 0); err != nil {
+	if _, err = d.Publish(ctx, "a-gone", drive.File{Workspace: o.leaverA, Name: "notes.txt"}, o.blob(t, o.leaverA, "notes"), 0); err != nil {
 		t.Fatal(err)
 	}
 	exec(`UPDATE users SET status='inactive' WHERE id='a-gone'`)
 	return o
+}
+
+// blob seals body for workspace's org, as an upload into it does.
+func (o *orgs) blob(t *testing.T, workspace, body string) drive.Version {
+	t.Helper()
+	k, err := o.d.KeysFor(o.ctx, workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := drive.WriteBlob(objects.Dir(o.root), k, strings.NewReader(body), 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }
 
 // same requires a call with org B's real ID to fail exactly as with an ID that never existed.

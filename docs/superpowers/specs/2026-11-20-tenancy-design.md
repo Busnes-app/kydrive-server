@@ -1274,6 +1274,28 @@ the release before. No R step starts before the owner approves this amendment.
     - The same name in two orgs gets two `name_hmac` values.
     - Deleting an org's `drive_org_keys` row makes its blobs, caches and names unopenable,
       on every replica once the cache is evicted.
+  - As built (`internal/drive/orgkeys.go`, `orgkeys_test.go`):
+    - `drive_org_keys` is created by every multi-tenant open, not by a schema entry, so SQLite
+      and single-tenant PostgreSQL schemas are unchanged. A multi-tenant snapshot and
+      `migrate-postgres` copy it after `drive_orgs` (`multiTables`), so a capsule restore
+      brings every key back.
+    - A key is created in the staff seed's transaction and in each poll page's, never for a
+      deleted org, and never replaces one.
+    - The cache holds active orgs' keys for one minute. `ApplyOrgs` evicts its page's orgs and
+      the purge its org on the replica that runs them; other replicas drop them within the
+      minute, while `activePrincipal` already refuses the org.
+    - The purge deletes the key in the transaction that sets `purged=1` (Lifecycle, `deleted`
+      step 5). After a restore, the next poll that reports the org deleted purges it again,
+      key included. The restore reset's suspension of every org is still step 5's; until a
+      poll succeeds, the restored mirror is not fresh and serves no customer org.
+    - Callers take a `drive.Keys`: `KeysFor(workspace)`, `UserKeys(user)`, or
+      `Deployment(key)` in single-tenant-only code (format upgrade, legacy sealing, Restic
+      bulk, content search). Uploads, KyPost tickets and viewing copies choose theirs in the
+      store. An org stanza makes the header `5+len(org)` bytes longer.
+    - Search keys are not per org yet: content search stays off in multi mode until the
+      per-org index (R2) lands, which derives them from the org key.
+    - No rewrap is built. The deployment key cannot change on an install (D13, R3), so `kek` 1
+      is the only KEK, and any other value refuses.
 5. **Quotas and lifecycle.**
    - The suite-wide org pool in `fits`, failing closed, and the usage reports to KyIdentity
      (D7, Quotas). It needs KyIdentity's pool contract. It is required for launch, so step 6

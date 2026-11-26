@@ -516,7 +516,7 @@ func (s *Server) kypostFetchRoute(r *http.Request, user *store.User, _ *kypostPe
 	case f.Size > *in.MaxBytes:
 		return refuse(413, "too_large")
 	}
-	file, err := s.openBlob(f)
+	file, err := s.openBlob(r.Context(), f)
 	if err != nil {
 		log.Printf("kypost fetch: blob %s: %v", f.Blob, err)
 		return refuse(503, "unavailable")
@@ -608,7 +608,7 @@ func (s *Server) handleTicketUpload(w http.ResponseWriter, r *http.Request, p *k
 		// The last bytes re-seal the whole file, which can outlast the write timeout.
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	}
-	received, f, err := d.TicketUpload(s.peerContext(r.Context(), p), s.stagingRoot(), s.blobRoot(), s.config.Security.EncryptionKey, t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
+	received, f, err := d.TicketUpload(s.peerContext(r.Context(), p), s.stagingRoot(), s.blobRoot(), t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		s.ticketRefuse(w, http.StatusConflict, "sharing_off")

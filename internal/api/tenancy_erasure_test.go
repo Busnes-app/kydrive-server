@@ -84,9 +84,7 @@ func TestUserErasedIsFinal(t *testing.T) {
 // failed read stops the poll before the orgs.
 func TestErasedListIsApplied(t *testing.T) {
 	m, f := multiSSO(t)
-	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES(?,'active',1099511627776,99999999999)`, erasedOrg); err != nil {
-		t.Fatal(err)
-	}
+	recordOrgs(t, m.st.Drive(), m.db, erasedOrg)
 	for _, u := range [][2]string{{"fay", erasedOrg}, {"gus", "org-a"}} {
 		if w := hook(t, m.srv, "user.created", scimBody(u[0], true, 1, u[1])); w.Code != http.StatusOK {
 			t.Fatalf("create %s: %d %s", u[0], w.Code, w.Body)
@@ -124,9 +122,7 @@ func TestErasedListIsApplied(t *testing.T) {
 // reset makes the next poll read the erased list from the start.
 func TestRestoreReplaysErasures(t *testing.T) {
 	m, f := multiSSO(t)
-	if _, err := m.db.Exec(`INSERT INTO drive_orgs(id,status,grant_ceiling,grant_expires) VALUES(?,'active',1099511627776,99999999999)`, erasedOrg); err != nil {
-		t.Fatal(err)
-	}
+	recordOrgs(t, m.st.Drive(), m.db, erasedOrg)
 	create := func() {
 		t.Helper()
 		if w := hook(t, m.srv, "user.created", scimBody("fay", true, 1, erasedOrg)); w.Code != http.StatusOK {

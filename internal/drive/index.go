@@ -34,7 +34,7 @@ func (s *Store) IndexChanges(ctx context.Context, after int64, limit int) ([]str
 
 // IndexFile returns file id at its current version, trashed or not; ErrNotFound when it is gone.
 func (s *Store) IndexFile(ctx context.Context, id string) (File, error) {
-	f, err := s.scanFile(s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
+	f, err := s.scanOpenFile(ctx, s.db, s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
 	if errors.Is(err, ErrDenied) {
 		return f, ErrNotFound
 	}
@@ -47,14 +47,18 @@ func (s *Store) IndexFiles(ctx context.Context, afterID string, limit int) ([]Fi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []File
 	for rows.Next() {
-		f, err := s.scanFile(rows)
+		f, err := scanFile(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.openFiles(ctx, s.db, out)
 }

@@ -266,7 +266,7 @@ func TestThumbnailCacheIsSealed(t *testing.T) {
 	}
 	gone := uuid.NewString()
 	for _, id := range []string{live.Blob, gone} {
-		if err = drive.WriteThumb(objects.Dir(root), key, id, thumb); err != nil {
+		if err = drive.WriteThumb(objects.Dir(root), drive.Deployment(key), id, thumb); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -277,13 +277,13 @@ func TestThumbnailCacheIsSealed(t *testing.T) {
 	if bytes.Contains(raw, []byte("\x89PNG")) || bytes.Contains(raw, []byte("IDAT")) {
 		t.Fatal("thumbnail stored in plaintext")
 	}
-	if got, err := drive.ReadThumb(objects.Dir(root), key, live.Blob); err != nil || !bytes.Equal(got, thumb) {
+	if got, err := drive.ReadThumb(objects.Dir(root), drive.Deployment(key), live.Blob); err != nil || !bytes.Equal(got, thumb) {
 		t.Fatalf("read back %d bytes, %v", len(got), err)
 	}
-	if _, err = drive.ReadThumb(objects.Dir(root), bytes.Repeat([]byte{8}, 32), live.Blob); err == nil {
+	if _, err = drive.ReadThumb(objects.Dir(root), drive.Deployment(bytes.Repeat([]byte{8}, 32)), live.Blob); err == nil {
 		t.Fatal("thumbnail opened with the wrong key")
 	}
-	if _, err = drive.ReadThumb(objects.Dir(root), key, uuid.NewString()); !errors.Is(err, os.ErrNotExist) {
+	if _, err = drive.ReadThumb(objects.Dir(root), drive.Deployment(key), uuid.NewString()); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing thumbnail: %v", err)
 	}
 	old := time.Now().Add(-2 * time.Hour)

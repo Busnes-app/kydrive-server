@@ -59,9 +59,11 @@ var textKinds = map[string]bool{"txt": true, "md": true, "markdown": true, "csv"
 
 func (s *Server) searchRoot() string { return filepath.Join(s.config.Database.DataDir, "search") }
 
-// openSearch opens the index when content search is on.
+// openSearch opens the index when content search is on: single-tenant SQLite only, so its
+// text caches are sealed under the deployment key (searchKeys). Per-org search keys (D14) come
+// with the per-org index.
 func (s *Server) openSearch() {
-	if !s.config.Drive.ContentSearch || !strings.EqualFold(s.config.Database.Driver, "sqlite") {
+	if !s.config.Drive.ContentSearch || !strings.EqualFold(s.config.Database.Driver, "sqlite") || s.store.Drive().Multi() {
 		return
 	}
 	x, err := search.Open(context.Background(), s.searchRoot(), s.config.Security.EncryptionKey)
@@ -71,6 +73,8 @@ func (s *Server) openSearch() {
 	}
 	s.search = x
 }
+
+func (s *Server) searchKeys() drive.Keys { return drive.Deployment(s.config.Security.EncryptionKey) }
 
 // CloseSearch closes the index; call it after RunSearchIndex has returned.
 func (s *Server) CloseSearch() error {
@@ -101,10 +105,10 @@ func (s *Server) indexText(ctx context.Context, f drive.File, kind string) (stri
 		text, _, err := s.documentText(ctx, f, kind)
 		return text, err
 	}
-	if cached, err := drive.ReadThumb(s.textRoot(), s.config.Security.EncryptionKey, f.Blob); err == nil && len(cached) > 0 {
+	if cached, err := drive.ReadThumb(s.textRoot(), s.searchKeys(), f.Blob); err == nil && len(cached) > 0 {
 		return string(cached[1:]), nil
 	}
-	blob, err := s.openBlob(f)
+	blob, err := s.openBlob(context.Background(), f)
 	if err != nil {
 		log.Printf("search index %s: %v", f.ID, err)
 		return "", errExtractFailed
@@ -125,7 +129,7 @@ func (s *Server) indexText(ctx context.Context, f drive.File, kind string) (stri
 	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
 		return "", extract.ErrUnsupported
 	}
-	if err := drive.WriteThumb(s.textRoot(), s.config.Security.EncryptionKey, f.Blob, append([]byte{flag}, data...)); err != nil {
+	if err := drive.WriteThumb(s.textRoot(), s.searchKeys(), f.Blob, append([]byte{flag}, data...)); err != nil {
 		log.Printf("document text cache %s: %v", f.ID, err)
 	}
 	return string(data), nil
@@ -272,7 +276,7 @@ func (s *Server) vocabSearch(ctx context.Context, blobs map[string]string, fresh
 	b := s.search.BuildVocab(fresh, now)
 	for _, blob := range blobs {
 		start := time.Now()
-		if cached, err := drive.ReadThumb(s.textRoot(), s.config.Security.EncryptionKey, blob); err == nil && len(cached) > 0 {
+		if cached, err := drive.ReadThumb(s.textRoot(), s.searchKeys(), blob); err == nil && len(cached) > 0 {
 			b.Add(string(cached[1:]))
 		}
 		select {
@@ -434,7 +438,7 @@ func (m *contentMatcher) verify(scores map[string]float64, blobs map[string]stri
 			}
 			break
 		}
-		cached, err := drive.ReadThumb(m.s.textRoot(), m.s.config.Security.EncryptionKey, blobs[ref])
+		cached, err := drive.ReadThumb(m.s.textRoot(), m.s.searchKeys(), blobs[ref])
 		if err != nil || len(cached) == 0 {
 			m.unverified += len(byRef[ref])
 			continue
@@ -454,7 +458,7 @@ func (s *Server) snippet(ctx context.Context, user string, h drive.Hit, m *conte
 	if err != nil || f.Trashed {
 		return nil, false
 	}
-	r, err := drive.OpenThumb(s.textRoot(), s.config.Security.EncryptionKey, f.Blob)
+	r, err := drive.OpenThumb(s.textRoot(), s.searchKeys(), f.Blob)
 	if errors.Is(err, fs.ErrNotExist) {
 		if err := s.search.Enqueue(ctx, []string{f.ID}, time.Now(), 0, -1); err != nil {
 			log.Printf("search index queue %s: %v", f.ID, err)

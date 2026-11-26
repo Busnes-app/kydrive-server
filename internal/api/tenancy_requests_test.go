@@ -11,10 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/objects"
-	"github.com/Busnes-app/kydrive-server/internal/testdb"
 	"github.com/google/uuid"
 )
 
@@ -271,11 +269,9 @@ func TestCrossOrgSearch(t *testing.T) {
 	}
 	type query struct{ term, options string }
 	queries := []query{{"ledgercanary", "&contents=0"}}
-	if !testdb.Postgres() {
-		if err := api.IndexSearchForTest(m.srv); err != nil {
-			t.Fatal(err)
-		}
-		queries = append(queries, query{term: "quartzcanary"})
+	// Content search is off on a multi-tenant install until its index is per org (D14).
+	if body := m.call("b1", "", "GET", "/api/drive/search?q=quartzcanary").Body.String(); !strings.Contains(body, `"searched":false`) || strings.Contains(body, f.ID) {
+		t.Fatalf("multi-tenant content search ran: %s", body)
 	}
 	before := m.orgBState(t)
 	for _, q := range queries {
@@ -310,7 +306,7 @@ func TestCrossOrgKyPostView(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := objects.Dir(filepath.Join(m.cfg.Database.DataDir, "view"))
-	if err := d.StoreViewCopy(peer, root, m.cfg.Security.EncryptionKey, copy, token, strings.NewReader(viewDocx)); err != nil {
+	if err := d.StoreViewCopy(peer, root, copy, token, strings.NewReader(viewDocx)); err != nil {
 		t.Fatal(err)
 	}
 	const base = "/api/drive/view-copies/"

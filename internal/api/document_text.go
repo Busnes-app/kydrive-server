@@ -47,14 +47,17 @@ func (s *Server) documentKind(ext string) string {
 
 // documentText returns f's text and whether it was cut at extract.MaxText.
 func (s *Server) documentText(ctx context.Context, f drive.File, ext string) (string, bool, error) {
-	if cached, err := drive.ReadThumb(s.textRoot(), s.config.Security.EncryptionKey, f.Blob); err == nil && len(cached) > 0 {
+	key, err := s.store.Drive().KeysFor(ctx, f.Workspace)
+	if err != nil {
+		return "", false, err
+	}
+	if cached, err := drive.ReadThumb(s.textRoot(), key, f.Blob); err == nil && len(cached) > 0 {
 		return string(cached[1:]), cached[0] == 't', nil
 	}
 	if f.Size > maxDocumentFile {
 		return "", false, extract.ErrTooLarge
 	}
 	var res extract.Result
-	var err error
 	if strings.EqualFold(ext, "pdf") {
 		res, err = s.pdfText(ctx, f)
 	} else {
@@ -67,7 +70,7 @@ func (s *Server) documentText(ctx context.Context, f drive.File, ext string) (st
 	if res.Truncated {
 		flag = 't'
 	}
-	if err := drive.WriteThumb(s.textRoot(), s.config.Security.EncryptionKey, f.Blob, append([]byte{flag}, res.Text...)); err != nil {
+	if err := drive.WriteThumb(s.textRoot(), key, f.Blob, append([]byte{flag}, res.Text...)); err != nil {
 		log.Printf("document text cache %s: %v", f.ID, err)
 	}
 	return res.Text, res.Truncated, nil
@@ -80,7 +83,7 @@ func (s *Server) extractText(ctx context.Context, f drive.File, ext string) (ext
 		return extract.Result{}, ctx.Err()
 	}
 	defer func() { <-extracting }()
-	blob, err := s.openBlob(f)
+	blob, err := s.openBlob(ctx, f)
 	if err != nil {
 		log.Printf("document text %s: %v", f.ID, err)
 		return extract.Result{}, errExtractFailed

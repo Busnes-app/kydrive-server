@@ -46,7 +46,7 @@ func (s *Server) zipEntry(z *zip.Writer, e drive.ZipEntry) error {
 	if err != nil || e.Blob == "" {
 		return err
 	}
-	in, err := drive.OpenBlob(s.blobRoot(), e.Blob, s.config.Security.EncryptionKey, e.Sealed, e.Size)
+	in, err := drive.OpenBlob(s.blobRoot(), e.Blob, e.Keys, e.Sealed, e.Size)
 	if err != nil {
 		return err
 	}

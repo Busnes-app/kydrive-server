@@ -266,11 +266,11 @@ func TestUpgradeBlobsThrottles(t *testing.T) {
 func TestUpgradeChecksStagedCopy(t *testing.T) {
 	root := t.TempDir()
 	p := plaintext(chunk + 1)
-	v, err := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(p), int64(len(p)))
+	v, err := drive.WriteBlob(objects.Dir(root), drive.Deployment(testKey), bytes.NewReader(p), int64(len(p)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, _ := drive.WriteBlob(objects.Dir(root), testKey, bytes.NewReader(p), int64(len(p)))
+	other, _ := drive.WriteBlob(objects.Dir(root), drive.Deployment(testKey), bytes.NewReader(p), int64(len(p)))
 	staged := filepath.Join(root, ".upload-staged")
 	raw, _ := os.ReadFile(filepath.Join(root, v.Blob))
 	os.WriteFile(staged, raw, 0600)

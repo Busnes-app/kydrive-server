@@ -27,6 +27,9 @@ var (
 		"drive_schema", "drive_key", "drive_name_scrub", "drive_blob_retire", "drive_blob_kyb1",
 		"drive_orgs", "drive_erasures",
 	}
+	// MultiTenantTables exist on a multi-tenant database only (orgKeysDDL), each reaching an
+	// org through its foreign key to the table named: the org data keys (D14).
+	MultiTenantTables = map[string]string{"drive_org_keys": "drive_orgs"}
 	// SharedStateTables are platform tables on PostgreSQL only: the replicas' short-lived
 	// security state (store.Shared), keyed by limit, key or token, never by org.
 	SharedStateTables = []string{"shared_windows", "shared_spent", "shared_tickets", "shared_dav_locks"}

@@ -26,7 +26,7 @@ func storeView(t *testing.T, d *drive.Store, peer context.Context, user, root st
 	}
 	c, err := d.ViewTicket(context.Background(), token)
 	if err == nil {
-		err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(docx))
+		err = d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader(docx))
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -57,14 +57,14 @@ func TestViewCopyLifecycle(t *testing.T) {
 	if _, err = d.ViewCopy(ctx, "worker", c.ID); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("copy readable before its bytes: %v", err)
 	}
-	if err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(docx)); err != nil {
+	if err = d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader(docx)); err != nil {
 		t.Fatal(err)
 	}
 	// The ticket is spent: neither found again nor usable again.
 	if _, err = d.ViewTicket(ctx, token); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("spent ticket found: %v", err)
 	}
-	if err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(docx)); !errors.Is(err, drive.ErrNotFound) {
+	if err = d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader(docx)); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("ticket replay: %v", err)
 	}
 	got, err := d.ViewCopy(ctx, "worker", c.ID)
@@ -144,7 +144,7 @@ func TestViewCopyRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 		c, _ := d.ViewTicket(ctx, token)
-		if err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(tc.body)); !errors.Is(err, tc.want) {
+		if err = d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader(tc.body)); !errors.Is(err, tc.want) {
 			t.Errorf("%s %q: %v, want %v", tc.file, tc.body, err, tc.want)
 		}
 		d.CloseViewCopy(ctx, "worker", c.ID)
@@ -156,10 +156,10 @@ func TestViewCopyRefusals(t *testing.T) {
 	token, _, _ := d.IssueViewTicket(peer, "worker", "a.pdf", 8, 1<<20)
 	c, _ := d.ViewTicket(ctx, token)
 	other := drive.WithPeer(ctx, drive.Peer{SwitchDefault: true, Live: func() bool { return true }, Pairing: "pairing-2"})
-	if err := d.StoreViewCopy(other, objects.Dir(root), testKey, c, token, strings.NewReader("%PDF-1.7")); !errors.Is(err, drive.ErrPeerGone) {
+	if err := d.StoreViewCopy(other, objects.Dir(root), c, token, strings.NewReader("%PDF-1.7")); !errors.Is(err, drive.ErrPeerGone) {
 		t.Errorf("other pairing: %v", err)
 	}
-	if err := d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader("%PDF-1.7")); err != nil {
+	if err := d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader("%PDF-1.7")); err != nil {
 		t.Errorf("pdf: %v", err)
 	}
 	// Four live per person.
@@ -395,7 +395,7 @@ func TestRevokedViewTicketTakesNoBytes(t *testing.T) {
 	if err := drive.ExecTx(ctx, d, `UPDATE drive_view_copies SET revoked=1 WHERE id=?`, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.StoreViewCopy(peer, objects.Dir(root), testKey, c, token, strings.NewReader(docx)); !errors.Is(err, drive.ErrNotFound) {
+	if err = d.StoreViewCopy(peer, objects.Dir(root), c, token, strings.NewReader(docx)); !errors.Is(err, drive.ErrNotFound) {
 		t.Fatalf("a revoked ticket stored its bytes: %v", err)
 	}
 }

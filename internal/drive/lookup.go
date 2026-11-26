@@ -27,7 +27,11 @@ func (s *Store) Lookup(ctx context.Context, user, workspace, parent, name string
 	if !ValidName(name) {
 		return Item{}, ErrNotFound
 	}
-	mac := s.names.hmac(name)
+	n, err := s.namesOf(ctx, s.db, workspaceOrg("?"), workspace)
+	if err != nil {
+		return Item{}, err
+	}
+	mac := n.hmac(name)
 	folders, err := s.queryFolders(ctx, s.db, `workspace=? AND parent=? AND name_hmac=? AND trashed=false`, workspace, parent, mac)
 	if err != nil {
 		return Item{}, err
@@ -55,45 +59,65 @@ func (s *Store) Children(ctx context.Context, user, workspace, parent string) ([
 	return folders, files, err
 }
 
+// rowQueryer is a *sql.DB or *sql.Tx.
+type rowQueryer interface {
+	rowser
+	queryer
+}
+
 // queryFolders and queryFiles decrypt the rows matching where (never a condition on name)
 // and sort them by name.
-func (s *Store) queryFolders(ctx context.Context, q rowser, where string, args ...any) ([]Folder, error) {
+func (s *Store) queryFolders(ctx context.Context, q rowQueryer, where string, args ...any) ([]Folder, error) {
 	rows, err := q.QueryContext(ctx, `SELECT id,workspace,parent,name,trashed FROM drive_folders WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []Folder{}
 	for rows.Next() {
 		var f Folder
 		if err = rows.Scan(&f.ID, &f.Workspace, &f.Parent, &f.Name, &f.Trashed); err != nil {
-			return nil, err
-		}
-		if f.Name, err = s.names.open("drive_folders", f.ID, f.Name); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, f)
 	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	n := s.wsNames(ctx, q)
+	for i, f := range out {
+		if out[i].Name, err = n.open("drive_folders", f.ID, f.Workspace, f.Name); err != nil {
+			return nil, err
+		}
+	}
 	slices.SortStableFunc(out, func(a, b Folder) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return out, nil
 }
 
-func (s *Store) queryFiles(ctx context.Context, q rowser, where string, args ...any) ([]File, error) {
+func (s *Store) queryFiles(ctx context.Context, q rowQueryer, where string, args ...any) ([]File, error) {
 	rows, err := q.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []File{}
 	for rows.Next() {
-		f, err := s.scanFile(rows)
+		f, err := scanFile(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, f)
 	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = s.openFiles(ctx, q, out); err != nil {
+		return nil, err
+	}
 	slices.SortStableFunc(out, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
-	return out, rows.Err()
+	return out, nil
 }
 
 // FolderPath returns the names from the workspace root down to folder id ("" = the root, no
@@ -101,6 +125,10 @@ func (s *Store) queryFiles(ctx context.Context, q rowser, where string, args ...
 // trashed, gone or in another workspace.
 func (s *Store) FolderPath(ctx context.Context, user, workspace, id string) ([]string, error) {
 	if err := authorizeItem(ctx, s.db, user, workspace, id, "", 1); err != nil {
+		return nil, err
+	}
+	n, err := s.namesOf(ctx, s.db, workspaceOrg("?"), workspace)
+	if err != nil {
 		return nil, err
 	}
 	names := []string{}
@@ -114,7 +142,7 @@ func (s *Store) FolderPath(ctx context.Context, user, workspace, id string) ([]s
 		if err != nil {
 			return nil, err
 		}
-		name, err := s.names.open("drive_folders", id, stored)
+		name, err := n.open("drive_folders", id, stored)
 		if err != nil {
 			return nil, err
 		}

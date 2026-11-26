@@ -55,6 +55,14 @@ func (s *Store) PersonalExport(ctx context.Context, user string, maxBytes int64)
 		if err != nil {
 			return err
 		}
+		nk, err := s.namesOf(ctx, tx, workspaceOrg("?"), ws)
+		if err != nil {
+			return err
+		}
+		keys, err := s.keysOf(ctx, tx, workspaceOrg("?"), ws)
+		if err != nil {
+			return err
+		}
 		rows, err := tx.QueryContext(ctx, `SELECT d.id,d.parent,d.name,d.trashed FROM drive_folders d JOIN drive_workspaces w ON w.id=d.workspace WHERE w.id=? AND w.org_id=`+userOrg("?")+` ORDER BY d.id`, ws, user)
 		if err != nil {
 			return err
@@ -63,7 +71,7 @@ func (s *Store) PersonalExport(ctx context.Context, user string, maxBytes int64)
 			f := Folder{Workspace: ws}
 			var stored string
 			if err = rows.Scan(&f.ID, &f.Parent, &stored, &f.Trashed); err == nil {
-				f.Name, err = s.names.open("drive_folders", f.ID, stored)
+				f.Name, err = nk.open("drive_folders", f.ID, stored)
 			}
 			if err != nil {
 				rows.Close()
@@ -91,7 +99,7 @@ func (s *Store) PersonalExport(ctx context.Context, user string, maxBytes int64)
 				return ErrTooLarge
 			}
 			total += v.Size
-			if f.Name, err = s.names.open("drive_files", f.ID, stored); err != nil {
+			if f.Name, err = nk.open("drive_files", f.ID, stored); err != nil {
 				return err
 			}
 			if len(out.Files) == 0 || out.Files[len(out.Files)-1].ID != f.ID {
@@ -104,7 +112,7 @@ func (s *Store) PersonalExport(ctx context.Context, user string, maxBytes int64)
 			v.FileID = f.ID
 			out.Versions = append(out.Versions, v)
 			modified, _ := time.Parse(time.RFC3339Nano, v.Created)
-			out.Entries = append(out.Entries, ZipEntry{Path: fmt.Sprintf("files/%s/%d/%s", f.ID, v.Revision, f.Name), Blob: v.Blob, Sealed: v.Sealed, Size: v.Size, Modified: modified})
+			out.Entries = append(out.Entries, ZipEntry{Path: fmt.Sprintf("files/%s/%d/%s", f.ID, v.Revision, f.Name), Blob: v.Blob, Sealed: v.Sealed, Size: v.Size, Modified: modified, Keys: keys})
 		}
 		return rows.Err()
 	})

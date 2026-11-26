@@ -676,7 +676,7 @@ func (t *mcpTools) readFile(ctx context.Context, _ *mcp.CallToolRequest, in read
 
 // readBytes reads n bytes of f's current version from offset.
 func (t *mcpTools) readBytes(f drive.File, offset, n int64) ([]byte, error) {
-	r, err := t.s.openBlob(f)
+	r, err := t.s.openBlob(context.Background(), f)
 	if err != nil {
 		return nil, err
 	}
@@ -774,7 +774,7 @@ func (t *mcpTools) writeFile(ctx context.Context, _ *mcp.CallToolRequest, in wri
 	if err = d.AuthorizeItem(ctx, t.user(), dir.workspace, dir.folder, target.ID, 2); err != nil {
 		return nil, writeOut{}, t.fail("write_file", err)
 	}
-	v, err := drive.WriteBlob(t.s.blobRoot(), t.s.config.Security.EncryptionKey, bytes.NewReader(data), limit)
+	v, err := t.s.writeBlob(ctx, dir.workspace, bytes.NewReader(data), limit)
 	if err != nil {
 		return nil, writeOut{}, t.fail("write_file", err)
 	}

@@ -52,7 +52,11 @@ func (s *Server) driveThumbnail(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrDenied)
 		return
 	}
-	key := s.config.Security.EncryptionKey
+	key, err := s.store.Drive().KeysFor(r.Context(), f.Workspace)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
 	thumb, err := drive.ReadThumb(s.thumbRoot(), key, f.Blob)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -82,7 +86,7 @@ func (s *Server) makeThumbnail(ctx context.Context, f drive.File) ([]byte, error
 	if s.editor != nil && convertible[ext] {
 		return s.officeThumbnail(ctx, f, ext)
 	}
-	file, err := s.openBlob(f)
+	file, err := s.openBlob(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +101,7 @@ func (s *Server) drivePreview(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrDenied)
 		return
 	}
-	file, ok := s.openFile(w, f)
+	file, ok := s.openFile(r.Context(), w, f)
 	if !ok {
 		return
 	}

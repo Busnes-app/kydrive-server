@@ -87,7 +87,7 @@ func TestMeasureSearch(t *testing.T) {
 			t.Fatal(err)
 		}
 		indexCPU += time.Since(start)
-		if err = drive.WriteThumb(objects.Dir(cache), key, blob, append([]byte{0}, body...)); err != nil {
+		if err = drive.WriteThumb(objects.Dir(cache), drive.Deployment(key), blob, append([]byte{0}, body...)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -164,7 +164,7 @@ func TestMeasureSearch(t *testing.T) {
 	start = time.Now()
 	hits := 0
 	for _, ref := range cand {
-		raw, err := drive.ReadThumb(objects.Dir(cache), key, blobOf[ref])
+		raw, err := drive.ReadThumb(objects.Dir(cache), drive.Deployment(key), blobOf[ref])
 		if err != nil {
 			t.Fatal(err)
 		}

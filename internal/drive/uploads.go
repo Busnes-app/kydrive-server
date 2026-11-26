@@ -83,7 +83,7 @@ func (s *Store) startUpload(ctx context.Context, user string, u UploadSession, m
 			if revision != u.Expected {
 				return ErrConflict
 			}
-			if u.Name, err = s.names.open("drive_files", u.File, stored); err != nil {
+			if u.Name, err = s.wsNames(ctx, tx).open("drive_files", u.File, u.Workspace, stored); err != nil {
 				return err
 			}
 		}
@@ -100,7 +100,7 @@ func (s *Store) startUpload(ctx context.Context, user string, u UploadSession, m
 		if open >= uploadsPerUser {
 			return fmt.Errorf("%w: too many uploads in progress", ErrQuota)
 		}
-		stored, mac, err := s.names.seal("drive_upload_sessions", u.ID, u.Name)
+		stored, mac, err := s.sealName(ctx, tx, "drive_upload_sessions", u.ID, u.Workspace, u.Name)
 		if err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, err
 	if err != nil {
 		return u, err
 	}
-	if u.Name, err = s.names.open("drive_upload_sessions", id, stored); err != nil {
+	if u.Name, err = s.wsNames(ctx, s.db).open("drive_upload_sessions", id, u.Workspace, stored); err != nil {
 		return u, err
 	}
 	if u.File == "" {
@@ -146,7 +146,7 @@ func (s *Store) Upload(ctx context.Context, user, id string) (UploadSession, err
 
 // AppendUpload seals exactly length bytes of r as the segment starting at start, which must be
 // the session's received count. Concurrent appends at one offset: one wins, the rest ErrConflict.
-func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, key []byte, user, id string, start, length int64, r io.Reader) (UploadSession, error) {
+func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, user, id string, start, length int64, r io.Reader) (UploadSession, error) {
 	u, err := s.Upload(ctx, user, id)
 	if err != nil {
 		return u, err
@@ -157,8 +157,12 @@ func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, key []by
 	if length < 1 || length > u.Size-start {
 		return u, ErrInvalid
 	}
+	k, err := s.KeysFor(ctx, u.Workspace)
+	if err != nil {
+		return u, err
+	}
 	segments, name := staging.Sub(id), uuid.NewString()
-	if err = writeSegment(segments, name, key, r, length); err != nil {
+	if err = writeSegment(segments, name, k, r, length); err != nil {
 		return u, err
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
@@ -181,13 +185,13 @@ func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, key []by
 }
 
 // writeSegment seals exactly length bytes of r as segments' object name.
-func writeSegment(segments objects.Store, name string, key []byte, r io.Reader, length int64) error {
+func writeSegment(segments objects.Store, name string, k Keys, r io.Reader, length int64) error {
 	w, err := segments.Create(context.Background())
 	if err != nil {
 		return err
 	}
 	defer w.Discard()
-	n, err := seal(w, key, blobBinding(name), io.LimitReader(r, length+1))
+	n, err := seal(w, k, blobBinding(name), io.LimitReader(r, length+1))
 	if err != nil {
 		return err
 	}
@@ -200,9 +204,13 @@ func writeSegment(segments objects.Store, name string, key []byte, r io.Reader, 
 // CompleteUpload publishes a fully received session as a file version and removes it. It ignores
 // cancellation: a proxy that times out on a long re-seal drops the connection, and stopping then
 // would only make every Retry re-seal the whole file again. The size cap bounds the work.
-func (s *Store) CompleteUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, key []byte, user, id string) (File, error) {
+func (s *Store) CompleteUpload(ctx context.Context, staging objects.Tree, blobs objects.Store, user, id string) (File, error) {
 	ctx = context.WithoutCancel(ctx)
 	u, err := s.Upload(ctx, user, id)
+	if err != nil {
+		return File{}, err
+	}
+	key, err := s.KeysFor(ctx, u.Workspace)
 	if err != nil {
 		return File{}, err
 	}
@@ -282,7 +290,7 @@ func rowsAffected(res sql.Result, err error) (int64, error) {
 	return res.RowsAffected()
 }
 
-func (s *Store) readSegments(ctx context.Context, w io.Writer, staging objects.Tree, key []byte, id string) error {
+func (s *Store) readSegments(ctx context.Context, w io.Writer, staging objects.Tree, key Keys, id string) error {
 	rows, err := s.db.QueryContext(ctx, `SELECT path,size FROM drive_upload_segments WHERE session=? ORDER BY start`, id)
 	if err != nil {
 		return err

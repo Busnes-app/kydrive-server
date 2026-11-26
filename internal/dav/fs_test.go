@@ -105,7 +105,7 @@ func (e *env) do(user, method, path string, body io.Reader, headers ...string) *
 		e.t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, objects.Dir(e.blobs), testdb.Key, 1<<20, mtime), e.locks[e.n.Add(1)%2])
+	dav.Serve(w, r, "/dav", dav.New(e.st.Drive(), user, objects.Dir(e.blobs), 1<<20, mtime), e.locks[e.n.Add(1)%2])
 	return w
 }
 
@@ -572,7 +572,7 @@ func TestIfNoneMatchHoldsWhileTheBodyArrives(t *testing.T) {
 	e := setup(t)
 	path := e.org() + "/race.txt"
 	body := &raceBody{before: func() { // a web upload: WebDAV's own lock would refuse a second PUT
-		v, err := drive.WriteBlob(objects.Dir(e.blobs), testdb.Key, strings.NewReader("theirs"), 1<<20)
+		v, err := drive.WriteBlob(objects.Dir(e.blobs), drive.Deployment(testdb.Key), strings.NewReader("theirs"), 1<<20)
 		if err == nil {
 			_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "race.txt"}, v, 0)
 		}
@@ -590,14 +590,14 @@ func TestIfNoneMatchHoldsWhileTheBodyArrives(t *testing.T) {
 // the target was opened.
 func TestCreateOnlyRefusesAFileFoundAtOpen(t *testing.T) {
 	e := setup(t)
-	v, err := drive.WriteBlob(objects.Dir(e.blobs), testdb.Key, strings.NewReader("theirs"), 1<<20)
+	v, err := drive.WriteBlob(objects.Dir(e.blobs), drive.Deployment(testdb.Key), strings.NewReader("theirs"), 1<<20)
 	if err == nil {
 		_, err = e.st.Drive().Publish(context.Background(), "worker", drive.File{Workspace: e.team.ID, Name: "open.txt"}, v, 0)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs := dav.New(e.st.Drive(), "worker", objects.Dir(e.blobs), testdb.Key, 1<<20, "")
+	fs := dav.New(e.st.Drive(), "worker", objects.Dir(e.blobs), 1<<20, "")
 	fs.IfMatch, fs.CreateOnly = true, true
 	name := strings.TrimPrefix(e.org(), "/dav") + "/open.txt"
 	name = strings.ReplaceAll(name, "%20", " ")
@@ -617,7 +617,7 @@ func TestIfMatchRefusesARevisionFoundAtOpen(t *testing.T) {
 	if err != nil || len(files) != 1 {
 		t.Fatalf("files %v %v", files, err)
 	}
-	v, err := drive.WriteBlob(objects.Dir(e.blobs), testdb.Key, strings.NewReader("two"), 1<<20)
+	v, err := drive.WriteBlob(objects.Dir(e.blobs), drive.Deployment(testdb.Key), strings.NewReader("two"), 1<<20)
 	if err == nil {
 		_, err = e.st.Drive().Publish(context.Background(), "worker", files[0], v, files[0].Revision)
 	}
@@ -627,7 +627,7 @@ func TestIfMatchRefusesARevisionFoundAtOpen(t *testing.T) {
 	current := e.do("worker", "GET", path, nil).Header().Get("ETag")
 	name := strings.ReplaceAll(strings.TrimPrefix(e.org(), "/dav")+"/match.txt", "%20", " ")
 	open := func(match string) error {
-		fs := dav.New(e.st.Drive(), "worker", objects.Dir(e.blobs), testdb.Key, 1<<20, "")
+		fs := dav.New(e.st.Drive(), "worker", objects.Dir(e.blobs), 1<<20, "")
 		fs.IfMatch, fs.Match = true, match
 		f, err := fs.OpenFile(context.Background(), name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
 		if err == nil {

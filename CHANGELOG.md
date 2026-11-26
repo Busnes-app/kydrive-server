@@ -4,6 +4,14 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Per-org data keys (multi-tenant, tenancy step K).** Each org has its own random data key,
+  stored only wrapped under a key derived from the deployment key. Blobs, viewing copies,
+  upload staging, thumbnails, text caches and file and folder names are sealed under it, so
+  one org's bytes and names never open under another's key. The org purge destroys the key,
+  so whatever the purge missed, such as a copy the object storage kept, can no longer be
+  read. Single-tenant installs keep deployment-key sealing, unchanged byte for byte. Content
+  search stays off in multi-tenant mode until the per-org index exists.
+
 - **Org purge and Delete everything (multi-tenant, tenancy step 5).** An org KyIdentity
   reports deleted is purged after the next poll: every row and blob it held goes, one
   workspace at a time, and only its tombstone and a platform event with counts stay. A member's

@@ -28,7 +28,6 @@ type FS struct {
 	store   *drive.Store
 	user    string
 	blobs   objects.Store
-	key     []byte
 	maxFile int64
 	// IfMatch is set when the request's If-Match was checked: a write then publishes against
 	// exactly the revision opened, instead of retrying as last writer wins.
@@ -65,8 +64,8 @@ func (b *body) Read(p []byte) (int, error) {
 }
 
 // New builds one request's view. mtime is the request's X-OC-Mtime from Mtime.
-func New(store *drive.Store, user string, blobs objects.Store, key []byte, maxFile int64, mtime string) *FS {
-	return &FS{store: store, user: user, blobs: blobs, key: key, maxFile: maxFile, mtime: mtime}
+func New(store *drive.Store, user string, blobs objects.Store, maxFile int64, mtime string) *FS {
+	return &FS{store: store, user: user, blobs: blobs, maxFile: maxFile, mtime: mtime}
 }
 
 // Mtime parses an X-OC-Mtime header (Unix seconds, as ownCloud clients and rclone send it) into
@@ -283,7 +282,11 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 	if n.dir() {
 		return &dirFile{fs: f, ctx: ctx, n: n}, nil
 	}
-	r, err := drive.OpenBlob(f.blobs, n.file.Blob, f.key, n.file.Sealed, n.file.Size)
+	k, err := f.store.KeysFor(ctx, n.file.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	r, err := drive.OpenBlob(f.blobs, n.file.Blob, k, n.file.Sealed, n.file.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -312,10 +315,14 @@ func (f *FS) create(ctx context.Context, name string) (webdav.File, error) {
 	if err = f.store.AuthorizeItem(ctx, f.user, dir.workspace, dir.folder, target.ID, 2); err != nil {
 		return nil, f.fail("create", name, err)
 	}
+	k, err := f.store.KeysFor(ctx, dir.workspace)
+	if err != nil {
+		return nil, f.fail("create", name, err)
+	}
 	pr, pw := io.Pipe()
 	w := &writeFile{fs: f, ctx: ctx, target: target, pw: pw, done: make(chan blobResult, 1), info: &fileInfo{name: base}}
 	go func() {
-		v, err := drive.WriteBlob(f.blobs, f.key, pr, f.maxFile)
+		v, err := drive.WriteBlob(f.blobs, k, pr, f.maxFile)
 		pr.CloseWithError(cmp.Or(err, io.EOF))
 		w.done <- blobResult{v, err}
 	}()

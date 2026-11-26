@@ -40,6 +40,23 @@ var migrationTables = []string{
 	"drive_peer_guest", "drive_erasures",
 }
 
+// multiTables exist on a multi-tenant database only, created at each open. They are copied
+// right after drive_orgs, and a store open fills them (the staff org's key).
+var multiTables = []string{"drive_org_keys"}
+
+// copiedTables is migrationTables, plus multiTables on a multi-tenant database.
+func copiedTables(multi bool) []string { return withMulti(migrationTables, multi) }
+
+// openedIn is openedTables, plus multiTables on a multi-tenant database.
+func openedIn(multi bool) []string { return withMulti(openedTables, multi) }
+
+func withMulti(tables []string, multi bool) []string {
+	if !multi {
+		return tables
+	}
+	return slices.Insert(slices.Clone(tables), slices.Index(tables, "drive_orgs")+1, multiTables...)
+}
+
 // schemaTables record schema versions; each side has its own, at the same versions.
 var schemaTables = []string{"schema_migrations", "drive_schema", "drive_name_scrub"}
 
@@ -124,13 +141,14 @@ func MigrateToPostgres(ctx context.Context, source, dsn string, key []byte, chec
 		return report, err
 	}
 	defer conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(?)`, startLock)
-	if err := checkTarget(ctx, db); err != nil {
+	multi := tenancy.Mode == drive.TenancyMulti
+	if err := checkTarget(ctx, db, multi); err != nil {
 		return report, err
 	}
 	if _, err := newSQLStore(ctx, db, "postgres", key, tenancy); err != nil {
 		return report, fmt.Errorf("create the PostgreSQL schema: %w", err)
 	}
-	if err := copyAll(ctx, src.db, db, tenancy.Mode == drive.TenancyMulti, &report); err != nil {
+	if err := copyAll(ctx, src.db, db, multi, &report); err != nil {
 		return report, err
 	}
 	return report, nil
@@ -184,16 +202,16 @@ func upgradedSnapshot(ctx context.Context, source string, key []byte) (_ *SQLSto
 
 // checkTarget refuses a target that holds anything but this schema, or any row a store
 // open did not write: a server has used it.
-func checkTarget(ctx context.Context, db *sql.DB) error {
+func checkTarget(ctx context.Context, db *sql.DB, multi bool) error {
 	tables, err := names(ctx, db, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`)
 	if err != nil {
 		return errors.New("cannot read the PostgreSQL target's tables")
 	}
 	for _, table := range tables {
-		if uncopied(table) || slices.Contains(openedTables, table) {
+		if uncopied(table) || slices.Contains(openedIn(multi), table) {
 			continue
 		}
-		if !slices.Contains(migrationTables, table) {
+		if !slices.Contains(copiedTables(multi), table) {
 			return fmt.Errorf("the PostgreSQL target has a table KyDrive does not know (%s); use an empty database", table)
 		}
 		var used bool
@@ -205,6 +223,7 @@ func checkTarget(ctx context.Context, db *sql.DB) error {
 }
 
 func copyAll(ctx context.Context, src, db *sql.DB, multi bool, report *MigrationReport) error {
+	migrationTables, openedTables := copiedTables(multi), openedIn(multi)
 	for side, q := range map[*sql.DB]string{
 		src: `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
 		db:  `SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`,
