@@ -32,10 +32,11 @@ func (s *Server) driveStartUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	u := drive.UploadSession{Workspace: r.PathValue("id"), Parent: in.Parent, Name: in.Name, File: in.File, Expected: in.Revision, Size: in.Size, Mtime: in.Mtime}
+	req := drive.UploadSession{Workspace: r.PathValue("id"), Parent: in.Parent, Name: in.Name, File: in.File, Expected: in.Revision, Size: in.Size, Mtime: in.Mtime}
+	var u drive.UploadSession
 	err := drive.RetryPool(r.Context(), func() error {
 		var serr error
-		u, serr = s.store.Drive().StartUpload(r.Context(), s.driveUser(r).ID, u, s.config.Drive.MaxFileSize)
+		u, serr = s.store.Drive().StartUpload(r.Context(), s.driveUser(r).ID, req, s.config.Drive.MaxFileSize)
 		return serr
 	})
 	if err != nil {

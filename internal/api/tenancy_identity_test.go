@@ -361,15 +361,22 @@ func TestConcurrentWriteWaitsOutInflightStorageReport(t *testing.T) {
 		t.Fatal("org-a report was not frozen")
 	}
 
-	// Start a concurrent write while report_inflight=1. It must wait rather than 413.
+	// Start concurrent writes while report_inflight=1: both a direct upload and a chunked
+	// upload session start must wait out the refresh without losing request fields or 413'ing.
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
 		done <- upload("during-refresh.txt", "hello during refresh")
+	}()
+	sessionDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		sessionDone <- m.callBody("a1", "", http.MethodPost, "/api/drive/workspaces/"+ws+"/upload-sessions", `{"name":"resumable.bin","size":4096,"revision":0}`)
 	}()
 
 	select {
 	case rec := <-done:
 		t.Fatalf("upload did not wait out in-flight report: %d %s", rec.Code, rec.Body.String())
+	case rec := <-sessionDone:
+		t.Fatalf("upload-session start did not wait out in-flight report: %d %s", rec.Code, rec.Body.String())
 	case <-time.After(60 * time.Millisecond):
 	}
 
@@ -388,6 +395,14 @@ func TestConcurrentWriteWaitsOutInflightStorageReport(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("concurrent upload did not complete after ApplyReports cleared report_inflight")
+	}
+	select {
+	case rec := <-sessionDone:
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("concurrent upload-session start after report landed: want 201, got %d %s", rec.Code, rec.Body.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent upload-session start did not complete after ApplyReports cleared report_inflight")
 	}
 
 	// A genuinely full org (zero remaining ceiling) must fail immediately with 413 even when
