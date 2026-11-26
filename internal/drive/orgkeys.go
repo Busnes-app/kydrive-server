@@ -22,6 +22,38 @@ import (
 // ErrNoOrgKey means the org has no data key: never recorded, or purged.
 var ErrNoOrgKey = errors.New("drive: org has no data key")
 
+// ErrBeforeOrgKeys refuses a multi-tenant database, or a capsule of one, made before per-org
+// keys: its names and blobs are sealed under the deployment key, and no release ever started
+// in multi-tenant mode, so there is nothing to migrate.
+var ErrBeforeOrgKeys = errors.New("drive: this multi-tenant database predates per-org data keys (tenancy step K) and cannot be upgraded; no release has run multi-tenant, so recreate the test install on an empty database")
+
+// refuseBeforeOrgKeys runs before open writes anything. A database recorded multi-tenant whose
+// orgs exist without the key table was made before K; a new one has no org row until the
+// staff seed, which creates the table first.
+func refuseBeforeOrgKeys(ctx context.Context, db *sql.DB, pg bool) error {
+	exists := `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`
+	if pg {
+		exists = `SELECT COUNT(*) FROM pg_tables WHERE schemaname=current_schema() AND tablename=?`
+	}
+	var settings, orgs, keys int
+	for table, n := range map[string]*int{"server_settings": &settings, "drive_orgs": &orgs, "drive_org_keys": &keys} {
+		if err := db.QueryRowContext(ctx, exists, table).Scan(n); err != nil {
+			return err
+		}
+	}
+	if settings == 0 || orgs == 0 || keys > 0 {
+		return nil
+	}
+	var multi, rows int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM server_settings WHERE key='tenancy_mode' AND value=?`, TenancyMulti).Scan(&multi); err != nil || multi == 0 {
+		return err
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_orgs`).Scan(&rows); err != nil || rows == 0 {
+		return err
+	}
+	return ErrBeforeOrgKeys
+}
+
 // orgKeysDDL is multi-tenant only, run by every multi-tenant open after the schema.
 const orgKeysDDL = `CREATE TABLE IF NOT EXISTS drive_org_keys(org_id TEXT PRIMARY KEY REFERENCES drive_orgs(id),kek BIGINT NOT NULL,wrapped TEXT NOT NULL,created TEXT NOT NULL)`
 

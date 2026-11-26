@@ -1279,6 +1279,9 @@ the release before. No R step starts before the owner approves this amendment.
       and single-tenant PostgreSQL schemas are unchanged. A multi-tenant snapshot and
       `migrate-postgres` copy it after `drive_orgs` (`multiTables`), so a capsule restore
       brings every key back.
+    - A multi-tenant database or capsule made before K is refused at open, before anything is
+      written (`ErrBeforeOrgKeys`): its names and blobs are under the deployment key, and no
+      release ever started multi-tenant, so there is no upgrade, only a new install.
     - A key is created in the staff seed's transaction and in each poll page's, never for a
       deleted org, and never replaces one.
     - The cache holds active orgs' keys for one minute. `ApplyOrgs` evicts its page's orgs and

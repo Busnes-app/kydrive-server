@@ -10,7 +10,8 @@ Interface and behaviour changes, newest first.
   one org's bytes and names never open under another's key. The org purge destroys the key,
   so whatever the purge missed, such as a copy the object storage kept, can no longer be
   read. Single-tenant installs keep deployment-key sealing, unchanged byte for byte. Content
-  search stays off in multi-tenant mode until the per-org index exists.
+  search stays off in multi-tenant mode until the per-org index exists. A multi-tenant test
+  database or capsule made before this change is refused at startup; recreate it.
 
 - **Org purge and Delete everything (multi-tenant, tenancy step 5).** An org KyIdentity
   reports deleted is purged after the next poll: every row and blob it held goes, one

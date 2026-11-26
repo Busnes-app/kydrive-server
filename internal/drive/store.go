@@ -114,6 +114,11 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if pg && version != len(schema) {
 		return nil, errors.New("drive: a PostgreSQL drive starts at the latest schema")
 	}
+	if t.Mode == TenancyMulti {
+		if err = refuseBeforeOrgKeys(ctx, db, pg); err != nil {
+			return nil, err
+		}
+	}
 	if !pg {
 		_, err = db.ExecContext(ctx, `
  CREATE UNIQUE INDEX IF NOT EXISTS drive_scim_subject ON users(sso_subject) WHERE sso_provider='scim' AND sso_subject!='';

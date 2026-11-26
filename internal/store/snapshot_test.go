@@ -3,7 +3,10 @@ package store_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -83,8 +86,13 @@ func multiPostgres(t *testing.T) (config.DatabaseConfig, store.Store, *sql.DB, s
 // dump is every row of every migrated table, as PostgreSQL renders it, in a stable order.
 func dump(t *testing.T, db *sql.DB) map[string]string {
 	t.Helper()
+	return dumpTables(t, db, store.CopiedTables(true))
+}
+
+func dumpTables(t *testing.T, db *sql.DB, tables []string) map[string]string {
+	t.Helper()
 	out := map[string]string{}
-	for _, table := range store.CopiedTables(true) {
+	for _, table := range tables {
 		var rows string
 		if err := db.QueryRow(`SELECT COALESCE(string_agg(r,E'\n' ORDER BY r),'') FROM (SELECT row_to_json(t)::text r FROM "` + table + `" t) s`).Scan(&rows); err != nil {
 			t.Fatal(table, err)
@@ -170,5 +178,56 @@ func TestPostgresSnapshotRestoresEveryRow(t *testing.T) {
 	var keys int
 	if err := restored.QueryRow(`SELECT COUNT(*) FROM drive_org_keys WHERE org_id IN ('org-a','org-b')`).Scan(&keys); err != nil || keys != 0 {
 		t.Fatalf("%d purged org keys left after the restore's purge, %v", keys, err)
+	}
+}
+
+// beforeOrgKeys makes db what the release before per-org keys left: the same multi-tenant
+// schema and rows, without drive_org_keys.
+func beforeOrgKeys(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`DROP TABLE drive_org_keys`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func tableNames(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	return strs(t, db, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema() ORDER BY 1`)
+}
+
+// A multi-tenant database from before per-org keys holds names and blobs sealed under the
+// deployment key: opening it is refused before anything is written.
+func TestMultiTenantDatabaseBeforeOrgKeysIsRefused(t *testing.T) {
+	ctx := context.Background()
+	cfg, st, db, _ := multiPostgres(t)
+	st.Close()
+	beforeOrgKeys(t, db)
+	tables, rows := tableNames(t, db), dumpTables(t, db, store.MigrationTables)
+	if _, err := store.Open(ctx, cfg, testdb.Key); !errors.Is(err, drive.ErrBeforeOrgKeys) {
+		t.Fatalf("open: %v, want ErrBeforeOrgKeys", err)
+	}
+	if got := tableNames(t, db); !slices.Equal(got, tables) {
+		t.Fatalf("tables changed: %v, were %v", got, tables)
+	}
+	if got := dumpTables(t, db, store.MigrationTables); fmt.Sprint(got) != fmt.Sprint(rows) {
+		t.Fatal("rows changed")
+	}
+}
+
+// So is a capsule of one: migrate-postgres refuses it before touching the target.
+func TestCapsuleBeforeOrgKeysIsRefused(t *testing.T) {
+	ctx := context.Background()
+	srcCfg, _, _, _ := multiPostgres(t)
+	path := filepath.Join(t.TempDir(), "ky_server.db")
+	if err := store.SnapshotPostgres(ctx, srcCfg.DSN, path, testdb.Key); err != nil {
+		t.Fatal(err)
+	}
+	beforeOrgKeys(t, testdb.Open(t, config.DatabaseConfig{Driver: "sqlite", DSN: path}))
+	target := testdb.Config(t)
+	if _, err := store.MigrateToPostgres(ctx, path, target.DSN, testdb.Key, false); !errors.Is(err, drive.ErrBeforeOrgKeys) {
+		t.Fatalf("restore: %v, want ErrBeforeOrgKeys", err)
+	}
+	if got := tableNames(t, testdb.Open(t, target)); len(got) != 0 {
+		t.Fatalf("the target was written: %v", got)
 	}
 }
