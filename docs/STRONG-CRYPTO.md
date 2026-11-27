@@ -26,6 +26,7 @@ key, separated by product and field labels. Only checks are stored, never values
 | Boundary | Default | Smaller keys |
 | --- | --- | --- |
 | Deployment key (blobs, names, search index, Restic password) | 32 random bytes in `data/encryption.key`, or `KY_ENCRYPTION_KEY` | Refused: the key must decode to exactly 32 bytes; a wrong-length file is refused, never overwritten. Blobs use age v1 with AES-256-GCM-wrapped file keys; names use AES-256-GCM under HKDF-SHA256 subkeys. |
+| Hosted search snapshot | AES-256-GCM under a 32-byte subkey of the org data key; AAD binds org, immutable object UUID and committed version | Key size fixed; single-tenant local index format is unchanged. |
 | Session secret (CSRF and proof-of-work HMAC-SHA256) | 32 random bytes (development); production requires an explicit value | Refused at startup below 16 bytes (`KY_SESSION_SECRET`). Use `openssl rand -hex 32`. |
 | Directory webhook HMAC-SHA256 | Unset (webhook off) | `KY_KYSIGNON_HMAC_SECRET` below 16 bytes is refused at startup, and the webhook refuses to verify with one before touching any account. |
 | Euro-Office JWT (HS256) | Operator-supplied | `KYDRIVE_EDITOR_SECRET` below 32 bytes is refused; the editor Compose overlay refuses the same. |
@@ -141,3 +142,9 @@ a restore drill.
 References: [Go FIPS 140-3 mode](https://go.dev/doc/security/fips140),
 [RFC 4226 key requirements](https://www.rfc-editor.org/rfc/rfc4226#section-4),
 [NIST SP 800-131A Rev. 2](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf).
+
+
+The hosted S3 client uses the Go/AWS SDK HTTPS transport and system trust. It refuses
+credentials, paths, queries and fragments in endpoint URLs; HTTP is restricted to literal
+loopback addresses or localhost for fixtures. No TLS curve override is installed. Credentials
+are explicit, never loaded through the SDK environment/file discovery chain or logged.

@@ -75,6 +75,17 @@ var errNoSuite = errors.New("KySignOn is not configured")
 // act on what the registry already holds.
 func (s *Server) purgeLifecycle(ctx context.Context) {
 	d := s.store.Drive()
+	if s.bucket != nil {
+		orgs, err := d.StorageOrgs(ctx, true)
+		if err != nil {
+			log.Printf("org object cleanup: %v", err)
+		}
+		for _, org := range orgs {
+			if err := s.purgeOrgObjects(ctx, org); err != nil {
+				log.Printf("org %s object cleanup: %v", org, err)
+			}
+		}
+	}
 	for _, p := range []struct {
 		what  string
 		purge func(context.Context) ([]string, []string, error)

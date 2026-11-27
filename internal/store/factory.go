@@ -66,7 +66,7 @@ func openSQLite(ctx context.Context, cfg config.DatabaseConfig, key []byte) (Sto
 	if _, err := db.ExecContext(ctx, "PRAGMA synchronous=FULL"); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return newSQLStore(ctx, db, "sqlite", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
+	return newSQLStore(ctx, db, "sqlite", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg, Cells: cfg.Cells})
 }
 
 // startLock is the PostgreSQL advisory lock a starting process holds while it opens the schema.
@@ -114,5 +114,5 @@ func openPostgres(ctx context.Context, cfg config.DatabaseConfig, key []byte) (S
 	}
 	defer conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(?)`, startLock)
 
-	return newSQLStore(ctx, db, "postgres", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg})
+	return newSQLStore(ctx, db, "postgres", key, drive.Tenancy{Mode: cmp.Or(cfg.Tenancy, drive.TenancySingle), StaffOrg: cfg.StaffOrg, Cells: cfg.Cells})
 }

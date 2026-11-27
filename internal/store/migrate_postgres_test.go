@@ -136,6 +136,9 @@ func source(t *testing.T) (string, string) {
 		`INSERT INTO drive_peer_tickets(id,token_hash,owner,name,size,expires,pairing) VALUES('ticket','ticket-hash','owner','name',1,1,'pairing')`,
 		`INSERT INTO drive_peer_picks(owner,file,expires) VALUES('owner','` + f.ID + `',1)`,
 		`INSERT INTO drive_peer_guest(user_id) VALUES('owner')`,
+		`INSERT INTO drive_cells(cell) VALUES('e2e-1')`,
+		`INSERT INTO drive_search_index(org_id,object,version) VALUES('` + drive.DefaultOrg + `','snapshot',1)`,
+		`INSERT INTO drive_search_queue(org_id,file,first,not_before) VALUES('` + drive.DefaultOrg + `','` + f.ID + `',1,1)`,
 		`INSERT INTO drive_erasures(subject,org_id,revision) VALUES('erased','org',1)`,
 	} {
 		if _, err := db.Exec(q); err != nil {

@@ -13,6 +13,7 @@ This directory owns test setup, disposable server launch and UI assertions. The 
 - Never reuse a development or production server. Launch the compiled `.browser/server` with a minimal environment and an owned temporary data directory; remove that directory on exit.
 - Use loopback only, with `KY_APP_URL` matching the test origin. `server.mjs` pairs KyPost from the environment (`https://post.example`, a disposable secret file); nothing calls it. It also sets a disposable `KY_SCIM_TOKEN`, so a spec can make a directory group. Bootstrap credentials are disposable test values, not deployment defaults.
 - Test light/dark at 390px and 1280px, using real authentication and API state. Do not disable service workers, relax CSP/CSRF, or substitute mocked responses.
+- Tests reusing saved cookies refresh password step-up before creating durable credentials or guest links; a long suite must not depend on the original login remaining within five minutes.
 - Screenshots and failure traces live in ignored `test-results/` and CI artifacts, not production assets.
 
 ## Work Guidance

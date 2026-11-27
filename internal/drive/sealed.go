@@ -196,6 +196,7 @@ func OpenBlob(st objects.Store, id string, k Keys, sealed bool, size int64) (io.
 // openObject opens st's object name as bound to bind. A sealed object of size -1 takes the
 // size it proves.
 func openObject(st objects.Store, name string, k Keys, sealed bool, size int64, bind string) (io.ReadSeekCloser, error) {
+	st = objects.Scope(st, k.org)
 	f, err := st.Open(context.Background(), name)
 	if err != nil {
 		return nil, err

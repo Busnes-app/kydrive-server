@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/netip"
 	"net/url"
 	"os"
 	"slices"
@@ -48,15 +49,8 @@ type Bucket struct {
 // NewBucket opens cfg's bucket. Drafts are written to files in spool, a private local
 // directory, and uploaded on Publish (in parts when larger than partSize).
 func NewBucket(cfg S3Config, spool string) (*Bucket, error) {
-	u, err := url.Parse(cfg.Endpoint)
-	if err != nil || u.Host == "" || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.User != nil {
-		return nil, errors.New("S3 endpoint must be a bare https://host[:port] URL")
-	}
-	if u.Scheme != "https" && !(u.Scheme == "http" && loopback(u.Hostname())) {
-		return nil, errors.New("S3 endpoint must use https (http only on a loopback host)")
-	}
-	if cfg.Region == "" || cfg.Bucket == "" || cfg.AccessKey == "" || cfg.SecretKey == "" {
-		return nil, errors.New("S3 needs a region, a bucket, an access key ID and a secret key")
+	if err := ValidateS3(cfg); err != nil {
+		return nil, err
 	}
 	creds := aws.Credentials{AccessKeyID: cfg.AccessKey, SecretAccessKey: cfg.SecretKey, Source: "kydrive"}
 	c := s3.New(s3.Options{
@@ -72,7 +66,8 @@ func NewBucket(cfg S3Config, spool string) (*Bucket, error) {
 }
 
 func loopback(host string) bool {
-	return host == "localhost" || host == "::1" || strings.HasPrefix(host, "127.")
+	addr, err := netip.ParseAddr(host)
+	return host == "localhost" || err == nil && addr.IsLoopback()
 }
 
 // Store is the Store of the objects whose keys start with prefix, which ends in "/".
@@ -340,11 +335,12 @@ func (t s3Tree) RemoveAll(ctx context.Context, name string) error {
 		return err
 	}
 	sub := t.Sub(name).(s3Store)
-	var names []string
-	if err := sub.List(ctx, func(n string, _ time.Time) error { names = append(names, n); return nil }); err != nil {
-		return err
-	}
-	return sub.Remove(ctx, names...)
+	// A subtree can contain nested namespaces (an org's staging, caches and search).
+	// Delete the exact listed keys; Store.Remove deliberately accepts one name only.
+	return t.b.list(ctx, sub.prefix, false, func(key string, _ time.Time) error {
+		_, err := t.b.c.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(t.b.bucket), Key: aws.String(key)})
+		return wrap("remove", key, err)
+	})
 }
 
 // wrap names what failed by operation and key, maps a missing object to fs.ErrNotExist, and
@@ -362,4 +358,54 @@ func wrap(op, key string, err error) error {
 		return fmt.Errorf("s3 %s %s: %s", op, key, ae.ErrorCode())
 	}
 	return fmt.Errorf("s3 %s %s: %w", op, key, err)
+}
+
+// ValidateS3 checks configuration without creating spool files or contacting S3.
+func ValidateS3(cfg S3Config) error {
+	u, err := url.Parse(cfg.Endpoint)
+	if err != nil || u.Host == "" || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.User != nil {
+		return errors.New("S3 endpoint must be a bare https://host[:port] URL")
+	}
+	if u.Scheme != "https" && !(u.Scheme == "http" && loopback(u.Hostname())) {
+		return errors.New("S3 endpoint must use https (http only on a loopback host)")
+	}
+	if cfg.Region == "" || cfg.Bucket == "" || cfg.AccessKey == "" || cfg.SecretKey == "" {
+		return errors.New("S3 needs a region, a bucket, an access key ID and a secret key")
+	}
+	if strings.ContainsAny(cfg.Bucket+cfg.Region+cfg.AccessKey, "/\\\r\n") {
+		return errors.New("S3 bucket, region and access key must not contain separators")
+	}
+	return nil
+}
+
+// PurgePrefix erases every accessible version and delete marker under an org prefix.
+// Start each page from the beginning: deleting versions can invalidate a provider's cursor.
+// Provider-managed backup copies and incomplete multipart uploads follow provider policy.
+func (b *Bucket) PurgePrefix(ctx context.Context, prefix string) error {
+	if prefix == "" || !strings.HasSuffix(prefix, "/") {
+		return fs.ErrInvalid
+	}
+	for {
+		page, err := b.c.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{Bucket: aws.String(b.bucket), Prefix: aws.String(prefix), MaxKeys: aws.Int32(1000)})
+		if err != nil {
+			return wrap("list versions", prefix, err)
+		}
+		var remove []types.ObjectIdentifier
+		for _, v := range page.Versions {
+			remove = append(remove, types.ObjectIdentifier{Key: v.Key, VersionId: v.VersionId})
+		}
+		for _, v := range page.DeleteMarkers {
+			remove = append(remove, types.ObjectIdentifier{Key: v.Key, VersionId: v.VersionId})
+		}
+		if len(remove) == 0 {
+			return nil
+		}
+		result, err := b.c.DeleteObjects(ctx, &s3.DeleteObjectsInput{Bucket: aws.String(b.bucket), Delete: &types.Delete{Objects: remove, Quiet: aws.Bool(true)}})
+		if err != nil {
+			return wrap("purge versions", prefix, err)
+		}
+		if len(result.Errors) > 0 {
+			return fmt.Errorf("s3 purge versions %s: %s", prefix, aws.ToString(result.Errors[0].Code))
+		}
+	}
 }

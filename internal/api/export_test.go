@@ -8,6 +8,7 @@ import (
 	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/auth"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -96,7 +97,7 @@ func IndexSearchForTest(s *Server) error { return s.indexIdle(context.Background
 func SearchRootForTest(s *Server) string { return s.searchRoot() }
 
 // TextRootForTest is where document text is cached. Test-only.
-func TextRootForTest(s *Server) string { return s.textRoot().Root() }
+func TextRootForTest(s *Server) string { return s.textRoot().(objects.Local).Root() }
 
 // OfficeBudgetForTest is the shared office budget per per-IP limit.
 const OfficeBudgetForTest = officeBudget

@@ -17,6 +17,7 @@ import (
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/extract"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/search"
 )
 
@@ -59,10 +60,13 @@ var textKinds = map[string]bool{"txt": true, "md": true, "markdown": true, "csv"
 
 func (s *Server) searchRoot() string { return filepath.Join(s.config.Database.DataDir, "search") }
 
-// openSearch opens the index when content search is on: single-tenant SQLite only, so its
-// text caches are sealed under the deployment key (searchKeys). Per-org search keys (D14) come
-// with the per-org index.
+// openSearch selects local SQLite or hosted in-memory snapshots. Single-tenant
+// PostgreSQL still has no content index; hosted keys and queue state are per org.
 func (s *Server) openSearch() {
+	if s.hostedSearch() {
+		s.searchSlots = make(chan struct{}, 4)
+		return
+	}
 	if !s.config.Drive.ContentSearch || !strings.EqualFold(s.config.Database.Driver, "sqlite") || s.store.Drive().Multi() {
 		return
 	}
@@ -74,7 +78,20 @@ func (s *Server) openSearch() {
 	s.search = x
 }
 
-func (s *Server) searchKeys() drive.Keys { return drive.Deployment(s.config.Security.EncryptionKey) }
+// searchWorker owns one mutable index. Hosted workers never share it with readers or another org.
+type searchWorker struct {
+	*Server
+	search *search.Index
+	org    string
+	keys   drive.Keys
+	done   []drive.SearchWork
+	dirty  bool
+}
+
+func (s *searchWorker) searchKeys() drive.Keys { return s.keys }
+func (s *Server) localSearch() *searchWorker {
+	return &searchWorker{Server: s, search: s.search, keys: drive.Deployment(s.config.Security.EncryptionKey)}
+}
 
 // CloseSearch closes the index; call it after RunSearchIndex has returned.
 func (s *Server) CloseSearch() error {
@@ -101,11 +118,15 @@ func (s *Server) indexKind(name string) string {
 
 // indexText returns f's text as kind, through the sealed text cache.
 func (s *Server) indexText(ctx context.Context, f drive.File, kind string) (string, error) {
+	key, err := s.store.Drive().KeysFor(ctx, f.Workspace)
+	if err != nil {
+		return "", err
+	}
 	if kind != kindText {
 		text, _, err := s.documentText(ctx, f, kind)
 		return text, err
 	}
-	if cached, err := drive.ReadThumb(s.textRoot(), s.searchKeys(), f.Blob); err == nil && len(cached) > 0 {
+	if cached, err := drive.ReadThumb(s.textRoot(), key, f.Blob); err == nil && len(cached) > 0 {
 		return string(cached[1:]), nil
 	}
 	blob, err := s.openBlob(context.Background(), f)
@@ -129,7 +150,7 @@ func (s *Server) indexText(ctx context.Context, f drive.File, kind string) (stri
 	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
 		return "", extract.ErrUnsupported
 	}
-	if err := drive.WriteThumb(s.textRoot(), s.searchKeys(), f.Blob, append([]byte{flag}, data...)); err != nil {
+	if err := drive.WriteThumb(s.textRoot(), key, f.Blob, append([]byte{flag}, data...)); err != nil {
 		log.Printf("document text cache %s: %v", f.ID, err)
 	}
 	return string(data), nil
@@ -156,11 +177,11 @@ func failCode(err error) string {
 	return "failed"
 }
 
-func (s *Server) textCached(blob string) bool {
+func (s *searchWorker) textCached(blob string) bool {
 	if _, err := drive.BlobPath("", blob); err != nil {
 		return false
 	}
-	o, err := s.textRoot().Open(context.Background(), blob)
+	o, err := objects.Scope(s.textRoot(), s.keys.Org()).Open(context.Background(), blob)
 	if err != nil {
 		return false
 	}
@@ -172,21 +193,26 @@ func (s *Server) textCached(blob string) bool {
 // and hourly, and every few seconds queues changed files and indexes those due, throttled to
 // about two thirds of a core.
 func (s *Server) RunSearchIndex(ctx context.Context) {
+	if s.hostedSearch() {
+		s.runHostedSearch(ctx)
+		return
+	}
+	w := s.localSearch()
 	if s.search == nil {
 		return
 	}
 	var reconciled time.Time
 	for {
 		if time.Since(reconciled) >= indexReconcile {
-			if err := s.reconcileSearch(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			if err := w.reconcileSearch(ctx, time.Now()); err != nil && ctx.Err() == nil {
 				log.Printf("search index reconcile: %v", err)
 			}
 			reconciled = time.Now()
 		}
-		if err := s.tailSearch(ctx, time.Now()); err != nil && ctx.Err() == nil {
+		if err := w.tailSearch(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			log.Printf("search index changes: %v", err)
 		}
-		if err := s.drainSearch(ctx, false, true); err != nil && ctx.Err() == nil {
+		if err := w.drainSearch(ctx, false, true); err != nil && ctx.Err() == nil {
 			log.Printf("search index: %v", err)
 		}
 		if err := s.search.SaveVocab(false); err != nil {
@@ -201,8 +227,8 @@ func (s *Server) RunSearchIndex(ctx context.Context) {
 }
 
 // tailSearch queues the files named by drive changes since the stored cursor.
-func (s *Server) tailSearch(ctx context.Context, now time.Time) error {
-	cursor, err := s.search.Cursor(ctx)
+func (s *searchWorker) tailSearch(ctx context.Context, now time.Time) error {
+	cursor, err := s.cursor(ctx)
 	if err != nil {
 		return err
 	}
@@ -211,7 +237,7 @@ func (s *Server) tailSearch(ctx context.Context, now time.Time) error {
 		if err != nil || next == cursor {
 			return err
 		}
-		if err = s.search.Enqueue(ctx, files, now, indexDebounce, next); err != nil {
+		if err = s.enqueue(ctx, files, now, indexDebounce, next); err != nil {
 			return err
 		}
 		cursor = next
@@ -222,7 +248,7 @@ func (s *Server) tailSearch(ctx context.Context, now time.Time) error {
 // retryable or missing its text cache, and deletes documents no current file holds (purged
 // files, old versions, sealed legacy blobs). It is what rebuilds the index after a restore.
 // It also brings the prefix vocabulary up to date from the sealed text cache (vocabSearch).
-func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
+func (s *searchWorker) reconcileSearch(ctx context.Context, now time.Time) error {
 	docs, err := s.search.Docs(ctx)
 	if err != nil {
 		return err
@@ -257,9 +283,10 @@ func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
 	if n, err := s.search.Keep(ctx, keep); err != nil {
 		return err
 	} else if n > 0 {
+		s.dirty = true
 		log.Printf("search index: removed %d documents", n)
 	}
-	if err := s.search.Enqueue(ctx, todo, now, 0, -1); err != nil {
+	if err := s.enqueue(ctx, todo, now, 0, -1); err != nil {
 		return err
 	}
 	return s.vocabSearch(ctx, words, fresh, now)
@@ -269,10 +296,11 @@ func (s *Server) reconcileSearch(ctx context.Context, now time.Time) error {
 // the prefix vocabulary, replacing it when fresh: that builds it after an upgrade, after a
 // crash lost its latest words, and daily, so no reindex is ever needed. It runs on the worker,
 // throttled like indexing; search keeps working meanwhile on the vocabulary as it was.
-func (s *Server) vocabSearch(ctx context.Context, blobs map[string]string, fresh bool, now time.Time) error {
+func (s *searchWorker) vocabSearch(ctx context.Context, blobs map[string]string, fresh bool, now time.Time) error {
 	if len(blobs) == 0 && !fresh {
 		return nil
 	}
+	s.dirty = true
 	b := s.search.BuildVocab(fresh, now)
 	for _, blob := range blobs {
 		start := time.Now()
@@ -289,9 +317,9 @@ func (s *Server) vocabSearch(ctx context.Context, blobs map[string]string, fresh
 }
 
 // drainSearch indexes queued files until none is due (with force, until the queue is empty).
-func (s *Server) drainSearch(ctx context.Context, force, throttle bool) error {
+func (s *searchWorker) drainSearch(ctx context.Context, force, throttle bool) error {
 	for {
-		due, err := s.search.Due(ctx, time.Now(), force, 20)
+		due, err := s.due(ctx, time.Now(), force, 20)
 		if err != nil || len(due) == 0 {
 			return err
 		}
@@ -308,22 +336,25 @@ func (s *Server) drainSearch(ctx context.Context, force, throttle bool) error {
 				}
 			}
 		}
+		if s.org != "" {
+			return nil
+		}
 	}
 }
 
 // indexFile indexes the current version of file id, or drops it from the queue when there is
 // nothing to do. Only database errors are returned; extraction failures are recorded.
-func (s *Server) indexFile(ctx context.Context, id string, now time.Time) error {
+func (s *searchWorker) indexFile(ctx context.Context, id string, now time.Time) error {
 	f, err := s.store.Drive().IndexFile(ctx, id)
 	if errors.Is(err, drive.ErrNotFound) {
-		return s.search.Dequeue(ctx, id)
+		return s.dequeue(ctx, id)
 	}
 	if err != nil {
 		return err
 	}
 	kind := s.indexKind(f.Name)
 	if kind == "" {
-		return s.search.Dequeue(ctx, id)
+		return s.dequeue(ctx, id)
 	}
 	ref := s.search.Ref(f.Blob, kind)
 	state, attempts, updated, err := s.search.Status(ctx, ref)
@@ -332,7 +363,7 @@ func (s *Server) indexFile(ctx context.Context, id string, now time.Time) error 
 	}
 	done := state == search.StateDone
 	if (done && s.textCached(f.Blob)) || (!done && !search.Retry(state, attempts, updated, now)) {
-		return s.search.Dequeue(ctx, id)
+		return s.dequeue(ctx, id)
 	}
 	text, err := s.indexText(ctx, f, kind)
 	if err != nil {
@@ -344,7 +375,7 @@ func (s *Server) indexFile(ctx context.Context, id string, now time.Time) error 
 	}
 	if done {
 		s.search.Learn(text)
-		return s.search.Dequeue(ctx, id) // the text cache is back; the postings were kept
+		return s.dequeue(ctx, id) // the text cache is back; the postings were kept
 	}
 	counts, length := search.Count(text)
 	return s.search.Put(ctx, ref, counts, length, id, now)
@@ -353,16 +384,20 @@ func (s *Server) indexFile(ctx context.Context, id string, now time.Time) error 
 // indexIdle brings the index fully up to date now, debounce ignored. Tests use it instead of
 // waiting for the worker.
 func (s *Server) indexIdle(ctx context.Context) error {
+	if s.hostedSearch() {
+		return s.indexHostedOrgs(ctx, true)
+	}
+	w := s.localSearch()
 	if s.search == nil {
 		return nil
 	}
-	if err := s.tailSearch(ctx, time.Now()); err != nil {
+	if err := w.tailSearch(ctx, time.Now()); err != nil {
 		return err
 	}
-	if err := s.reconcileSearch(ctx, time.Now()); err != nil {
+	if err := w.reconcileSearch(ctx, time.Now()); err != nil {
 		return err
 	}
-	if err := s.drainSearch(ctx, true, false); err != nil {
+	if err := w.drainSearch(ctx, true, false); err != nil {
 		return err
 	}
 	return s.search.SaveVocab(true)
@@ -373,6 +408,8 @@ func (s *Server) indexIdle(ctx context.Context) error {
 // phrase candidates went unchecked and whether a prefix was capped.
 type contentMatcher struct {
 	s          *Server
+	index      *search.Index
+	keys       drive.Keys
 	terms      []string // highlighted alone: words and the words prefixes expanded to
 	phrases    [][]string
 	pending    int
@@ -382,26 +419,56 @@ type contentMatcher struct {
 
 // matcher returns a content matcher, or nil when content search is off.
 func (s *Server) matcher() *contentMatcher {
-	if s.search == nil {
+	if s.search == nil && !s.hostedSearch() {
 		return nil
 	}
-	return &contentMatcher{s: s}
+	return &contentMatcher{s: s, index: s.search, keys: drive.Deployment(s.config.Security.EncryptionKey)}
 }
 
 func (m *contentMatcher) Match(ctx context.Context, q string, files []drive.File) (map[string]float64, error) {
+	if !m.s.hostedSearch() {
+		return m.matchIndex(ctx, q, files)
+	}
+	if len(files) == 0 {
+		return map[string]float64{}, nil
+	}
+	k, err := m.s.store.Drive().KeysFor(ctx, files[0].Workspace)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		other, err := m.s.store.Drive().KeysFor(ctx, f.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		if other.Org() != k.Org() {
+			return nil, drive.ErrDenied
+		}
+	}
+	var out map[string]float64
+	err = m.s.withHostedIndex(ctx, k.Org(), func(x *search.Index, _ drive.SearchPointer, keys drive.Keys) error {
+		m.index, m.keys = x, keys
+		var err error
+		out, err = m.matchIndex(ctx, q, files)
+		return err
+	})
+	m.index = nil
+	return out, err
+}
+func (m *contentMatcher) matchIndex(ctx context.Context, q string, files []drive.File) (map[string]float64, error) {
 	query := search.ParseQuery(q)
 	refs := map[string]bool{}
 	byRef := map[string][]string{}
 	blobs := map[string]string{}
 	for _, f := range files {
 		if kind := m.s.indexKind(f.Name); kind != "" {
-			ref := m.s.search.Ref(f.Blob, kind)
+			ref := m.index.Ref(f.Blob, kind)
 			refs[ref] = true
 			byRef[ref] = append(byRef[ref], f.ID)
 			blobs[ref] = f.Blob
 		}
 	}
-	got, err := m.s.search.Match(ctx, query, refs)
+	got, err := m.index.Match(ctx, query, refs)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +505,7 @@ func (m *contentMatcher) verify(scores map[string]float64, blobs map[string]stri
 			}
 			break
 		}
-		cached, err := drive.ReadThumb(m.s.textRoot(), m.s.searchKeys(), blobs[ref])
+		cached, err := drive.ReadThumb(m.s.textRoot(), m.keys, blobs[ref])
 		if err != nil || len(cached) == 0 {
 			m.unverified += len(byRef[ref])
 			continue
@@ -458,9 +525,13 @@ func (s *Server) snippet(ctx context.Context, user string, h drive.Hit, m *conte
 	if err != nil || f.Trashed {
 		return nil, false
 	}
-	r, err := drive.OpenThumb(s.textRoot(), s.searchKeys(), f.Blob)
+	key, err := s.store.Drive().KeysFor(ctx, f.Workspace)
+	if err != nil {
+		return nil, false
+	}
+	r, err := drive.OpenThumb(s.textRoot(), key, f.Blob)
 	if errors.Is(err, fs.ErrNotExist) {
-		if err := s.search.Enqueue(ctx, []string{f.ID}, time.Now(), 0, -1); err != nil {
+		if err := s.enqueueSnippet(ctx, key.Org(), f.ID); err != nil {
 			log.Printf("search index queue %s: %v", f.ID, err)
 		}
 		return nil, true

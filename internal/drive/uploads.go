@@ -161,7 +161,7 @@ func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, user, id
 	if err != nil {
 		return u, err
 	}
-	segments, name := staging.Sub(id), uuid.NewString()
+	segments, name := objects.ScopeTree(staging, k.org).Sub(id), uuid.NewString()
 	if err = writeSegment(segments, name, k, r, length); err != nil {
 		return u, err
 	}
@@ -186,6 +186,7 @@ func (s *Store) AppendUpload(ctx context.Context, staging objects.Tree, user, id
 
 // writeSegment seals exactly length bytes of r as segments' object name.
 func writeSegment(segments objects.Store, name string, k Keys, r io.Reader, length int64) error {
+	segments = objects.Scope(segments, k.org)
 	w, err := segments.Create(context.Background())
 	if err != nil {
 		return err

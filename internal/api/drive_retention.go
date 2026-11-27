@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Busnes-app/kydrive-server/internal/drive"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
 
@@ -139,17 +140,21 @@ const blobUpgradeRate = 32 << 20
 // KYB2, now and then hourly. Each pass first finishes swaps an earlier run committed but did
 // not clean up.
 func (s *Server) RunBlobSealing(ctx context.Context) {
+	local, ok := s.blobRoot().(objects.Local)
+	if !ok || s.multi() {
+		return
+	}
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	for {
-		n, err := s.store.Drive().SealLegacyBlobs(ctx, s.blobRoot().Root(), s.config.Security.EncryptionKey)
+		n, err := s.store.Drive().SealLegacyBlobs(ctx, local.Root(), s.config.Security.EncryptionKey)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("blob sealing: %v", err)
 		}
 		if n > 0 {
 			log.Printf("blob sealing: sealed %d legacy blobs", n)
 		}
-		if _, err = s.store.Drive().UpgradeBlobs(ctx, s.blobRoot().Root(), s.config.Security.EncryptionKey, blobUpgradeRate); err != nil && ctx.Err() == nil {
+		if _, err = s.store.Drive().UpgradeBlobs(ctx, local.Root(), s.config.Security.EncryptionKey, blobUpgradeRate); err != nil && ctx.Err() == nil {
 			log.Printf("blob format: %v", err)
 		}
 		select {

@@ -270,3 +270,29 @@ func TestS3PublishesInParts(t *testing.T) {
 		t.Fatalf("read back %d of %d bytes (size %d): %v", n, len(data), o.Size(), err)
 	}
 }
+
+func TestS3RemovesNestedOrgNamespace(t *testing.T) {
+	b, err := objects.NewBucket(s3Config(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, p := context.Background(), prefix(t)
+	for _, kind := range []string{"blobs/", "search/", "staging/session/"} {
+		st := b.Store(p + "orgs/org-a/" + kind)
+		draft, err := st.Create(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		draft.Write([]byte("sealed"))
+		if err := draft.Publish("object"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.Tree(p+"orgs/").RemoveAll(ctx, "org-a"); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	if err := b.Tree(p+"orgs/").List(ctx, func(string, time.Time) error { count++; return nil }); err != nil || count != 0 {
+		t.Fatal("nested org objects survived", count, err)
+	}
+}

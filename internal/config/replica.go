@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // ReplicaConfigSetting is private coordination state, cleared after restore.
@@ -63,6 +64,13 @@ func ReplicaFingerprint(c *Config) map[string]string {
 		"KYDRIVE_MAX_ZIP_SIZE":             strconv.FormatInt(c.Drive.MaxZipSize, 10),
 		"KYDRIVE_CONTENT_SEARCH":           b(c.Drive.ContentSearch),
 	}
+	cells := slices.Clone(c.Database.Cells)
+	slices.Sort(cells)
+	fields["KY_CELLS"] = strings.Join(cells, ",")
+	fields["KYDRIVE_S3_ENDPOINT"] = c.ObjectStorage.Endpoint
+	fields["KYDRIVE_S3_BUCKET"] = c.ObjectStorage.Bucket
+	fields["KYDRIVE_S3_REGION"] = c.ObjectStorage.Region
+	fields["KYDRIVE_S3_PATH_STYLE"] = b(c.ObjectStorage.PathStyle)
 	for name, value := range fields {
 		fields[name] = ReplicaField(c.Security.EncryptionKey, name, value)
 	}

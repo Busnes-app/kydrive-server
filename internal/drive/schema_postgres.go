@@ -10,7 +10,7 @@ import (
 // new (SQLite moves over by migrate-postgres), so it starts at the latest version; an entry
 // appended to schema needs its PostgreSQL form here too, and TestPostgresSchemaIsCurrent fails
 // until it has one.
-const postgresVersion = 30
+const postgresVersion = 31
 
 // postgresTables is every drive table at postgresVersion without org_id, which
 // tenancySchema adds as on SQLite. SQLite's INTEGER is 64-bit, so it is BIGINT here.
@@ -105,6 +105,13 @@ func (s *Store) createPostgres(ctx context.Context) error {
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema`).Scan(&done); err != nil || done == postgresVersion {
 			return err
 		}
+		if done == 30 {
+			if _, err := tx.ExecContext(ctx, cellsSearchSchema(dialect{pg: true})); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(31)`)
+			return err
+		}
 		if done != 0 {
 			return fmt.Errorf("drive: PostgreSQL schema half recorded (%d of %d)", done, postgresVersion)
 		}
@@ -122,7 +129,7 @@ func (s *Store) createPostgres(ctx context.Context) error {
 // postgresSchema is the drive schema at postgresVersion.
 func postgresSchema() string {
 	pg := dialect{pg: true}
-	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg)
+	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg) + cellsSearchSchema(pg)
 }
 
 // dialect spells what the two backends write differently: triggers and IS NOT between values.

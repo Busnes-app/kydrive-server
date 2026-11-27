@@ -450,3 +450,65 @@ func TestPhoneQRLink(t *testing.T) {
 	srv.ServeHTTP(rec, inURL)
 	expect(rec, 400, "code in URL")
 }
+
+// Both authenticated endpoints expose the exact same directory identity. The local ID
+// remains for older clients; an org is reported only when the store owns that binding.
+func TestDeviceDirectoryClaims(t *testing.T) {
+	m := setupMultiServer(t)
+	m.cfg.SSO.KySignOnIssuer = "https://identity.e2e.test/tenant/"
+	for _, row := range []struct{ id, sub, org string }{{"a1", "Exact:Alice", "org-a"}, {"b1", "Exact:Bob", "org-b"}} {
+		if _, err := m.db.Exec(`UPDATE users SET sso_provider='kysignon',sso_subject=? WHERE id=?`, row.sub, row.id); err != nil {
+			t.Fatal(err)
+		}
+		out := redeem(m.srv, approve(t, m.srv, m.session[row.id]), linkVerifier)
+		var got map[string]string
+		if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &got) != nil {
+			t.Fatalf("token: %d %s", out.Code, out.Body)
+		}
+		for key, want := range map[string]string{"issuer": strings.TrimRight(m.cfg.SSO.KySignOnIssuer, "/"), "sub": row.sub, "org_id": row.org, "user_id": row.id} {
+			if got[key] != want {
+				t.Errorf("token %s=%q want %q", key, got[key], want)
+			}
+		}
+		me := send(t, m.srv, "GET", "/api/drive/device", "", nil, got["token"])
+		var account map[string]string
+		if me.Code != 200 || json.Unmarshal(me.Body.Bytes(), &account) != nil {
+			t.Fatalf("device: %d %s", me.Code, me.Body)
+		}
+		for _, key := range []string{"issuer", "sub", "org_id", "user_id"} {
+			if account[key] != got[key] {
+				t.Errorf("device %s differs", key)
+			}
+		}
+	}
+}
+
+// The identity on the wire must match the verified ID token, even when the operator's
+// configured spelling ends in a slash (oauthFlow trims it before discovery/verification).
+func TestDeviceIssuerMatchesVerifiedOIDCIssuer(t *testing.T) {
+	_, st, cfg := setupTestServer(t)
+	f := newFakeKySignOn(t)
+	cfg.SSO.KySignOnIssuer, cfg.SSO.KySignOnClientID, cfg.SSO.AutoProvision = f.issuer+"/", "client", true
+	srv := api.NewServer(cfg, st)
+	if sessionCookie(ssoLogin(t, srv, f, "ExactSubject", "sid-device")) == nil {
+		t.Fatal("OIDC login failed")
+	}
+	user, err := st.Users().GetUserBySSO(context.Background(), "kysignon", "ExactSubject")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := st.Drive().ApproveLink(context.Background(), user.ID, "Work laptop", "linux", linkChallenge(), "http://127.0.0.1:53682/cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := redeem(srv, code, linkVerifier)
+	var got map[string]string
+	if out.Code != 200 || json.Unmarshal(out.Body.Bytes(), &got) != nil || got["issuer"] != f.issuer || got["sub"] != "ExactSubject" || got["org_id"] != "" {
+		t.Fatalf("device claims do not match ID token: %d %s", out.Code, out.Body)
+	}
+	me := send(t, srv, "GET", "/api/drive/device", "", nil, got["token"])
+	var account map[string]string
+	if me.Code != 200 || json.Unmarshal(me.Body.Bytes(), &account) != nil || account["issuer"] != f.issuer || account["sub"] != "ExactSubject" {
+		t.Fatalf("account claims: %d %s", me.Code, me.Body)
+	}
+}

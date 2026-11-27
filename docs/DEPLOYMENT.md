@@ -137,3 +137,47 @@ least three connections per replica (`KY_DB_MAX_OPEN_CONNS`; multi mode raises a
 value to 3). Neither lock is an exactly-once or stale-writer fence: jobs are idempotent, and
 a deposit already sealing or uploading when its session dies finishes. Multi-mode startup
 and acceptance gates all remain.
+
+
+## Hosted object storage and cells (end-to-end test builds only)
+
+Release builds still refuse `KYDRIVE_TENANCY=multi`. An explicit `kye2e` build accepts only
+an HTTPS KyIdentity issuer under `.test`; it is for isolated suite fixtures, not deployment.
+Single-tenant installs keep their existing filesystem storage and local SQLite search index.
+
+A hosted fixture requires retained external keys (as described above), PostgreSQL, and:
+
+| Variable | Value |
+| --- | --- |
+| `KY_CELLS` | 1–32 unique home-region slugs, comma-separated; each `^[a-z][a-z0-9-]{1,31}$` |
+| `KYDRIVE_S3_ENDPOINT` | Bare HTTPS origin; HTTP is accepted only on loopback for fixtures |
+| `KYDRIVE_S3_BUCKET` | Existing bucket; the server does not create it |
+| `KYDRIVE_S3_REGION` | Signing region, default `us-east-1` |
+| `KYDRIVE_S3_ACCESS_KEY` | Access key ID |
+| `KYDRIVE_S3_SECRET_KEY_FILE` | Private credential file; alternatively `KYDRIVE_S3_SECRET_KEY` |
+| `KYDRIVE_S3_PATH_STYLE` | Boolean, default `true`; set false for virtual-hosted bucket addressing |
+
+Conflicting secret sources and incomplete storage settings fail startup. Secrets are never
+logged. Single mode refuses hosted settings, and the old `KY_REGION` name is refused.
+Replicas share the endpoint, bucket, region, addressing mode and sorted cell list in the
+configuration fingerprint; credential rotation does not change the destination identity.
+
+Every object is under `cells/<home_region>/orgs/<org_id>/`: `blobs/`, `staging/`, `view/`,
+`thumbs/`, `text/` or `search/`. The home is fixed after KyIdentity assigns it. Dropping a
+cell at restart immediately blocks its existing principals and exports; a regioned KyPost
+peer resolves only through that org's `home_region`. Configure a bucket lifecycle rule to
+abort incomplete multipart uploads left by a killed process.
+
+The hosted search index has a 32 MiB per-org in-memory SQLite limit. The complete snapshot,
+including prefix vocabulary, is AEAD sealed under an org subkey and bound to the org, object
+UUID and monotonically committed version. PostgreSQL holds the queue and current pointer;
+replicas cache at most 64 MiB of ciphertext and open at most four private RAM copies at a
+time. The elected worker rewrites a snapshot per batch, then commits the pointer by CAS.
+Erasure removes its queue/pointer and recursively removes the org prefix; failed cleanup
+retries from the tombstone. Erasure requires bucket version-list/delete permissions and removes accessible versions
+and delete markers. Provider-managed backups need their own retention policy and become
+unreadable when the org key is destroyed.
+
+Provider durability/read-after-write, cold-fetch and rewrite costs, large-org indexing,
+restore against object storage, real desktop clients and hosted Office remain unqualified.
+The existing single-tenant Restic bulk workflow is not a backup of hosted S3 objects.
