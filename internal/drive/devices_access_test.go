@@ -34,6 +34,8 @@ var (
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, session-only exports, admin-only listings and background workers.
 	deviceUnreachable = []string{
+		"ConfigureCells",
+		"ObjectPrefix", "OrgHomeRegion", "OrgKeys", "PublishSearch", "SearchDue", "SearchEnqueue", "SearchPointer", "SetOrgPurger", "StorageOrgs",
 		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeletedWorkspaces", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",
 		"GuestView", "IndexChanges", "IndexFile", "IndexFiles", "Leavers", "MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations",

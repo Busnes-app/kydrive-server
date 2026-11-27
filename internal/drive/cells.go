@@ -21,7 +21,10 @@ func cellsSearchSchema(d dialect) string {
 func cellServing(o string) string {
 	return `NOT ` + multiTenantSQL + ` OR COALESCE((SELECT value FROM server_settings WHERE key='cells_configured'),'')<>'1' OR ` + o + `.seeded=1 OR EXISTS(SELECT 1 FROM drive_cells c WHERE c.cell=` + o + `.home_region)`
 }
-func (s *Store) recordCells(ctx context.Context) error {
+
+// ConfigureCells activates the validated deployment cell set. Call only after the
+// replica configuration check succeeds; opening a rejected replica must change no serving state.
+func (s *Store) ConfigureCells(ctx context.Context) error {
 	if !s.Multi() || len(s.tenancy.Cells) == 0 {
 		return nil
 	}

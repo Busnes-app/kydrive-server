@@ -1157,7 +1157,8 @@ the release before. No R step starts before the owner approves this amendment.
     S3-compatible server in CI. Two processes write, read and sweep the same store. Every log
     line and error from the S3 backend is scanned for the secret.
   - As built in Track 3: `KYDRIVE_S3_*` opens the existing bucket backend at runtime;
-    `KY_CELLS` is validated and recorded before serving. Schema 31 retains immutable homes,
+    `KY_CELLS` is validated and activated after the replica configuration check, before serving;
+    opening a mismatched replica cannot change shared serving state. Schema 31 retains immutable homes,
     serves only configured cells (staff excepted), and upgrades PostgreSQL v30 atomically.
     `ObjectPrefix` supplies cell/org prefixes to blob, staging, view and cache paths.
     Desktop token/account responses carry exact directory issuer/sub and the stored org.

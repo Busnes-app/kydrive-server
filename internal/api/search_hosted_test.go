@@ -70,6 +70,9 @@ func newHostedWorld(t *testing.T) *hostedWorld {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	if err := st.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	w := &hostedWorld{st: st, cfg: cfg, db: testdb.Open(t, cfg.Database)}
 	for i, home := range []string{"e2e-1", "e2e-2", "e2e-1"} {
 		org := uuid.NewString()
@@ -302,6 +305,9 @@ func TestHostedSearchConcurrentPublishAndCellGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	if err := st.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if _, active, err := st.Drive().OrgActive(ctx, w.orgs[1]); err != nil || active {
 		t.Fatal("dropped cell active", active, err)
 	}
@@ -323,6 +329,9 @@ func TestHostedSearchConcurrentPublishAndCellGuard(t *testing.T) {
 	// Restore served cells for the independent cleanup owner.
 	restored, err := store.Open(ctx, w.cfg.Database, w.cfg.Security.EncryptionKey)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restored.Drive().ConfigureCells(ctx); err != nil {
 		t.Fatal(err)
 	}
 	restored.Close()

@@ -152,11 +152,6 @@ func open(ctx context.Context, db *sql.DB, key []byte, version int, t Tenancy) (
 	if err = s.migrateTo(ctx, version); err != nil {
 		return nil, err
 	}
-	if version == len(schema) {
-		if err = s.recordCells(ctx); err != nil {
-			return nil, err
-		}
-	}
 	if err = s.seedStaffOrg(ctx); err != nil {
 		return nil, err
 	}

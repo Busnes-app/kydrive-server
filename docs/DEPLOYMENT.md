@@ -163,8 +163,9 @@ Replicas share the endpoint, bucket, region, addressing mode and sorted cell lis
 configuration fingerprint; credential rotation does not change the destination identity.
 
 Every object is under `cells/<home_region>/orgs/<org_id>/`: `blobs/`, `staging/`, `view/`,
-`thumbs/`, `text/` or `search/`. The home is fixed after KyIdentity assigns it. Dropping a
-cell at restart immediately blocks its existing principals and exports; a regioned KyPost
+`thumbs/`, `text/` or `search/`. The home is fixed after KyIdentity assigns it. The replica configuration check must approve the cell list before activation; a refused
+startup leaves serving cells and directory freshness untouched. Dropping a
+cell at a validated restart immediately blocks its existing principals and exports; a regioned KyPost
 peer resolves only through that org's `home_region`. Configure a bucket lifecycle rule to
 abort incomplete multipart uploads left by a killed process.
 

@@ -22,6 +22,9 @@ func TestCellsRequireFreshListingAndKeepHomeFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	if err := st.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	local, remote := uuid.NewString(), uuid.NewString()
 	listed := []suitedir.Org{{ID: local, HomeRegion: "e2e-1", Status: suitedir.OrgActive, Enabled: true, Revision: 1}, {ID: remote, HomeRegion: "e2e-2", Status: suitedir.OrgActive, Enabled: true, Revision: 2}}
 	if _, err := st.Drive().ApplyOrgs(ctx, listed, 2); err != nil {
@@ -39,6 +42,9 @@ func TestCellsRequireFreshListingAndKeepHomeFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer grown.Close()
+	if err := grown.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if since, err := grown.Drive().OrgsSince(ctx); err != nil || since != 0 {
 		t.Fatal("new cell did not reset cursor", since, err)
 	}
@@ -72,6 +78,9 @@ func TestCellsRequireFreshListingAndKeepHomeFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer same.Close()
+	if err := same.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if since, err := same.Drive().OrgsSince(ctx); err != nil || since != 2 {
 		t.Fatal("reorder reset cursor", since, err)
 	}
@@ -81,6 +90,9 @@ func TestCellsRequireFreshListingAndKeepHomeFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dropped.Close()
+	if err := dropped.Drive().ConfigureCells(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := grown.Drive().ObjectPrefix(ctx, remote); err != drive.ErrDenied {
 		t.Fatal("old replica resolved dropped cell", err)
 	}
