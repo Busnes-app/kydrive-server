@@ -79,9 +79,9 @@ func TestDeviceSigningGoldenVector(t *testing.T) {
 		t.Fatalf("replayed vector: %v", err)
 	}
 	// Another key of the right shape refuses it.
-	other, _ := ecdsa.GenerateKey(key.Curve, strings.NewReader(strings.Repeat("x", 128)))
+	other, _ := ecdsa.GenerateKey(key.P256.Curve, strings.NewReader(strings.Repeat("x", 128)))
 	r.Header.Set("KyDrive-Nonce", "BBECAwQFBgcICQoLDA0ODw")
-	if err = s.verifyDeviceRequest(r, "dev2", &other.PublicKey); err != errDeviceSignature {
+	if err = s.verifyDeviceRequest(r, "dev2", &drive.DeviceKey{P256: &other.PublicKey}); err != errDeviceSignature {
 		t.Fatalf("other key: %v", err)
 	}
 }

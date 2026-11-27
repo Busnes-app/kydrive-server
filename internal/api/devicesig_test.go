@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
@@ -28,6 +29,7 @@ import (
 // signer is a linked device holding its key, as the Android and desktop clients do.
 type signer struct {
 	key    *ecdsa.PrivateKey
+	hybrid *hybridsig.PrivateKey
 	token  string
 	origin string
 	now    func() time.Time
@@ -50,8 +52,14 @@ func (d *signer) sign(r *http.Request, body []byte) {
 		}
 	}
 	msg := strings.Join([]string{"kydrive-request-v1", d.origin, r.Method, r.RequestURI, date, n, hexSum([]byte(hs.String())), hexSum(body)}, "|")
-	sum := sha256.Sum256([]byte(msg))
-	sig, err := ecdsa.SignASN1(rand.Reader, d.key, sum[:])
+	var sig []byte
+	var err error
+	if d.hybrid != nil {
+		sig, err = d.hybrid.Sign("kydrive-request-v1", []byte(msg))
+	} else {
+		sum := sha256.Sum256([]byte(msg))
+		sig, err = ecdsa.SignASN1(rand.Reader, d.key, sum[:])
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -282,4 +290,113 @@ func TestKeylessDevicesMustLinkAgain(t *testing.T) {
 	if out := serve(srv, r); out.Code != 401 || strings.TrimSpace(out.Body.String()) != `{"error":"device_revoked","wipe":true}` {
 		t.Fatalf("revoked keyless device: %d %s", out.Code, out.Body.String())
 	}
+}
+
+func TestSignedDeviceRequestsHybrid(t *testing.T) {
+	srv, st, cfg := setupTestServer(t)
+	ctx := context.Background()
+	loginAs(t, srv, st, "hybadmin", "admin")
+	user := loginAs(t, srv, st, "hybuser", "user")
+	if err := st.Groups().ReplaceGroup(ctx, &store.Group{ID: "hybgroup", DisplayName: "Hyb", Members: []string{"usr_hybuser"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	w, err := st.Drive().CreateWorkspace(ctx, "usr_hybadmin", "HybTeam", 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Drive().Grant(ctx, "usr_hybadmin", w.ID, "hybgroup", "editor"); err != nil {
+		t.Fatal(err)
+	}
+	origin := strings.ToLower(strings.TrimRight(cfg.Server.AppURL, "/"))
+
+	// Link a desktop device via PKCE with an ML-DSA-65+Ed25519 hybrid key.
+	verifier := "hybridsig-pkce-verifier-0123456789abcdefghijklmnopqrstuvwxyz"
+	chSum := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(chSum[:])
+	approveBody, _ := json.Marshal(map[string]string{
+		"redirect":  "http://127.0.0.1:41234/callback",
+		"challenge": challenge,
+		"state":     "hybstate",
+		"name":      "Linux Workstation",
+		"platform":  "linux",
+	})
+	approveOut := send(t, srv, "POST", "/api/devices/approve", string(approveBody), user, "")
+	var approved struct{ Redirect string }
+	if approveOut.Code != 200 || json.Unmarshal(approveOut.Body.Bytes(), &approved) != nil {
+		t.Fatalf("approve %d %s", approveOut.Code, approveOut.Body.String())
+	}
+	ru, _ := url.Parse(approved.Redirect)
+
+	hybridKey, err := hybridsig.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{
+		"code":      {ru.Query().Get("code")},
+		"verifier":  {verifier},
+		"publicKey": {base64.StdEncoding.EncodeToString(hybridKey.Public().Bytes())},
+	}
+	redeemReq := httptest.NewRequest("POST", "/api/devices/token", strings.NewReader(form.Encode()))
+	redeemReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	redeemOut := serve(srv, redeemReq)
+	var redeemed struct{ Token string }
+	if redeemOut.Code != 200 || json.Unmarshal(redeemOut.Body.Bytes(), &redeemed) != nil {
+		t.Fatalf("redeem %d %s", redeemOut.Code, redeemOut.Body.String())
+	}
+	d := &signer{hybrid: hybridKey, token: redeemed.Token, origin: origin, now: time.Now}
+
+	expect := func(got *httptest.ResponseRecorder, code int, what string) {
+		t.Helper()
+		if got.Code != code {
+			t.Fatalf("%s: %d, want %d: %s", what, got.Code, code, got.Body.String())
+		}
+	}
+
+	expect(serve(srv, d.request("GET", "/api/drive/workspaces", nil)), 200, "hybrid signed list")
+	expect(serve(srv, d.request("GET", "/api/drive/device", nil)), 200, "hybrid signed account")
+	expect(serve(srv, d.request("PROPFIND", "/dav/", nil, "Depth", "1")), 207, "hybrid signed DAV")
+	folder := []byte(`{"name":"PQSynced","parent":""}`)
+	expect(serve(srv, d.request("POST", "/api/drive/workspaces/"+w.ID+"/folders", folder)), 201, "hybrid signed write")
+
+	// Unsigned request and replay are rejected.
+	expect(send(t, srv, "GET", "/api/drive/workspaces", "", nil, d.token), 401, "unsigned")
+	r := d.request("GET", "/api/drive/workspaces", nil)
+	replay := r.Clone(ctx)
+	expect(serve(srv, r), 200, "first")
+	expect(serve(srv, replay), 401, "replay")
+
+	// Corrupting either half (ML-DSA-65 or Ed25519) must fail verification.
+	corruptByte := func(offset int, label string) {
+		req := d.request("GET", "/api/drive/workspaces", nil)
+		rawSig, err := base64.StdEncoding.DecodeString(req.Header.Get("KyDrive-Signature"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rawSig[offset] ^= 0x01
+		req.Header.Set("KyDrive-Signature", base64.StdEncoding.EncodeToString(rawSig))
+		expect(serve(srv, req), 401, label)
+	}
+	corruptByte(len(hybridsig.Alg)+1+10, "corrupted ML-DSA-65 half")
+	corruptByte(hybridsig.SignatureBytes-1, "corrupted Ed25519 half")
+
+	// A different hybrid key and a P-256 signature downgrade must both be rejected.
+	otherHybrid, err := hybridsig.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSigner := &signer{hybrid: otherHybrid, token: d.token, origin: origin, now: time.Now}
+	expect(serve(srv, otherSigner.request("GET", "/api/drive/workspaces", nil)), 401, "different hybrid key")
+
+	p256Key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	downgrade := &signer{key: p256Key, token: d.token, origin: origin, now: time.Now}
+	expect(serve(srv, downgrade.request("GET", "/api/drive/workspaces", nil)), 401, "p256 signature against hybrid key")
+
+	// Stale date and wrong origin are rejected.
+	stale := &signer{hybrid: hybridKey, token: d.token, origin: origin, now: func() time.Time { return time.Now().Add(-6 * time.Minute) }}
+	expect(serve(srv, stale.request("GET", "/api/drive/workspaces", nil)), 401, "stale date")
+	wrongOrigin := &signer{hybrid: hybridKey, token: d.token, origin: "https://evil.example", now: time.Now}
+	expect(serve(srv, wrongOrigin.request("GET", "/api/drive/workspaces", nil)), 401, "wrong origin")
+
+	// Unlinking works with hybrid signature.
+	expect(serve(srv, d.request("DELETE", "/api/devices/self", nil)), 204, "hybrid signed unlink")
 }

@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -18,14 +19,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/google/uuid"
 )
 
 // Device credentials are a client's own bearer tokens. A computer links through the browser:
 // it receives a one-time code on its loopback listener and redeems it with its PKCE verifier.
 // A phone scans a one-time code the signed-in user shows as a QR code. Codes and tokens are
-// 256 random bits, stored as SHA-256 only. A device may enrol a P-256 signing key when it links,
-// and only then: DeviceUser hands it to the caller to check the request's signature.
+// 256 random bits, stored as SHA-256 only. A device enrols an ML-DSA-65+Ed25519 hybrid or P-256
+// signing key when it links, and only then: DeviceUser hands it to the caller to check the
+// request's signature.
 const (
 	DevicePrefix      = "kyd_"
 	devicesPerUser    = 20
@@ -129,18 +132,67 @@ func (s *Store) RedeemPhone(ctx context.Context, code, name, platform string, ke
 	return s.redeem(ctx, code, name, platform, key, func(challenge string) bool { return challenge == "" })
 }
 
-// ParseDeviceKey accepts a P-256 public key as SPKI DER, the only signing key a device enrols.
-func ParseDeviceKey(der []byte) (*ecdsa.PublicKey, error) {
-	k, err := x509.ParsePKIXPublicKey(der)
-	if pub, ok := k.(*ecdsa.PublicKey); err == nil && ok && pub.Curve == elliptic.P256() {
-		return pub, nil
+// DeviceKey is a linked device's enrolled request-signing public key: either an
+// ML-DSA-65+Ed25519 hybrid key (software clients) or a P-256 ECDSA key
+// (hardware-backed mobile keystores and legacy clients).
+type DeviceKey struct {
+	Hybrid *hybridsig.PublicKey
+	P256   *ecdsa.PublicKey
+}
+
+// Verify checks sig over msg using the enrolled key. For a hybrid key, label is
+// the domain-separation label passed to hybridsig.PublicKey.Verify; for P-256,
+// sig is ASN.1 DER ECDSA over SHA-256(msg).
+func (k *DeviceKey) Verify(label string, msg, sig []byte) bool {
+	if k == nil {
+		return false
 	}
-	return nil, fmt.Errorf("%w: device key must be P-256 SPKI", ErrInvalid)
+	if k.Hybrid != nil {
+		return k.Hybrid.Verify(label, msg, sig) == nil
+	}
+	if k.P256 != nil {
+		sum := sha256.Sum256(msg)
+		return ecdsa.VerifyASN1(k.P256, sum[:], sig)
+	}
+	return false
+}
+
+// Equal reports whether k and other represent the same device public key.
+func (k *DeviceKey) Equal(other *DeviceKey) bool {
+	if k == nil || other == nil {
+		return k == other
+	}
+	if k.Hybrid != nil || other.Hybrid != nil {
+		if k.Hybrid == nil || other.Hybrid == nil {
+			return false
+		}
+		return bytes.Equal(k.Hybrid.Bytes(), other.Hybrid.Bytes())
+	}
+	if k.P256 != nil && other.P256 != nil {
+		return k.P256.Equal(other.P256)
+	}
+	return k.P256 == nil && other.P256 == nil
+}
+
+// ParseDeviceKey accepts an ML-DSA-65+Ed25519 hybrid public key (ky-primitives/hybridsig)
+// or a P-256 public key as SPKI DER.
+func ParseDeviceKey(raw []byte) (*DeviceKey, error) {
+	if len(raw) == hybridsig.PublicKeyBytes {
+		if pub, err := hybridsig.ParsePublicKey(raw); err == nil {
+			return &DeviceKey{Hybrid: pub}, nil
+		}
+		return nil, fmt.Errorf("%w: device key must be ML-DSA-65+Ed25519 or P-256 SPKI", ErrInvalid)
+	}
+	k, err := x509.ParsePKIXPublicKey(raw)
+	if pub, ok := k.(*ecdsa.PublicKey); err == nil && ok && pub.Curve == elliptic.P256() {
+		return &DeviceKey{P256: pub}, nil
+	}
+	return nil, fmt.Errorf("%w: device key must be ML-DSA-65+Ed25519 or P-256 SPKI", ErrInvalid)
 }
 
 // redeem burns code, then mints a token if it is unexpired and proven. A computer's code holds
 // its name and platform; a phone's are empty and come from the redeeming request.
-// key is the device's SPKI DER signing key, or empty for an unsigned device.
+// key is the device's ML-DSA-65+Ed25519 or P-256 SPKI DER signing key.
 func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform string, key []byte, proven func(challenge string) bool) (token, user string, err error) {
 	if _, err := ParseDeviceKey(key); err != nil {
 		return "", "", err
@@ -210,7 +262,7 @@ func deviceSlot(ctx context.Context, tx *sql.Tx, user string) error {
 // written, so a token without its key learns nothing and keeps nothing alive; its error is
 // returned as is. A token revoked in the last 30 days is ErrDeviceRevoked; anything else
 // unusable is ErrDenied.
-func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id string, key *ecdsa.PublicKey) error) (string, error) {
+func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id string, key *DeviceKey) error) (string, error) {
 	if !strings.HasPrefix(token, DevicePrefix) {
 		return "", ErrDenied
 	}
@@ -224,13 +276,13 @@ func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id str
 	if err != nil {
 		return "", err
 	}
-	var key *ecdsa.PublicKey
+	var key *DeviceKey
 	if pubkey != "" {
-		der, err := base64.StdEncoding.DecodeString(pubkey)
+		raw, err := base64.StdEncoding.DecodeString(pubkey)
 		if err != nil {
 			return "", err
 		}
-		if key, err = ParseDeviceKey(der); err != nil {
+		if key, err = ParseDeviceKey(raw); err != nil {
 			return "", err
 		}
 	}

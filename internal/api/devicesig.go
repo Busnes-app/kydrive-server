@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -17,15 +16,20 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/syncauth"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
-// Device request signing. A device that enrolled a P-256 key when it linked signs every request
-// with it, so its bearer token alone authorises nothing: a certificate the device trusts in the
-// wrong hands reads the token, but not the key, which never leaves the device's keystore.
+// Device request signing. A device that enrolled a signing key (ML-DSA-65+Ed25519 hybrid for
+// software clients or ECDSA P-256 for hardware-backed mobile keystores and legacy clients) when
+// it linked signs every request with it, so its bearer token alone authorises nothing: a
+// certificate the device trusts in the wrong hands reads the token, but not the key, which never
+// leaves the device's keystore.
 //
-// The device signs SHA-256 of the message below with ECDSA P-256 and sends the DER signature,
-// std base64, in KyDrive-Signature. The message is "kydrive-request-v1" and these fields,
-// joined by "|":
+// For a hybrid key, the device signs the message below under the "kydrive-request-v1" domain
+// label (ky-primitives/hybridsig) and sends the encoded signature, std base64, in
+// KyDrive-Signature. For a P-256 key, the device signs SHA-256 of the message with ECDSA P-256
+// and sends the DER signature, std base64, in KyDrive-Signature. The message is
+// "kydrive-request-v1" and these fields, joined by "|":
 //
 //  1. origin: the server's KY_APP_URL as scheme://host[:port], lowercased, default port dropped
 //  2. method
@@ -56,7 +60,7 @@ var (
 
 // verifyDeviceRequest checks a request from the device id against its enrolled key, then binds
 // the body to the signed digest. A device linked before signing has no key and is refused.
-func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *ecdsa.PublicKey) error {
+func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *drive.DeviceKey) error {
 	if key == nil {
 		return errDeviceKeyRequired
 	}
@@ -85,8 +89,7 @@ func (s *Server) verifyDeviceRequest(r *http.Request, id string, key *ecdsa.Publ
 		return errDeviceSignature
 	}
 	msg, ok := deviceMessage(canonicalOrigin(s.config.Server.AppURL), r.Method, r.RequestURI, date, nonce, headers, digest)
-	sum := sha256.Sum256([]byte(msg))
-	if !ok || !ecdsa.VerifyASN1(key, sum[:], sig) {
+	if !ok || !key.Verify(deviceSigPrefix, []byte(msg), sig) {
 		return errDeviceSignature
 	}
 	var guard any = sharedReplay{s, "device:" + id, 2 * deviceSkew}
