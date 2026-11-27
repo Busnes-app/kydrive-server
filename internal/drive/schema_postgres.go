@@ -94,36 +94,38 @@ func (s *Store) createPostgres(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := func() error {
-		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+		return err
+	}
+	var done int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema`).Scan(&done); err != nil {
+		return err
+	}
+	switch done {
+	case postgresVersion:
+		return tx.Commit()
+	case 30:
+		if _, err := tx.ExecContext(ctx, cellsSearchSchema(dialect{pg: true})); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(31)`); err != nil {
 			return err
 		}
-		var done int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema`).Scan(&done); err != nil || done == postgresVersion {
-			return err
-		}
-		if done == 30 {
-			if _, err := tx.ExecContext(ctx, cellsSearchSchema(dialect{pg: true})); err != nil {
-				return err
-			}
-			_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(31)`)
-			return err
-		}
-		if done != 0 {
-			return fmt.Errorf("drive: PostgreSQL schema half recorded (%d of %d)", done, postgresVersion)
-		}
+		return tx.Commit()
+	case 0:
 		if _, err := tx.ExecContext(ctx, postgresSchema()); err != nil {
 			return fmt.Errorf("drive: PostgreSQL schema: %w", err)
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema SELECT generate_series(1,?)`, postgresVersion)
-		return err
-	}(); err != nil {
-		return err
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema SELECT generate_series(1,?)`, postgresVersion); err != nil {
+			return err
+		}
+		return tx.Commit()
+	default:
+		return fmt.Errorf("drive: PostgreSQL schema half recorded (%d of %d)", done, postgresVersion)
 	}
-	return tx.Commit()
 }
 
 // postgresSchema is the drive schema at postgresVersion.
