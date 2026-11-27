@@ -12,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/ky-primitives/syncauth"
 	"github.com/Busnes-app/kydrive-server/internal/api"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
 const webhookSecret = "hook-secret-16-bytes"
@@ -327,5 +329,110 @@ func TestStorageReportsSurviveABadOrg(t *testing.T) {
 	}
 	if f.stored != 1 || m.count(t, `SELECT COUNT(*) FROM drive_orgs WHERE id=? AND grant_ceiling=? AND report_inflight=0`, good, 1<<30) != 1 {
 		t.Fatalf("%d reports sent; the good org has no grant (%v)", f.stored, err)
+	}
+}
+
+// A concurrent HTTP upload arriving while a storage-pool report is in flight waits for
+// ApplyReports to clear report_inflight and succeeds with 201 instead of returning a spurious
+// 413. A genuinely full org still fails immediately with 413 without waiting.
+func TestConcurrentWriteWaitsOutInflightStorageReport(t *testing.T) {
+	m := setupMultiServer(t)
+	ctx := context.Background()
+	ws := m.ids["org-a"]["workspace"]
+	upload := func(name, payload string) *httptest.ResponseRecorder {
+		return m.callBody("a1", "", http.MethodPost, "/api/drive/workspaces/"+ws+"/uploads?name="+url.QueryEscape(name)+"&revision=0", payload)
+	}
+
+	// Freeze an in-flight report for org-a while keeping plenty of unexpired ceiling headroom.
+	if _, err := m.db.Exec(`UPDATE drive_orgs SET report_due=1 WHERE id='org-a'`); err != nil {
+		t.Fatal(err)
+	}
+	reports, err := m.st.Drive().BeginReports(ctx, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rep drive.PoolReport
+	for _, r := range reports {
+		if r.OrgID == "org-a" {
+			rep = r
+		}
+	}
+	if rep.OrgID == "" {
+		t.Fatal("org-a report was not frozen")
+	}
+
+	// Start concurrent writes while report_inflight=1: both a direct upload and a chunked
+	// upload session start must wait out the refresh without losing request fields or 413'ing.
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		done <- upload("during-refresh.txt", "hello during refresh")
+	}()
+	sessionDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		sessionDone <- m.callBody("a1", "", http.MethodPost, "/api/drive/workspaces/"+ws+"/upload-sessions", `{"name":"resumable.bin","size":4096,"revision":0}`)
+	}()
+
+	select {
+	case rec := <-done:
+		t.Fatalf("upload did not wait out in-flight report: %d %s", rec.Code, rec.Body.String())
+	case rec := <-sessionDone:
+		t.Fatalf("upload-session start did not wait out in-flight report: %d %s", rec.Code, rec.Body.String())
+	case <-time.After(60 * time.Millisecond):
+	}
+
+	// Clear report_inflight via ApplyReports with a refreshed grant.
+	if _, err := m.st.Drive().ApplyReports(ctx, []suitedir.StorageResult{{
+		OrgID: rep.OrgID, Result: "ok", Seq: rep.Seq,
+		CeilingBytes: rep.UsedBytes + 1<<20, TTLSeconds: drive.GrantTTL,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case rec := <-done:
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("concurrent upload after report landed: want 201, got %d %s", rec.Code, rec.Body.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent upload did not complete after ApplyReports cleared report_inflight")
+	}
+	select {
+	case rec := <-sessionDone:
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("concurrent upload-session start after report landed: want 201, got %d %s", rec.Code, rec.Body.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent upload-session start did not complete after ApplyReports cleared report_inflight")
+	}
+
+	// A genuinely full org (zero remaining ceiling) must fail immediately with 413 even when
+	// report_inflight=1, without burning retry backoff (poolRetryCap is 1500ms).
+	if _, err := m.db.Exec(`UPDATE drive_orgs SET report_due=1 WHERE id='org-a'`); err != nil {
+		t.Fatal(err)
+	}
+	reports, err = m.st.Drive().BeginReports(ctx, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep = drive.PoolReport{}
+	for _, r := range reports {
+		if r.OrgID == "org-a" {
+			rep = r
+		}
+	}
+	if rep.OrgID == "" {
+		t.Fatal("second org-a report was not frozen")
+	}
+	// Shrink ceiling to current usage (0 headroom) while report_inflight=1.
+	if _, err := m.db.Exec(`UPDATE drive_orgs SET grant_ceiling=? WHERE id='org-a'`, rep.UsedBytes); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	rec := upload("over-ceiling.txt", "too full")
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("genuinely full org: want 413, got %d %s", rec.Code, rec.Body.String())
+	}
+	if elapsed := time.Since(start); elapsed >= 1200*time.Millisecond {
+		t.Fatalf("genuinely full org waited %v instead of failing without retry backoff", elapsed)
 	}
 }

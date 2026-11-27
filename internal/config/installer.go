@@ -53,6 +53,11 @@ func ApplyInstallerConfiguration(cfg *Config, b applysetup.Common) error {
 				return errors.New("installer refuses to replace configured SSO values")
 			}
 		}
+		if multiTenantBuild {
+			if err := testIssuer(s.IssuerURL); err != nil {
+				return err
+			}
+		}
 		cfg.SSO.Enabled = true
 		cfg.SSO.KySignOnIssuer = s.IssuerURL
 		cfg.SSO.KySignOnClientID = s.ClientID

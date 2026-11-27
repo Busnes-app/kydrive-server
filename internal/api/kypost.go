@@ -367,7 +367,13 @@ func (s *Server) kypostTicket(r *http.Request, user *store.User, _ *kypostPeer, 
 	if json.Unmarshal(body, &in) != nil || in.Size == nil {
 		return refuse(400, "bad_body")
 	}
-	token, t, err := s.store.Drive().IssueTicket(r.Context(), user.ID, in.Name, *in.Size, s.config.Drive.MaxFileSize)
+	var token string
+	var t drive.Ticket
+	err := drive.RetryPool(r.Context(), func() error {
+		var ierr error
+		token, t, ierr = s.store.Drive().IssueTicket(r.Context(), user.ID, in.Name, *in.Size, s.config.Drive.MaxFileSize)
+		return ierr
+	})
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		return refuse(409, "sharing_off")
@@ -608,7 +614,23 @@ func (s *Server) handleTicketUpload(w http.ResponseWriter, r *http.Request, p *k
 		// The last bytes re-seal the whole file, which can outlast the write timeout.
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	}
-	received, f, err := d.TicketUpload(s.peerContext(r.Context(), p), s.stagingRoot(), s.blobRoot(), t, start, length, http.MaxBytesReader(w, r.Body, chunkLimit+1))
+	peerCtx := s.peerContext(r.Context(), p)
+	var body io.Reader = http.MaxBytesReader(w, r.Body, chunkLimit+1)
+	var received int64
+	var f *drive.File
+	err = drive.RetryPool(r.Context(), func() error {
+		var uerr error
+		received, f, uerr = d.TicketUpload(peerCtx, s.stagingRoot(), s.blobRoot(), t, start, length, body)
+		if errors.Is(uerr, drive.ErrPoolRefreshing) {
+			if refreshed, lerr := d.Ticket(r.Context(), token); lerr == nil {
+				t = refreshed
+			}
+			if length > 0 && received == t.Size {
+				length, body = 0, nil
+			}
+		}
+		return uerr
+	})
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		s.ticketRefuse(w, http.StatusConflict, "sharing_off")

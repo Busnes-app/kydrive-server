@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/google/uuid"
@@ -16,6 +17,50 @@ import (
 // POST /api/suite/storage). KyDrive reports each org's drive bytes and receives a ceiling it may
 // fill until the grant expires. Every grant figure lives on the org's drive_orgs row, so every
 // replica checks the same one inside the write's own transaction.
+
+// ErrPoolRefreshing reports that an org's unexpired storage grant has room for a write, but an
+// in-flight storage report to KyIdentity currently caps spending at report_used until the answer
+// lands. It wraps ErrQuota so callers that do not retry still treat it as quota exceeded.
+var ErrPoolRefreshing = fmt.Errorf("%w: storage grant refreshing", ErrQuota)
+
+var poolRetryDelays = []time.Duration{
+	25 * time.Millisecond,
+	50 * time.Millisecond,
+	100 * time.Millisecond,
+	200 * time.Millisecond,
+	400 * time.Millisecond,
+}
+
+const poolRetryCap = 1500 * time.Millisecond
+
+// RetryPool retries fn while it returns ErrPoolRefreshing, using short bounded backoff up to
+// poolRetryCap so concurrent writes wait out an in-flight storage-pool report instead of failing
+// with quota exceeded. Never call inside a database transaction; store methods themselves return
+// ErrPoolRefreshing immediately without sleeping.
+func RetryPool(ctx context.Context, fn func() error) error {
+	deadline := time.Now().Add(poolRetryCap)
+	for attempt := 0; ; attempt++ {
+		err := fn()
+		if !errors.Is(err, ErrPoolRefreshing) {
+			return err
+		}
+		rem := time.Until(deadline)
+		if rem <= 0 {
+			return err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		wait := min(poolRetryDelays[min(attempt, len(poolRetryDelays)-1)], rem)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
 
 // GrantTTL is the longest a grant lives, in seconds (KyIdentity answers ttl_seconds 900). It
 // counts from when the report was frozen, by database time, so a slow answer only shortens it.
@@ -81,7 +126,9 @@ type execQueryer interface {
 
 // poolFits admits extra > 0 more bytes for org only within an unexpired grant. While a report
 // is unanswered its frozen snapshot is the limit, so the grant that answer replaces is never
-// spent twice. A write past half the grant marks the org due, committing with the write.
+// spent twice; when the write still fits in the unexpired ceiling, it returns ErrPoolRefreshing
+// so write-boundary callers can wait out the report instead of refusing with quota exceeded.
+// A write past half the grant marks the org due, committing with the write.
 func poolFits(ctx context.Context, q execQueryer, org string, extra int64) error {
 	var seeded, inflight bool
 	var ceiling sql.NullInt64
@@ -105,6 +152,9 @@ func poolFits(ctx context.Context, q execQueryer, org string, extra int64) error
 		return err
 	}
 	if extra > budget-used {
+		if inflight && extra <= ceiling.Int64-used {
+			return ErrPoolRefreshing
+		}
 		return ErrQuota
 	}
 	if grant := ceiling.Int64 - reported; used+extra-reported >= (grant+1)/2 {

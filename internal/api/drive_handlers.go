@@ -435,7 +435,12 @@ func (s *Server) driveUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v.Mtime = mtime
-	out, err := s.store.Drive().Publish(r.Context(), user, f, v, expected)
+	var out drive.File
+	err = drive.RetryPool(r.Context(), func() error {
+		var perr error
+		out, perr = s.store.Drive().Publish(r.Context(), user, f, v, expected)
+		return perr
+	})
 	if err != nil {
 		s.discardBlob(v.Blob)
 		s.driveError(w, err)
@@ -581,7 +586,12 @@ func (s *Server) driveRestore(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	out, err := s.store.Drive().RestoreVersion(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Revision, in.Expected)
+	var out drive.File
+	err := drive.RetryPool(r.Context(), func() error {
+		var rerr error
+		out, rerr = s.store.Drive().RestoreVersion(r.Context(), s.driveUser(r).ID, r.PathValue("id"), in.Revision, in.Expected)
+		return rerr
+	})
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -716,7 +726,12 @@ func (s *Server) editorCallback(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	duplicate, err := s.store.Drive().PublishEditor(r.Context(), user, f, v, cb.Key, cb.Status == 2)
+	var duplicate bool
+	err = drive.RetryPool(r.Context(), func() error {
+		var perr error
+		duplicate, perr = s.store.Drive().PublishEditor(r.Context(), user, f, v, cb.Key, cb.Status == 2)
+		return perr
+	})
 	if err != nil || duplicate {
 		s.discardBlob(v.Blob)
 	}
@@ -809,7 +824,12 @@ func (s *Server) driveCopyFile(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	out, err := s.store.Drive().CopyFile(r.Context(), s.driveUser(r).ID, r.PathValue("id"), drive.Location{Workspace: in.Workspace, Parent: in.Parent, Name: in.Name})
+	var out drive.File
+	err := drive.RetryPool(r.Context(), func() error {
+		var cerr error
+		out, cerr = s.store.Drive().CopyFile(r.Context(), s.driveUser(r).ID, r.PathValue("id"), drive.Location{Workspace: in.Workspace, Parent: in.Parent, Name: in.Name})
+		return cerr
+	})
 	if err != nil {
 		s.driveError(w, err)
 		return

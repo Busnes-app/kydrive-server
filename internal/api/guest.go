@@ -224,7 +224,11 @@ func (s *Server) guestUpload(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, err)
 		return
 	}
-	if _, err = s.store.Drive().GuestUpload(r.Context(), token, secret, name, v); err != nil {
+	err = drive.RetryPool(r.Context(), func() error {
+		_, gerr := s.store.Drive().GuestUpload(r.Context(), token, secret, name, v)
+		return gerr
+	})
+	if err != nil {
 		s.discardBlob(v.Blob)
 		s.driveError(w, err)
 		return

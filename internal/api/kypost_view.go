@@ -40,7 +40,12 @@ func (s *Server) kypostViewTicket(r *http.Request, user *store.User, _ *kypostPe
 	if json.Unmarshal(body, &in) != nil || in.Size == nil {
 		return refuse(400, "bad_body")
 	}
-	token, _, err := s.store.Drive().IssueViewTicket(r.Context(), user.ID, in.Name, *in.Size, s.config.Drive.MaxFileSize)
+	var token string
+	err := drive.RetryPool(r.Context(), func() error {
+		var ierr error
+		token, _, ierr = s.store.Drive().IssueViewTicket(r.Context(), user.ID, in.Name, *in.Size, s.config.Drive.MaxFileSize)
+		return ierr
+	})
 	switch {
 	case errors.Is(err, drive.ErrPeerOff):
 		return refuse(409, "sharing_off")

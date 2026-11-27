@@ -25,7 +25,7 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 - `KY_EXCALIDRAW_FONTS_DIR` (default empty, none served) is the directory holding Excalidraw's `Xiaolai/` CJK fonts; set but not a directory fails startup. The Docker image sets it to `/app/excalidraw-fonts`.
 
 - `KYDRIVE_KYPOST_URL` (`https://host`, no path, query or credentials; `KyPostURL` also checks KyIdentity's) and `KYDRIVE_KYPOST_SECRET_FILE` (read through `applysetup.Secret`, at least 32 bytes once trimmed) pair KyPost from the environment (`Drive.KyPostURL`, `Drive.KyPostSecret`, never serialised); either alone or a bad value fails startup naming the variable. `kypost_test.go`.
-- `KYDRIVE_TENANCY` is `single` (default) or `multi`, validated before any key creation. Multi mode requires `KY_ENCRYPTION_KEY` and an existing private `KYDRIVE_IDENTITY_KEY_FILE` outside `KY_DATA_DIR` (resolved ancestors included); it never creates either key and refuses local `encryption.key`/`identity.key` copies. Both server and operator loaders still refuse multi startup after key validation until the remaining tenancy gates ship. Single mode retains its existing key creation/loading behavior. The drive store records the mode (`drive.recordTenancy`).
+- `KYDRIVE_TENANCY` is `single` (default) or `multi`, validated before any key creation (`Database.Tenancy`, with `KYDRIVE_STAFF_ORG` in `Database.StaffOrg`). Multi mode requires `KY_ENCRYPTION_KEY` and an existing private `KYDRIVE_IDENTITY_KEY_FILE` outside `KY_DATA_DIR` (resolved ancestors included); it never creates either key and refuses local `encryption.key`/`identity.key` copies. Release builds (`gate_release.go`, `//go:build !kye2e`, `multiTenantBuild = false`) always refuse `KYDRIVE_TENANCY=multi` with `KYDRIVE_TENANCY=multi is not available in this release`. Only a `-tags kye2e` suite end-to-end test build (`gate_kye2e.go`, `multiTenantBuild = true`) opens multi-tenant startup, and that build refuses any `KY_KYSIGNON_ISSUER` or installer SSO issuer outside `https://*.test` (`testIssuer`). Single mode retains its existing key creation/loading behavior. The drive store records the mode (`drive.recordTenancy`).
 - `KYDRIVE_CONTENT_SEARCH` (boolean, default on) runs the content search index worker and content matching (`Drive.ContentSearch`); off leaves file name search alone.
 - `KYDRIVE_MAX_FILE_SIZE` (resumable upload size) and `KYDRIVE_MAX_ZIP_SIZE` (folder zip plaintext total) default to `10GiB` and accept a whole number of `MiB`, `GiB` or `TiB` from 1 MiB to 1 TiB; anything else fails startup naming the variable.
 
@@ -35,6 +35,7 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 
 ## Verification
 - `go test -v ./internal/config/...`
+- `scripts/check-test-build-tag.sh` (keeps `kye2e` inside the gate files, forbids build tags in release paths, and runs `internal/config` under `-tags kye2e`)
 - `go test -v ./internal/auth/ -run TestClientIP` (the helper that consumes the allowlist)
 
 ## Child DOX Index

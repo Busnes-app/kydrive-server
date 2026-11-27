@@ -778,7 +778,12 @@ func (t *mcpTools) writeFile(ctx context.Context, _ *mcp.CallToolRequest, in wri
 	if err != nil {
 		return nil, writeOut{}, t.fail("write_file", err)
 	}
-	f, err := d.Publish(ctx, t.user(), target, v, target.Revision)
+	var f drive.File
+	err = drive.RetryPool(ctx, func() error {
+		var perr error
+		f, perr = d.Publish(ctx, t.user(), target, v, target.Revision)
+		return perr
+	})
 	if err != nil {
 		t.s.discardBlob(v.Blob)
 		return nil, writeOut{}, t.fail("write_file", err)

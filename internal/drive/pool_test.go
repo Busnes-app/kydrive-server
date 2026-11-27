@@ -1,6 +1,7 @@
 package drive_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Busnes-app/ky-primitives/suitedir"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
@@ -357,4 +359,97 @@ func (o *orgs) count(t *testing.T, q string, args ...any) int {
 		t.Fatal(q, err)
 	}
 	return n
+}
+
+// ErrPoolRefreshing (wrapping ErrQuota) is returned only when an unexpired grant has room for
+// the write and an in-flight report is the sole blocker. Writes genuinely over the ceiling,
+// expired grants, and missing grants return plain ErrQuota so callers do not wait.
+func TestPoolRefreshingError(t *testing.T) {
+	o := poolOrgs(t)
+	// First grant: 1000 bytes of headroom above current usage (0).
+	r, ok := o.freeze(t, true, "org-a")
+	if !ok {
+		t.Fatal("initial report missing")
+	}
+	o.apply(t, okAnswer(r, 1000))
+
+	// Use 500 bytes (crosses half-grant, marks report_due=1) then freeze the report so
+	// report_inflight=1, report_used=500, grant_ceiling=1000.
+	noErr(t, "half grant write", o.put("a1", o.teamA.ID, 500))
+	if _, ok := o.freeze(t, false, "org-a"); !ok {
+		t.Fatal("due report not frozen")
+	}
+
+	// Fits in unexpired ceiling (500 + 500 <= 1000), blocked only by report_inflight=1:
+	// must match both ErrPoolRefreshing and ErrQuota.
+	err := o.put("a1", o.teamA.ID, 500)
+	if !errors.Is(err, drive.ErrPoolRefreshing) || !errors.Is(err, drive.ErrQuota) {
+		t.Fatalf("blocked only by inflight report: want ErrPoolRefreshing(ErrQuota), got %v", err)
+	}
+
+	// Genuinely over ceiling (500 + 501 > 1000) while report_inflight=1: plain ErrQuota only.
+	err = o.put("a1", o.teamA.ID, 501)
+	if !errors.Is(err, drive.ErrQuota) || errors.Is(err, drive.ErrPoolRefreshing) {
+		t.Fatalf("over ceiling while inflight: want plain ErrQuota, got %v", err)
+	}
+
+	// Expired grant while report_inflight=1: plain ErrQuota only.
+	if _, err := o.db.Exec(`UPDATE drive_orgs SET grant_expires=unixepoch()-1 WHERE id='org-a'`); err != nil {
+		t.Fatal(err)
+	}
+	err = o.put("a1", o.teamA.ID, 1)
+	if !errors.Is(err, drive.ErrQuota) || errors.Is(err, drive.ErrPoolRefreshing) {
+		t.Fatalf("expired grant while inflight: want plain ErrQuota, got %v", err)
+	}
+
+	// Missing grant while report_inflight=1: plain ErrQuota only.
+	if _, err := o.db.Exec(`UPDATE drive_orgs SET grant_ceiling=NULL,grant_expires=unixepoch()+3600 WHERE id='org-a'`); err != nil {
+		t.Fatal(err)
+	}
+	err = o.put("a1", o.teamA.ID, 1)
+	if !errors.Is(err, drive.ErrQuota) || errors.Is(err, drive.ErrPoolRefreshing) {
+		t.Fatalf("missing grant while inflight: want plain ErrQuota, got %v", err)
+	}
+
+	// Over ceiling with report_inflight=0: plain ErrQuota only.
+	grant(t, o.db, "org-a", 600)
+	err = o.put("a1", o.teamA.ID, 101)
+	if !errors.Is(err, drive.ErrQuota) || errors.Is(err, drive.ErrPoolRefreshing) {
+		t.Fatalf("over ceiling without inflight: want plain ErrQuota, got %v", err)
+	}
+}
+
+func TestRetryPool(t *testing.T) {
+	// Retries ErrPoolRefreshing until it clears.
+	attempts := 0
+	err := drive.RetryPool(context.Background(), func() error {
+		attempts++
+		if attempts < 3 {
+			return drive.ErrPoolRefreshing
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("retry until clear: attempts=%d err=%v", attempts, err)
+	}
+
+	// Plain ErrQuota fails immediately without retrying or sleeping.
+	attempts = 0
+	start := time.Now()
+	err = drive.RetryPool(context.Background(), func() error {
+		attempts++
+		return drive.ErrQuota
+	})
+	if !errors.Is(err, drive.ErrQuota) || attempts != 1 || time.Since(start) > 100*time.Millisecond {
+		t.Fatalf("plain ErrQuota: attempts=%d elapsed=%v err=%v", attempts, time.Since(start), err)
+	}
+
+	// Respects context cancellation while waiting.
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	start = time.Now()
+	err = drive.RetryPool(ctx, func() error { return drive.ErrPoolRefreshing })
+	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 250*time.Millisecond {
+		t.Fatalf("cancelled retry: elapsed=%v err=%v", time.Since(start), err)
+	}
 }
