@@ -446,7 +446,7 @@ func (m *contentMatcher) Match(ctx context.Context, q string, files []drive.File
 		}
 	}
 	var out map[string]float64
-	err = m.s.withHostedIndex(ctx, k.Org(), func(x *search.Index, _ drive.SearchPointer, keys drive.Keys) error {
+	err = m.s.withHostedIndex(ctx, k.Org(), func(x *search.Index, _ drive.SearchPointer, keys drive.Keys, _ bool) error {
 		m.index, m.keys = x, keys
 		var err error
 		out, err = m.matchIndex(ctx, q, files)

@@ -442,7 +442,7 @@ func TestHostedStorageStagingAndFailedIndexPublish(t *testing.T) {
 		t.Fatal(err)
 	}
 	fresh := NewServer(w.cfg, w.st)
-	if err := fresh.withHostedIndex(ctx, w.orgs[0], func(*search.Index, drive.SearchPointer, drive.Keys) error { return nil }); err == nil {
+	if err := fresh.withHostedIndex(ctx, w.orgs[0], func(*search.Index, drive.SearchPointer, drive.Keys, bool) error { return nil }); err == nil {
 		t.Fatal("old snapshot replay opened")
 	}
 	draft, err = st.Create(ctx)
@@ -592,5 +592,112 @@ func TestHostedSearchReconcilesHourlyAndTailsChanges(t *testing.T) {
 	o.Close()
 	if time.Since(reconciled[w.orgs[0]]) >= indexReconcile {
 		t.Fatal("reconciliation timestamp not advanced")
+	}
+}
+
+func TestHostedSearchRebuildsAfterTokenizerUpgrade(t *testing.T) {
+	w := newHostedWorld(t)
+	ctx := context.Background()
+	f := w.publish(t, 0, "upgradeabletoken")
+	if err := w.s.indexIdle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix, err := w.st.Drive().ObjectPrefix(ctx, w.orgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := w.st.Drive().OrgKeys(ctx, w.orgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := keys.SearchKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := w.s.bucket.Store(prefix + "search/")
+	sealed := string(readStored(t, st, before.Object))
+	plain, err := crypto.DecryptAESGCMAAD(sealed, key, searchAAD(w.orgs[0], before.Object, before.Version))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Raw(func(dc any) error { return dc.(interface{ Deserialize([]byte) error }).Deserialize(plain) }); err != nil {
+		conn.Close()
+		t.Fatal(err)
+	}
+	conn.Close()
+	if _, err := db.ExecContext(ctx, `UPDATE meta SET v = substr(v, 1, instr(v, ':')) || '0' WHERE k='check'`); err != nil {
+		t.Fatal(err)
+	}
+	conn, err = db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stale []byte
+	if err := conn.Raw(func(dc any) error {
+		var e error
+		stale, e = dc.(interface{ Serialize() ([]byte, error) }).Serialize()
+		return e
+	}); err != nil {
+		conn.Close()
+		t.Fatal(err)
+	}
+	conn.Close()
+	resealed, err := crypto.EncryptAESGCMAAD(stale, key, searchAAD(w.orgs[0], before.Object, before.Version))
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := st.Create(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := draft.Write([]byte(resealed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := draft.Publish(before.Object); err != nil {
+		t.Fatal(err)
+	}
+	w.s.searchCache.evict(w.orgs[0])
+	// Hosted search degrades to an empty index instead of failing while awaiting rebuild.
+	got := w.request(t, w.s, 0, "GET", "/api/drive/search?q=upgradeabletoken", "")
+	if got.Code != 200 {
+		t.Fatalf("search against stale tokenizer snapshot: %d %s", got.Code, got.Body)
+	}
+	// Even without force and with a fresh reconcile timestamp, the worker rebuilds and publishes.
+	reconciled := map[string]time.Time{}
+	for _, org := range w.orgs {
+		reconciled[org] = time.Now()
+	}
+	if err := w.s.indexHostedOrgs(ctx, false, reconciled); err != nil {
+		t.Fatalf("rebuild after tokenizer upgrade: %v", err)
+	}
+	after, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+	if err != nil || after.Version != before.Version+1 {
+		t.Fatalf("pointer after rebuild = %+v (before %+v), err = %v", after, before, err)
+	}
+	if err := w.s.withHostedIndex(ctx, w.orgs[0], func(_ *search.Index, _ drive.SearchPointer, _ drive.Keys, rebuilt bool) error {
+		if rebuilt {
+			return errors.New("rebuilt snapshot still triggered rebuild")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got = w.request(t, w.s, 0, "GET", "/api/drive/search?q=upgradeabletoken", "")
+	if got.Code != 200 || !strings.Contains(got.Body.String(), f.ID) {
+		t.Fatalf("search after rebuild: %d %s", got.Code, got.Body)
 	}
 }

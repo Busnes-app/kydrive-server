@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
@@ -37,6 +38,10 @@ const File = "index.db"
 
 // MaxSnapshot bounds each hosted index to 32 MiB (8192 SQLite pages).
 const MaxSnapshot = 32 << 20
+
+// ErrTokenizerVersion is returned by OpenMemory when a snapshot matches the deployment
+// key check but was built with a different TokenizerVersion and must be rebuilt.
+var ErrTokenizerVersion = errors.New("search index: tokenizer version mismatch")
 
 const schema = `CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS docs(id INTEGER PRIMARY KEY, ref BLOB NOT NULL UNIQUE, state INTEGER NOT NULL, len INTEGER NOT NULL DEFAULT 0, err TEXT NOT NULL DEFAULT '', attempts INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL);
@@ -87,7 +92,8 @@ func openDatabase(ctx context.Context, dir string, key, snapshot []byte, memory 
 	if err != nil {
 		return nil, err
 	}
-	want := hex.EncodeToString(check) + ":" + strconv.Itoa(TokenizerVersion)
+	checkHex := hex.EncodeToString(check)
+	want := checkHex + ":" + strconv.Itoa(TokenizerVersion)
 	if !memory {
 		if err = os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
@@ -147,7 +153,13 @@ func openDatabase(ctx context.Context, dir string, key, snapshot []byte, memory 
 		if err != nil {
 			return nil, fmt.Errorf("search index: %w", err)
 		}
-		if memory || attempt > 0 {
+		if memory {
+			if gotKey, _, ok := strings.Cut(got, ":"); ok && subtle.ConstantTimeCompare([]byte(gotKey), []byte(checkHex)) == 1 {
+				return nil, ErrTokenizerVersion
+			}
+			return nil, errors.New("search index: snapshot check mismatch")
+		}
+		if attempt > 0 {
 			return nil, errors.New("search index: could not start a fresh index")
 		}
 		for _, suffix := range []string{"", "-wal", "-shm"} {

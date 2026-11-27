@@ -70,7 +70,7 @@ func searchAAD(org, object string, version int64) []byte {
 	return fmt.Appendf(nil, "kydrive:search-index:v1:%s:%s:%d", org, object, version)
 }
 func (s *Server) hostedSearch() bool { return s.bucket != nil && s.config.Drive.ContentSearch }
-func (s *Server) withHostedIndex(ctx context.Context, org string, fn func(*search.Index, drive.SearchPointer, drive.Keys) error) error {
+func (s *Server) withHostedIndex(ctx context.Context, org string, fn func(*search.Index, drive.SearchPointer, drive.Keys, bool) error) error {
 	select {
 	case s.searchSlots <- struct{}{}:
 	case <-ctx.Done():
@@ -102,12 +102,17 @@ func (s *Server) withHostedIndex(ctx context.Context, org string, fn func(*searc
 	if err != nil {
 		return err
 	}
+	rebuilt := false
 	x, err := search.OpenMemory(ctx, key, snapshot)
+	if errors.Is(err, search.ErrTokenizerVersion) {
+		x, err = search.OpenMemory(ctx, key, nil)
+		rebuilt = err == nil
+	}
 	if err != nil {
 		return err
 	}
 	defer x.Close()
-	return fn(x, p, keys)
+	return fn(x, p, keys, rebuilt)
 }
 func (s *Server) hostedSnapshot(ctx context.Context, org string, p drive.SearchPointer, key []byte) ([]byte, error) {
 	var snapshot []byte
@@ -178,13 +183,13 @@ func (s *Server) indexHostedOrgs(ctx context.Context, force bool, reconciled map
 		reconcile := force || time.Since(reconciled[org]) >= indexReconcile
 		for {
 			count := 0
-			err := s.withHostedIndex(ctx, org, func(x *search.Index, p drive.SearchPointer, keys drive.Keys) error {
+			err := s.withHostedIndex(ctx, org, func(x *search.Index, p drive.SearchPointer, keys drive.Keys, rebuilt bool) error {
 				w := &searchWorker{Server: s, search: x, org: org, keys: keys}
 				scoped := drive.WithOrg(ctx, org)
 				if err := w.tailSearch(scoped, time.Now()); err != nil {
 					return err
 				}
-				if reconcile || p.Object == "" {
+				if reconcile || p.Object == "" || rebuilt {
 					if err := w.reconcileSearch(scoped, time.Now()); err != nil {
 						return err
 					}
@@ -193,7 +198,7 @@ func (s *Server) indexHostedOrgs(ctx context.Context, force bool, reconciled map
 					return err
 				}
 				count = len(w.done)
-				if count == 0 && !w.dirty && p.Object != "" {
+				if count == 0 && !w.dirty && p.Object != "" && !rebuilt {
 					return nil
 				}
 				snapshot, err := x.Snapshot(ctx)
