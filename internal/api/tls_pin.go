@@ -39,6 +39,11 @@ const (
 	// identityHybridHKDFInfo derives the deterministic ML-DSA-65 companion seed from the
 	// persisted 32-byte Ed25519 identity key seed so existing backups cover both keys.
 	identityHybridHKDFInfo = "kydrive-identity-mldsa65/1"
+	// identityHybridBindContext domain-separates the Ed25519 signature binding the full
+	// hybrid public key ID ("mldsa65+ed25519:<hex>") to the server's held Ed25519 identity key.
+	// Clients verify this signature before persisting identity_key_hybrid so a compromised TLS
+	// terminator without the identity private key cannot poison hybrid enrollment.
+	identityHybridBindContext = "kydrive-identity-hybrid-bind/1"
 )
 
 const (
@@ -57,6 +62,12 @@ func tlsPinStatement(host, pin string, issuedAt int64) []byte {
 // tlsPinStatementBody is the v2 message passed to hybridsig under tlsPinContextV2.
 func tlsPinStatementBody(host, pin string, issuedAt int64) []byte {
 	return []byte(host + "\n" + pin + "\n" + strconv.FormatInt(issuedAt, 10))
+}
+
+// identityHybridBindStatement is the exact message signed by the held Ed25519 identity key
+// to authenticate hybrid public key enrollment.
+func identityHybridBindStatement(hybridID string) []byte {
+	return []byte(identityHybridBindContext + "\n" + hybridID)
 }
 
 // identityHybridKey derives the deterministic ML-DSA-65+Ed25519 hybridsig private key paired
@@ -90,20 +101,31 @@ func (s *Server) identityKey() string {
 
 // identityKeyHybrid is the std-base64 hybridsig (ML-DSA-65+Ed25519) public key, or "" without one.
 func (s *Server) identityKeyHybrid() string {
-	hk, err := identityHybridKey(s.config.Security.IdentityKey)
-	if err != nil {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(hk.Public().Bytes())
+	pub, _ := s.identityKeyHybridBinding()
+	return pub
 }
 
-// withIdentityKey adds identity_key and identity_key_hybrid to a device-facing reply when a key exists.
+// identityKeyHybridBinding returns the std-base64 hybridsig (ML-DSA-65+Ed25519) public key
+// and an Ed25519 signature over identityHybridBindStatement(pub.ID()) under IdentityKey.
+func (s *Server) identityKeyHybridBinding() (pubB64, sigB64 string) {
+	hk, err := identityHybridKey(s.config.Security.IdentityKey)
+	if err != nil {
+		return "", ""
+	}
+	pub := hk.Public()
+	sig := ed25519.Sign(s.config.Security.IdentityKey, identityHybridBindStatement(pub.ID()))
+	return base64.StdEncoding.EncodeToString(pub.Bytes()), base64.StdEncoding.EncodeToString(sig)
+}
+
+// withIdentityKey adds identity_key, identity_key_hybrid, and identity_key_hybrid_sig to a
+// device-facing reply when a key exists.
 func (s *Server) withIdentityKey(resp map[string]string) map[string]string {
 	if key := s.identityKey(); key != "" {
 		resp["identity_key"] = key
 	}
-	if hkey := s.identityKeyHybrid(); hkey != "" {
+	if hkey, hsig := s.identityKeyHybridBinding(); hkey != "" {
 		resp["identity_key_hybrid"] = hkey
+		resp["identity_key_hybrid_sig"] = hsig
 	}
 	return resp
 }

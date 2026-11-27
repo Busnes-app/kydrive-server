@@ -306,8 +306,16 @@ func TestIdentityKeyIsOmittedWithoutAKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode identity_key_hybrid: %v", err)
 	}
-	if _, err := hybridsig.ParsePublicKey(rawHybrid); err != nil {
+	hpub, err := hybridsig.ParsePublicKey(rawHybrid)
+	if err != nil {
 		t.Fatalf("ParsePublicKey(identity_key_hybrid): %v", err)
+	}
+	rawBindSig, err := base64.StdEncoding.DecodeString(resp["identity_key_hybrid_sig"])
+	if err != nil || len(rawBindSig) != ed25519.SignatureSize {
+		t.Fatalf("decode identity_key_hybrid_sig: err=%v len=%d", err, len(rawBindSig))
+	}
+	if !ed25519.Verify(pub, identityHybridBindStatement(hpub.ID()), rawBindSig) {
+		t.Fatal("identity_key_hybrid_sig did not verify under identity_key")
 	}
 	// GET /api/drive/device is read with a 4096-byte cap by older desktop clients.
 	b, _ := json.Marshal(resp)
@@ -321,6 +329,9 @@ func TestIdentityKeyIsOmittedWithoutAKey(t *testing.T) {
 	}
 	if _, ok := omitted["identity_key_hybrid"]; ok {
 		t.Fatal("no key must mean no identity_key_hybrid field, not an empty one")
+	}
+	if _, ok := omitted["identity_key_hybrid_sig"]; ok {
+		t.Fatal("no key must mean no identity_key_hybrid_sig field, not an empty one")
 	}
 }
 
