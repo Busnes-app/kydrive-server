@@ -2,8 +2,6 @@ module github.com/Busnes-app/kydrive-server
 
 go 1.27.4
 
-toolchain go1.27.3
-
 require (
 	filippo.io/age v1.3.2
 	github.com/Busnes-app/ky-primitives v0.12.0
