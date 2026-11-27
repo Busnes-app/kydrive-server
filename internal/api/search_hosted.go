@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"sync"
 	"time"
@@ -84,44 +85,22 @@ func (s *Server) withHostedIndex(ctx context.Context, org string, fn func(*searc
 	if err != nil {
 		return err
 	}
-	p, err := s.store.Drive().SearchPointer(ctx, org)
+	var p drive.SearchPointer
+	var snapshot []byte
+	for attempt := 0; ; attempt++ {
+		p, err = s.store.Drive().SearchPointer(ctx, org)
+		if err != nil {
+			return err
+		}
+		snapshot, err = s.hostedSnapshot(ctx, org, p, key)
+		// Publication may remove a snapshot between the pointer read and HEAD/GET.
+		// Reload only missing objects; authentication and other failures stay fatal.
+		if !errors.Is(err, fs.ErrNotExist) || attempt == 2 {
+			break
+		}
+	}
 	if err != nil {
 		return err
-	}
-	var snapshot []byte
-	if p.Object != "" {
-		sealed, ok := s.searchCache.get(org, p)
-		if !ok {
-			prefix, err := s.orgPrefix(ctx, org)
-			if err != nil {
-				return err
-			}
-			obj, err := s.bucket.Store(prefix+"search/").Open(ctx, p.Object)
-			if err != nil {
-				return err
-			}
-			if obj.Size() > maxSearchObject {
-				obj.Close()
-				return errors.New("search snapshot exceeds size limit")
-			}
-			raw, err := io.ReadAll(io.NewSectionReader(obj, 0, obj.Size()))
-			obj.Close()
-			if err != nil {
-				return err
-			}
-			sealed = string(raw)
-			// Authenticate before a remote object enters the cache.
-		}
-		snapshot, err = crypto.DecryptAESGCMAAD(sealed, key, searchAAD(org, p.Object, p.Version))
-		if err != nil {
-			return errors.New("search snapshot failed authentication")
-		}
-		if len(snapshot) > search.MaxSnapshot {
-			return errors.New("search snapshot exceeds expanded size limit")
-		}
-		if !ok {
-			s.searchCache.put(org, p, sealed)
-		}
 	}
 	x, err := search.OpenMemory(ctx, key, snapshot)
 	if err != nil {
@@ -130,9 +109,49 @@ func (s *Server) withHostedIndex(ctx context.Context, org string, fn func(*searc
 	defer x.Close()
 	return fn(x, p, keys)
 }
+func (s *Server) hostedSnapshot(ctx context.Context, org string, p drive.SearchPointer, key []byte) ([]byte, error) {
+	var snapshot []byte
+	var err error
+	if p.Object != "" {
+		sealed, ok := s.searchCache.get(org, p)
+		if !ok {
+			prefix, err := s.orgPrefix(ctx, org)
+			if err != nil {
+				return nil, err
+			}
+			obj, err := s.bucket.Store(prefix+"search/").Open(ctx, p.Object)
+			if err != nil {
+				return nil, err
+			}
+			if obj.Size() > maxSearchObject {
+				obj.Close()
+				return nil, errors.New("search snapshot exceeds size limit")
+			}
+			raw, err := io.ReadAll(io.NewSectionReader(obj, 0, obj.Size()))
+			obj.Close()
+			if err != nil {
+				return nil, err
+			}
+			sealed = string(raw)
+			// Authenticate before a remote object enters the cache.
+		}
+		snapshot, err = crypto.DecryptAESGCMAAD(sealed, key, searchAAD(org, p.Object, p.Version))
+		if err != nil {
+			return nil, errors.New("search snapshot failed authentication")
+		}
+		if len(snapshot) > search.MaxSnapshot {
+			return nil, errors.New("search snapshot exceeds expanded size limit")
+		}
+		if !ok {
+			s.searchCache.put(org, p, sealed)
+		}
+	}
+	return snapshot, nil
+}
 func (s *Server) runHostedSearch(ctx context.Context) {
+	reconciled := map[string]time.Time{} // owned by this worker, never shared with readers
 	for {
-		if err := s.indexHostedOrgs(ctx, false); err != nil && ctx.Err() == nil {
+		if err := s.indexHostedOrgs(ctx, false, reconciled); err != nil && ctx.Err() == nil {
 			log.Printf("org search index: %v", err)
 		}
 		select {
@@ -142,7 +161,7 @@ func (s *Server) runHostedSearch(ctx context.Context) {
 		}
 	}
 }
-func (s *Server) indexHostedOrgs(ctx context.Context, force bool) error {
+func (s *Server) indexHostedOrgs(ctx context.Context, force bool, reconciled map[string]time.Time) error {
 	orgs, err := s.store.Drive().ActiveOrgs(ctx)
 	if err != nil {
 		return err
@@ -156,6 +175,7 @@ func (s *Server) indexHostedOrgs(ctx context.Context, force bool) error {
 		if home == "" && org == s.config.Database.StaffOrg {
 			continue
 		}
+		reconcile := force || time.Since(reconciled[org]) >= indexReconcile
 		for {
 			count := 0
 			err := s.withHostedIndex(ctx, org, func(x *search.Index, p drive.SearchPointer, keys drive.Keys) error {
@@ -164,8 +184,10 @@ func (s *Server) indexHostedOrgs(ctx context.Context, force bool) error {
 				if err := w.tailSearch(scoped, time.Now()); err != nil {
 					return err
 				}
-				if err := w.reconcileSearch(scoped, time.Now()); err != nil {
-					return err
+				if reconcile || p.Object == "" {
+					if err := w.reconcileSearch(scoped, time.Now()); err != nil {
+						return err
+					}
 				}
 				if err := w.drainSearch(scoped, force, !force); err != nil {
 					return err
@@ -223,6 +245,10 @@ func (s *Server) indexHostedOrgs(ctx context.Context, force bool) error {
 				errs = append(errs, fmt.Errorf("org %s: %w", org, err))
 				break
 			}
+			if reconcile && reconciled != nil {
+				reconciled[org] = time.Now()
+			}
+			reconcile = false
 			if !force || count == 0 {
 				break
 			}

@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -483,5 +485,112 @@ func TestHostedPeerUsesOrgCellWithoutFallback(t *testing.T) {
 	}
 	if _, _, err := w.st.Drive().IssueTicket(oldContext, w.users[1], "attachment.txt", 3, 1<<20); !errors.Is(err, drive.ErrPeerGone) {
 		t.Fatal("removed cell peer stayed live", err)
+	}
+}
+
+// Exercise deletion both before HEAD and between HEAD and GET on a cold replica.
+func TestHostedSearchReloadsReplacedSnapshot(t *testing.T) {
+	for _, method := range []string{http.MethodHead, http.MethodGet} {
+		t.Run(method, func(t *testing.T) {
+			w := newHostedWorld(t)
+			ctx := context.Background()
+			w.publish(t, 0, "firstsnapshot")
+			if err := w.s.indexIdle(ctx); err != nil {
+				t.Fatal(err)
+			}
+			old, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			next := w.publish(t, 0, "secondsnapshot")
+			target, err := url.Parse(w.cfg.ObjectStorage.Endpoint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			var once sync.Once
+			var publishErr error
+			gateway := httptest.NewServer(http.HandlerFunc(func(out http.ResponseWriter, req *http.Request) {
+				if req.Method == method && strings.HasSuffix(req.URL.Path, "/"+old.Object) {
+					once.Do(func() { publishErr = w.s.indexIdle(ctx) })
+				}
+				// Keep the signed request Host while forwarding to the real S3 fixture.
+				proxy.ServeHTTP(out, req)
+			}))
+			defer gateway.Close()
+			cfg := *w.cfg
+			cfg.ObjectStorage.Endpoint = gateway.URL
+			replica := NewServer(&cfg, w.st)
+			got := w.request(t, replica, 0, "GET", "/api/drive/search?q=secondsnapshot", "")
+			if got.Code != 200 || !strings.Contains(got.Body.String(), next.ID) {
+				t.Fatalf("replacement search: %d %s", got.Code, got.Body)
+			}
+			if publishErr != nil {
+				t.Fatal(publishErr)
+			}
+			current, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+			if err != nil || current.Object == old.Object {
+				t.Fatal("publication did not race", current, err)
+			}
+		})
+	}
+}
+
+func TestHostedSearchReconcilesHourlyAndTailsChanges(t *testing.T) {
+	w := newHostedWorld(t)
+	ctx := context.Background()
+	f := w.publish(t, 0, "hourlyreconcile")
+	if err := w.s.indexIdle(ctx); err != nil {
+		t.Fatal(err)
+	}
+	reconciled := map[string]time.Time{}
+	for _, org := range w.orgs {
+		reconciled[org] = time.Now()
+	}
+	prefix, err := w.st.Drive().ObjectPrefix(ctx, w.orgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := w.s.bucket.Store(prefix + "text/")
+	if err := cache.Remove(ctx, f.Blob); err != nil {
+		t.Fatal(err)
+	}
+	before, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.s.indexHostedOrgs(ctx, false, reconciled); err != nil {
+		t.Fatal(err)
+	}
+	after, err := w.st.Drive().SearchPointer(ctx, w.orgs[0])
+	if err != nil || after.Version != before.Version {
+		t.Fatal("idle poll reconciled", after, err)
+	}
+	if o, err := cache.Open(ctx, f.Blob); !errors.Is(err, fs.ErrNotExist) {
+		if o != nil {
+			o.Close()
+		}
+		t.Fatal("idle poll rebuilt cache", err)
+	}
+	// A new change enters the durable queue without a full reconciliation.
+	next := w.publish(t, 0, "changefeed")
+	if err := w.s.indexHostedOrgs(ctx, false, reconciled); err != nil {
+		t.Fatal(err)
+	}
+	due, err := w.st.Drive().SearchDue(ctx, w.orgs[0], time.Now(), true, 20)
+	if err != nil || len(due) != 1 || due[0].File != next.ID {
+		t.Fatal("change not queued", due, err)
+	}
+	reconciled[w.orgs[0]] = time.Now().Add(-indexReconcile)
+	if err := w.s.indexHostedOrgs(ctx, false, reconciled); err != nil {
+		t.Fatal(err)
+	}
+	o, err := cache.Open(ctx, f.Blob)
+	if err != nil {
+		t.Fatal("hourly reconciliation did not rebuild cache", err)
+	}
+	o.Close()
+	if time.Since(reconciled[w.orgs[0]]) >= indexReconcile {
+		t.Fatal("reconciliation timestamp not advanced")
 	}
 }

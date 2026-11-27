@@ -385,7 +385,7 @@ func (s *searchWorker) indexFile(ctx context.Context, id string, now time.Time) 
 // waiting for the worker.
 func (s *Server) indexIdle(ctx context.Context) error {
 	if s.hostedSearch() {
-		return s.indexHostedOrgs(ctx, true)
+		return s.indexHostedOrgs(ctx, true, nil)
 	}
 	w := s.localSearch()
 	if s.search == nil {
