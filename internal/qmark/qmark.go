@@ -72,8 +72,9 @@ func Retry(ctx context.Context, f func() error) error {
 	}
 }
 
-// MaxAttempts bounds the runs of one transaction: enough for dozens of writers to one row.
-const MaxAttempts = 50
+// MaxAttempts bounds one transaction while leaving room for dozens of contending writers.
+// The 20-writer pool regression exhausts 50 attempts on a loaded PostgreSQL host.
+const MaxAttempts = 250
 
 func retryable(err error) bool {
 	msg := fmt.Sprint(err)

@@ -651,7 +651,7 @@ The contract is KyIdentity's `POST /api/suite/storage` (T #290, `docs/SUITE-DIRE
   - **Serialization aborts.** The pool read is a sum over the org's rows followed by an
     insert into them, so two byte-adding writes in one org conflict under serializable
     isolation, and PostgreSQL aborts one of them (SQLSTATE 40001) even when both fit.
-    `qmark.Retry` reruns every drive transaction on that error, up to 50 times with a random
+    `qmark.Retry` reruns every drive transaction on that error, up to 250 times with a random
     pause (R1a as built), so the write succeeds, only later.
     - Step 5's tests: twenty uploads in one org with room for all of them all succeed, and
       uploads in two orgs at once all succeed.
