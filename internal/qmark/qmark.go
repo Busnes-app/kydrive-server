@@ -61,13 +61,18 @@ func (p boolPlan) Encode(value any, buf []byte) ([]byte, error) {
 func Retry(ctx context.Context, f func() error) error {
 	for attempt := 1; ; attempt++ {
 		err := f()
-		if attempt == MaxAttempts || !retryable(err) {
+		if attempt == MaxAttempts || !retryable(err) || ctx.Err() != nil {
 			return err
 		}
+		timer := time.NewTimer(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond))))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return err
-		case <-time.After(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond)))):
+		case <-timer.C:
+		}
+		if ctx.Err() != nil {
+			return err
 		}
 	}
 }
