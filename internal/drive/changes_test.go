@@ -279,6 +279,16 @@ func leaver(t *testing.T, e *changeEnv) (string, []string) {
 // noChange lists every exported Store method that writes no change row, and why. A new method
 // fails TestEveryMutatorWritesAChange until it is classified here or added to mutators.
 var noChange = map[string]string{
+	"ConfigureCells":          "validated deployment serving state, not drive items",
+	"ObjectPrefix":            "read; internal storage routing",
+	"OrgHomeRegion":           "read",
+	"OrgKeys":                 "read; internal key lookup",
+	"PublishSearch":           "derived search snapshot, not a drive item",
+	"SearchDue":               "read; derived search queue",
+	"SearchEnqueue":           "derived search queue, not a drive item",
+	"SearchPointer":           "read; derived snapshot pointer",
+	"SetOrgPurger":            "process-local cleanup adapter",
+	"StorageOrgs":             "read; internal maintenance registry",
 	"ExportPrincipal":         "read",
 	"PersonalExport":          "read; never creates a workspace",
 	"IssueViewTicket":         "viewing copies are not items",

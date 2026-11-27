@@ -33,7 +33,10 @@ const (
 // extracting bounds in-process extractions at once, as converting does conversions.
 var extracting = make(chan struct{}, 2)
 
-func (s *Server) textRoot() objects.Local {
+func (s *Server) textRoot() objects.Store {
+	if s.bucket != nil {
+		return s.hostedStore("text")
+	}
 	return objects.Dir(filepath.Join(s.config.Database.DataDir, "text"))
 }
 

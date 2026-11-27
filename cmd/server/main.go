@@ -259,6 +259,9 @@ func runServer() {
 	}
 
 	srv := api.NewServer(cfg, st)
+	if err := srv.StorageConfigurationError(); err != nil {
+		log.Fatalf("Object storage: %v", err)
+	}
 	if err := srv.EditorConfigurationError(); err != nil {
 		log.Fatalf("Editor configuration: %v", err)
 	}

@@ -167,6 +167,9 @@ func (x *Index) loadVocab() *vocab {
 // SaveVocab seals the vocabulary to disk when it changed, at most once a minute unless now is
 // set; Close saves it too. The file is replaced atomically.
 func (x *Index) SaveVocab(now bool) error {
+	if x.dir == "" {
+		return nil
+	}
 	v := x.vocabNow()
 	v.mu.Lock()
 	due := v.dirty && (now || time.Since(v.saved) >= time.Minute)
@@ -175,6 +178,9 @@ func (x *Index) SaveVocab(now bool) error {
 	}
 	v.mu.Unlock()
 	if !due {
+		return nil
+	}
+	if x.dir == "" {
 		return nil
 	}
 	sealed, err := crypto.EncryptAESGCMAAD(v.encode(), x.vkey, x.vaad)

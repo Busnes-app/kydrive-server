@@ -26,7 +26,11 @@ func replicaConfig(ctx context.Context, cfg *config.Config, st store.Store, acce
 	}
 	current := config.ReplicaFingerprint(cfg)
 	maps.Copy(current, ed.ReplicaFingerprint(cfg.Security.EncryptionKey))
-	return st.UpdateReplicaConfig(ctx, current, accept)
+	changed, err := st.UpdateReplicaConfig(ctx, current, accept)
+	if err == nil && !accept {
+		err = st.Drive().ConfigureCells(ctx)
+	}
+	return changed, err
 }
 
 func acceptReplicaConfig(ctx context.Context, args []string, out io.Writer) error {

@@ -4,13 +4,23 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Hosted storage, cells and desktop identity (test builds).** Device linking and account
+  lookup return exact KyIdentity issuer/subject and the registered org alongside legacy local
+  IDs. Hosted startup wires `KYDRIVE_S3_*`, requires PostgreSQL and `KY_CELLS`, and stores
+  sealed blobs, caches and upload segments under cell/org prefixes. Content search uses
+  per-org sealed snapshots on S3, with shared generation-aware queues and CAS publication;
+  erasure removes every nested org object and destroys its key. Single-tenant local blob and
+  search formats stay unchanged. Release multi-tenant startup remains closed; this enables
+  fixture qualification, not production hosted readiness.
+
+
 - **Per-org data keys (multi-tenant, tenancy step K).** Each org has its own random data key,
   stored only wrapped under a key derived from the deployment key. Blobs, viewing copies,
   upload staging, thumbnails, text caches and file and folder names are sealed under it, so
   one org's bytes and names never open under another's key. The org purge destroys the key,
   so whatever the purge missed, such as a copy the object storage kept, can no longer be
-  read. Single-tenant installs keep deployment-key sealing, unchanged byte for byte. Content
-  search stays off in multi-tenant mode until the per-org index exists. A multi-tenant test
+  read. Single-tenant installs keep deployment-key sealing, unchanged byte for byte. Hosted content
+  search uses the per-org sealed index described above. A multi-tenant test
   database or capsule made before this change is refused at startup; recreate it.
 
 - **Org purge and Delete everything (multi-tenant, tenancy step 5).** An org KyIdentity

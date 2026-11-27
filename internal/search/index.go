@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -34,6 +36,13 @@ const (
 // File is the index database's name inside its directory (<KY_DATA_DIR>/search).
 const File = "index.db"
 
+// MaxSnapshot bounds each hosted index to 32 MiB (8192 SQLite pages).
+const MaxSnapshot = 32 << 20
+
+// ErrTokenizerVersion is returned by OpenMemory when a snapshot matches the deployment
+// key check but was built with a different TokenizerVersion and must be rebuilt.
+var ErrTokenizerVersion = errors.New("search index: tokenizer version mismatch")
+
 const schema = `CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS docs(id INTEGER PRIMARY KEY, ref BLOB NOT NULL UNIQUE, state INTEGER NOT NULL, len INTEGER NOT NULL DEFAULT 0, err TEXT NOT NULL DEFAULT '', attempts INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS postings(token INTEGER NOT NULL, doc INTEGER NOT NULL, tf INTEGER NOT NULL, PRIMARY KEY(token, doc)) WITHOUT ROWID;
@@ -55,6 +64,15 @@ type Index struct {
 // Open opens or creates the index under dir. An index built under another deployment key or
 // tokenizer version is deleted and started again, empty.
 func Open(ctx context.Context, dir string, key []byte) (*Index, error) {
+	return openDatabase(ctx, dir, key, nil, false)
+}
+
+// OpenMemory keeps a hosted snapshot entirely in RAM, including SQLite temporary data.
+func OpenMemory(ctx context.Context, key, snapshot []byte) (*Index, error) {
+	return openDatabase(ctx, "", key, snapshot, true)
+}
+
+func openDatabase(ctx context.Context, dir string, key, snapshot []byte, memory bool) (*Index, error) {
 	if len(key) != 32 {
 		return nil, errors.New("search: index requires a 32-byte deployment key")
 	}
@@ -74,27 +92,72 @@ func Open(ctx context.Context, dir string, key []byte) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	want := hex.EncodeToString(check) + ":" + strconv.Itoa(TokenizerVersion)
-	if err = os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
+	checkHex := hex.EncodeToString(check)
+	want := checkHex + ":" + strconv.Itoa(TokenizerVersion)
+	if !memory {
+		if err = os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
 	}
 	path := filepath.Join(dir, File)
 	for attempt := 0; ; attempt++ {
-		db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=secure_delete(ON)")
+		dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=secure_delete(ON)"
+		if memory {
+			dsn = ":memory:?_pragma=temp_store(MEMORY)&_pragma=max_page_count(8192)&_pragma=secure_delete(ON)"
+		}
+		db, err := sql.Open("sqlite", dsn)
 		if err != nil {
 			return nil, err
 		}
 		db.SetMaxOpenConns(1)
 		db.SetMaxIdleConns(1)
+		if memory && len(snapshot) > 0 {
+			c, err := db.Conn(ctx)
+			if err != nil {
+				db.Close()
+				return nil, err
+			}
+			err = c.Raw(func(dc any) error { return dc.(interface{ Deserialize([]byte) error }).Deserialize(snapshot) })
+			c.Close()
+			if err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
 		got, err := prepare(ctx, db, want)
 		if err == nil && got == want {
 			x := &Index{db: db, tok: tok, ref: ref, dir: dir, vkey: vkey, vaad: []byte("kydrive:search-vocab:" + want)}
-			x.vocab = x.loadVocab()
+			x.vocab = newVocab()
+			if memory {
+				var raw string
+				err := db.QueryRowContext(ctx, `SELECT v FROM meta WHERE k='vocab'`).Scan(&raw)
+				if err == nil {
+					data, e := base64.StdEncoding.DecodeString(raw)
+					if e == nil {
+						x.vocab, e = decodeVocab(data)
+					}
+					if e != nil {
+						db.Close()
+						return nil, e
+					}
+				} else if !errors.Is(err, sql.ErrNoRows) {
+					db.Close()
+					return nil, err
+				}
+			} else {
+				x.vocab = x.loadVocab()
+			}
 			return x, nil
 		}
 		db.Close()
 		if err != nil {
 			return nil, fmt.Errorf("search index: %w", err)
+		}
+		if memory {
+			if gotKey, _, ok := strings.Cut(got, ":"); ok && subtle.ConstantTimeCompare([]byte(gotKey), []byte(checkHex)) == 1 {
+				return nil, ErrTokenizerVersion
+			}
+			return nil, errors.New("search index: snapshot check mismatch")
 		}
 		if attempt > 0 {
 			return nil, errors.New("search index: could not start a fresh index")
@@ -513,4 +576,27 @@ func (x *Index) Match(ctx context.Context, q Query, refs map[string]bool) (Match
 		out.Scores[cand[d].ref] = s
 	}
 	return out, nil
+}
+
+// Snapshot serializes a self-contained SQLite database and its prefix vocabulary. The
+// caller seals it before publishing; no hosted index or vocabulary touches the filesystem.
+func (x *Index) Snapshot(ctx context.Context) ([]byte, error) {
+	if err := x.SaveVocab(true); err != nil {
+		return nil, err
+	}
+	if _, err := x.db.ExecContext(ctx, `INSERT INTO meta(k,v) VALUES('vocab',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, base64.StdEncoding.EncodeToString(x.vocabNow().encode())); err != nil {
+		return nil, err
+	}
+	c, err := x.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	var out []byte
+	err = c.Raw(func(dc any) error {
+		var err error
+		out, err = dc.(interface{ Serialize() ([]byte, error) }).Serialize()
+		return err
+	})
+	return out, err
 }

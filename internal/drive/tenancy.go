@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +27,10 @@ const (
 
 // Tenancy is how a database is shared. StaffOrg is the org of KyDrive's own staff, the only
 // accounts that may administer a multi-tenant install (D9); single-tenant leaves it empty.
-type Tenancy struct{ Mode, StaffOrg string }
+type Tenancy struct {
+	Mode, StaffOrg string
+	Cells          []string
+}
 
 func (t Tenancy) check() error {
 	switch t.Mode {
@@ -213,7 +217,7 @@ func orgServing(o string) string {
 }
 
 func orgAvailable(o, status string) string {
-	return o + `.status='` + status + `' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR COALESCE(CAST((SELECT value FROM server_settings WHERE key='` + OrgsFreshUntil + `') AS BIGINT),0)>unixepoch())`
+	return `(` + cellServing(o) + `) AND ` + o + `.status='` + status + `' AND ` + o + `.enabled=1 AND (` + o + `.seeded=1 OR ` + o + `.id='` + DefaultOrg + `' OR COALESCE(CAST((SELECT value FROM server_settings WHERE key='` + OrgsFreshUntil + `') AS BIGINT),0)>unixepoch())`
 }
 
 // sameOrg is true when workspace $W is in user $U's org. Both are column references.
@@ -390,13 +394,37 @@ func (s *Store) ApplyOrgs(ctx context.Context, orgs []suitedir.Org, next int64) 
 		staffNotActive = false
 		for _, o := range orgs {
 			if o.ID == s.tenancy.StaffOrg {
+				if o.HomeRegion != "" {
+					var home string
+					if err := tx.QueryRowContext(ctx, `SELECT home_region FROM drive_orgs WHERE id=?`, o.ID).Scan(&home); err != nil {
+						return err
+					}
+					if home != "" && home != o.HomeRegion {
+						return fmt.Errorf("staff home_region is immutable")
+					}
+					if _, err := tx.ExecContext(ctx, `UPDATE drive_orgs SET home_region=? WHERE id=?`, o.HomeRegion, o.ID); err != nil {
+						return err
+					}
+				}
 				staffNotActive = staffNotActive || o.Status != suitedir.OrgActive || !o.Enabled
 				continue
 			}
+			// A cell is fixed once assigned. Never serve a rehomed org on its old storage.
+			var home string
+			err := tx.QueryRowContext(ctx, `SELECT home_region FROM drive_orgs WHERE id=?`, o.ID).Scan(&home)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if home != "" && home != o.HomeRegion {
+				return fmt.Errorf("org %s: home_region is immutable", o.ID)
+			}
+			if len(s.tenancy.Cells) > 0 && !slices.Contains(s.tenancy.Cells, o.HomeRegion) && errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
 			// A deleted org stays deleted: no later answer brings it back.
-			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,revision,enabled,storage_bytes) VALUES(?,?,?,?,?)
-ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes,report_due=1
-WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas)); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO drive_orgs(id,status,revision,enabled,storage_bytes,home_region) VALUES(?,?,?,?,?,?)
+ON CONFLICT(id) DO UPDATE SET status=excluded.status,revision=excluded.revision,enabled=excluded.enabled,storage_bytes=excluded.storage_bytes,home_region=CASE WHEN drive_orgs.home_region='' THEN excluded.home_region ELSE drive_orgs.home_region END,report_due=1
+WHERE drive_orgs.seeded=0 AND drive_orgs.status<>'deleted' AND drive_orgs.revision<excluded.revision`, o.ID, o.Status, o.Revision, o.Enabled, storageBytes(o.Quotas), o.HomeRegion); err != nil {
 				return err
 			}
 			if err := s.createOrgKey(ctx, tx, o.ID); err != nil {

@@ -30,7 +30,10 @@ var previewTypes = map[string]bool{
 // from acting as the app.
 const previewCSP = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
 
-func (s *Server) thumbRoot() objects.Local {
+func (s *Server) thumbRoot() objects.Store {
+	if s.bucket != nil {
+		return s.hostedStore("thumbs")
+	}
 	return objects.Dir(filepath.Join(s.config.Database.DataDir, "thumbs"))
 }
 

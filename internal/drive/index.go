@@ -12,7 +12,8 @@ import (
 // IndexChanges returns the files named by up to limit change rows after seq after, each once,
 // and the last seq read (after itself when there are none).
 func (s *Store) IndexChanges(ctx context.Context, after int64, limit int) ([]string, int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT seq,kind,item FROM drive_changes WHERE seq>? ORDER BY seq LIMIT ?`, after, limit)
+	org, _ := ctx.Value(orgKey{}).(string)
+	rows, err := s.db.QueryContext(ctx, `SELECT seq,kind,item FROM drive_changes WHERE seq>? AND (?='' OR org_id=?) ORDER BY seq LIMIT ?`, after, org, org, limit)
 	if err != nil {
 		return nil, after, err
 	}
@@ -34,7 +35,8 @@ func (s *Store) IndexChanges(ctx context.Context, after int64, limit int) ([]str
 
 // IndexFile returns file id at its current version, trashed or not; ErrNotFound when it is gone.
 func (s *Store) IndexFile(ctx context.Context, id string) (File, error) {
-	f, err := s.scanOpenFile(ctx, s.db, s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=?`, id))
+	org, _ := ctx.Value(orgKey{}).(string)
+	f, err := s.scanOpenFile(ctx, s.db, s.db.QueryRowContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id=? AND (?='' OR `+workspaceOrg("f.workspace")+`=?)`, id, org, org))
 	if errors.Is(err, ErrDenied) {
 		return f, ErrNotFound
 	}
@@ -43,7 +45,8 @@ func (s *Store) IndexFile(ctx context.Context, id string) (File, error) {
 
 // IndexFiles pages every file at its current version, trashed or not, by ID after afterID.
 func (s *Store) IndexFiles(ctx context.Context, afterID string, limit int) ([]File, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id>? ORDER BY f.id LIMIT ?`, afterID, limit)
+	org, _ := ctx.Value(orgKey{}).(string)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+fileColumns+` FROM drive_files f JOIN drive_versions v ON v.file_id=f.id AND v.revision=f.revision WHERE f.id>? AND (?='' OR `+workspaceOrg("f.workspace")+`=?) ORDER BY f.id LIMIT ?`, afterID, org, org, limit)
 	if err != nil {
 		return nil, err
 	}

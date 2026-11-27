@@ -23,14 +23,15 @@ import (
 
 // Config encapsulates all runtime configuration for kydrive-server.
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	Database DatabaseConfig `json:"database"`
-	Security SecurityConfig `json:"security"`
-	SSO      SSOConfig      `json:"sso"`
-	SCIM     SCIMConfig     `json:"scim"`
-	Backup   BackupConfig   `json:"backup"`
-	Captcha  CaptchaConfig  `json:"captcha"`
-	Drive    DriveConfig    `json:"drive"`
+	Server        ServerConfig        `json:"server"`
+	Database      DatabaseConfig      `json:"database"`
+	Security      SecurityConfig      `json:"security"`
+	SSO           SSOConfig           `json:"sso"`
+	SCIM          SCIMConfig          `json:"scim"`
+	Backup        BackupConfig        `json:"backup"`
+	Captcha       CaptchaConfig       `json:"captcha"`
+	ObjectStorage ObjectStorageConfig `json:"object_storage"`
+	Drive         DriveConfig         `json:"drive"`
 }
 
 // DriveConfig bounds resumable uploads and folder zip downloads, in bytes. ContentSearch
@@ -68,8 +69,9 @@ type DatabaseConfig struct {
 	ConnMaxLifetime time.Duration `json:"conn_max_lifetime"`
 	// Tenancy is the drive's tenancy mode, single unless set; StaffOrg is a multi-tenant
 	// drive's staff org. Configuration offers only single until multi-tenant mode ships.
-	Tenancy  string `json:"-"`
-	StaffOrg string `json:"-"`
+	Tenancy  string   `json:"-"`
+	StaffOrg string   `json:"-"`
+	Cells    []string `json:"-"`
 }
 
 // SQLitePath is the SQLite database file DSN names.
@@ -374,6 +376,11 @@ func load(existing bool) (*Config, error) {
 			return nil, err
 		}
 	}
+	cells, storage, err := hostedStorage(multi)
+	if err != nil {
+		return nil, err
+	}
+
 	fontsDir := getEnv("KY_EXCALIDRAW_FONTS_DIR", "")
 	if fontsDir != "" {
 		if info, err := os.Stat(fontsDir); err != nil || !info.IsDir() {
@@ -381,6 +388,7 @@ func load(existing bool) (*Config, error) {
 		}
 	}
 	cfg := &Config{
+		ObjectStorage: storage,
 		Server: ServerConfig{
 			Host:               host,
 			Port:               port,
@@ -397,6 +405,7 @@ func load(existing bool) (*Config, error) {
 			DataDir:         dataDir,
 			Tenancy:         tenancy,
 			StaffOrg:        getEnv("KYDRIVE_STAFF_ORG", ""),
+			Cells:           cells,
 			MaxOpenConns:    envInt("KY_DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns:    envInt("KY_DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: 15 * time.Minute,

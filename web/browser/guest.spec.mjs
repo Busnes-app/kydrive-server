@@ -21,6 +21,9 @@ async function signIn(page) {
 
 test('a guest without an account opens a password link and downloads a file', async ({ page, browser }, testInfo) => {
   const headers = await signIn(page);
+  // The shared session can outlive the five-minute step-up during a slow full run.
+  const stepUp = await page.request.post('/api/auth/step-up', { headers, data: { password: 'BrowserUpdated456!' } });
+  expect(stepUp.ok(), await stepUp.text()).toBe(true);
   expect((await page.request.put('/api/drive/guest-links-policy', { headers, data: { enabled: true, max_days: 7 } })).ok()).toBe(true);
   expect((await page.request.post('/api/drive/personal-workspace', { headers, data: {} })).ok()).toBe(true);
   const mine = (await (await page.request.get('/api/drive/workspaces')).json()).find(w => w.kind === 'personal');

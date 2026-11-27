@@ -34,6 +34,7 @@ func writeObject(st objects.Store, k Keys, name, bind string, r io.Reader, limit
 	if limit < 1 {
 		return v, ErrInvalid
 	}
+	st = objects.Scope(st, k.org)
 	w, err := st.Create(context.Background())
 	if err != nil {
 		return v, err

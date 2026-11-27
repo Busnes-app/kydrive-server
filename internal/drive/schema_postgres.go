@@ -10,7 +10,7 @@ import (
 // new (SQLite moves over by migrate-postgres), so it starts at the latest version; an entry
 // appended to schema needs its PostgreSQL form here too, and TestPostgresSchemaIsCurrent fails
 // until it has one.
-const postgresVersion = 30
+const postgresVersion = 31
 
 // postgresTables is every drive table at postgresVersion without org_id, which
 // tenancySchema adds as on SQLite. SQLite's INTEGER is 64-bit, so it is BIGINT here.
@@ -94,35 +94,44 @@ func (s *Store) createPostgres(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := func() error {
-		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('kydrive drive schema'))`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+		return err
+	}
+	var done int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema`).Scan(&done); err != nil {
+		return err
+	}
+	switch done {
+	case postgresVersion:
+		return tx.Commit()
+	case 30:
+		if _, err := tx.ExecContext(ctx, cellsSearchSchema(dialect{pg: true})); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS drive_schema(version BIGINT PRIMARY KEY)`); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(31)`); err != nil {
 			return err
 		}
-		var done int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM drive_schema`).Scan(&done); err != nil || done == postgresVersion {
-			return err
-		}
-		if done != 0 {
-			return fmt.Errorf("drive: PostgreSQL schema half recorded (%d of %d)", done, postgresVersion)
-		}
+		return tx.Commit()
+	case 0:
 		if _, err := tx.ExecContext(ctx, postgresSchema()); err != nil {
 			return fmt.Errorf("drive: PostgreSQL schema: %w", err)
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO drive_schema SELECT generate_series(1,?)`, postgresVersion)
-		return err
-	}(); err != nil {
-		return err
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema SELECT generate_series(1,?)`, postgresVersion); err != nil {
+			return err
+		}
+		return tx.Commit()
+	default:
+		return fmt.Errorf("drive: PostgreSQL schema half recorded (%d of %d)", done, postgresVersion)
 	}
-	return tx.Commit()
 }
 
 // postgresSchema is the drive schema at postgresVersion.
 func postgresSchema() string {
 	pg := dialect{pg: true}
-	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg)
+	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg) + cellsSearchSchema(pg)
 }
 
 // dialect spells what the two backends write differently: triggers and IS NOT between values.

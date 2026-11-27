@@ -378,7 +378,10 @@ func (s *Server) driveSearch(w http.ResponseWriter, r *http.Request) {
 
 // blobRoot is the store of file contents. Every other store is named the same way, so the
 // hosted backend is chosen here.
-func (s *Server) blobRoot() objects.Local {
+func (s *Server) blobRoot() objects.Store {
+	if s.bucket != nil {
+		return s.hostedStore("blobs")
+	}
 	return objects.Dir(filepath.Join(s.config.Database.DataDir, "blobs"))
 }
 

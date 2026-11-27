@@ -14,6 +14,7 @@ var (
 	// NullableOrgID tables may hold platform rows (org_id NULL).
 	NullableOrgID = map[string]bool{"audit_records": true, "drive_events": true}
 	DerivedTables = map[string]string{
+		"drive_search_index": "drive_orgs", "drive_search_queue": "drive_orgs",
 		"sessions": "users", "group_members": "groups", "mfa_challenges": "users",
 		"drive_personal_workspaces": "drive_workspaces", "drive_grants": "drive_workspaces",
 		"drive_folders": "drive_workspaces", "drive_files": "drive_workspaces",
@@ -25,7 +26,7 @@ var (
 	PlatformTables = []string{
 		"schema_migrations", "server_settings", "sso_logout_tokens", "sso_logouts", "sso_subject_logouts",
 		"drive_schema", "drive_key", "drive_name_scrub", "drive_blob_retire", "drive_blob_kyb1",
-		"drive_orgs", "drive_erasures",
+		"drive_orgs", "drive_erasures", "drive_cells",
 	}
 	// MultiTenantTables exist on a multi-tenant database only (orgKeysDDL), each reaching an
 	// org through its foreign key to the table named: the org data keys (D14).

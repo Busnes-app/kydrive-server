@@ -1,7 +1,7 @@
 # objects
 
 ## Purpose
-Stores KyDrive's named, immutable objects: blobs and the caches derived from them (thumbnails, document text, KyPost viewing copies), and resumable-upload staging. `Dir` and `DirTree` keep them as files. `Bucket` keeps them in an S3-compatible bucket for the hosted install (tenancy spec R2); the server selects it in tenancy step 6, since single-tenant stays on files.
+Stores KyDrive's named, immutable objects: blobs and the caches derived from them (thumbnails, document text, KyPost viewing copies), and resumable-upload staging. `Dir` and `DirTree` keep them as files. `Bucket` keeps them in an S3-compatible bucket for the hosted install (tenancy spec R2); the server selects it for hosted startup; single-tenant stays on files.
 
 ## Ownership
 Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory backend. Imports the standard library and AWS's S3 client (`aws-sdk-go-v2/service/s3`, whose modules are all AWS's).
@@ -23,6 +23,9 @@ Owns the `Store`, `Draft`, `Object` and `Local` interfaces and the directory bac
   - `Open` is a HEAD; reads are ranged GETs of at least 4 MiB (`readAhead`), pinned to the ETag the HEAD saw, so an object replaced meanwhile fails instead of mixing versions.
   - A Tree's Sub is the key prefix `<prefix><name>/`; `List` dates a Sub by its newest object, and an empty Sub is not listed (S3 has no empty directories).
   - Errors name the operation, the key and the service's error code, never a request or the secret; NotFound and NoSuchKey are `fs.ErrNotExist` (`TestS3ErrorsNeverCarryTheSecret`).
+- `Bucket.PurgePrefix` erases all accessible object versions and delete markers, repeatedly listing the first page so deletion never invalidates its cursor. Org erasure requires version-list/delete permissions; provider backup copies and unfinished multipart uploads remain provider-policy responsibilities.
+- `ScopedStore`/`ScopedTree` select an org namespace through `Scope`/`ScopeTree`. Unscoped reads and writes fail closed; maintenance alone enumerates/removes all served namespaces by generated UUID. `Tree.RemoveAll` removes nested objects recursively, including an org's staging sessions and derived caches.
+- Runtime keys are `cells/<home_region>/orgs/<org_id>/<kind>/<object>`; `internal/api/objects.go` resolves authoritative cells through the drive store. The private spool contains sealed drafts only.
 - `Local` adds `Root()`, the directory itself. Only single-tenant maintenance jobs use it: legacy sealing, the KYB1 format upgrade (both rewrite a file in place), and Restic's bulk backup, which reads files.
 
 ## Verification

@@ -184,8 +184,7 @@ audit commit together (`internal/store/replica.go`). Malformed records and immut
 tenancy identity changes fail closed. Bulk settings omit the record and restore reset drops it.
 `TestReplicaConfigAtomic` exercises real independent PostgreSQL pools, mismatched first
 starts, old-replica refusal, upgrade fields and audit rollback. Single-mode tests require no
-coordination state. This groundwork does not establish replica/hosted readiness; S3 wiring,
-worker election, shared security state, backup and full acceptance remain required.
+coordination state. This groundwork does not establish replica/hosted readiness; provider durability, object-store restore, failover/load and full acceptance remain required.
 
 
 The R3 session-lock boundary (`internal/store/replica_lock.go`) keeps named ownership
@@ -200,3 +199,24 @@ tests on one PostgreSQL database (`TestOneReplicaRunsTheJobs`,
 cover exclusion, takeover after backend termination and refusal. This is still not
 exactly-once execution or fencing of an external write already in flight, and startup
 qualification remains required.
+
+
+## Hosted object and index boundary
+
+Test-build hosted storage selects `cells/<home_region>/orgs/<org_id>/` from the immutable
+directory home and registered org. Blob, cache and segment sealing uses that org's data key.
+Both desktop identity endpoints report exact issuer/subject and the stored org; usernames
+and local IDs never substitute for the OIDC tuple.
+
+Each hosted index is one immutable AES-256-GCM snapshot under an org-derived key. AAD binds
+org, object UUID and pointer version, so moving or replaying ciphertext at a different
+committed version fails authentication. Queue generations and a serving-state check are in
+the pointer CAS transaction. Readers own separate in-memory SQLite connections; host disk
+contains sealed drafts/ciphertext only. The queue and pointer contain opaque IDs, not terms.
+Erasure fences publishers, removes their rows and destroys the key; repeated recursive
+prefix cleanup catches late writes and failed deletions. Accessible object versions and delete markers are erased through S3 version APIs;
+provider-managed backup copies remain outside application authority and require provider policy.
+
+`TestHosted*` uses CI's signature-checking S3 fixture and PostgreSQL for replica reads,
+cell/org separation, queue/CAS races, replay refusal, failed publishes and erasure. These
+checks do not qualify a production provider, load, desktop packaging or hosted Office.

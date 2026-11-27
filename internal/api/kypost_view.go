@@ -25,7 +25,10 @@ const (
 	viewPath        = "/api/suite/view/"
 )
 
-func (s *Server) viewRoot() objects.Local {
+func (s *Server) viewRoot() objects.Store {
+	if s.bucket != nil {
+		return s.hostedStore("view")
+	}
 	return objects.Dir(filepath.Join(s.config.Database.DataDir, "view"))
 }
 
@@ -113,6 +116,11 @@ func (s *Server) handleViewUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.allowAttempt("view-upload:"+c.Owner, 60, time.Minute) {
 		w.Header().Set("Retry-After", "60")
 		s.ticketRefuse(w, http.StatusTooManyRequests, "rate_limited")
+		return
+	}
+	p, err = s.kypostFor(r.Context(), c.Owner, p)
+	if err != nil {
+		s.ticketRefuse(w, 404, "no_cell_peer")
 		return
 	}
 	if on, err := s.kypostEnabled(r.Context(), c.Owner, p); err != nil || !on {

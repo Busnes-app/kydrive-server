@@ -1,6 +1,7 @@
 package qmark
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -46,5 +47,21 @@ func TestRetryRerunsOnlySerializationFailures(t *testing.T) {
 		return nil
 	}); err != nil || runs != 3 {
 		t.Fatalf("%d runs, %v", runs, err)
+	}
+}
+
+func TestRetryCancellationStopsContention(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	runs := 0
+	err := Retry(ctx, func() error {
+		runs++
+		if runs == 3 {
+			cancel()
+		}
+		return errors.New("(SQLSTATE 40001)")
+	})
+	if err == nil || runs != 3 {
+		t.Fatalf("cancelled contention kept retrying: runs=%d err=%v", runs, err)
 	}
 }

@@ -26,12 +26,13 @@ var (
 )
 
 type Store struct {
-	db      *sql.DB
-	pg      bool // opened by qmark: PostgreSQL
-	key     []byte
-	names   names // the deployment key's: single-tenant names
-	tenancy Tenancy
-	orgKeys orgKeys
+	db        *sql.DB
+	pg        bool // opened by qmark: PostgreSQL
+	key       []byte
+	names     names // the deployment key's: single-tenant names
+	tenancy   Tenancy
+	orgKeys   orgKeys
+	orgPurger func(context.Context, string) error
 }
 type Workspace struct {
 	Kind         string `json:"kind"`

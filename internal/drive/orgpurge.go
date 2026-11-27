@@ -95,6 +95,8 @@ func platformEvent(ctx context.Context, tx *sql.Tx, action, resource string) err
 // orgRows deletes, in order, every row an org still holds once its workspaces are gone. ? is
 // the org. users last: sessions and MFA challenges cascade from it.
 var orgRows = []step{
+	{"", `DELETE FROM drive_search_queue WHERE org_id=?`},
+	{"", `DELETE FROM drive_search_index WHERE org_id=?`},
 	{"view_copies", `DELETE FROM drive_view_copies WHERE org_id=?`},
 	{"", `DELETE FROM drive_editor_saves WHERE org_id=?`},
 	{"", `DELETE FROM drive_editor_documents WHERE org_id=?`},
@@ -176,6 +178,11 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 	}
 	if waiting != nil {
 		return blobs, nil, nil
+	}
+	if s.orgPurger != nil {
+		if err := s.orgPurger(ctx, org); err != nil {
+			return blobs, nil, err
+		}
 	}
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
 		views = nil

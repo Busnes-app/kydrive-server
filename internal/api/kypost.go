@@ -65,9 +65,11 @@ const (
 
 // kypostPeer is the paired KyPost. The secret lives only here, in memory.
 type kypostPeer struct {
-	URL    string
-	Secret []byte
-	Source string
+	URL     string
+	Secret  []byte
+	Source  string
+	Regions map[string]string
+	Region  string
 }
 
 type kypostLink struct {
@@ -183,14 +185,26 @@ func (s *Server) resolveKyPost(ctx context.Context) bool {
 		}
 		return s.unlinkKyPost(kypostUnreachable, err)
 	}
-	u, err := config.KyPostURL(peer.URL)
+	u := peer.URL
+	if peer.Regions == nil {
+		u, err = config.KyPostURL(peer.URL)
+	} else {
+		for cell := range peer.Regions {
+			raw, _ := peer.URLFor(cell)
+			if _, e := config.KyPostURL(raw); e != nil {
+				err = e
+				break
+			}
+		}
+		u = ""
+	}
 	if err != nil {
 		return s.unlinkKyPost(kypostInvalidPeer, err)
 	}
 	if cur := s.kypost.peer.Load(); cur == nil || cur.URL != u || string(cur.Secret) != string(peer.Secret) {
 		log.Printf("[KYPOST] linked through KyIdentity: %s", u)
 	}
-	s.kypost.set(&kypostPeer{URL: u, Secret: peer.Secret, Source: kypostSourceKyIdentity}, "")
+	s.kypost.set(&kypostPeer{URL: u, Secret: peer.Secret, Source: kypostSourceKyIdentity, Regions: peer.Regions}, "")
 	return true
 }
 
@@ -223,7 +237,11 @@ func (s *Server) peerContext(ctx context.Context, p *kypostPeer) context.Context
 	mac.Write([]byte("kydrive:kypost-pairing\x00" + p.Source + "\x00" + p.URL))
 	return drive.WithPeer(ctx, drive.Peer{SwitchDefault: p.Source == kypostSourceKyIdentity, Pairing: hex.EncodeToString(mac.Sum(nil)), Live: func() bool {
 		cur := s.kypost.peer.Load()
-		return cur != nil && cur.URL == p.URL && cur.Source == p.Source && string(cur.Secret) == string(p.Secret)
+		if cur == nil {
+			return false
+		}
+		u, ok := (suitedir.Peer{URL: cur.URL, Regions: cur.Regions}).URLFor(p.Region)
+		return ok && u == p.URL && cur.Source == p.Source && string(cur.Secret) == string(p.Secret)
 	}})
 }
 
@@ -316,6 +334,10 @@ func (s *Server) kypostVerify(r *http.Request, event string, limit int, h func(*
 	}
 	if !s.inOrg(r, user, who.OrgID, "kypost") {
 		return "", hd.EventID, refuse(404, "no_user") // as an unknown subject, and audited
+	}
+	p, err = s.kypostFor(r.Context(), user.ID, p)
+	if err != nil {
+		return "", hd.EventID, refuse(404, "no_cell_peer")
 	}
 	if !s.allowAttempt("kypost:"+event+":"+user.ID, limit, time.Minute) {
 		return user.ID, hd.EventID, refuse(429, "rate_limited")
@@ -589,6 +611,15 @@ func (s *Server) handleTicketUpload(w http.ResponseWriter, r *http.Request, p *k
 		s.ticketRefuse(w, http.StatusTooManyRequests, "rate_limited")
 		return
 	}
+	p, err = s.kypostFor(r.Context(), t.Owner, p)
+	if err != nil {
+		s.ticketRefuse(w, 404, "no_cell_peer")
+		return
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && !sameOrigin(origin, p.URL) {
+		s.ticketRefuse(w, 403, "bad_origin")
+		return
+	}
 	if on, err := s.kypostEnabled(r.Context(), t.Owner, p); err != nil || !on {
 		s.ticketRefuse(w, http.StatusConflict, "sharing_off")
 		return
@@ -715,7 +746,7 @@ func (s *Server) handleKyPostSetting(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(r.Context(), &store.AuditRecord{UserID: user.ID, Action: action, Resource: "user:" + user.ID, Details: "enabled=" + strconv.FormatBool(*on), IPAddress: s.requestIP(r)})
 	}
-	p := s.kypost.peer.Load()
+	p, _ := s.kypostFor(r.Context(), user.ID, s.kypost.peer.Load())
 	out := map[string]bool{"paired": p != nil, "enabled": false, "guest_policy": policy, "guest_links": false}
 	if p != nil {
 		on, err := s.kypostEnabled(r.Context(), user.ID, p)
@@ -729,4 +760,48 @@ func (s *Server) handleKyPostSetting(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.writeJSON(w, http.StatusOK, out)
+}
+
+// kypostFor resolves the org's peer cell with no fallback to another region's origin.
+func (s *Server) kypostFor(ctx context.Context, user string, p *kypostPeer) (*kypostPeer, error) {
+	if p == nil {
+		return nil, drive.ErrNotFound
+	}
+	if p.Regions == nil {
+		return p, nil
+	}
+	if !s.multi() {
+		return nil, drive.ErrDenied
+	}
+	org, err := s.store.Drive().UserOrg(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	home, err := s.store.Drive().OrgHomeRegion(ctx, org)
+	if err != nil {
+		return nil, err
+	}
+	u, ok := (suitedir.Peer{URL: p.URL, Regions: p.Regions}).URLFor(home)
+	if !ok {
+		return nil, drive.ErrDenied
+	}
+	selected := *p
+	selected.URL, selected.Region = u, home
+	return &selected, nil
+}
+
+// Preflight has no account; the ticket handler narrows the origin to its owner's cell.
+func (s *Server) kypostOrigin(p *kypostPeer, origin string) bool {
+	if p == nil {
+		return false
+	}
+	if p.Regions == nil {
+		return sameOrigin(origin, p.URL)
+	}
+	for _, cell := range s.config.Database.Cells {
+		if u, ok := (suitedir.Peer{Regions: p.Regions}).URLFor(cell); ok && sameOrigin(origin, u) {
+			return true
+		}
+	}
+	return false
 }

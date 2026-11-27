@@ -26,6 +26,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/dav"
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/editor"
+	"github.com/Busnes-app/kydrive-server/internal/objects"
 	"github.com/Busnes-app/kydrive-server/internal/scim"
 	"github.com/Busnes-app/kydrive-server/internal/search"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
@@ -79,6 +80,10 @@ type Server struct {
 	// has sent nothing, so StopBackupCollection may abandon it.
 	collecting     context.Context
 	stopCollecting context.CancelFunc
+	bucket         *objects.Bucket
+	storageErr     error
+	searchCache    sealedSearchCache
+	searchSlots    chan struct{}
 	search         *search.Index // content search; nil when off
 	suiteApps      suiteAppsCache
 	kypost         kypostLink // KyPost pairing (kypost.go)
@@ -199,6 +204,7 @@ func NewServer(cfg *config.Config, st store.Store) *Server {
 	}
 
 	s.editor, s.editorErr = editor.FromEnv(cfg.Server.AppURL, cfg.Server.Environment)
+	s.openObjects()
 	s.openSearch()
 	s.mcp = s.newMCPHandler()
 	s.loadExemptNetworks()
@@ -647,7 +653,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		p := s.kypost.peer.Load()
 		origin := r.Header.Get("Origin")
-		if origin != "" && (p == nil || !sameOrigin(origin, p.URL)) {
+		if origin != "" && !s.kypostOrigin(p, origin) {
 			s.ticketRefuse(w, http.StatusForbidden, "bad_origin")
 			return
 		}

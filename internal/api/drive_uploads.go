@@ -16,6 +16,9 @@ import (
 const chunkLimit int64 = 64 << 20
 
 func (s *Server) stagingRoot() objects.Tree {
+	if s.bucket != nil {
+		return s.hostedTree("staging")
+	}
 	return objects.DirTree(filepath.Join(s.config.Database.DataDir, "staging"))
 }
 

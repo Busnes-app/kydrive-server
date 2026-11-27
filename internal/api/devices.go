@@ -111,7 +111,13 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	}
 	// user_id is the account's immutable ID: the client keys its pairing on it, since a username can change.
 	// identity_key reaches the device over its pinned channel; it verifies GET /api/devices/tls-pin.
-	s.writeJSON(w, 200, s.withIdentityKey(map[string]string{"token": token, "user_id": user.ID, "user": user.Username, "devices_url": s.config.Server.AppURL + "/"}))
+	out, err := s.deviceIdentity(r.Context(), user)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	out["token"], out["devices_url"] = token, s.config.Server.AppURL+"/"
+	s.writeJSON(w, 200, s.withIdentityKey(out))
 }
 
 // handleDeviceAccount tells a linked computer which account its own device token belongs to.
@@ -126,7 +132,12 @@ func (s *Server) handleDeviceAccount(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.writeJSON(w, 200, s.withIdentityKey(map[string]string{"user_id": user.ID, "user": user.Username}))
+	out, err := s.deviceIdentity(r.Context(), user)
+	if err != nil {
+		s.driveError(w, err)
+		return
+	}
+	s.writeJSON(w, 200, s.withIdentityKey(out))
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
@@ -274,4 +285,25 @@ func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string
 		return nil, false
 	}
 	return user, true
+}
+
+// deviceIdentity reports the authoritative directory tuple, never a username or local ID
+// substituted for sub. Single-tenant local accounts keep their original response shape.
+func (s *Server) deviceIdentity(ctx context.Context, u *store.User) (map[string]string, error) {
+	out := map[string]string{"user_id": u.ID, "user": u.Username}
+	if (u.SSOProvider == "kysignon" || u.SSOProvider == "scim") && u.SSOSubject != "" && s.config.SSO.KySignOnIssuer != "" {
+		// oauthFlow verifies against this issuer with trailing slashes removed.
+		out["issuer"], out["sub"] = strings.TrimRight(s.config.SSO.KySignOnIssuer, "/"), u.SSOSubject
+		if s.multi() {
+			org, err := s.store.Drive().UserOrg(ctx, u.ID)
+			if err != nil {
+				return nil, err
+			}
+			if org == "" {
+				return nil, drive.ErrDenied
+			}
+			out["org_id"] = org
+		}
+	}
+	return out, nil
 }

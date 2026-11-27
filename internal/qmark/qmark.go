@@ -61,19 +61,25 @@ func (p boolPlan) Encode(value any, buf []byte) ([]byte, error) {
 func Retry(ctx context.Context, f func() error) error {
 	for attempt := 1; ; attempt++ {
 		err := f()
-		if attempt == MaxAttempts || !retryable(err) {
+		if attempt == MaxAttempts || !retryable(err) || ctx.Err() != nil {
 			return err
 		}
+		timer := time.NewTimer(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond))))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return err
-		case <-time.After(time.Duration(rand.Int64N(int64(min(attempt, 20)) * int64(time.Millisecond)))):
+		case <-timer.C:
+		}
+		if ctx.Err() != nil {
+			return err
 		}
 	}
 }
 
-// MaxAttempts bounds the runs of one transaction: enough for dozens of writers to one row.
-const MaxAttempts = 50
+// MaxAttempts bounds one transaction while leaving room for dozens of contending writers.
+// The 20-writer pool regression exhausts 50 attempts on a loaded PostgreSQL host.
+const MaxAttempts = 250
 
 func retryable(err error) bool {
 	msg := fmt.Sprint(err)

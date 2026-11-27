@@ -187,3 +187,67 @@ func TestConcurrentFirstStartsOpen(t *testing.T) {
 		}
 	}
 }
+
+// Reopening an existing PostgreSQL database recorded at version 30 must commit version 31
+// so drive_cells, search tables, and drive_orgs.home_region persist across subsequent opens.
+func TestPostgresUpgradeFromVersion30Persists(t *testing.T) {
+	if !testdb.Postgres() {
+		t.Skip("PostgreSQL upgrade path")
+	}
+	cfg := testdb.Config(t)
+	ctx := context.Background()
+	st, err := store.Open(ctx, cfg, testdb.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db := testdb.Open(t, cfg)
+	for _, stmt := range []string{
+		`DROP TRIGGER IF EXISTS drive_org_home_fixed ON drive_orgs`,
+		`DROP FUNCTION IF EXISTS drive_org_home_fixed()`,
+		`DROP TABLE drive_search_queue`,
+		`DROP TABLE drive_search_index`,
+		`DROP FUNCTION IF EXISTS drive_search_queue_org_exists()`,
+		`DROP FUNCTION IF EXISTS drive_search_queue_org_fixed()`,
+		`DROP FUNCTION IF EXISTS drive_search_index_org_exists()`,
+		`DROP FUNCTION IF EXISTS drive_search_index_org_fixed()`,
+		`DROP TABLE drive_cells`,
+		`ALTER TABLE drive_orgs DROP COLUMN home_region`,
+		`DELETE FROM drive_schema WHERE version = 31`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	upgraded, err := store.Open(ctx, cfg, testdb.Key)
+	if err != nil {
+		t.Fatalf("reopen at version 30: %v", err)
+	}
+	if err := upgraded.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.Open(ctx, cfg, testdb.Key)
+	if err != nil {
+		t.Fatalf("reopen after upgrade: %v", err)
+	}
+	defer reopened.Close()
+	var version int
+	if err := db.QueryRowContext(ctx, `SELECT MAX(version) FROM drive_schema`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != drive.PostgresVersion {
+		t.Fatalf("drive_schema max version = %d, want %d", version, drive.PostgresVersion)
+	}
+	for _, query := range []string{
+		`SELECT home_region FROM drive_orgs LIMIT 1`,
+		`SELECT COUNT(*) FROM drive_cells`,
+		`SELECT COUNT(*) FROM drive_search_index`,
+		`SELECT COUNT(*) FROM drive_search_queue`,
+	} {
+		if _, err := db.ExecContext(ctx, query); err != nil {
+			t.Fatalf("post-upgrade query %q failed: %v", query, err)
+		}
+	}
+}

@@ -34,6 +34,8 @@ var (
 	// Credential checks, callbacks, session-only exports, the operator CLI and background workers
 	// are never reached through the peer routes.
 	peerUnreachable = []string{
+		"ConfigureCells",
+		"ObjectPrefix", "OrgHomeRegion", "OrgKeys", "PublishSearch", "SearchDue", "SearchEnqueue", "SearchPointer", "SetOrgPurger", "StorageOrgs",
 		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",
 		"MarkDropped", "OperatorHandover", "OperatorLeavers", "PendingRevocations", "PruneChanges", "PruneDevices", "PublishEditor",
