@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -26,11 +27,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Busnes-app/ky-primitives/hybridsig"
 )
 
 // tlsPinContext domain-separates the signed bytes. Clients build the same string; change both
 // together (testdata/tls-pin-v1.json).
-const tlsPinContext = "kydrive-tls-pin/1"
+const (
+	tlsPinContext   = "kydrive-tls-pin/1"
+	tlsPinContextV2 = "kydrive-tls-pin/2"
+	// identityHybridHKDFInfo derives the deterministic ML-DSA-65 companion seed from the
+	// persisted 32-byte Ed25519 identity key seed so existing backups cover both keys.
+	identityHybridHKDFInfo = "kydrive-identity-mldsa65/1"
+)
 
 const (
 	// pinProbeTimeout bounds the handshake with KY_APP_URL.
@@ -40,9 +49,28 @@ const (
 	pinProbeFailureTTL = 5 * time.Minute
 )
 
-// tlsPinStatement is the exact byte string signed and verified.
+// tlsPinStatement is the exact v1 byte string signed and verified.
 func tlsPinStatement(host, pin string, issuedAt int64) []byte {
 	return []byte(tlsPinContext + "\n" + host + "\n" + pin + "\n" + strconv.FormatInt(issuedAt, 10))
+}
+
+// tlsPinStatementBody is the v2 message passed to hybridsig under tlsPinContextV2.
+func tlsPinStatementBody(host, pin string, issuedAt int64) []byte {
+	return []byte(host + "\n" + pin + "\n" + strconv.FormatInt(issuedAt, 10))
+}
+
+// identityHybridKey derives the deterministic ML-DSA-65+Ed25519 hybridsig private key paired
+// with the server's persisted Ed25519 identity key. The Ed25519 half is identical.
+func identityHybridKey(edKey ed25519.PrivateKey) (*hybridsig.PrivateKey, error) {
+	if edKey == nil {
+		return nil, errors.New("identity key unavailable")
+	}
+	edSeed := edKey.Seed()
+	mldsaSeed, err := hkdf.Key(sha256.New, edSeed, nil, identityHybridHKDFInfo, hybridsig.SeedBytes)
+	if err != nil {
+		return nil, err
+	}
+	return hybridsig.FromSeeds(mldsaSeed, edSeed)
 }
 
 // spkiPin is sha256/ plus std base64 of the SHA-256 of the leaf's SubjectPublicKeyInfo DER,
@@ -60,10 +88,22 @@ func (s *Server) identityKey() string {
 	return base64.StdEncoding.EncodeToString(s.config.Security.IdentityKey.Public().(ed25519.PublicKey))
 }
 
-// withIdentityKey adds identity_key to a device-facing reply when a key exists.
+// identityKeyHybrid is the std-base64 hybridsig (ML-DSA-65+Ed25519) public key, or "" without one.
+func (s *Server) identityKeyHybrid() string {
+	hk, err := identityHybridKey(s.config.Security.IdentityKey)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(hk.Public().Bytes())
+}
+
+// withIdentityKey adds identity_key and identity_key_hybrid to a device-facing reply when a key exists.
 func (s *Server) withIdentityKey(resp map[string]string) map[string]string {
 	if key := s.identityKey(); key != "" {
 		resp["identity_key"] = key
+	}
+	if hkey := s.identityKeyHybrid(); hkey != "" {
+		resp["identity_key_hybrid"] = hkey
 	}
 	return resp
 }
@@ -71,6 +111,10 @@ func (s *Server) withIdentityKey(resp map[string]string) map[string]string {
 // handleTLSPin signs the leaf KY_APP_URL serves right now. Public: the statement names the
 // server's own certificate, never caller input, and is useful only to a holder of the public key.
 // KyDrive never terminates TLS itself, so the probe is the only source of the pin.
+//
+// Older desktop and Android clients read this body with a 4 KiB cap, so the default response
+// stays compact (v1 Ed25519 only). Callers that pass ?v=2 receive signature_v2 (hybridsig
+// ML-DSA-65+Ed25519 under kydrive-tls-pin/2) and identity_key_hybrid alongside the v1 fields.
 func (s *Server) handleTLSPin(w http.ResponseWriter, r *http.Request) {
 	if !s.allowAttempt("tls-pin:"+s.requestIP(r), 10, time.Minute) {
 		w.Header().Set("Retry-After", "60")
@@ -100,12 +144,27 @@ func (s *Server) handleTLSPin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	issuedAt := s.now().Unix()
-	s.writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"host":      host,
 		"pin":       pin,
 		"issued_at": issuedAt,
 		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(key, tlsPinStatement(host, pin, issuedAt))),
-	})
+	}
+	if r.URL.Query().Get("v") == "2" {
+		hk, err := identityHybridKey(key)
+		if err != nil {
+			s.writeError(w, http.StatusServiceUnavailable, "TLS pin rollover is not available")
+			return
+		}
+		sigV2, err := hk.Sign(tlsPinContextV2, tlsPinStatementBody(host, pin, issuedAt))
+		if err != nil {
+			s.writeError(w, http.StatusServiceUnavailable, "TLS pin rollover is not available")
+			return
+		}
+		resp["signature_v2"] = base64.StdEncoding.EncodeToString(sigV2)
+		resp["identity_key_hybrid"] = base64.StdEncoding.EncodeToString(hk.Public().Bytes())
+	}
+	s.writeJSON(w, http.StatusOK, resp)
 }
 
 // filePin is the pin of the leaf in the operator's PEM certificate file, re-read on each call so

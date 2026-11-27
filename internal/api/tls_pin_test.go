@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -23,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/Busnes-app/kydrive-server/internal/config"
 	"github.com/Busnes-app/kydrive-server/internal/store"
 )
@@ -59,6 +61,34 @@ func TestTLSPinGoldenVector(t *testing.T) {
 	}
 	if got := base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(v.Statement))); got != v.Signature {
 		t.Fatalf("signature %s, want %s", got, v.Signature)
+	}
+
+	// v2 hybridsig derivation from the same seed is deterministic and preserves the Ed25519 half.
+	hk, err := identityHybridKey(key)
+	if err != nil {
+		t.Fatalf("identityHybridKey: %v", err)
+	}
+	hk2, err := identityHybridKey(key)
+	if err != nil {
+		t.Fatalf("second identityHybridKey: %v", err)
+	}
+	if !bytes.Equal(hk.Public().Bytes(), hk2.Public().Bytes()) {
+		t.Fatal("hybrid identity public key derivation is not deterministic")
+	}
+	edPub := key.Public().(ed25519.PublicKey)
+	rawHybrid := hk.Public().Bytes()
+	if !bytes.Equal(rawHybrid[len(rawHybrid)-ed25519.PublicKeySize:], edPub) {
+		t.Fatal("hybrid identity key Ed25519 tail does not match v1 identity_key")
+	}
+	sigV2, err := hk.Sign(tlsPinContextV2, tlsPinStatementBody(v.Host, v.Pin, v.IssuedAt))
+	if err != nil {
+		t.Fatalf("hk.Sign: %v", err)
+	}
+	if err := hk.Public().Verify(tlsPinContextV2, tlsPinStatementBody(v.Host, v.Pin, v.IssuedAt), sigV2); err != nil {
+		t.Fatalf("v2 signature failed verification: %v", err)
+	}
+	if err := hk.Public().Verify(tlsPinContext, tlsPinStatementBody(v.Host, v.Pin, v.IssuedAt), sigV2); err == nil {
+		t.Fatal("v2 signature verified under v1 context")
 	}
 }
 
@@ -126,6 +156,14 @@ func getPin(s *Server, ip string) *httptest.ResponseRecorder {
 	return w
 }
 
+func getPinV2(s *Server, ip string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodGet, "/api/devices/tls-pin?v=2", nil)
+	r.RemoteAddr = ip + ":1234"
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	return w
+}
+
 func TestTLSPinSignsTheServedLeaf(t *testing.T) {
 	base, want, roots := tlsOrigin(t)
 	s := pinServer(t, base) // host "LocalHost": the signed host is lowercased
@@ -139,12 +177,19 @@ func TestTLSPinSignsTheServedLeaf(t *testing.T) {
 	if rec.Header().Get("Cache-Control") != "no-store" {
 		t.Error("a signed pin must not be cached")
 	}
+	if rec.Body.Len() >= 4096 {
+		t.Fatalf("default v1 response is %d bytes; must stay under 4096 for legacy clients", rec.Body.Len())
+	}
 	var body struct {
 		Host, Pin, Signature string
-		IssuedAt             int64 `json:"issued_at"`
+		SignatureV2          string `json:"signature_v2"`
+		IssuedAt             int64  `json:"issued_at"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
+	}
+	if body.SignatureV2 != "" {
+		t.Fatal("default v1 response unexpectedly included signature_v2")
 	}
 	if body.Pin != want || body.Host != "localhost" {
 		t.Fatalf("host %q pin %q, want localhost %q", body.Host, body.Pin, want)
@@ -156,6 +201,39 @@ func TestTLSPinSignsTheServedLeaf(t *testing.T) {
 	pub, _ := base64.StdEncoding.DecodeString(s.identityKey())
 	if !ed25519.Verify(pub, tlsPinStatement(body.Host, body.Pin, body.IssuedAt), sig) {
 		t.Fatal("signature does not verify against identity_key")
+	}
+
+	// Requesting ?v=2 returns both v1 Ed25519 and v2 hybridsig (ML-DSA-65 + Ed25519).
+	recV2 := getPinV2(s, "192.0.2.1")
+	if recV2.Code != 200 {
+		t.Fatalf("v2 status %d %s", recV2.Code, recV2.Body)
+	}
+	var bodyV2 struct {
+		Host, Pin, Signature string
+		SignatureV2          string `json:"signature_v2"`
+		IdentityKeyHybrid    string `json:"identity_key_hybrid"`
+		IssuedAt             int64  `json:"issued_at"`
+	}
+	if err := json.Unmarshal(recV2.Body.Bytes(), &bodyV2); err != nil {
+		t.Fatal(err)
+	}
+	if bodyV2.IdentityKeyHybrid != s.identityKeyHybrid() {
+		t.Fatalf("identity_key_hybrid mismatch")
+	}
+	rawPubV2, err := base64.StdEncoding.DecodeString(bodyV2.IdentityKeyHybrid)
+	if err != nil {
+		t.Fatalf("decode identity_key_hybrid: %v", err)
+	}
+	pubV2, err := hybridsig.ParsePublicKey(rawPubV2)
+	if err != nil {
+		t.Fatalf("ParsePublicKey: %v", err)
+	}
+	sigV2, err := base64.StdEncoding.DecodeString(bodyV2.SignatureV2)
+	if err != nil {
+		t.Fatalf("decode signature_v2: %v", err)
+	}
+	if err := pubV2.Verify(tlsPinContextV2, tlsPinStatementBody(bodyV2.Host, bodyV2.Pin, bodyV2.IssuedAt), sigV2); err != nil {
+		t.Fatalf("signature_v2 failed verification: %v", err)
 	}
 }
 
@@ -217,12 +295,32 @@ func TestTLSPinCachesAFailedProbe(t *testing.T) {
 func TestIdentityKeyIsOmittedWithoutAKey(t *testing.T) {
 	s := pinServer(t, "https://drive.example.com")
 	pub := s.config.Security.IdentityKey.Public().(ed25519.PublicKey)
-	if got := s.withIdentityKey(map[string]string{})["identity_key"]; got != base64.StdEncoding.EncodeToString(pub) {
+	resp := s.withIdentityKey(map[string]string{
+		"user_id": "00000000-0000-0000-0000-000000000000",
+		"user":    "alice@example.com",
+	})
+	if got := resp["identity_key"]; got != base64.StdEncoding.EncodeToString(pub) {
 		t.Fatalf("identity_key %q", got)
 	}
+	rawHybrid, err := base64.StdEncoding.DecodeString(resp["identity_key_hybrid"])
+	if err != nil {
+		t.Fatalf("decode identity_key_hybrid: %v", err)
+	}
+	if _, err := hybridsig.ParsePublicKey(rawHybrid); err != nil {
+		t.Fatalf("ParsePublicKey(identity_key_hybrid): %v", err)
+	}
+	// GET /api/drive/device is read with a 4096-byte cap by older desktop clients.
+	b, _ := json.Marshal(resp)
+	if len(b) >= 4096 {
+		t.Fatalf("device identity reply is %d bytes; must fit under 4096 bytes", len(b))
+	}
 	s.config.Security.IdentityKey = nil
-	if _, ok := s.withIdentityKey(map[string]string{})["identity_key"]; ok {
+	omitted := s.withIdentityKey(map[string]string{})
+	if _, ok := omitted["identity_key"]; ok {
 		t.Fatal("no key must mean no field, not an empty one")
+	}
+	if _, ok := omitted["identity_key_hybrid"]; ok {
+		t.Fatal("no key must mean no identity_key_hybrid field, not an empty one")
 	}
 }
 
