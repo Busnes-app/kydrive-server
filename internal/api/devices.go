@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -84,8 +83,8 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var token, id string
-	// publicKey is the device's P-256 signing key (SPKI DER, std base64), required: every request
-	// the token makes must be signed with it (devicesig.go).
+	// publicKey is the device's ML-DSA-65+Ed25519 hybrid or P-256 SPKI DER signing key (std
+	// base64), required: every request the token makes must be signed with it (devicesig.go).
 	key, err := base64.StdEncoding.DecodeString(r.PostFormValue("publicKey"))
 	if err != nil {
 		s.writeError(w, 400, "Invalid device key")
@@ -249,7 +248,7 @@ func (s *Server) driveSetDevicePolicy(w http.ResponseWriter, r *http.Request) {
 // deviceUser authenticates a device token. A revoked one is told whether to wipe; every
 // other failure is a plain 401. Dedicated installer administrators never hold one.
 func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string) (*store.User, bool) {
-	id, err := s.store.Drive().DeviceUser(r.Context(), token, func(device string, key *ecdsa.PublicKey) error {
+	id, err := s.store.Drive().DeviceUser(r.Context(), token, func(device string, key *drive.DeviceKey) error {
 		return s.verifyDeviceRequest(r, device, key)
 	})
 	var revoked drive.ErrDeviceRevoked
