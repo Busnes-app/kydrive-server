@@ -294,6 +294,10 @@ func TestWritesNameTheirOrg(t *testing.T) {
 		switch table {
 		case "users", "groups", "drive_workspaces", "audit_records", "drive_events", "drive_orgs":
 			continue
+		case "drive_vaults":
+			check = `NOT EXISTS(SELECT 1 FROM drive_orgs o WHERE o.id=drive_vaults.org_id)`
+		case "drive_vault_records":
+			check = `NOT EXISTS(SELECT 1 FROM drive_vaults v WHERE v.id=drive_vault_records.vault_id AND v.org_id=drive_vault_records.org_id)`
 		case "drive_changes", "drive_change_floor", "drive_service_tokens", "drive_view_copies":
 			check = `org_id IS DISTINCT FROM (SELECT org_id FROM drive_workspaces WHERE id=workspace)`
 		case "drive_editor_documents":

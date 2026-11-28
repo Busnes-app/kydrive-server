@@ -2,6 +2,7 @@ package backup_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"github.com/Busnes-app/ky-primitives/recoveryclient"
 	"github.com/Busnes-app/kydrive-server/internal/backup"
 	"github.com/Busnes-app/kydrive-server/internal/config"
@@ -706,6 +708,64 @@ func TestRestoreFromTheCapsuleAlone(t *testing.T) {
 	}
 	if got := f.read(t, target, v, true); got != "kept far away" {
 		t.Fatalf("restored %q", got)
+	}
+}
+
+func TestBulkRestoresVaultCiphertext(t *testing.T) {
+	f := newBulkFixture(t)
+	ctx := t.Context()
+	identity, err := age.GenerateHybridIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ciphertext bytes.Buffer
+	seal, err := age.Encrypt(&ciphertext, identity.Recipient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const payload = "saved Office data in the vault"
+	if _, err := io.WriteString(seal, payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := seal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	v, err := drive.WriteBlob(objects.Dir(filepath.Join(f.dir, "blobs")), drive.Deployment(f.key), bytes.NewReader(ciphertext.Bytes()), 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := testdb.Open(t, f.cfg.Database)
+	id := uuid.NewString()
+	if _, err := db.ExecContext(ctx, `INSERT INTO drive_vaults(org_id,id,log_id,sequence,hash) VALUES(?,?,?,1,?)`, drive.DefaultOrg, id, "fixture-log", "fixture-head"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO drive_vault_versions(org_id,vault_id,file_id,revision,blob,digest,size,manifest)
+		VALUES(?,?,?,1,?,?,?,'fixture-manifest')`, drive.DefaultOrg, id, uuid.NewString(), v.Blob, v.Digest, v.Size); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.st.Drive().SweepOrphans(ctx, objects.Dir(filepath.Join(f.dir, "blobs")), 0); n != 0 || err != nil {
+		t.Fatalf("sweep removed a vault version: %d %v", n, err)
+	}
+	opened := openCapsule(t, f.collect(t, backup.PurposeDeposit))
+	repo, ok, err := backup.CapsuleRepository(opened)
+	if err != nil || !ok {
+		t.Fatalf("missing repository: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), "blobs")
+	if err := backup.RestoreBulk(ctx, opened, repo, target); err != nil {
+		t.Fatal(err)
+	}
+	got := f.read(t, target, v, true)
+	if got != ciphertext.String() {
+		t.Fatal("restore changed ciphertext")
+	}
+	r, err := age.Decrypt(strings.NewReader(got), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(r)
+	if err != nil || string(data) != payload {
+		t.Fatalf("restored vault export: %v", err)
 	}
 }
 

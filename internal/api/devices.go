@@ -248,7 +248,14 @@ func (s *Server) driveSetDevicePolicy(w http.ResponseWriter, r *http.Request) {
 // deviceUser authenticates a device token. A revoked one is told whether to wipe; every
 // other failure is a plain 401. Dedicated installer administrators never hold one.
 func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string) (*store.User, bool) {
+	user, _, ok := s.devicePrincipal(w, r, token)
+	return user, ok
+}
+
+func (s *Server) devicePrincipal(w http.ResponseWriter, r *http.Request, token string) (*store.User, string, bool) {
+	var deviceID string
 	id, err := s.store.Drive().DeviceUser(r.Context(), token, func(device string, key *drive.DeviceKey) error {
+		deviceID = device
 		return s.verifyDeviceRequest(r, device, key)
 	})
 	var revoked drive.ErrDeviceRevoked
@@ -256,34 +263,34 @@ func (s *Server) deviceUser(w http.ResponseWriter, r *http.Request, token string
 	switch {
 	case errors.Is(err, errDeviceSignature), errors.Is(err, errDeviceBody):
 		s.writeError(w, 401, "Invalid device credential")
-		return nil, false
+		return nil, "", false
 	case errors.Is(err, errDeviceKeyRequired):
 		s.writeJSON(w, 401, map[string]string{"error": "device_key_required"})
-		return nil, false
+		return nil, "", false
 	case errors.As(err, &tooLarge):
 		s.writeError(w, http.StatusRequestEntityTooLarge, "Request body too large")
-		return nil, false
+		return nil, "", false
 	case errors.As(err, &revoked):
 		s.writeJSON(w, 401, map[string]any{"error": "device_revoked", "wipe": revoked.Wipe})
-		return nil, false
+		return nil, "", false
 	case errors.Is(err, drive.ErrDenied):
 		s.writeError(w, 401, "Invalid device credential")
-		return nil, false
+		return nil, "", false
 	case err != nil:
 		log.Printf("device sign-in: %v", err)
 		s.writeError(w, 503, "Sign-in unavailable")
-		return nil, false
+		return nil, "", false
 	}
 	user, err := s.store.Users().GetUserByID(r.Context(), id)
 	if err != nil {
 		s.writeError(w, 401, "Invalid device credential")
-		return nil, false
+		return nil, "", false
 	}
 	if dedicated, err := s.store.InstallerAdministrator(r.Context(), id); err != nil || dedicated {
 		s.writeError(w, 403, "Installer administrators cannot use linked computers")
-		return nil, false
+		return nil, "", false
 	}
-	return user, true
+	return user, deviceID, true
 }
 
 // deviceIdentity reports the authoritative directory tuple, never a username or local ID

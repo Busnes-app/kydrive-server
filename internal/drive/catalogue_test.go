@@ -188,7 +188,7 @@ func TestConcurrentFirstStartsOpen(t *testing.T) {
 	}
 }
 
-// Reopening an existing PostgreSQL database recorded at version 30 must commit version 31
+// Reopening an existing PostgreSQL database recorded at version 30 must apply the remaining migrations
 // so drive_cells, search tables, and drive_orgs.home_region persist across subsequent opens.
 func TestPostgresUpgradeFromVersion30Persists(t *testing.T) {
 	if !testdb.Postgres() {
@@ -215,7 +215,17 @@ func TestPostgresUpgradeFromVersion30Persists(t *testing.T) {
 		`DROP FUNCTION IF EXISTS drive_search_index_org_fixed()`,
 		`DROP TABLE drive_cells`,
 		`ALTER TABLE drive_orgs DROP COLUMN home_region`,
-		`DELETE FROM drive_schema WHERE version = 31`,
+		`DROP TABLE drive_vault_rooms`,
+		`DROP TABLE drive_vault_editor_blobs`,
+		`DROP TABLE drive_vault_bindings`,
+		`DROP TABLE drive_vault_versions`,
+		`DROP TABLE drive_vault_records`,
+		`DROP TABLE drive_vaults`,
+		`DROP TABLE drive_vault_user_keys`,
+		`DROP FUNCTION drive_vault_records_org_exists(), drive_vault_records_org_fixed(),
+			drive_vaults_org_exists(), drive_vaults_org_fixed(),
+			drive_vault_user_keys_org_exists(), drive_vault_user_keys_org_fixed()`,
+		`DELETE FROM drive_schema WHERE version >= 31`,
 	} {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("%s: %v", stmt, err)

@@ -4,6 +4,13 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Vault control-plane groundwork.** An opt-in signed-device API commits shared vault
+  membership and key rotation. A separately operated HTTPS witness checkpoints the committed
+  log without receiving member keys or file data. Signed devices stream ciphertext revisions
+  and publish per-member room capabilities. Short-lived relay sessions check their binding
+  and device at forwarding time. A standalone staging gateway protects WebSocket, history
+  and signed encrypted-blob reads on a private relay network.
+
 - **Hosted storage, cells and desktop identity (test builds).** Device linking and account
   lookup return exact KyIdentity issuer/subject and the registered org alongside legacy local
   IDs. Hosted startup wires `KYDRIVE_S3_*`, requires PostgreSQL and `KY_CELLS`, and stores

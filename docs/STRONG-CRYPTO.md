@@ -33,6 +33,8 @@ key, separated by product and field labels. Only checks are stored, never values
 | OIDC ID tokens | Verified by `coreos/go-oidc` against the provider's JWKS | Every RSA key in the fetched JWKS must have at least 2048 modulus bits, or the whole set is refused and sign-in fails. The check reads JWK members the way the verifier does. EC/Ed25519 key handling stays with go-jose. |
 | Recovery capsules | Sealed by `ky-primitives/recoveryclient` to the pinned fixed-suite public key | No size is selectable; the suite is fixed. |
 | TLS pin identity key (Ed25519) | 32-byte seed created once in `data/identity.key`, or `KYDRIVE_IDENTITY_KEY_FILE` (absolute path); sealed in every backup capsule | No size is selectable. A wrong-length file is refused at startup, never overwritten. Never rotated: linked apps hold its public half. |
+| Vault relay session | Domain-separated HMAC-SHA256 under the configured KyDrive session secret. | Uses the existing session secret floor. The bearer expires in at most one minute. |
+| Vault control plane | Hybrid Ed25519 and ML-DSA-65 signatures for membership records, publisher receipts, and witness checkpoints. Public age recipients use ML-KEM-768 with X25519. | Fixed formats. Separate publisher and witness signing keys each use two 32-byte seeds. |
 | Generated tokens | Session, service, device, sharing-link and guest tokens 256 random bits; app passwords and agent tokens 160; stored as SHA-256 hashes | Not operator-supplied. |
 
 `KY_SCIM_TOKEN` (default 24 random bytes) and `KY_KYSIGNON_SECRET` are bearer
@@ -93,6 +95,10 @@ ssl_ciphers 'DEFAULT@SECLEVEL=2';
 client. Check the edge before rollout.
 
 ## Out of scope
+
+The standalone CryptPad staging gateway terminates TLS 1.3 with Node.js and applies
+Node's certificate verification to the KyDrive HTTPS authority. It runs outside
+KyDrive's Go TLS profile.
 
 These ship beside KyDrive or are reached by it, but are stock upstream software
 with their own key and TLS policy. This guide makes no claim about them:

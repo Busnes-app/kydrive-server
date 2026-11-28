@@ -31,6 +31,7 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/search"
 	"github.com/Busnes-app/kydrive-server/internal/sso"
 	"github.com/Busnes-app/kydrive-server/internal/store"
+	"github.com/Busnes-app/kydrive-server/internal/vault"
 	"github.com/Busnes-app/kydrive-server/web"
 )
 
@@ -720,6 +721,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		limit := int64(1 << 20)
 		if r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/drive/workspaces/") && strings.HasSuffix(r.URL.Path, "/uploads") {
 			limit = uploadLimit + 1
+		}
+		if r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/api/vaults/") && strings.Contains(r.URL.Path, "/versions/") {
+			limit = vault.MaxDocumentBytes + 1
 		}
 		if r.Method == "POST" && r.URL.Path == "/api/public/links/upload" {
 			limit = uploadLimit + 1

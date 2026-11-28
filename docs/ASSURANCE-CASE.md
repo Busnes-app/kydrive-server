@@ -220,3 +220,25 @@ provider-managed backup copies remain outside application authority and require 
 `TestHosted*` uses CI's signature-checking S3 fixture and PostgreSQL for replica reads,
 cell/org separation, queue/CAS races, replay refusal, failed publishes and erasure. These
 checks do not qualify a production provider, load, desktop packaging or hosted Office.
+
+
+## Vault catalogue and witness
+
+Signed linked devices can opt into the vault control plane. An active vault manager signs
+membership and generation updates, and KyDrive authorizes and commits them together. KyDrive
+signs an opaque receipt after the commit. An independently administered HTTPS witness pins
+that publisher key, stores a monotonic head in its own database, and signs a fresh checkpoint
+of that head. KyDrive checks the witness signature against the precise current head and active
+membership.
+
+A publisher can withhold receipts or submit unusable hashes to the witness. This can interrupt
+service. A trusted client must verify the signed log against pinned member keys before it
+relies on a checkpoint. A witness restore to an older head can undercut freshness for a
+device without the newer pinned head. The operator must preserve the latest witnessed
+state independently. Signed revision manifests bind the ciphertext digest and file revision
+to the exact vault head. A signed binding reserves fresh rooms and wraps each capability
+to its member and reserves the exact encrypted blob IDs. The staging gateway verifies
+the active binding and device before each WebSocket frame and blob request. Its fixed
+history and file allowlists leave raw relay paths on the isolated network. Installed
+client provisioning, distributed signing and coordinated recovery remain release gates.
+See [Vault integration](VAULT-INTEGRATION.md).

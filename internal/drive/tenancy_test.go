@@ -348,8 +348,11 @@ func TestTenancyUpgradeKeepsEveryRow(t *testing.T) {
 	}
 	for _, table := range drive.OrgOwnedTables {
 		var rows, inDefault int
-		if err := db.QueryRow(`SELECT COUNT(*),COUNT(*) FILTER (WHERE org_id=?) FROM `+table, drive.DefaultOrg).Scan(&rows, &inDefault); err != nil || rows == 0 || rows != inDefault {
-			t.Errorf("%s: %d rows, %d in the default org, %v", table, rows, inDefault, err)
+		err := db.QueryRow(`SELECT COUNT(*),COUNT(*) FILTER (WHERE org_id=?) FROM `+table, drive.DefaultOrg).Scan(&rows, &inDefault)
+		_, existed := cols[table]
+		// Tables introduced after this fixture's schema start empty.
+		if err != nil || rows != inDefault || (rows > 0) != existed {
+			t.Errorf("%s: %d rows, %d in the default org, existed before upgrade: %t, %v", table, rows, inDefault, existed, err)
 		}
 	}
 	var version int

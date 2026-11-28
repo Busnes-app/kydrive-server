@@ -64,6 +64,12 @@ func ReplicaFingerprint(c *Config) map[string]string {
 		"KYDRIVE_MAX_ZIP_SIZE":             strconv.FormatInt(c.Drive.MaxZipSize, 10),
 		"KYDRIVE_CONTENT_SEARCH":           b(c.Drive.ContentSearch),
 	}
+
+	fields["KYDRIVE_VAULT_PUBLISHER_KEY_FILE"], fields["KYDRIVE_VAULT_WITNESS_KEY"] = "", ""
+	if c.Vault.Publisher != nil && c.Vault.Witness != nil {
+		fields["KYDRIVE_VAULT_PUBLISHER_KEY_FILE"] = string(c.Vault.Publisher.Public().Bytes())
+		fields["KYDRIVE_VAULT_WITNESS_KEY"] = string(c.Vault.Witness.Bytes())
+	}
 	cells := slices.Clone(c.Database.Cells)
 	slices.Sort(cells)
 	fields["KY_CELLS"] = strings.Join(cells, ",")

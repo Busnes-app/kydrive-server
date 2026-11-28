@@ -23,4 +23,4 @@ Owns `render.py` and the generated installation contract. Root Compose owns NAS 
 - `python -m unittest discover -s deploy -p '*_test.py'`
 
 ## Child DOX Index
-None.
+- `vault-gateway/` owns the isolated CryptPad staging transport and Compose project.

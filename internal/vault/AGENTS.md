@@ -1,0 +1,19 @@
+# Vault protocol
+
+## Purpose
+Owns membership verification and the witness protocol. See the [vault runbook](../../docs/VAULT-INTEGRATION.md).
+
+## Local Contracts
+- Sign each record type with its own hybridsig domain. Membership uses a manager's pinned
+  hybrid signing key. KyDrive signs receipts only after the store commits the record.
+- Witness checkpoints bind the exact log ID, sequence, hash and issue time. A delayed response
+  must not renew a superseded head. The witness signs only extensions or the exact current head.
+- The witness receives opaque hashes and keeps its own durable state and distinct signing key.
+
+- Sign document revisions and room bindings under separate domains. The signed scope includes
+  tenant, vault, file, signer and witnessed head. Wrap the editor capability separately for
+  each member. Readers receive the CryptPad view capability. Optional sorted blob IDs
+  reserve encrypted CryptPad files to the signed binding.
+
+## Verification
+Run `go test -race ./internal/vault` and `go test -race ./internal/api -run TestVault`.

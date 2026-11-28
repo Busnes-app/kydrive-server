@@ -223,7 +223,14 @@ func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkF
 	if exists == 1 {
 		sealed = "sealed"
 	}
-	rows, err := db.QueryContext(ctx, `SELECT DISTINCT blob,digest,size,`+sealed+` FROM drive_versions ORDER BY blob`)
+	query := `SELECT DISTINCT blob,digest,size,` + sealed + ` FROM drive_versions`
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='drive_vault_versions'`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists == 1 {
+		query += ` UNION ALL SELECT blob,digest,size,1 FROM drive_vault_versions`
+	}
+	rows, err := db.QueryContext(ctx, query+` ORDER BY blob`)
 	if err != nil {
 		return nil, err
 	}

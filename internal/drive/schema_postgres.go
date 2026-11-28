@@ -10,7 +10,7 @@ import (
 // new (SQLite moves over by migrate-postgres), so it starts at the latest version; an entry
 // appended to schema needs its PostgreSQL form here too, and TestPostgresSchemaIsCurrent fails
 // until it has one.
-const postgresVersion = 31
+const postgresVersion = 34
 
 // postgresTables is every drive table at postgresVersion without org_id, which
 // tenancySchema adds as on SQLite. SQLite's INTEGER is 64-bit, so it is BIGINT here.
@@ -114,6 +114,30 @@ func (s *Store) createPostgres(ctx context.Context) error {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(31)`); err != nil {
 			return err
 		}
+		fallthrough
+	case 31:
+		if _, err := tx.ExecContext(ctx, vaultSchema(dialect{pg: true})); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(32)`); err != nil {
+			return err
+		}
+		fallthrough
+	case 32:
+		if _, err := tx.ExecContext(ctx, vaultDocumentsSchema); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(33)`); err != nil {
+			return err
+		}
+		fallthrough
+	case 33:
+		if _, err := tx.ExecContext(ctx, vaultEditorBlobsSchema); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO drive_schema(version) VALUES(34)`); err != nil {
+			return err
+		}
 		return tx.Commit()
 	case 0:
 		if _, err := tx.ExecContext(ctx, postgresSchema()); err != nil {
@@ -131,7 +155,7 @@ func (s *Store) createPostgres(ctx context.Context) error {
 // postgresSchema is the drive schema at postgresVersion.
 func postgresSchema() string {
 	pg := dialect{pg: true}
-	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg) + cellsSearchSchema(pg)
+	return postgresTables + nameFreeSchema(pg) + tenancySchema(pg, orgOwned, orgNullable) + staffAdminSchema(pg) + erasuresSchema(pg) + poolSchema(pg) + cellsSearchSchema(pg) + vaultSchema(pg) + vaultDocumentsSchema + vaultEditorBlobsSchema
 }
 
 // dialect spells what the two backends write differently: triggers and IS NOT between values.

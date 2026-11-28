@@ -45,6 +45,10 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 
 - `DatabaseConfig.Cells` reaches the drive tenancy contract at open. `migrationTables` includes `drive_cells`, `drive_search_index` and `drive_search_queue`; migration fixtures populate each so row/hash preservation is exercised.
 
+- SQLite-to-PostgreSQL migration and hosted metadata snapshots copy the vault catalogue
+  with public keys, heads, signed records, file revisions, room bindings and editor blob reservations in foreign-key order. The witness has
+  independent state outside these copies.
+
 ## Verification
 - `go test -v ./internal/store/...`
 - With `KY_TEST_POSTGRES_DSN` set, `go test -race -count=1 ./internal/store -run TestReplicaLock` checks independent-pool exclusion, distinct names, release after error/panic, cancellation without premature release, backend loss and takeover. The existing PostgreSQL CI leg runs these cases; default SQLite verifies the single-mode refusal.

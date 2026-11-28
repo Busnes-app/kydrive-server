@@ -35,6 +35,9 @@ var (
 	// are never reached through the peer routes.
 	peerUnreachable = []string{
 		"ConfigureCells",
+		// Vault routes require a signed device, which a KyPost peer never holds.
+		"CheckVaultAccess", "CommitVaultRecord", "EnrollVaultKey", "VaultRecords", "VaultUserKey",
+		"WriteVaultVersion", "ReadVaultVersion", "BindVaultEditor", "VaultEditorBinding", "CheckVaultRelay",
 		"ObjectPrefix", "OrgHomeRegion", "OrgKeys", "PublishSearch", "SearchDue", "SearchEnqueue", "SearchPointer", "SetOrgPurger", "StorageOrgs",
 		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",
 		"ExpireAgentTokens", "ExpireTickets", "ExpireUploads", "GuestFile", "GuestUpload", "GuestView", "IndexChanges", "IndexFile", "IndexFiles",

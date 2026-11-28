@@ -10,11 +10,14 @@ var (
 		"drive_editor_saves", "drive_app_passwords", "drive_changes", "drive_change_floor",
 		"drive_devices", "drive_device_codes", "drive_peer_settings", "drive_peer_folders",
 		"drive_peer_tickets", "drive_peer_picks", "drive_peer_guest", "drive_view_copies",
+		"drive_vault_user_keys", "drive_vaults", "drive_vault_records",
 	}
 	// NullableOrgID tables may hold platform rows (org_id NULL).
 	NullableOrgID = map[string]bool{"audit_records": true, "drive_events": true}
 	DerivedTables = map[string]string{
 		"drive_search_index": "drive_orgs", "drive_search_queue": "drive_orgs",
+		"drive_vault_versions": "drive_vaults", "drive_vault_bindings": "drive_vaults",
+		"drive_vault_rooms": "drive_vault_bindings", "drive_vault_editor_blobs": "drive_vault_bindings",
 		"sessions": "users", "group_members": "groups", "mfa_challenges": "users",
 		"drive_personal_workspaces": "drive_workspaces", "drive_grants": "drive_workspaces",
 		"drive_folders": "drive_workspaces", "drive_files": "drive_workspaces",
