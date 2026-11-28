@@ -440,6 +440,9 @@ var noChange = map[string]string{
 	"ReadVaultCheckpoint":     "read",
 	"WriteVaultCheckpoint":    "separate vault checkpoint catalogue",
 	"VaultUserKey":            "read",
+	"CommitVaultRecovery":     "vault identity",
+	"VaultRecoveryCopy":       "read",
+	"VaultRecoveryHistory":    "read",
 }
 
 func TestEveryMutatorWritesAChange(t *testing.T) {
