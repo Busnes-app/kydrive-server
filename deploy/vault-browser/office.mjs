@@ -1,7 +1,13 @@
+export const officeApplications = new Map([
+  ['docx', 'doc'],
+  ['xlsx', 'sheet'],
+  ['pptx', 'presentation'],
+]);
+
 export function vaultOffice({ origin, mount, revisionPlaintextLimit, onSave, onReady, onError }) {
   const frame = document.createElement('iframe');
   frame.src = origin + '/integration/';
-  frame.title = 'CryptPad DOCX editor';
+  frame.title = 'CryptPad Office editor';
   frame.referrerPolicy = 'no-referrer';
   frame.width = '100%';
   frame.height = '650';
@@ -33,8 +39,8 @@ export function vaultOffice({ origin, mount, revisionPlaintextLimit, onSave, onR
     if (data.msg?.q === 'SAVE' && typeof data.txid === 'string') {
       try {
         const blob = data.msg.data;
-        if (!(blob instanceof Blob)) throw Error('Invalid DOCX export');
-        if (blob.size > revisionPlaintextLimit) throw Error('DOCX is too large for an encrypted 32 MiB revision');
+        if (!(blob instanceof Blob)) throw Error('Invalid Office export');
+        if (blob.size > revisionPlaintextLimit) throw Error('Office export is too large for an encrypted 32 MiB revision');
         await onSave(blob);
         send({ ack: data.txid });
       } catch (error) {
@@ -61,9 +67,9 @@ export function vaultOffice({ origin, mount, revisionPlaintextLimit, onSave, onR
 
   return {
     prepare: () => query('PREPARE_VAULT'),
-    start: (vault, hash, blob, name) => query('START', {
-      vault, key: hash, document: blob, application: 'doc', ext: 'docx',
-      name: 'vault-document.docx', autosave: 0, readOnly: false, editorConfig: { user: { name } },
+    start: ({ format, hash, ...vault }, blob, name) => query('START', {
+      vault, key: hash, document: blob, application: officeApplications.get(format), ext: format,
+      name: 'vault-document.' + format, autosave: 0, readOnly: false, editorConfig: { user: { name } },
     }),
     save: () => send({ msg: { q: 'MANUAL_SAVE' } }),
     renew: token => query('RENEW_VAULT', token),

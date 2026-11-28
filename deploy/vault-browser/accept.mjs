@@ -1,8 +1,18 @@
 import assert from 'node:assert/strict';
-import { stageCryptPad, assertWord, typeWord, checkExport } from './cryptpad-proof.mjs';
+import { stageCryptPad, assertOffice, editOffice, checkExport } from './cryptpad-proof.mjs';
 import { chromium } from '../../web/node_modules/playwright-core/index.mjs';
 
 const [drive, editor, witness, gateway, pin, cryptpadFixture] = process.argv.slice(2);
+const format = process.env.KYDRIVE_VAULT_OFFICE_FORMAT ?? 'docx';
+const officeFixtures = new Map([
+  ['docx', { name: 'edit.docx', original: 'Original bake-off document' }],
+  ['xlsx', { name: 'budget.xlsx', original: 'Rent' }],
+  ['pptx', { name: 'deck.pptx', original: 'Roadmap 2027' }],
+]);
+const fixture = officeFixtures.get(format);
+assert.ok(fixture, 'Expected docx, xlsx or pptx for the Office proof');
+const officeLabel = format.toUpperCase();
+const markers = ['owner changes', 'collaborator changes', 'change after lease renewal'];
 const browser = await chromium.launch({ channel: 'chrome', args: pin ? ['--ignore-certificate-errors-spki-list=' + pin] : [] });
 let stopOffice;
 
@@ -141,11 +151,11 @@ try {
   if (cryptpadFixture) {
     const { readFile } = await import('node:fs/promises');
     await page.getByLabel('File ID').fill('');
-    const source = await readFile(cryptpadFixture + '/fixtures/edit.docx');
-    await save(page, source, 1, 'edit.docx');
-    const docx = await page.getByLabel('File ID').inputValue();
+    const source = await readFile(cryptpadFixture + '/fixtures/' + fixture.name);
+    await save(page, source, 1, fixture.name);
+    const officeFile = await page.getByLabel('File ID').inputValue();
     await read(page, 1);
-    await guest.getByLabel('File ID').fill(docx);
+    await guest.getByLabel('File ID').fill(officeFile);
     await read(guest, 1);
     const restored = await guest.getByRole('link', { name: 'Download verified file' }).getAttribute('href');
     const bytes = await guest.evaluate(async url => new Uint8Array(await (await fetch(url)).arrayBuffer()).toBase64(), restored);
@@ -175,7 +185,7 @@ try {
         });
       });
     }
-    const openDOCX = async tab => {
+    const openOffice = async tab => {
       const problems = [];
       tab.on('pageerror', error => { if (problems.length < 10) problems.push(error.message.slice(0, 200)); });
       tab.on('websocket', socket => {
@@ -193,43 +203,62 @@ try {
         const url = new URL(response.url());
         if (response.status() >= 400 && problems.length < 20) problems.push([url.origin, url.pathname.split('/').slice(0, 3).join('/'), response.status()]);
       });
-      await tab.getByRole('button', { name: 'Edit DOCX together' }).click();
+      await tab.getByRole('button', { name: 'Edit together' }).click();
       try {
-        await tab.getByRole('status').filter({ hasText: 'DOCX editor ready' }).waitFor({ timeout: 35000 });
+        await tab.getByRole('status').filter({ hasText: officeLabel + ' editor ready' }).waitFor({ timeout: 35000 });
       } catch (error) {
-        throw Error('DOCX startup failed: ' + await tab.getByRole('status').textContent() + ' ' + JSON.stringify(problems), { cause: error });
+        throw Error(officeLabel + ' startup failed: ' + await tab.getByRole('status').textContent() + ' ' + JSON.stringify(problems), { cause: error });
       }
     };
     const firstLease = page.waitForResponse(response => response.request().method() === 'POST' &&
       response.url().endsWith('/editor/session') && response.ok());
-    await openDOCX(page);
+    await page.getByLabel('Office format', { exact: true }).selectOption(format);
+    await openOffice(page);
     const { expires_ms: firstExpiry } = await (await firstLease).json();
-    await openDOCX(guest);
-    await assertWord(guest, 'Original bake-off document');
-    await typeWord(page, 'owner changes');
-    await assertWord(guest, 'owner changes');
-    await typeWord(guest, 'collaborator changes');
-    await assertWord(page, 'collaborator changes');
+    // The collaborator begins with the default selection. The signed capability supplies the real format.
+    const peerBinding = guest.waitForResponse(response => response.request().method() === 'GET' &&
+      response.url() === drive + '/api/vaults/' + JSON.parse(invite).vault + '/files/' + officeFile + '/editor' &&
+      response.ok());
+    await openOffice(guest);
+    const shape = await guest.evaluate(({ File, Binding }) => {
+      const result = JSON.parse(globalThis.kyDriveVault('openEditor', JSON.stringify({ File, Binding })));
+      if (result.error) throw Error(result.error);
+      const capability = JSON.parse(result.value.capability);
+      return { originalHash: Object.hasOwn(capability, 'hash'), format: capability.format };
+    }, { File: officeFile, Binding: await (await peerBinding).json() });
+    assert.deepEqual(shape, { originalHash: format === 'docx', format: format === 'docx' ? undefined : format });
+    await assertOffice(guest, format, fixture.original);
+    await editOffice(page, format, markers[0], 0);
+    await assertOffice(guest, format, markers[0], 0);
+    await editOffice(guest, format, markers[1], 1);
+    await assertOffice(page, format, markers[1], 1);
     await guest.getByRole('button', { name: 'Close editor' }).click();
-    await openDOCX(guest);
-    await assertWord(guest, 'collaborator changes');
+    await openOffice(guest);
+    await assertOffice(guest, format, markers[0], 0);
+    await assertOffice(guest, format, markers[1], 1);
     await page.waitForFunction(expiry => Date.now() > expiry, firstExpiry, { timeout: 65000 });
     try {
-      await typeWord(page, 'change after lease renewal');
-      await assertWord(page, 'change after lease renewal');
-      await assertWord(guest, 'change after lease renewal');
+      await editOffice(page, format, markers[2], 2);
+      await assertOffice(guest, format, markers[2], 2);
     } catch (error) {
       console.log('Relay activity after initial expiry', firstExpiry,
         await status.textContent(), await guestStatus.textContent(), JSON.stringify([...relayEvents.values()]));
       throw error;
     }
-    await page.getByRole('button', { name: 'Save encrypted DOCX' }).click();
-    await status.filter({ hasText: 'Saved encrypted DOCX revision 2' }).waitFor();
+    const exportUpload = page.waitForRequest(r => r.method() === 'PUT' && r.url() === drive +
+      '/api/vaults/' + JSON.parse(invite).vault + '/files/' + officeFile + '/versions/2');
+    await page.getByRole('button', { name: 'Save encrypted Office revision' }).click();
+    await status.filter({ hasText: 'Saved encrypted ' + officeLabel + ' revision 2' }).waitFor();
+    const ciphertext = (await exportUpload).postDataBuffer();
+    assert.match(ciphertext.toString('ascii', 0, 21), /^age-encryption.org\/v1/);
+    assert.ok(markers.every(marker => !ciphertext.includes(marker)));
     await read(page, 2);
     const output = await page.getByRole('link', { name: 'Download verified file' }).getAttribute('href');
     const result = await page.evaluate(async url => new Uint8Array(await (await fetch(url)).arrayBuffer()).toBase64(), output);
-    checkExport(Buffer.from(result, 'base64'), ['owner changes', 'collaborator changes', 'change after lease renewal']);
-    console.log('Two linked browsers edited a DOCX, reopened history, edited beyond the first lease, and verified the encrypted export');
+    assert.deepEqual(await page.getByRole('link', { name: 'Download verified file' }).getAttribute('download'),
+      'vault-document.' + format);
+    checkExport(Buffer.from(result, 'base64'), format, fixture.original, markers);
+    console.log('Two linked browsers edited ' + officeLabel + ', reopened history, edited beyond the first lease, and verified the encrypted export');
     await guest.getByLabel('File ID').fill(file);
     await guest.getByLabel('Revision', { exact: true }).fill('1');
     await page.getByLabel('File ID').fill(file);
@@ -265,8 +294,8 @@ try {
   }
   if (cryptpadFixture) {
     await guestStatus.filter({ hasText: 'Vault editor access ended' }).waitFor({ timeout: 35000 });
-    assert.equal(await guest.getByTitle('CryptPad DOCX editor').count(), 0);
-    console.log('An open DOCX editor closed when its witnessed grant could no longer renew');
+    assert.equal(await guest.getByTitle('CryptPad Office editor').count(), 0);
+    console.log('An open ' + officeLabel + ' editor closed when its witnessed grant could no longer renew');
   }
   await save(page, 'synthetic revision after removal', 2);
   assert.equal(await read(page, 1), 'synthetic shared vault revision');

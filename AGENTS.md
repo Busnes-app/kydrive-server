@@ -94,8 +94,9 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - A local pass is not production readiness or a suite-wide installer.
 - Opt-in vault versions use signed ciphertext revisions and a separate catalogue.
   Vault browser staging uses a separately deployed HTTPS origin and a scoped linked device.
-  The CryptPad DOCX fixture uses witnessed membership and room authorization. Its standalone
-  staging gateway lives in `deploy/vault-gateway/` and exposes only guarded relay operations.
+  CryptPad staging co-editing covers DOCX, XLSX and PPTX with witnessed membership and room
+  authorization. The standalone staging gateway in `deploy/vault-gateway/` exposes only
+  guarded relay operations.
   `docs/VAULT-INTEGRATION.md` owns verification and rollout boundaries.
 - Hosted personal export is a separate, restricted SSO path during scheduled org deletion (`internal/api/export.go`); it includes the member's My files, trash and retained versions only. It does not enable multi-tenant startup or establish hosted readiness; the remaining tenancy design phases still apply.
 - Personal files belong to one active account’s private workspace until an admin handover moves a leaver's tree to a shared workspace or a colleague's My files (UI or audited `handover` CLI); shared files use group grants. Any folder or file, personal ones included, can also be shared with people or groups as reader, editor or manager (shares only add; a folder share covers its subtree; a deactivated owner's personal shares stop until handover, which drops them). The sidebar lists My files, Shared with me and shared workspaces directly. New file creates blank DOCX/XLSX/PPTX and opens Euro-Office.

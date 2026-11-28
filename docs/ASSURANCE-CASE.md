@@ -248,6 +248,6 @@ The staging browser is a vault-only signed device. KyDrive links it with PKCE an
 cookie-free CORS on the vault API to one configured origin. That origin's publisher can
 change code that handles browser keys, so its deployment control must sit outside the
 operator's authority for operator-resistant vaults. The CryptPad asset publisher has the
-same browser trust responsibility for Office editing. The scoped DOCX flow has loopback
-coverage. Coordinated recovery and remote asset deployment remain release gates.
+same browser trust responsibility for Office editing. Scoped DOCX, XLSX and PPTX
+co-editing have loopback coverage. Coordinated recovery and remote asset deployment remain release gates.
 See [Vault integration](VAULT-INTEGRATION.md).
