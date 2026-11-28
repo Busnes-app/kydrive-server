@@ -4,6 +4,10 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Native vault protocol.** A signed linked device can read its vault account and
+  organization scope. The native client and browser staging fixture share the signed
+  history, revision and editor binding implementation.
+
 - **Vault Office co-editing.** Linked staging browsers can share live CryptPad edits
   in DOCX, XLSX and PPTX and save a signed encrypted revision through scoped rooms
   and quota-accounted checkpoints.

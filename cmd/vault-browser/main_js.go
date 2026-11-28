@@ -18,9 +18,8 @@ import (
 	"time"
 
 	"filippo.io/age"
-	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/Busnes-app/kydrive-server/internal/vault"
-	"github.com/google/uuid"
+	"github.com/Busnes-app/kydrive-server/pkg/vaultclient"
 )
 
 type account struct {
@@ -37,24 +36,20 @@ type browserIdentity struct {
 	EdSeed          []byte
 }
 
-type memberKey struct {
-	Recipient string `json:"recipient"`
-	Signing   []byte `json:"signing"`
-}
-
 type browser struct {
-	account account
-	device  *ecdsa.PrivateKey
-	member  *age.HybridIdentity
-	signing *hybridsig.PrivateKey
-	active  *openVault
-}
-
-func (b *browser) publicKey() memberKey {
-	return memberKey{b.member.Recipient().String(), b.signing.Public().Bytes()}
+	account  account
+	device   *ecdsa.PrivateKey
+	identity *vaultclient.Identity
+	vault    *vaultclient.Session
 }
 
 func (b *browser) invoke(action string, input json.RawMessage) (any, error) {
+	switch action {
+	case "createVault", "verifyHistory", "openVault", "changeMembership", "sealRevision", "readRevision", "bindEditor", "openEditor", "refreshCheckpoint":
+		if b.vault == nil {
+			return nil, errors.New("Unlock your vault key first")
+		}
+	}
 	switch action {
 	case "device":
 		device, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -99,71 +94,68 @@ func (b *browser) invoke(action string, input json.RawMessage) (any, error) {
 		}
 		return b.unlock(in.Passphrase, in.Sealed)
 	case "publicKey":
-		if b.member == nil {
+		if b.identity == nil {
 			return nil, errors.New("Unlock your vault key first")
 		}
-		return b.publicKey(), nil
+		return b.identity.PublicKey(), nil
 	case "createVault":
-		return b.createVault()
+		return b.vault.CreateVault()
 	case "identity":
-		if b.member == nil {
+		if b.identity == nil {
 			return nil, errors.New("Unlock your vault key first")
 		}
-		return memberPin{b.account.User, b.publicKey().fingerprint()}, nil
+		return vaultclient.MemberPin{User: b.account.User, Fingerprint: b.identity.PublicKey().Fingerprint()}, nil
 	case "verifyHistory", "openVault":
-		var in historyInput
+		var in vaultclient.HistoryInput
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
 		if action == "verifyHistory" {
-			checked, err := b.verifyHistory(in)
-			return checked.head, err
+			return b.vault.VerifyHistory(in)
 		}
-		return b.openHistory(in)
+		return b.vault.OpenHistory(in)
 	case "changeMembership":
-		var in membershipChange
+		var in vaultclient.MembershipChange
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
-		return b.changeMembership(in)
+		return b.vault.ChangeMembership(in)
 	case "sealRevision":
-		var in revisionInput
+		var in vaultclient.RevisionInput
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
-		return b.sealRevision(in)
+		return b.vault.SealRevision(in)
 	case "revisionPlaintextLimit":
-		return revisionPlaintextLimit, nil
+		return vaultclient.RevisionPlaintextLimit, nil
 	case "readRevision":
-		var in revisionRead
+		var in vaultclient.RevisionRead
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
-		return b.readRevision(in)
+		return b.vault.ReadRevision(in)
 	case "bindEditor":
-		var in editorInput
+		var in vaultclient.EditorInput
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
-		return b.bindEditor(in)
+		return b.vault.BindEditor(in)
 	case "openEditor":
-		var in editorOpen
+		var in vaultclient.EditorOpen
 		if err := json.Unmarshal(input, &in); err != nil {
 			return nil, err
 		}
-		return b.openEditor(in)
+		return b.vault.OpenEditor(in)
 	case "refreshCheckpoint":
 		var checkpoint vault.Checkpoint
 		if err := json.Unmarshal(input, &checkpoint); err != nil {
 			return nil, err
 		}
-		if b.active == nil || vault.VerifyCheckpoint(b.active.witness, checkpoint, b.active.head, time.Now()) != nil {
-			return nil, errors.New("The vault witness checkpoint did not verify")
-		}
-		b.active.checkpoint = checkpoint
-		return nil, nil
+		return nil, b.vault.RefreshCheckpoint(checkpoint)
 	case "closeVault":
-		b.active = nil
+		if b.vault != nil {
+			b.vault.Close()
+		}
 		return nil, nil
 	default:
 		return nil, errors.New("Invalid vault browser operation")
@@ -204,14 +196,14 @@ func (b *browser) requestHeaders(origin, method, requestURI string, body []byte)
 }
 
 func (b *browser) createKey(passphrase string) ([]byte, error) {
-	if b.device == nil || !validAccount(b.account) || b.member != nil || len(passphrase) < 12 {
+	if b.device == nil || !validAccount(b.account) || b.identity != nil || len(passphrase) < 12 {
 		return nil, errors.New("Link your browser and choose a passphrase of at least 12 characters")
 	}
-	member, err := age.GenerateHybridIdentity()
+	identity, err := vaultclient.GenerateIdentity()
 	if err != nil {
 		return nil, err
 	}
-	signing, err := hybridsig.Generate()
+	session, err := vaultclient.NewSession(b.account.User, b.account.Org, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +211,8 @@ func (b *browser) createKey(passphrase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ml, ed := signing.Seeds()
-	bundle, err := json.Marshal(browserIdentity{b.account, device, member.String(), ml, ed})
+	secret, ml, ed := identity.Secrets()
+	bundle, err := json.Marshal(browserIdentity{b.account, device, secret, ml, ed})
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +225,7 @@ func (b *browser) createKey(passphrase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	b.member, b.signing = member, signing
+	b.identity, b.vault = identity, session
 	return sealed, nil
 }
 
@@ -251,11 +243,11 @@ func (b *browser) unlock(passphrase string, sealed []byte) (string, error) {
 	if err := json.Unmarshal(opened, &secret); err != nil || !validAccount(secret.Account) {
 		return "", errors.New("Invalid browser vault key")
 	}
-	member, err := age.ParseHybridIdentity(secret.RecipientSecret)
+	key, err := vaultclient.RestoreIdentity(secret.RecipientSecret, secret.MLDSASeed, secret.EdSeed)
 	if err != nil {
 		return "", err
 	}
-	signing, err := hybridsig.FromSeeds(secret.MLDSASeed, secret.EdSeed)
+	session, err := vaultclient.NewSession(secret.Account.User, secret.Account.Org, key)
 	if err != nil {
 		return "", err
 	}
@@ -264,36 +256,8 @@ func (b *browser) unlock(passphrase string, sealed []byte) (string, error) {
 	if err != nil || !ok || device.Curve != elliptic.P256() {
 		return "", errors.New("Invalid browser device key")
 	}
-	*b = browser{account: secret.Account, device: device, member: member, signing: signing}
+	*b = browser{account: secret.Account, device: device, identity: key, vault: session}
 	return b.account.User, nil
-}
-
-func (b *browser) createVault() (vault.Record, error) {
-	if b.member == nil {
-		return vault.Record{}, errors.New("Unlock the vault key first")
-	}
-	key, err := age.GenerateHybridIdentity()
-	if err != nil {
-		return vault.Record{}, err
-	}
-	wrapped, err := encrypt([]byte(key.String()), b.member.Recipient())
-	if err != nil {
-		return vault.Record{}, err
-	}
-	indexKey := make([]byte, 32)
-	if _, err := rand.Read(indexKey); err != nil {
-		return vault.Record{}, err
-	}
-	index, err := encrypt(indexKey, key.Recipient())
-	if err != nil {
-		return vault.Record{}, err
-	}
-	record := vault.Record{
-		Org: b.account.Org, Vault: uuid.NewString(), Sequence: 1, Signer: b.account.User, Change: "create",
-		State: vault.State{Generation: 1, Recipient: key.Recipient().String(), NameIndex: index,
-			Members: []vault.Member{{User: b.account.User, Fingerprint: b.publicKey().fingerprint(), Role: vault.Manager, Wrap: wrapped}}},
-	}
-	return record.Sign(b.signing)
 }
 
 func encrypt(data []byte, recipient age.Recipient) ([]byte, error) {

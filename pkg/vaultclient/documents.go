@@ -1,4 +1,4 @@
-package main
+package vaultclient
 
 import (
 	"errors"
@@ -12,28 +12,28 @@ import (
 
 // Leave room for age's 16-byte tag per 64 KiB chunk and the hybrid
 // recipient header, authentication data, and payload nonce.
-const revisionPlaintextLimit = vault.MaxDocumentBytes - (16 << 10)
+const RevisionPlaintextLimit = vault.MaxDocumentBytes - (16 << 10)
 
-type revisionInput struct {
+type RevisionInput struct {
 	File    string
 	Number  int64
 	Body    []byte
 	Binding string
 }
 
-type revisionRead struct {
+type RevisionRead struct {
 	File     string
 	Number   int64
 	Manifest vault.Revision
 	Body     []byte
 }
 
-type sealedRevision struct {
+type SealedRevision struct {
 	Manifest vault.Revision `json:"manifest"`
 	Body     []byte         `json:"body"`
 }
 
-func (b *browser) currentDocument(file string, edit bool) (vault.Document, error) {
+func (b *Session) currentDocument(file string, edit bool) (vault.Document, error) {
 	if b.active == nil || !vault.ID(file) {
 		return vault.Document{}, errors.New("Open a verified vault and choose a file")
 	}
@@ -43,33 +43,33 @@ func (b *browser) currentDocument(file string, edit bool) (vault.Document, error
 		return vault.Document{}, errors.New("Refresh the vault checkpoint")
 	}
 	last := active.records[len(active.records)-1]
-	member, ok := last.State.Member(b.account.User)
+	member, ok := last.State.Member(b.user)
 	if !ok || edit && member.Role == vault.Reader {
 		return vault.Document{}, errors.New("Vault access refused")
 	}
-	return vault.Document{Org: last.Org, Vault: last.Vault, File: file, Generation: last.State.Generation, Head: active.head, Signer: b.account.User}, nil
+	return vault.Document{Org: last.Org, Vault: last.Vault, File: file, Generation: last.State.Generation, Head: active.head, Signer: b.user}, nil
 }
 
-func (b *browser) sealRevision(in revisionInput) (sealedRevision, error) {
+func (b *Session) SealRevision(in RevisionInput) (SealedRevision, error) {
 	document, err := b.currentDocument(in.File, true)
 	if err != nil {
-		return sealedRevision{}, err
+		return SealedRevision{}, err
 	}
-	if in.Number < 1 || len(in.Body) > revisionPlaintextLimit {
-		return sealedRevision{}, errors.New("Invalid file revision or size")
+	if in.Number < 1 || len(in.Body) > RevisionPlaintextLimit {
+		return SealedRevision{}, errors.New("Invalid file revision or size")
 	}
 	encrypted, err := encrypt(in.Body, b.active.identity.Recipient())
 	if err != nil {
-		return sealedRevision{}, err
+		return SealedRevision{}, err
 	}
 	if len(encrypted) > vault.MaxDocumentBytes {
-		return sealedRevision{}, errors.New("Encrypted vault revision exceeds the size limit")
+		return SealedRevision{}, errors.New("Encrypted vault revision exceeds the size limit")
 	}
 	manifest, err := (vault.Revision{Document: document, Number: in.Number, Digest: vault.Digest(encrypted), Size: int64(len(encrypted)), Binding: in.Binding}).Sign(b.signing)
-	return sealedRevision{manifest, encrypted}, err
+	return SealedRevision{manifest, encrypted}, err
 }
 
-func (b *browser) readRevision(in revisionRead) ([]byte, error) {
+func (b *Session) ReadRevision(in RevisionRead) ([]byte, error) {
 	doc, err := b.currentDocument(in.File, false)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (b *browser) readRevision(in revisionRead) ([]byte, error) {
 	return decrypt(in.Body, key, vault.MaxDocumentBytes)
 }
 
-type editorInput struct {
+type EditorInput struct {
 	File           string
 	Source         int64
 	Rooms          []string
@@ -110,12 +110,12 @@ type editorInput struct {
 	ViewCapability string
 }
 
-type editorOpen struct {
+type EditorOpen struct {
 	File    string
 	Binding vault.Binding
 }
 
-type editorSession struct {
+type EditorSession struct {
 	Binding    string           `json:"binding"`
 	Capability string           `json:"capability"`
 	Rooms      []string         `json:"rooms"`
@@ -123,7 +123,7 @@ type editorSession struct {
 	Checkpoint vault.Checkpoint `json:"checkpoint"`
 }
 
-func (b *browser) bindEditor(in editorInput) (vault.Binding, error) {
+func (b *Session) BindEditor(in EditorInput) (vault.Binding, error) {
 	doc, err := b.currentDocument(in.File, true)
 	if err != nil {
 		return vault.Binding{}, err
@@ -163,26 +163,26 @@ func (b *browser) bindEditor(in editorInput) (vault.Binding, error) {
 	return signed, nil
 }
 
-func (b *browser) openEditor(in editorOpen) (editorSession, error) {
+func (b *Session) OpenEditor(in EditorOpen) (EditorSession, error) {
 	doc, err := b.currentDocument(in.File, false)
 	if err != nil {
-		return editorSession{}, err
+		return EditorSession{}, err
 	}
 	binding := in.Binding
 	if binding.Org != doc.Org || binding.Vault != doc.Vault || binding.File != doc.File || binding.Generation != doc.Generation || binding.Head != doc.Head {
-		return editorSession{}, errors.New("The editor binding does not match the verified vault head")
+		return EditorSession{}, errors.New("The editor binding does not match the verified vault head")
 	}
 	state := b.active.records[len(b.active.records)-1].State
 	signer, ok := state.Member(binding.Signer)
 	key, err := hybridsig.ParsePublicKey(b.active.keys[binding.Signer].Signing)
 	if !ok || signer.Role == vault.Reader || err != nil || binding.Verify(key) != nil || len(binding.Grants) != len(state.Members) {
-		return editorSession{}, errors.New("The editor binding did not verify")
+		return EditorSession{}, errors.New("The editor binding did not verify")
 	}
 	var grant vault.EditorGrant
 	for i, candidate := range binding.Grants {
 		member := state.Members[i]
 		if candidate.User != member.User || candidate.Role != member.Role {
-			return editorSession{}, errors.New("The editor grants do not match current membership")
+			return EditorSession{}, errors.New("The editor grants do not match current membership")
 		}
 		if candidate.User == doc.Signer {
 			grant = candidate
@@ -190,7 +190,7 @@ func (b *browser) openEditor(in editorOpen) (editorSession, error) {
 	}
 	capability, err := decrypt(grant.Wrapped, b.member, 4096)
 	if err != nil || len(capability) == 0 {
-		return editorSession{}, errors.New("The editor capability did not open")
+		return EditorSession{}, errors.New("The editor capability did not open")
 	}
-	return editorSession{binding.ID(), string(capability), binding.Rooms, grant.Role != vault.Reader, b.active.checkpoint}, nil
+	return EditorSession{binding.ID(), string(capability), binding.Rooms, grant.Role != vault.Reader, b.active.checkpoint}, nil
 }

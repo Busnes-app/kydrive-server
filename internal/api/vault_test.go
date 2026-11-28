@@ -78,6 +78,18 @@ func TestVaultWitnessAndRevocation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	accountPath := "/api/vault/account"
+	if unsigned := serve(srv, httptest.NewRequest(http.MethodGet, accountPath, nil)); unsigned.Code != http.StatusUnauthorized {
+		t.Fatalf("unsigned account discovery returned %d", unsigned.Code)
+	}
+	var scope struct {
+		User string `json:"user_id"`
+		Org  string `json:"org_id"`
+	}
+	decode(request(manager, http.MethodGet, accountPath, nil, http.StatusOK), &scope)
+	if scope.User != "usr_vmgr" || scope.Org != drive.DefaultOrg {
+		t.Fatalf("unexpected signed vault scope: %+v", scope)
+	}
 	wrap := func(to age.Recipient, data string) []byte {
 		t.Helper()
 		var out bytes.Buffer

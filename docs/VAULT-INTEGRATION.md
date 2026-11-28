@@ -35,7 +35,8 @@ the trusted clients on synchronized clocks.
 ## Device protocol
 
 The routes in `internal/api/vault.go` require a signed linked-device request. The authenticated
-account establishes the caller's organization. The key route enrolls and reads public keys.
+account establishes the caller's organization. Native clients read this scope from
+`GET /api/vault/account`, then enroll or read public keys through the key routes.
 Enrollment is immutable, and the signed log pins each member's fingerprint. The client
 checks the pins independently and creates and opens each age wrap locally.
 
@@ -54,6 +55,10 @@ signature chain, the recipient and the independently witnessed head before using
 A fresh checkpoint cannot substitute for the member-signature checks.
 
 ## Stage the browser sign-in
+
+The standalone `cmd/vault-browser` site is a staging fixture for disposable accounts and
+data. User-facing decryption follows Q13 through signed native apps and a signed browser
+extension. See [the extension design](superpowers/specs/2026-11-28-vault-browser-extension.md).
 
 Choose a trusted editor HTTPS origin with deployment control separate from KyDrive.
 Start at that origin directly. Its publisher controls the code that handles vault keys
