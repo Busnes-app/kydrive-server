@@ -74,6 +74,8 @@ Own drive schema and domain operations over the application's database and blob 
 - `ObjectPrefix` validates canonical org UUIDs and home slugs before selecting storage. `Keys` scope blob/cache/staging access before I/O; UUID-only maintenance enumerates served orgs including tombstones. `SetOrgPurger` removes the whole S3 prefix before `purged=1`; failures retry, and tombstone cleanup repeats to catch late writes. Key destruction and search row removal commit together.
 - `OrgKeys` rechecks serving state before unwrapping search keys. Shared search queue entries carry generations; `PublishSearch` compares the previous version, rechecks serving state and acknowledges only the completed generations in one transaction. A deleted org cannot recreate a pointer. Snapshots are rebuildable; provider read-after-write, rewrite cost and hosted load remain qualification gates.
 
+- The `vault-browser` device platform requires the explicit vault-browser context for token
+  exchange and signed requests. Native device credentials require their own context.
 - Schema 32 keeps vault public keys, signed membership history and heads in an org-scoped
   catalogue separate from ordinary workspaces. A manager's signed transition and all wraps
   commit together. A generation recipient can appear once per vault. Only active members can

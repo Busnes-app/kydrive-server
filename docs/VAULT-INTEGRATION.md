@@ -2,7 +2,7 @@
 
 KyDrive can store and commit signed vault membership records. A separate witness can
 checkpoint those records. Linked devices can store immutable ciphertext versions and
-bind one CryptPad session to a signed vault head.
+bind a CryptPad editing session to a signed vault head.
 
 ## Start a fixture
 
@@ -52,6 +52,75 @@ the exact head signed by the witness within the last five minutes. KyDrive refus
 head as soon as it commits a membership change. A trusted client also verifies the member
 signature chain, the recipient and the independently witnessed head before using a wrap.
 A fresh checkpoint cannot substitute for the member-signature checks.
+
+## Stage the browser sign-in
+
+Choose a trusted editor HTTPS origin with deployment control separate from KyDrive.
+Start at that origin directly. Its publisher controls the code that handles vault keys
+in the browser. Set `KYDRIVE_VAULT_BROWSER_ORIGIN` to that origin on staging KyDrive
+along with the two vault keys described above. Development accepts separate loopback HTTP
+origins. The browser's linked device works only on the vault API and uses a request signature.
+
+Build the site from the repository root. Supply the public witness key from its independent
+setup. The site pins this key in its own configuration.
+
+```sh
+scripts/build-vault-browser.sh /absolute/site/output \
+  https://drive.example.test https://witness.example.test "$WITNESS_PUBLIC_KEY"
+```
+
+Serve the output at the editor origin root with `application/wasm` for `vault.wasm`.
+Set a no-referrer policy and use a CSP with scripts from the editor origin,
+`'wasm-unsafe-eval'` for WebAssembly and network connections to the editor, KyDrive and
+witness origins only. At the witness HTTPS edge, allow that editor origin **without
+cookies** for GET and POST to `/v1/logs/` and the Content-Type preflight. Set `Vary: Origin`
+on those responses. The witness retains its own signing key and durable database.
+
+With a fresh staging account, link from the editor, approve in KyDrive, and set a passphrase.
+The browser seals its key material locally and publishes only the public member key. Create a
+personal vault and reopen it after a reload. Each linked browser displays its account ID and
+key fingerprint. Confirm a second browser's fingerprint independently before adding it as an
+editor. Give the editor the vault invitation through the trusted channel used to verify the
+manager. The invitation pins the manager's genesis key. Opening verifies the full signed chain,
+member pins and the current witness checkpoint before unwrapping the vault key.
+
+Save and open a selected file revision in either browser. Removing the editor rotates the
+vault key and preserves earlier revisions for the manager. Use disposable profiles and accounts.
+Existing-key import and browser key recovery remain open.
+
+```sh
+(cd web && npm ci && npm run build)
+KYDRIVE_VAULT_BROWSER_FIXTURE=1 go test -race -count=1 -v -timeout=5m \
+  ./internal/api -run '^TestVaultBrowser(PersonalVault|Scope)$'
+```
+
+Add `KYDRIVE_VAULT_BROWSER_GATEWAY=1` to exercise the two linked browsers through the
+pinned private CryptPad relay. The test signs and unwraps the document binding in the
+browser, sends room traffic, and checks that the removed member's open socket closes.
+
+For live DOCX co-editing, also set
+`KYDRIVE_CRYPTPAD_INTEGRATION_FIXTURE=/absolute/prepared-proof` to the pinned asset bundle
+described below. Stop the preparation relay first. The test launches both trusted asset
+origins and a separate private relay. It builds the vault site with the two optional
+`CRYPTPAD_ORIGIN GATEWAY_ORIGIN` arguments and uses its **Edit DOCX together** and
+**Save encrypted DOCX** controls. The vault site's CSP needs `frame-src` for the trusted
+CryptPad origin. The asset host serves the local, verified CryptPad 2026.10.1 assets with
+the scoped patches in `deploy/vault-browser/cryptpad-patches.mjs`. Its network policy
+allows the gateway over HTTPS and WSS.
+
+Open an encrypted DOCX by file ID and revision in the first linked browser. Wait for the
+editor to be ready before joining from the second linked browser, using the same file ID.
+The first browser provisions an editor binding and uploads an encrypted checkpoint. The
+second opens that checkpoint and the existing encrypted history. Saving converts the
+live document in the browser and appends a signed, encrypted KyDrive revision. On a new
+membership head, start the next binding from the latest verified export.
+
+```sh
+KYDRIVE_VAULT_BROWSER_FIXTURE=1 KYDRIVE_VAULT_BROWSER_GATEWAY=1 \
+  KYDRIVE_CRYPTPAD_INTEGRATION_FIXTURE=/absolute/prepared-proof \
+  go test -race -count=1 -v -timeout=5m ./internal/api \
+    -run '^TestVaultBrowser(PersonalVault|Scope)$'
+```
 
 ## File versions and editor sessions
 
@@ -114,13 +183,21 @@ WebSocket subprotocol header or the HTTP Authorization header.
 The gateway checks the connection and each forwarded WebSocket frame against KyDrive
 without a lease cache. It allows room joins, leaves, messages and specific CryptPad
 history operations. CryptPad's ordinary `GET_HISTORY` can create metadata and requires
-an edit lease. A view lease can use `GET_FULL_HISTORY` or `GET_HISTORY_RANGE`. Unknown
-commands, direct peer messages and general history-keeper RPC are refused.
+an edit lease. The gateway allows `IS_NEW_CHANNEL` and `GET_METADATA` for a signed room.
+A view lease can use `GET_FULL_HISTORY` or `GET_HISTORY_RANGE`. The gateway closes
+connections that attempt unknown commands, direct peer messages or account RPC. A relay
+heartbeat reply must match the challenge on the same connection.
+The browser renews its grant against a freshly verified checkpoint every 25 seconds.
+The gateway accepts renewal only for the same binding, device, principal and edit role.
 
 The HTTPS file surface accepts authenticated GET, HEAD and single-byte-range reads at
 `/blob/<first-two-hex-digits>/<48-character-blob-id>`. Reads require an active signed blob
-reservation. The gateway blocks upstream account, config, datastore and upload routes.
-This profile supports 32 WebSocket connections and 1 MiB text frames, with bounded
+reservation. `PUT /checkpoint/{blob}` accepts one encrypted checkpoint per signed ID
+from an active editor. The gateway streams uploads up to 32 MiB into the private
+`gateway-checkpoints` volume and rechecks access before publishing. GET requires the
+same binding. The volume stores ciphertext and must be retained alongside the relay's
+history when restarting. The gateway blocks upstream account, config, datastore and
+upload routes. This profile supports 32 WebSocket connections and 1 MiB text frames, with bounded
 forwarding queues. It checks authorization before each HTTP request to the relay.
 KyDrive allows 6,000 relay checks per source IP per minute. A shared gateway consumes
 that budget for both incoming frames and each outgoing copy of a room message. Measure
@@ -136,9 +213,9 @@ KYDRIVE_VAULT_GATEWAY_FIXTURE=1 go test -race -count=1 -v -timeout=6m \
 ```
 
 Chromium sent live room traffic through the real gateway and pinned private relay. The
-test verified a write, history replay, bound blob download and range read before
-revocation. A foreign blob, reader write, raw relay path, and unapproved history or RPC
-failed. When KyDrive returned 503, the gateway refused the operation. After witnessed
+test verifies a write, history replay, bound blob download and range read before
+revocation. It rejects checkpoint overwrites, reader writes, foreign IDs and renewal with
+a different scope. It also denies raw relay paths and unapproved history or RPC. When KyDrive returned 503, the gateway refused the operation. After witnessed
 removal, open sockets closed and reconnects and direct blob reads failed. The remaining
 member could join a new signed binding. An edge-network peer also failed to reach the
 relay's private address directly.
@@ -178,12 +255,19 @@ The current signed catalogue supports manager-only membership changes and up to 
 members. Each role change rotates the vault key. The independent witness uses the persisted
 KyDrive commit as its append authority.
 
-Review the wire format and device recovery flow before distributing a client. Full
-production qualification still needs an independently signed installed client wired to
-the strict gateway, including scoped room and encrypted-blob provisioning. It also
-needs coordinated recovery of KyDrive, live CryptPad history and the witness state, plus
-a representative peak-memory comparison. Stage with synthetic data until those gates
-pass. Consult the [vault design](superpowers/specs/2026-11-22-e2e-vault-design.md)
+The loopback browser integration covers DOCX between linked editors, reopening a live
+document, manual signed exports and removal during editing. The staging adapter reserves
+three checkpoint slots per document binding. It leaves CryptPad account operations,
+chat, cursors and attachment insertion out of this profile. Initialize from one browser
+before others join. If initialization stops after persisting its checkpoint and before
+publishing its encrypted room state, restart that document in a fresh binding with a
+new witnessed head. Staging uses disposable data and profiles.
+
+Production qualification still needs key recovery, coordinated recovery of KyDrive,
+CryptPad history, gateway checkpoints and witness state, and representative peak-load
+memory measurements. The adapter serves pinned assets in the local fixture. A remote
+deployment needs the same patches and transport restrictions on controlled asset
+origins. Consult the [vault design](superpowers/specs/2026-11-22-e2e-vault-design.md)
 for the remaining protocol.
 
 `TestVaultWitnessAndRevocation` exercises signed ciphertext storage, mismatched and stale

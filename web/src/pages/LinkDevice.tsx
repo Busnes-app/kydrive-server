@@ -5,9 +5,9 @@ import { useStepUp } from '../components/StepUp';
 
 // The desktop app opens /link?redirect=&challenge=&state=&name=&platform=. The request moves to
 // session storage at once, so it survives a KyIdentity sign-in, and waits for an explicit
-// Approve; the server then answers with the loopback redirect carrying a one-time code.
+// Approve; the server then answers with the validated redirect carrying a one-time code.
 const pending = 'ky-pending-device-link';
-const platforms: Record<string, string> = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
+const platforms: Record<string, string> = { windows: 'Windows', macos: 'macOS', linux: 'Linux', 'vault-browser': 'Vault browser' };
 
 type LinkRequest = { redirect: string; challenge: string; state: string; name: string; platform: string };
 
@@ -23,7 +23,11 @@ export function hasLinkRequest(): boolean { return sessionStorage.getItem(pendin
 function parse(search: string): LinkRequest | null {
   const q = new URLSearchParams(search);
   const r = { redirect: q.get('redirect') ?? '', challenge: q.get('challenge') ?? '', state: q.get('state') ?? '', name: q.get('name') ?? '', platform: q.get('platform') ?? '' };
-  const ok = /^http:\/\/(127\.0\.0\.1|\[::1\]):[1-9][0-9]{0,4}(\/[^?#]*)?$/.test(r.redirect) && /^[A-Za-z0-9_-]{43}$/.test(r.challenge)
+  const returnURL = URL.parse(r.redirect);
+  const validReturn = r.platform === 'vault-browser'
+    ? returnURL !== null && (returnURL.protocol === 'https:' || returnURL.protocol === 'http:') && r.redirect === returnURL.origin + '/'
+    : /^http:\/\/(127\.0\.0\.1|\[::1\]):[1-9][0-9]{0,4}(\/[^?#]*)?$/.test(r.redirect);
+  const ok = validReturn && /^[A-Za-z0-9_-]{43}$/.test(r.challenge)
     && r.state !== '' && r.state.length <= 256 && r.name.trim() === r.name && r.name !== '' && r.name.length <= 100 && Object.hasOwn(platforms, r.platform);
   return ok ? r : null;
 }
@@ -57,7 +61,7 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
 
   return <main className="auth-center" style={{ minHeight: '100vh' }}>
     <section className="panel" style={{ width: '100%', maxWidth: '32rem' }} aria-labelledby="link-device-heading">
-      <h2 id="link-device-heading">Link a computer</h2>
+      <h2 id="link-device-heading">{request?.platform === 'vault-browser' ? 'Link a vault browser' : 'Link a computer'}</h2>
       {!request ? <>
         <Alert>This link request is not valid. Start linking again from the KyDrive app on your computer.</Alert>
         <div className="button-row"><button type="button" className="btn-secondary" onClick={cancel}>Close</button></div>
@@ -67,7 +71,9 @@ export function LinkDevice({ onClose }: { onClose: () => void }) {
           <dt>Request from</dt><dd className="font-mono">{ip || 'unknown'}</dd>
           <dt>Time</dt><dd>{at.toLocaleString()}</dd>
         </dl>
-        <p className="alert alert-warn">The computer can open and change every file you can, until you revoke it in Settings → Phones & apps. Approve only if you just chose Link in the KyDrive app on this computer.</p>
+        {request.platform === 'vault-browser'
+          ? <p className="alert alert-warn">Approve only if you started linking from {request.redirect}. This browser can access your vaults until you revoke it in Settings → Phones & apps.</p>
+          : <p className="alert alert-warn">The computer can open and change every file you can, until you revoke it in Settings → Phones & apps. Approve only if you just chose Link in the KyDrive app on this computer.</p>}
         <div className="button-row">
           <button type="button" className="btn-secondary" onClick={cancel} disabled={sent && !error}>Cancel</button>
           <button type="button" onClick={() => void approve()} disabled={sent}>Approve</button>

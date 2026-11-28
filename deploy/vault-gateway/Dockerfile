@@ -4,6 +4,7 @@ WORKDIR /app
 COPY --from=cryptpad /cryptpad/node_modules/ws ./node_modules/ws
 COPY deploy/vault-gateway/gateway.mjs deploy/vault-gateway/netflux.mjs ./deploy/vault-gateway/
 COPY scripts/vault-relay-authorize.mjs ./scripts/
+RUN mkdir -m 0700 /app/checkpoints && chown 1000:1000 /app/checkpoints
 USER 1000:1000
 EXPOSE 9443
 ENTRYPOINT ["node", "deploy/vault-gateway/gateway.mjs"]

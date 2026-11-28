@@ -53,7 +53,16 @@ func (s *Server) handleApproveDevice(w http.ResponseWriter, r *http.Request) {
 		s.driveError(w, drive.ErrInvalid)
 		return
 	}
-	code, err := s.store.Drive().ApproveLink(r.Context(), user, in.Name, in.Platform, in.Challenge, in.Redirect)
+	redirect := in.Redirect
+	if in.Platform == drive.VaultBrowserPlatform {
+		origin := s.config.Vault.BrowserOrigin
+		if origin == "" || in.Redirect != origin+"/" || s.config.Vault.Publisher == nil || s.config.Vault.Witness == nil {
+			s.driveError(w, drive.ErrInvalid)
+			return
+		}
+		redirect = ""
+	}
+	code, err := s.store.Drive().ApproveLink(r.Context(), user, in.Name, in.Platform, in.Challenge, redirect)
 	if err != nil {
 		s.driveError(w, err)
 		return
@@ -91,6 +100,10 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("grant") == "qr" {
+		if r.URL.Path == vaultBrowserTokenPath {
+			s.writeError(w, 400, "Invalid vault browser grant")
+			return
+		}
 		token, id, err = s.store.Drive().RedeemPhone(r.Context(), r.PostFormValue("code"), r.PostFormValue("name"), r.PostFormValue("platform"), key)
 	} else {
 		token, id, err = s.store.Drive().RedeemLink(r.Context(), r.PostFormValue("code"), r.PostFormValue("verifier"), key)
@@ -114,6 +127,14 @@ func (s *Server) handleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.driveError(w, err)
 		return
+	}
+	if r.URL.Path == vaultBrowserTokenPath {
+		org, err := s.store.Drive().UserOrg(r.Context(), id)
+		if err != nil || org == "" {
+			s.driveError(w, errors.Join(drive.ErrDenied, err))
+			return
+		}
+		out["org_id"] = org
 	}
 	out["token"], out["devices_url"] = token, s.config.Server.AppURL+"/"
 	s.writeJSON(w, 200, s.withIdentityKey(out))

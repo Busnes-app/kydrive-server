@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync } from 'node:fs';
+import { link, mkdtemp, rm, stat } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { createServer, request as httpsRequest } from 'node:https';
 import { once } from 'node:events';
@@ -12,6 +13,10 @@ const socketLimit = 32;
 const protocol = 'kydrive-vault';
 const tokenPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const openPath = /^\/cryptpad_websocket\?room=([a-f0-9]{32}|[a-f0-9]{34})$/;
+const checkpointPath = /^\/checkpoint\/([a-f0-9]{48})$/;
+const checkpointRoot = '/app/checkpoints/';
+const checkpointLimit = 32 << 20;
+let checkpointWrites = 0;
 const blobPath = /^\/blob\/([a-f0-9]{2})\/([a-f0-9]{48})$/;
 
 function origin(value, protocols) {
@@ -57,6 +62,61 @@ function cors(req, res) {
   res.setHeader('access-control-allow-origin', source);
   res.setHeader('vary', 'Origin');
   return true;
+}
+
+async function serveCheckpoint(req, res, blob) {
+  const writing = req.method === 'PUT';
+  if (!cors(req, res)) return refuse(res, 403);
+  if (req.method === 'OPTIONS') {
+    if (!clientOrigins.includes(header(req, 'origin')) ||
+        !['GET', 'PUT'].includes(header(req, 'access-control-request-method'))) return refuse(res, 403);
+    res.setHeader('access-control-allow-methods', 'GET, PUT');
+    res.setHeader('access-control-allow-headers', 'Authorization, Content-Type');
+    return refuse(res, 204);
+  }
+  const length = header(req, 'content-length');
+  if ((!writing && req.method !== 'GET') || req.headers['transfer-encoding'] ||
+      (!writing && length && length !== '0')) return refuse(res, 405);
+  if (writing && (!/^[1-9][0-9]{0,7}$/.test(length) || Number(length) > checkpointLimit ||
+      header(req, 'content-type') !== 'application/octet-stream')) return refuse(res, 400);
+  const token = httpToken(req);
+  if (!validToken(token) || !await authorizeVaultBlob(authority, token, blob, writing)) return refuse(res, 403);
+
+  const file = checkpointRoot + blob;
+  if (!writing) {
+    const info = await stat(file).catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+    if (!info) return refuse(res, 404);
+    res.writeHead(200, {
+      'content-length': info.size, 'content-type': 'application/octet-stream',
+      'content-disposition': 'attachment', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store',
+    });
+    await pipeline(createReadStream(file), res);
+    return;
+  }
+  if (checkpointWrites >= 4) return refuse(res, 503);
+  checkpointWrites++;
+  let temp;
+  try {
+    temp = await mkdtemp(checkpointRoot + '.upload-');
+    const staged = temp + '/ciphertext';
+    await pipeline(req, createWriteStream(staged, { flags: 'wx', mode: 0o600 }),
+      { signal: AbortSignal.timeout(15_000) });
+    if ((await stat(staged)).size !== Number(length)) return refuse(res, 400);
+    if (!await authorizeVaultBlob(authority, token, blob, true)) return refuse(res, 403);
+    try {
+      // Publish only complete uploads and never replace a checkpoint another editor published.
+      await link(staged, file);
+    } catch (error) {
+      if (error.code === 'EEXIST') return refuse(res, 409);
+      throw error;
+    }
+    return refuse(res, 201);
+  } finally {
+    checkpointWrites--;
+    if (temp) await rm(temp, { recursive: true, force: true });
+  }
 }
 
 async function serveBlob(req, res) {
@@ -118,11 +178,12 @@ function forward(source, target, allow, stop) {
     pending++;
     order = order.then(async () => {
       if (source.readyState !== WebSocket.OPEN || target.readyState !== WebSocket.OPEN) return;
-      if (!await allow(data) || target.readyState !== WebSocket.OPEN ||
+      const allowed = await allow(data);
+      if (!allowed || target.readyState !== WebSocket.OPEN ||
           source.readyState !== WebSocket.OPEN || target.bufferedAmount + data.length > frameLimit) {
         return stop();
       }
-      target.send(data, { binary: false });
+      if (allowed === true) target.send(data, { binary: false });
     }).catch(stop).finally(() => {
       queued -= data.length;
       if (--pending === 0 && source.readyState === WebSocket.OPEN) source.resume();
@@ -134,7 +195,14 @@ const wss = new WebSocketServer({
   noServer: true, maxPayload: frameLimit, perMessageDeflate: false,
   handleProtocols: () => protocol,
 });
+function relayScope(token) {
+  const { Org, Vault, File, User, Device, Binding, Edit } =
+    JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString());
+  return JSON.stringify([Org, Vault, File, User, Device, Binding, Edit]);
+}
+
 function bridge(client, relay, token, anchor) {
+  const scope = relayScope(token);
   const state = { joined: new Set(), joining: new Map(), identity: '', requestedHistory: false };
   let stopped = false;
   const stop = () => {
@@ -153,11 +221,21 @@ function bridge(client, relay, token, anchor) {
   relay.on('close', stop);
 
   forward(client, relay, async data => {
-    const op = clientOperation(data, anchor, state.joined, state.joining);
+    if (data[0] === 123) { // Gateway control messages are objects. Netflux frames are arrays.
+      const renewal = JSON.parse(data.toString());
+      const { grant } = renewal;
+      if (Object.keys(renewal).length !== 1 || typeof grant !== 'string' || !validToken(grant) ||
+          !await authorizeVaultRoom(authority, grant, anchor, false) ||
+          relayScope(grant) !== scope) return false;
+      token = grant;
+      return 'renewed';
+    }
+    const op = clientOperation(data, anchor, state.joined, state.joining, state.pong);
     if (!op || !await authorizeVaultRoom(authority, token, op.room, op.edit)) return false;
     if (op.join !== undefined) state.joining.set(op.join, op.room);
     if (op.leave) state.joined.delete(op.room);
     if (op.history) state.requestedHistory = true;
+    if (op.pong) state.pong = undefined;
     return true;
   }, stop);
   forward(relay, client, data =>
@@ -172,7 +250,9 @@ const server = createServer({
   requestTimeout: 15_000,
   headersTimeout: 5_000,
 }, (req, res) => {
-  serveBlob(req, res).catch(() => {
+  const checkpoint = checkpointPath.exec(req.url);
+  const response = checkpoint ? serveCheckpoint(req, res, checkpoint[1]) : serveBlob(req, res);
+  response.catch(() => {
     if (res.headersSent) res.destroy();
     else refuse(res, 502);
   });
@@ -204,11 +284,24 @@ server.on('upgrade', async (req, socket, head) => {
     });
     relay.on('error', () => relay.terminate());
     socket.once('close', () => relay.terminate());
-    await once(relay, 'open');
-    if (socket.destroyed) return relay.terminate();
-    wss.handleUpgrade(req, socket, head, client => {
-      bridge(client, relay, token, anchor);
-      client.resume();
+    await new Promise((resolve, reject) => {
+      relay.once('error', reject);
+      relay.once('close', () => reject(Error('Upstream socket closed during upgrade')));
+      relay.once('open', () => {
+        try {
+          // IDENT can arrive in the same read as the upstream upgrade response.
+          // Install the forwarding listeners before returning from the open event.
+          if (socket.destroyed) relay.terminate();
+          else wss.handleUpgrade(req, socket, head, client => {
+            bridge(client, relay, token, anchor);
+            client.resume();
+          });
+          resolve();
+        } catch (error) {
+          relay.terminate();
+          reject(error);
+        }
+      });
     });
   } catch {
     rejectUpgrade(socket, '502 Bad Gateway');

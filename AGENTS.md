@@ -93,6 +93,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - Hosted storage (`KYDRIVE_S3_*`) is cell/org-scoped; `KY_CELLS` fixes the cells this deployment serves. Hosted content search publishes one immutable sealed SQLite snapshot per org, with its queue and CAS pointer in PostgreSQL; see the owning config, objects, drive and search contracts. Release startup remains refused without `-tags kye2e`; provider durability, scale and failover qualification remain open.
 - A local pass is not production readiness or a suite-wide installer.
 - Opt-in vault versions use signed ciphertext revisions and a separate catalogue.
+  Vault browser staging uses a separately deployed HTTPS origin and a scoped linked device.
   The CryptPad DOCX fixture uses witnessed membership and room authorization. Its standalone
   staging gateway lives in `deploy/vault-gateway/` and exposes only guarded relay operations.
   `docs/VAULT-INTEGRATION.md` owns verification and rollout boundaries.
@@ -146,6 +147,7 @@ Root owns product identity, CLI lifecycle, Compose/Docker packaging, shared veri
 - `internal/dav/` — WebDAV file system over the drive store for app-password clients.
 - `internal/editor/` — Euro-Office JWT, scoped output fetching and revocation commands.
 - `internal/vault/` and `cmd/vault-witness/` — signed vault membership, opaque receipts and the independently operated checkpoint service.
+- `cmd/vault-browser/` — browser WebAssembly for vault keys and signature verification.
 - `internal/crypto/` — inherited application encryption helpers over shared primitives.
 - `internal/auth/` — local/bootstrap password authentication, sessions, CAPTCHA and CSRF. Two-factor sign-in is KyIdentity's; KyDrive has no local MFA.
 - `internal/sso/` — KySignOn OIDC verification and signed directory webhook.

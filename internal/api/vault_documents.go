@@ -170,7 +170,7 @@ func (s *Server) vaultRelayCheck(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 256)
 	if vault.Decode(r.Body, &in) != nil || ((in.Room == "") == (in.Blob == "")) ||
 		(in.Room != "" && !vault.ValidRoom(in.Room)) ||
-		(in.Blob != "" && (in.Edit || !vault.ValidEditorBlob(in.Blob))) {
+		(in.Blob != "" && !vault.ValidEditorBlob(in.Blob)) {
 		s.vaultError(w, vault.ErrInvalid)
 		return
 	}

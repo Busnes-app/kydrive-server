@@ -1,0 +1,189 @@
+package main
+
+import (
+	"errors"
+	"filippo.io/age"
+	"slices"
+	"time"
+
+	"github.com/Busnes-app/ky-primitives/hybridsig"
+	"github.com/Busnes-app/kydrive-server/internal/vault"
+)
+
+type revisionInput struct {
+	File    string
+	Number  int64
+	Body    []byte
+	Binding string
+}
+
+type revisionRead struct {
+	File     string
+	Number   int64
+	Manifest vault.Revision
+	Body     []byte
+}
+
+type sealedRevision struct {
+	Manifest vault.Revision `json:"manifest"`
+	Body     []byte         `json:"body"`
+}
+
+func (b *browser) currentDocument(file string, edit bool) (vault.Document, error) {
+	if b.active == nil || !vault.ID(file) {
+		return vault.Document{}, errors.New("Open a verified vault and choose a file")
+	}
+	active := b.active
+	age := time.Since(time.UnixMilli(active.checkpoint.IssuedMS))
+	if age < 0 || age >= vault.MaxCheckpointAge {
+		return vault.Document{}, errors.New("Refresh the vault checkpoint")
+	}
+	last := active.records[len(active.records)-1]
+	member, ok := last.State.Member(b.account.User)
+	if !ok || edit && member.Role == vault.Reader {
+		return vault.Document{}, errors.New("Vault access refused")
+	}
+	return vault.Document{Org: last.Org, Vault: last.Vault, File: file, Generation: last.State.Generation, Head: active.head, Signer: b.account.User}, nil
+}
+
+func (b *browser) sealRevision(in revisionInput) (sealedRevision, error) {
+	document, err := b.currentDocument(in.File, true)
+	if err != nil {
+		return sealedRevision{}, err
+	}
+	if in.Number < 1 || len(in.Body) > vault.MaxDocumentBytes-8192 {
+		return sealedRevision{}, errors.New("Invalid file revision or size")
+	}
+	encrypted, err := encrypt(in.Body, b.active.identity.Recipient())
+	if err != nil {
+		return sealedRevision{}, err
+	}
+	manifest, err := (vault.Revision{Document: document, Number: in.Number, Digest: vault.Digest(encrypted), Size: int64(len(encrypted)), Binding: in.Binding}).Sign(b.signing)
+	return sealedRevision{manifest, encrypted}, err
+}
+
+func (b *browser) readRevision(in revisionRead) ([]byte, error) {
+	doc, err := b.currentDocument(in.File, false)
+	if err != nil {
+		return nil, err
+	}
+	revision := in.Manifest
+	if revision.File != doc.File || revision.Org != doc.Org || revision.Vault != doc.Vault || revision.Head.Log != doc.Head.Log ||
+		revision.Head.Sequence < 1 || revision.Head.Sequence > int64(len(b.active.records)) || revision.Number != in.Number ||
+		revision.Size != int64(len(in.Body)) || revision.Digest != vault.Digest(in.Body) {
+		return nil, errors.New("The requested vault revision did not verify")
+	}
+	record := b.active.records[revision.Head.Sequence-1]
+	member, found := record.State.Member(revision.Signer)
+	public, err := hybridsig.ParsePublicKey(b.active.keys[revision.Signer].Signing)
+	if !found || member.Role == vault.Reader || record.Link().Hash() != revision.Head.Hash || record.State.Generation != revision.Generation ||
+		err != nil || revision.Verify(public) != nil {
+		return nil, errors.New("The vault revision signer or head did not verify")
+	}
+	key := b.active.identity
+	for index := len(b.active.records) - 1; index > 0 && b.active.records[index].State.Generation > revision.Generation; index-- {
+		state, previous := b.active.records[index].State, b.active.records[index-1].State
+		if previous.Generation == state.Generation {
+			continue
+		}
+		key, err = unwrapIdentity(state.Previous, key, previous.Recipient)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return decrypt(in.Body, key, vault.MaxDocumentBytes)
+}
+
+type editorInput struct {
+	File           string
+	Source         int64
+	Rooms          []string
+	Blobs          []string
+	EditCapability string
+	ViewCapability string
+}
+
+type editorOpen struct {
+	File    string
+	Binding vault.Binding
+}
+
+type editorSession struct {
+	Binding    string           `json:"binding"`
+	Capability string           `json:"capability"`
+	Rooms      []string         `json:"rooms"`
+	Edit       bool             `json:"edit"`
+	Checkpoint vault.Checkpoint `json:"checkpoint"`
+}
+
+func (b *browser) bindEditor(in editorInput) (vault.Binding, error) {
+	doc, err := b.currentDocument(in.File, true)
+	if err != nil {
+		return vault.Binding{}, err
+	}
+	if len(in.EditCapability) == 0 || len(in.EditCapability) > 4096 || in.ViewCapability == in.EditCapability || len(in.ViewCapability) > 4096 {
+		return vault.Binding{}, errors.New("Supply a valid separate editor capability for each mode")
+	}
+	current := b.active.records[len(b.active.records)-1]
+	binding := vault.Binding{Document: doc, Source: in.Source, Rooms: in.Rooms, Blobs: in.Blobs}
+	slices.Sort(binding.Rooms)
+	slices.Sort(binding.Blobs)
+	for _, member := range current.State.Members {
+		capability := in.EditCapability
+		if member.Role == vault.Reader {
+			capability = in.ViewCapability
+		}
+		if capability == "" {
+			return vault.Binding{}, errors.New("The reader needs a view capability")
+		}
+		recipient, err := age.ParseHybridRecipient(b.active.keys[member.User].Recipient)
+		if err != nil {
+			return vault.Binding{}, err
+		}
+		encrypted, err := encrypt([]byte(capability), recipient)
+		if err != nil {
+			return vault.Binding{}, err
+		}
+		binding.Grants = append(binding.Grants, vault.EditorGrant{User: member.User, Role: member.Role, Wrapped: encrypted})
+	}
+	signed, err := binding.Sign(b.signing)
+	if err != nil {
+		return vault.Binding{}, err
+	}
+	if err := signed.Verify(b.signing.Public()); err != nil {
+		return vault.Binding{}, errors.New("The editor binding is invalid")
+	}
+	return signed, nil
+}
+
+func (b *browser) openEditor(in editorOpen) (editorSession, error) {
+	doc, err := b.currentDocument(in.File, false)
+	if err != nil {
+		return editorSession{}, err
+	}
+	binding := in.Binding
+	if binding.Org != doc.Org || binding.Vault != doc.Vault || binding.File != doc.File || binding.Generation != doc.Generation || binding.Head != doc.Head {
+		return editorSession{}, errors.New("The editor binding does not match the verified vault head")
+	}
+	state := b.active.records[len(b.active.records)-1].State
+	signer, ok := state.Member(binding.Signer)
+	key, err := hybridsig.ParsePublicKey(b.active.keys[binding.Signer].Signing)
+	if !ok || signer.Role == vault.Reader || err != nil || binding.Verify(key) != nil || len(binding.Grants) != len(state.Members) {
+		return editorSession{}, errors.New("The editor binding did not verify")
+	}
+	var grant vault.EditorGrant
+	for i, candidate := range binding.Grants {
+		member := state.Members[i]
+		if candidate.User != member.User || candidate.Role != member.Role {
+			return editorSession{}, errors.New("The editor grants do not match current membership")
+		}
+		if candidate.User == doc.Signer {
+			grant = candidate
+		}
+	}
+	capability, err := decrypt(grant.Wrapped, b.member, 4096)
+	if err != nil || len(capability) == 0 {
+		return editorSession{}, errors.New("The editor capability did not open")
+	}
+	return editorSession{binding.ID(), string(capability), binding.Rooms, grant.Role != vault.Reader, b.active.checkpoint}, nil
+}

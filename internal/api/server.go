@@ -674,16 +674,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The only other CORS grant KyDrive makes: the app's own origin, reflected, never "*".
-	// TestCORSNeverGrantsAnotherOrigin pins that no other code sets these headers.
+	// Vault browser requests authenticate with a scoped device credential. The app's own
+	// origin is the general CORS grant. TestCORSNeverGrantsAnotherOrigin checks the boundary.
 	origin := r.Header.Get("Origin")
 	w.Header().Set("Vary", "Origin")
-	if origin != "" && sameOrigin(origin, s.config.Server.AppURL) {
+	vaultBrowser := s.vaultBrowserOrigin(r) && r.URL.EscapedPath() == r.URL.Path && path.Clean(r.URL.Path) == r.URL.Path &&
+		(r.URL.Path == vaultBrowserTokenPath || r.URL.Path == "/api/vault-keys" ||
+			strings.HasPrefix(r.URL.Path, "/api/vault-keys/") || strings.HasPrefix(r.URL.Path, "/api/vaults/"))
+	if vaultBrowser {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, KyDrive-Date, KyDrive-Nonce, KyDrive-Signature, KyDrive-Content-SHA256, KyDrive-Vault-Revision, KyDrive-Vault-Checkpoint")
+		w.Header().Set("Access-Control-Expose-Headers", "KyDrive-Vault-Revision")
+	} else if origin != "" && sameOrigin(origin, s.config.Server.AppURL) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 	}
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-KySignOn-Signature")
+	if !vaultBrowser {
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-KySignOn-Signature")
+	}
 
 	// WebDAV authenticates every request itself (app passwords, never cookies) and owns its
 	// OPTIONS, methods and body sizes.
@@ -693,7 +703,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodOptions {
-		if origin != "" && !sameOrigin(origin, s.config.Server.AppURL) {
+		if origin != "" && !vaultBrowser && !sameOrigin(origin, s.config.Server.AppURL) {
 			http.Error(w, "Origin not allowed", http.StatusForbidden)
 			return
 		}
@@ -703,7 +713,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if isUnsafeMethod(r.Method) {
 		// The signed directory webhook is server-to-server; every other write must not be cross-site.
-		if r.URL.Path != "/api/sso/kysignon/sync" && !s.sameSiteRequest(r) {
+		if r.URL.Path != "/api/sso/kysignon/sync" && !vaultBrowser && !s.sameSiteRequest(r) {
 			s.writeError(w, http.StatusForbidden, "Cross-site request refused")
 			return
 		}
@@ -712,7 +722,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
 			return
 		}
-		if s.sessions.SessionToken(r) != "" && !csrfExempt(r.URL.Path) && !s.sessions.ValidateCSRF(r) {
+		if !vaultBrowser && s.sessions.SessionToken(r) != "" && !csrfExempt(r.URL.Path) && !s.sessions.ValidateCSRF(r) {
 			s.writeError(w, http.StatusForbidden, "Invalid CSRF token")
 			return
 		}

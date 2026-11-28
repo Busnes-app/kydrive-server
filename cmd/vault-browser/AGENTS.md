@@ -1,0 +1,18 @@
+# Vault browser WebAssembly
+
+## Purpose
+Own browser device signing, passphrase-protected local keys, vault membership and ciphertext revisions.
+
+## Local Contracts
+- Use the existing age hybrid identity and vault signature and checkpoint implementations.
+- The browser encrypts private key material before local storage. Publish only public keys,
+  signed requests and encrypted vault state.
+- Verify the genesis fingerprint from the trusted invitation, each membership transition,
+  and the pinned witness checkpoint before unwrapping. Removal rotates the recipient and
+  carries the prior generation encrypted to the new one.
+- Verify revision signers against their historical membership and editor binding signers
+  against the current head. Refresh a checkpoint only after verifying the same head with
+  the pinned witness. The runbook owns staging scope and hosting.
+
+## Verification
+Run the browser acceptance in [Vault integration](../../docs/VAULT-INTEGRATION.md).

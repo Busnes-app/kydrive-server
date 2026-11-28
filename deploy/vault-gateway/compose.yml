@@ -11,6 +11,7 @@ services:
       KY_VAULT_GATEWAY_KEY: /run/tls/gateway.key
       NODE_EXTRA_CA_CERTS: /run/tls/authority.pem
     volumes:
+      - gateway-checkpoints:/app/checkpoints
       - type: bind
         source: ${KY_VAULT_GATEWAY_CERT:?mount the gateway certificate}
         target: /run/tls/gateway.pem
@@ -62,6 +63,7 @@ networks:
     driver_opts:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
 volumes:
+  gateway-checkpoints: {}
   relay-state: {}
   relay-history: {}
   relay-blobs: {}
