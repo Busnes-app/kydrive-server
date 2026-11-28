@@ -174,7 +174,7 @@ func validAccount(a account) bool {
 	return strings.HasPrefix(a.Token, "kyd_") && vault.ValidUserID(a.User) && vault.ID(a.Org)
 }
 
-func (b *browser) requestHeaders(origin, method, path string, body []byte) (map[string]string, error) {
+func (b *browser) requestHeaders(origin, method, requestURI string, body []byte) (map[string]string, error) {
 	if b.device == nil || !validAccount(b.account) {
 		return nil, errors.New("Link this browser first")
 	}
@@ -185,7 +185,10 @@ func (b *browser) requestHeaders(origin, method, path string, body []byte) (map[
 	}
 	encodedNonce := base64.RawURLEncoding.EncodeToString(nonce)
 	digest := vault.Digest(body)
-	message := strings.Join([]string{"kydrive-request-v1", origin, method, path, date, encodedNonce, vault.Digest(nil), digest}, "|")
+	// The wire format signs the entire request URI, including any query, as sent.
+	// Vault requests do not use any headers from the device signing list.
+	headerDigest := vault.Digest(nil)
+	message := strings.Join([]string{"kydrive-request-v1", origin, method, requestURI, date, encodedNonce, headerDigest, digest}, "|")
 	signed := sha256.Sum256([]byte(message))
 	signature, err := ecdsa.SignASN1(rand.Reader, b.device, signed[:])
 	if err != nil {

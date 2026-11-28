@@ -18,3 +18,4 @@ Own the standalone browser link, shared vault proof and CryptPad transport accep
 
 ## Verification
 Run the browser acceptance in [Vault integration](../../docs/VAULT-INTEGRATION.md).
+It reopens 33 witnessed records across two signed history pages.

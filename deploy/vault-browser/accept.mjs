@@ -274,6 +274,53 @@ try {
   await guest.getByLabel('Revision', { exact: true }).fill('2');
   await guest.getByRole('button', { name: 'Open encrypted revision' }).click();
   await guestStatus.filter({ hasText: 'Request refused (404)' }).waitFor();
+
+  // Set up a history longer than one server page without routing or mocking any responses.
+  const invitation = JSON.parse(invite);
+  const path = '/api/vaults/' + invitation.vault + '/records';
+  const generation = await page.evaluate(async ({ drive, witness, path, invitation, user, fingerprint }) => {
+    const wasm = (action, data) => {
+      const result = JSON.parse(globalThis.kyDriveVault(action, JSON.stringify(data)));
+      if (result.error) throw Error(result.error);
+      return result.value;
+    };
+    const json = async response => {
+      if (!response.ok) throw Error('History fixture request failed (' + response.status + ')');
+      return response.json();
+    };
+    const api = (method, uri, payload) => {
+      const body = payload === undefined ? undefined : JSON.stringify(payload);
+      const headers = wasm('sign', { Origin: drive, Method: method, Path: uri,
+        Body: body ? new TextEncoder().encode(body).toBase64() : '' });
+      if (body) headers['Content-Type'] = 'application/json';
+      return fetch(drive + uri, { method, body, headers, credentials: 'omit', redirect: 'error' }).then(json);
+    };
+    const { records, head } = await api('GET', path);
+    const { witnessKey } = await fetch('/config.json').then(json);
+    const keys = Object.fromEntries(await Promise.all([invitation.owner.user, user].map(async id => [
+      id, await api('GET', '/api/vault-keys/' + id),
+    ])));
+    let action = 'add';
+    while (records.length < 33) {
+      const next = wasm('changeMembership', { Action: action, Target: { user, fingerprint }, Key: keys[user] });
+      const receipt = await api('POST', path, next);
+      const checkpoint = await fetch(witness + '/v1/logs/' + head.log, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([receipt]),
+      }).then(json);
+      records.push(next);
+      wasm('openVault', { Invite: invitation, Records: records, Keys: keys, WitnessKey: witnessKey, Checkpoint: checkpoint });
+      action = action === 'add' ? 'remove' : 'add';
+    }
+    return records.at(-1).state.generation;
+  }, { drive, witness, path, invitation, user, fingerprint });
+  const paginated = page.waitForResponse(response =>
+    response.request().method() === 'GET' && response.url() === drive + path + '?after=32');
+  await page.getByRole('button', { name: 'Open last vault' }).click();
+  const secondPage = await paginated;
+  assert.equal(secondPage.status(), 200);
+  assert.deepEqual((await secondPage.json()).records.map(record => record.sequence), [33]);
+  await status.filter({ hasText: 'Verified and opened personal vault (generation ' + generation + ')' }).waitFor();
+  console.log('Linked browser verified and opened all 33 records across two signed history pages');
 } finally {
   await browser.close();
   await stopOffice?.();
