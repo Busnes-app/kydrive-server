@@ -122,6 +122,8 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
   member signs the revision manifest. The relay uses a short-lived, MACed bearer scoped to a
   binding, device and role. It checks either a bound room or a signed blob reservation,
   with the current head and device, before the gateway forwards traffic.
+- The opt-in DOCX test hands off Office bytes in a private test directory. The loopback
+  controller accepts fixed save operations and compares the restored plaintext with the export.
 
 ## Verification
 - `TestFullLimiterStillThrottlesLogin` tracks retained login windows under cache pressure and forces one permitted eviction; it keeps the 20-attempt retained-window threshold and rejects an expiry-biased eviction policy. Password work/parameters and production limiter behavior stay unchanged.

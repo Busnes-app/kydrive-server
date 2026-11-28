@@ -159,9 +159,10 @@ go test -count=1 -v -timeout=5m ./internal/api -run '^TestVaultWitnessAndRevocat
 
 The fixture uses disposable browser accounts and keys. The native fixture controller
 encrypts the file and capabilities before sending them to KyDrive. It decrypts the stored
-version for local editor import. The fixture proxy checks registered rooms with the live
-KyDrive relay endpoint. It lets the stock CryptPad client bootstrap its test account and
-originate candidate rooms on the isolated relay.
+version for local editor import and verifies saved exports byte for byte. The browser runner
+and controller exchange DOCX files in a private test directory. The fixture proxy checks
+registered rooms with the live KyDrive relay endpoint. It lets the stock CryptPad client
+bootstrap its test account and originate candidate rooms on the isolated relay.
 
 The local DOCX run on 2026-11-27 wrote three immutable versions. It recovered both
 collaborators' edits from a saved export. After membership removal the active browser

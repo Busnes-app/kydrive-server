@@ -2,13 +2,16 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const fixture = await import(pathToFileURL(resolve('browser-fixture.mjs')));
 const { chromium } = await import(pathToFileURL(resolve(process.env.OFFICE_PLAYWRIGHT)));
-const control = process.env.KY_VAULT_FIXTURE_CONTROLLER;
+const control = new URL(process.env.KY_VAULT_FIXTURE_CONTROLLER);
+assert.ok(control.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(control.hostname) &&
+  control.href === control.origin + '/', 'Expected a loopback fixture controller origin');
+const exportsDir = process.env.KY_VAULT_FIXTURE_EXPORTS;
 const nonce = randomBytes(5).toString('hex');
 const file = 'edit.docx';
 const markers = ['KVAULTALICE', 'KVAULTBOB', 'KVAULTSAVED', 'KVAULTFRESH', 'KVAULTDENIED', 'KVAULTLIVE']
@@ -16,7 +19,7 @@ const markers = ['KVAULTALICE', 'KVAULTBOB', 'KVAULTSAVED', 'KVAULTFRESH', 'KVAU
 const report = event => console.log(JSON.stringify(event));
 
 async function call(method, path, body) {
-  const response = await fetch(control + path, { method, body, signal: AbortSignal.timeout(10000) });
+  const response = await fetch(control.origin + path, { method, body, redirect: 'error', signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw Error(path + ' returned ' + response.status + ' ' + await response.text());
   return response;
 }
@@ -94,14 +97,11 @@ const sample = setInterval(() => {
 }, 500);
 try {
   await fixture.until(async () => (await fetch(fixture.cp + '/__verified_release')).ok, 15000);
-  mkdirSync('exports', { recursive: true, mode: 0o700 });
-  const original = Buffer.from(await (await call('GET', '/source')).arrayBuffer());
-  writeFileSync('exports/source.docx', original, { mode: 0o600 });
   [aliceBrowser, bobBrowser] = await Promise.all([chromium.launch(fixture.options), chromium.launch(fixture.options)]);
   const alice = await fixture.editorContext(aliceBrowser);
   const bob = await fixture.editorContext(bobBrowser);
   await Promise.all([fixture.register(alice, 'alice'+nonce), fixture.register(bob, 'bob'+nonce)]);
-  const a = (await fixture.cpImport(alice, file, resolve('exports/source.docx'))).page;
+  const a = (await fixture.cpImport(alice, file, resolve(exportsDir, 'source.docx'))).page;
   const link = await fixture.shareLink(a);
   const b = (await fixture.openOffice(bob, link)).page;
   assert.match(await fixture.readOffice(a, file), /Original bake-off document/);
@@ -118,17 +118,15 @@ try {
   await fixture.editOffice(b, file, markers[2], 1);
   await fixture.until(async () => (await fixture.readOffice(a, file)).includes(markers[2]), 25000);
 
-  async function checkpoint(page, path, expected) {
-    await fixture.exportOffice(page, path);
-    const bytes = Buffer.from(await (await call('POST', '/save', readFileSync(path))).arrayBuffer());
-    assert.deepEqual(bytes, readFileSync(path));
-    const checked = path.replace('.docx', '-restored.docx');
-    writeFileSync(checked, bytes, { mode: 0o600 });
+  async function checkpoint(page, stage, expected) {
+    await fixture.exportOffice(page, resolve(exportsDir, stage + '.docx'));
+    await call('POST', '/save/' + stage);
+    const checked = resolve(exportsDir, stage + '-restored.docx');
     execFileSync('python3', ['check-export.py', checked, ...expected]);
     return checked;
   }
 
-  const restored = await checkpoint(a, 'exports/coedited.docx', markers.slice(0,3));
+  const restored = await checkpoint(a, 'coedited', markers.slice(0,3));
   await a.close();
   await call('POST', '/rotate');
   const offset = readFileSync('relay-boundary.ndjson', 'utf8').length;
@@ -152,7 +150,7 @@ try {
   const newLease = (await (await call('POST', '/bind', JSON.stringify({ url: freshLink, rooms: second.rooms }))).json()).token;
   policy({ ...oldTokens, ...Object.fromEntries(second.rooms.map(room => [room, newLease])) });
   const expected = markers.slice(0,4);
-  const last = await checkpoint(fresh, 'exports/rotated.docx', expected);
+  const last = await checkpoint(fresh, 'rotated', expected);
   const output = execFileSync('python3', ['check-export.py', last, ...expected], { encoding: 'utf8' });
   assert.ok(!(await fixture.readOffice(fresh, file)).includes(markers[4]));
   report({ event: 'encrypted-docx-round-trip', revisions: 3, rooms: second.rooms.length,
