@@ -53,12 +53,12 @@ export async function stageCryptPad(fixture, editor, gateway) {
 }
 
 function sdkFrame(page) {
-  const frame = page.frames().find(frame => /\/apps\/documenteditor\/main\//.test(frame.url()));
+  const frame = page.frames().find(frame => /\/apps\/(document|spreadsheet|presentation)editor\/main\//.test(frame.url()));
   assert.ok(frame, 'Office iframe must be open');
   return frame;
 }
 
-export async function assertWord(page, marker) {
+async function assertWord(page, marker) {
   await page.bringToFront();
   const sdk = sdkFrame(page);
   await sdk.getByText('Got it', { exact: true }).click({ timeout: 600 }).catch(() => {});
@@ -75,7 +75,7 @@ export async function assertWord(page, marker) {
   });
 }
 
-export async function typeWord(page, marker) {
+async function typeWord(page, marker) {
   await page.bringToFront();
   await sdkFrame(page).locator('#id_viewer_overlay').click({ position: { x: 400, y: 135 }, timeout: 5000 });
   await page.keyboard.press('Control+End');
@@ -83,14 +83,71 @@ export async function typeWord(page, marker) {
   await sdkFrame(page).evaluate(() => window.Asc.editor.asc_Save());
 }
 
-export function checkExport(data, markers) {
+export async function assertOffice(page, format, marker, editIndex) {
+  if (format === 'docx') return assertWord(page, marker);
+  await page.bringToFront();
+  await sdkFrame(page).waitForFunction(({ format, marker, editIndex }) => {
+    if (format === 'xlsx') {
+      const sheet = window.AscBuilder?.Cell?.Api.GetActiveSheet();
+      return sheet?.GetRange(editIndex === undefined ? 'A2' : 'G' + (10 + editIndex)).GetValue() === marker;
+    }
+    const slide = window.AscBuilder?.Slide?.Api.GetPresentation().GetSlideByIndex(0);
+    return slide?.GetAllShapes().some(shape => {
+      const content = shape.GetDocContent();
+      return content && Array.from({ length: content.GetElementsCount() },
+        (_, i) => content.GetElement(i).GetText()).join('\n').includes(marker);
+    });
+  }, { format, marker, editIndex }, { timeout: 15000 });
+}
+
+export async function editOffice(page, format, marker, editIndex) {
+  if (format === 'docx') return typeWord(page, marker);
+  await page.bringToFront();
+  await sdkFrame(page).evaluate(({ format, marker, editIndex }) => {
+    if (format === 'xlsx') {
+      window.AscBuilder.Cell.Api.GetActiveSheet().GetRange('G' + (10 + editIndex)).SetValue(marker);
+    } else {
+      const api = window.AscBuilder.Slide.Api;
+      const slide = api.GetPresentation().GetSlideByIndex(0);
+      window.AscCommon.History.Create_NewPoint(0);
+      const shape = api.CreateShape('rect', 4400000, 480000, api.CreateNoFill(), api.CreateStroke(0, api.CreateNoFill()));
+      shape.SetPosition(1900000, 3300000 + editIndex * 650000);
+      shape.GetDocContent().GetElement(0).AddText(marker);
+      if (!slide.AddObject(shape)) throw Error('Could not add the test shape');
+    }
+    window.Asc.editor.asc_Save();
+  }, { format, marker, editIndex });
+}
+
+export function checkExport(data, format, original, markers) {
   const verify = spawnSync('python3', ['-c', `
 import io, sys, zipfile
-from xml.etree import ElementTree
+from xml.etree import ElementTree as ET
+
+kind, original, *markers = sys.argv[1:]
 with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as doc:
     assert doc.testzip() is None
-    text = ''.join(ElementTree.fromstring(doc.read('word/document.xml')).itertext())
-    assert all(marker in text for marker in sys.argv[1:]), 'Missing expected content'
-`, 'Original bake-off document', ...markers], { input: data });
+    if kind == 'xlsx':
+        ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        sheet = ET.fromstring(doc.read('xl/worksheets/sheet1.xml'))
+        strings = [''.join(item.itertext()) for item in ET.fromstring(doc.read('xl/sharedStrings.xml'))]
+
+        def value_at(ref, worksheet=sheet):
+            cell = worksheet.find(f".//s:c[@r='{ref}']", ns)
+            value = cell.findtext('s:v', namespaces=ns)
+            return strings[int(value)] if cell.get('t') == 's' else value
+
+        assert value_at('A2') == original
+        assert value_at('B2') == '1200'
+        second_sheet = ET.fromstring(doc.read('xl/worksheets/sheet2.xml'))
+        assert value_at('A1', second_sheet) == 'Ünïcode ✓'
+        assert [value_at(f'G{row}') for row in range(10, 10 + len(markers))] == markers
+    else:
+        part = {'docx': 'word/document.xml', 'pptx': 'ppt/slides/slide1.xml'}[kind]
+        text = ''.join(ET.fromstring(doc.read(part)).itertext())
+        if kind == 'pptx':
+            assert 'Ship MCP' in text and 'Extract text' in text
+        assert all(marker in text for marker in [original, *markers]), 'Missing expected content'
+`, format, original, ...markers], { input: data });
   assert.equal(verify.status, 0, verify.stderr.toString());
 }

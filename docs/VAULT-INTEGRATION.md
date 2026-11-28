@@ -98,28 +98,38 @@ Add `KYDRIVE_VAULT_BROWSER_GATEWAY=1` to exercise the two linked browsers throug
 pinned private CryptPad relay. The test signs and unwraps the document binding in the
 browser, sends room traffic, and checks that the removed member's open socket closes.
 
-For live DOCX co-editing, also set
+For live DOCX, XLSX or PPTX co-editing, also set
 `KYDRIVE_CRYPTPAD_INTEGRATION_FIXTURE=/absolute/prepared-proof` to the pinned asset bundle
 described below. Stop the preparation relay first. The test launches both trusted asset
 origins and a separate private relay. It builds the vault site with the two optional
-`CRYPTPAD_ORIGIN GATEWAY_ORIGIN` arguments and uses its **Edit DOCX together** and
-**Save encrypted DOCX** controls. The vault site's CSP needs `frame-src` for the trusted
-CryptPad origin. The asset host serves the local, verified CryptPad 2026.10.1 assets with
+`CRYPTPAD_ORIGIN GATEWAY_ORIGIN` arguments and uses its **Edit together** and
+**Save encrypted Office revision** controls. The vault site's CSP needs `frame-src` for
+the trusted CryptPad origin. The asset host serves the local, verified CryptPad 2026.10.1 assets with
 the scoped patches in `deploy/vault-browser/cryptpad-patches.mjs`. Its network policy
 allows the gateway over HTTPS and WSS.
 
-Open an encrypted DOCX by file ID and revision in the first linked browser. Wait for the
-editor to be ready before joining from the second linked browser, using the same file ID.
-The first browser provisions an editor binding and uploads an encrypted checkpoint. The
-second opens that checkpoint and the existing encrypted history. Saving converts the
-live document in the browser and appends a signed, encrypted KyDrive revision. On a new
-membership head, start the next binding from the latest verified export.
+Enter the encrypted file ID and source revision in the first linked browser and select
+the matching **Office format**. Wait for the editor to be ready before joining from the
+second linked browser, using the same file ID. The first browser provisions an editor binding
+and uploads an encrypted checkpoint. Collaborators use the format in the verified binding
+and open its encrypted checkpoint and history. Bindings without a format open as DOCX.
+A DOCX-only staging browser refuses the newer XLSX and PPTX binding shape. Saving converts the live document in the browser and appends a signed, encrypted
+KyDrive revision. When opening a revision directly for download, choose its Office format
+for the download filename. On a new membership head, start the next binding from the latest
+verified export and select its format again.
+
+Run the proof once per format. Supply the synthetic `fixtures/edit.docx`,
+`fixtures/budget.xlsx` and `fixtures/deck.pptx` from the prepared proof bundle.
+Each run exercises both editors, room reopen, lease renewal, encrypted export and revocation.
 
 ```sh
-KYDRIVE_VAULT_BROWSER_FIXTURE=1 KYDRIVE_VAULT_BROWSER_GATEWAY=1 \
-  KYDRIVE_CRYPTPAD_INTEGRATION_FIXTURE=/absolute/prepared-proof \
-  go test -race -count=1 -v -timeout=5m ./internal/api \
-    -run '^TestVaultBrowser(PersonalVault|Scope)$'
+for format in docx xlsx pptx; do
+  KYDRIVE_VAULT_BROWSER_FIXTURE=1 KYDRIVE_VAULT_BROWSER_GATEWAY=1 \
+    KYDRIVE_VAULT_OFFICE_FORMAT="$format" \
+    KYDRIVE_CRYPTPAD_INTEGRATION_FIXTURE=/absolute/prepared-proof \
+    go test -race -count=1 -v -timeout=5m ./internal/api \
+      -run '^TestVaultBrowser(PersonalVault|Scope)$' || exit
+done
 ```
 
 ## File versions and editor sessions
@@ -260,9 +270,9 @@ The current signed catalogue supports manager-only membership changes and up to 
 members. Each role change rotates the vault key. The independent witness uses the persisted
 KyDrive commit as its append authority.
 
-The loopback browser integration covers DOCX between linked editors, reopening a live
-document, manual signed exports and removal during editing. The staging adapter reserves
-three checkpoint slots per document binding. It leaves CryptPad account operations,
+The loopback browser integration covers DOCX, XLSX and PPTX between linked editors,
+reopening a live document, manual signed exports and removal during editing. The staging
+adapter reserves three checkpoint slots per document binding. It leaves CryptPad account operations,
 chat, cursors and attachment insertion out of this profile. Initialize from one browser
 before others join. If initialization stops after persisting its checkpoint and before
 publishing its encrypted room state, restart that document in a fresh binding with a

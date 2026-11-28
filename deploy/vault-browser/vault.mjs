@@ -1,4 +1,4 @@
-import { vaultOffice } from './office.mjs';
+import { officeApplications, vaultOffice } from './office.mjs';
 
 const status = document.querySelector('#status');
 const link = document.querySelector('#link');
@@ -17,7 +17,8 @@ const download = document.querySelector('#download');
 const encoder = new TextEncoder();
 const version = document.querySelector('#revision');
 const fileID = document.querySelector('#file-id');
-const officeButton = document.querySelector('#open-office');
+const officeControls = document.querySelector('#office-controls');
+const officeFormat = document.querySelector('#office-format');
 const officeMount = document.querySelector('#office');
 const saveOffice = document.querySelector('#save-office');
 const closeOffice = document.querySelector('#close-office');
@@ -77,7 +78,7 @@ async function start() {
   if (cryptpad && (!gateway.startsWith('https://') || [drive, witness, gateway, location.origin].includes(cryptpad))) {
     throw Error('Configure a separate trusted CryptPad asset origin and HTTPS gateway');
   }
-  officeButton.hidden = !cryptpad;
+  officeControls.hidden = !cryptpad;
   if (drive === location.origin || witness === drive) throw new Error('The editor and witness must be separate from KyDrive');
   if (typeof config.witnessKey !== 'string' || !config.witnessKey) throw new Error('Configure the independent witness public key');
 
@@ -101,7 +102,7 @@ async function start() {
   };
   closeOffice.addEventListener('click', () => {
     closeEditor();
-    status.textContent = 'DOCX editor closed';
+    status.textContent = 'Office editor closed';
   });
   const api = async (method, path, value, extra = {}) => {
     const binary = value instanceof Uint8Array;
@@ -269,19 +270,24 @@ async function start() {
   const officeIDs = (values, pattern) => Array.isArray(values) && values.length === 3 &&
     new Set(values).size === values.length && values.every(value => typeof value === 'string' && pattern.test(value));
   function validateOfficeCapability(data) {
-    if (typeof data?.hash !== 'string' || !/^\/2\/integration\/edit\/[A-Za-z0-9+\-]{24}\/$/.test(data.hash) ||
+    // Bindings from the first staging version only supported DOCX.
+    const format = data?.format === undefined ? 'docx' : data.format;
+    const hash = format === 'docx' ? data?.hash : data?.editorHash;
+    if (typeof hash !== 'string' || !/^\/2\/integration\/edit\/[A-Za-z0-9+\-]{24}\/$/.test(hash) ||
         typeof data.room !== 'string' || !/^[a-f0-9]{32}$/.test(data.room) ||
         !officeIDs(data.rooms, /^[a-f0-9]{32}$/) || data.rooms.includes(data.room) ||
-        !officeIDs(data.blobs, /^[a-f0-9]{48}$/)) throw Error('Invalid DOCX editor binding');
-    return data;
+        !officeIDs(data.blobs, /^[a-f0-9]{48}$/) || !officeApplications.has(format)) {
+      throw Error('Invalid Office editor binding');
+    }
+    return { hash, format, room: data.room, rooms: data.rooms, blobs: data.blobs };
   }
 
-  async function editDocx(file, sourceNumber) {
+  async function editOffice(file, sourceNumber) {
     const document = filePath(file);
     const path = document + '/editor';
     const current = await api('GET', path);
     let binding = current.status === 404 ? undefined : await (await checked(current)).json();
-    let bindingID;
+    let bindingID, format;
     const refresh = async () => {
       const checkpoint = await (await checked(await request(witness + '/v1/logs/' + active.checkpoint.head.log))).json();
       wasm('refreshCheckpoint', checkpoint);
@@ -291,16 +297,16 @@ async function start() {
     const editor = office = vaultOffice({
       origin: cryptpad, mount: officeMount, revisionPlaintextLimit,
       onReady() {
-        status.textContent = 'DOCX editor ready';
+        status.textContent = format.toUpperCase() + ' editor ready';
         saveOffice.hidden = closeOffice.hidden = false;
       },
       onError(error) {
         if (editor !== office) return;
         saveOffice.disabled = false;
-        status.textContent = error?.message ?? 'CryptPad could not open the DOCX';
+        status.textContent = error?.message ?? 'CryptPad could not open the Office file';
       },
       async onSave(blob) {
-        if (!saveOffice.disabled || editor !== office) throw Error('No active DOCX save');
+        if (!saveOffice.disabled || editor !== office) throw Error('No active Office save');
         try {
           // The server sequences revisions. Read only one ciphertext byte for the current manifest.
           const response = await checked(await api('GET', document + '/versions/latest',
@@ -308,12 +314,12 @@ async function start() {
           await response.body?.cancel();
           const latest = revisionManifest(response).number;
           if (!Number.isSafeInteger(latest) || latest < 1 || latest >= Number.MAX_SAFE_INTEGER ||
-              editor !== office) throw Error('Could not find the current DOCX revision');
+              editor !== office) throw Error('Could not find the current Office revision');
           const next = latest + 1;
           await writeRevision(file, next, blob, bindingID);
           if (editor !== office) return;
           version.value = next;
-          status.textContent = 'Saved encrypted DOCX revision ' + next;
+          status.textContent = 'Saved encrypted ' + format.toUpperCase() + ' revision ' + next;
         } finally {
           if (editor === office) saveOffice.disabled = false;
         }
@@ -336,21 +342,29 @@ async function start() {
       let source = null;
       if (!binding) {
         source = await readRevision(file, sourceNumber);
-        const capability = validateOfficeCapability(await editor.prepare());
+        const selectedFormat = officeFormat.value;
+        const { hash, room, rooms, blobs } = await editor.prepare();
+        // A DOCX-only client requires hash. Give new formats their own field so
+        // that an older client refuses the session instead of opening it as DOCX.
+        const payload = selectedFormat === 'docx' ? { hash, room, rooms, blobs } :
+          { editorHash: hash, format: selectedFormat, room, rooms, blobs };
+        const capability = validateOfficeCapability(payload);
         binding = wasm('bindEditor', { File: file, Source: sourceNumber, Rooms: [capability.room, ...capability.rooms],
-          Blobs: capability.blobs, EditCapability: JSON.stringify(capability) });
+          Blobs: capability.blobs, EditCapability: JSON.stringify(payload) });
         await checked(await api('PUT', path, { binding, checkpoint: active.checkpoint }));
       }
       const session = wasm('openEditor', { File: file, Binding: binding });
-      if (!session.edit) throw Error('DOCX co-editing needs editor access');
+      if (!session.edit) throw Error('Office co-editing needs editor access');
       const capability = validateOfficeCapability(JSON.parse(session.capability));
       if (session.rooms.length !== capability.rooms.length + 1 ||
           ![capability.room, ...capability.rooms].every(room => session.rooms.includes(room)) ||
           binding.blobs?.length !== capability.blobs.length ||
-          !capability.blobs.every(id => binding.blobs.includes(id))) throw Error('DOCX capability did not match its signed binding');
+          !capability.blobs.every(id => binding.blobs.includes(id))) throw Error('Office capability did not match its signed binding');
+      format = capability.format;
+      officeFormat.value = format;
       bindingID = session.binding;
       const { token } = await refresh();
-      await editor.start({ ...capability, gateway, token }, capability.hash, source, user);
+      await editor.start({ ...capability, gateway, token }, source, user);
       renewal = setTimeout(renew, 25000);
     } catch (error) {
       if (editor === office) closeEditor();
@@ -361,7 +375,7 @@ async function start() {
   saveOffice.addEventListener('click', () => {
     if (!office || saveOffice.disabled) return;
     saveOffice.disabled = true;
-    status.textContent = 'Saving encrypted DOCX…';
+    status.textContent = 'Saving encrypted Office revision…';
     office.save();
   });
   fileForm.addEventListener('submit', action(fileForm.querySelector('button'), async event => {
@@ -371,8 +385,8 @@ async function start() {
     if (!uuidPattern.test(file) || !Number.isSafeInteger(number) || number < 1) throw new Error('Choose a valid file ID and revision');
     await openVault(active.invite);
     if (operation === 'office' && cryptpad) {
-      status.textContent = 'Opening DOCX editor…';
-      await editDocx(file, number);
+      status.textContent = 'Opening Office editor…';
+      await editOffice(file, number);
     } else if (operation === 'save') {
       const source = document.querySelector('#content').files[0];
       if (!source) throw new Error('Select a file to encrypt');
@@ -382,6 +396,7 @@ async function start() {
     } else {
       const plaintext = await readRevision(file, number);
       download.href = URL.createObjectURL(plaintext);
+      if (officeApplications.has(officeFormat.value)) download.download = 'vault-document.' + officeFormat.value;
       download.hidden = false;
       status.textContent = 'Verified encrypted revision ' + number;
     }

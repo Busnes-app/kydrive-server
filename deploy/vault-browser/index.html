@@ -43,10 +43,18 @@
       <label for="content">File to encrypt</label>
       <input id="content" type="file">
       <button type="submit" value="save">Save encrypted revision</button>
-      <button id="open-office" type="submit" value="office" hidden>Edit DOCX together</button>
+      <span id="office-controls" hidden>
+        <label for="office-format">Office format</label>
+        <select id="office-format">
+          <option value="docx">DOCX</option>
+          <option value="xlsx">XLSX</option>
+          <option value="pptx">PPTX</option>
+        </select>
+        <button type="submit" value="office">Edit together</button>
+      </span>
       <button type="submit" value="read">Open encrypted revision</button>
     </form>
-    <button id="save-office" type="button" hidden>Save encrypted DOCX</button>
+    <button id="save-office" type="button" hidden>Save encrypted Office revision</button>
     <button id="close-office" type="button" hidden>Close editor</button>
     <div id="office"></div>
     <a id="download" download="vault-document.docx" hidden>Download verified file</a>
