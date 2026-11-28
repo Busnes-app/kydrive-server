@@ -1,0 +1,68 @@
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/vault-gateway/Dockerfile
+    environment:
+      KY_VAULT_RELAY_UPSTREAM: http://relay:3000
+      KY_VAULT_RELAY_AUTHORITY: ${KY_VAULT_RELAY_AUTHORITY:?set the staging KyDrive HTTPS origin}
+      KY_VAULT_CLIENT_ORIGINS: ${KY_VAULT_CLIENT_ORIGINS:?set an approved client origin}
+      KY_VAULT_GATEWAY_CERT: /run/tls/gateway.pem
+      KY_VAULT_GATEWAY_KEY: /run/tls/gateway.key
+      NODE_EXTRA_CA_CERTS: /run/tls/authority.pem
+    volumes:
+      - type: bind
+        source: ${KY_VAULT_GATEWAY_CERT:?mount the gateway certificate}
+        target: /run/tls/gateway.pem
+        read_only: true
+      - type: bind
+        source: ${KY_VAULT_GATEWAY_KEY:?mount the gateway key}
+        target: /run/tls/gateway.key
+        read_only: true
+      - type: bind
+        source: ${KY_VAULT_AUTHORITY_CA:?mount the staging authority CA}
+        target: /run/tls/authority.pem
+        read_only: true
+    ports:
+      - "127.0.0.1:${KY_VAULT_GATEWAY_PORT:-18960}:9443"
+    networks:
+      - edge
+      - relay-only
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    pids_limit: 128
+    mem_limit: 512m
+    depends_on: [relay]
+  relay:
+    image: cryptpad/cryptpad@sha256:b1129d954692e9b8a7d198e79d3080d3627051c95137bbf41a7d2683aa53305d
+    entrypoint: ["node", "server.js"]
+    command: []
+    environment:
+      CRYPTPAD_CONFIG: /cryptpad/config.local/config.example.js
+      CRYPTPAD_CONFIG_INFRA: /cryptpad/config.local/infra.example.js
+      CPAD_MAIN_DOMAIN: ${KY_VAULT_RELAY_ORIGIN:?set the staging relay public HTTPS origin}
+      CPAD_SANDBOX_DOMAIN: ${KY_VAULT_SANDBOX_ORIGIN:?set the distinct staging sandbox origin}
+    volumes:
+      - relay-state:/cryptpad/data
+      - relay-history:/cryptpad/datastore
+      - relay-blobs:/cryptpad/blob
+      - relay-block:/cryptpad/block
+    networks: [relay-only]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 2g
+networks:
+  edge: {}
+  relay-only:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+volumes:
+  relay-state: {}
+  relay-history: {}
+  relay-blobs: {}
+  relay-block: {}

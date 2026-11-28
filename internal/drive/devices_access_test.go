@@ -11,9 +11,9 @@ import (
 	"github.com/Busnes-app/kydrive-server/internal/drive"
 )
 
-// A device token syncs files. It never creates or changes access, and never mints a session or
-// credential, so revoking the device leaves nothing behind. Every exported Store method is in
-// exactly one list; the guard fails when a new one is in none.
+// Devices sync files. The legacy device path cannot change access or mint credentials.
+// The signed-device vault API can change vault membership with a separate manager signature.
+// Every exported Store method belongs to one list.
 var (
 	// Reads, content changes and the device's own unlink.
 	deviceAllowed = []string{
@@ -22,6 +22,9 @@ var (
 		"GuestLinks", "Grants", "Links", "Lookup", "MoveFile", "MoveFolder", "People", "Publish", "PurgeFile",
 		"PurgeFolder", "PurgeVersion", "RestoreVersion", "Search", "SearchContent", "SearchFolder", "SearchFolderContent", "SetFolderTrash", "SetFolderTrashSince", "SetTrash", "SharedWithMe",
 		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
+		// Device-only vault routes. Membership writes also verify the vault manager's signature.
+		"CheckVaultAccess", "CommitVaultRecord", "EnrollVaultKey", "VaultRecords", "VaultUserKey",
+		"WriteVaultVersion", "ReadVaultVersion", "BindVaultEditor", "VaultEditorBinding",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.
 	deviceRefused = []string{
@@ -34,7 +37,7 @@ var (
 	// Never reached with a device context: credential checks, editor and guest callbacks, the
 	// operator CLI, session-only exports, admin-only listings and background workers.
 	deviceUnreachable = []string{
-		"ConfigureCells",
+		"ConfigureCells", "CheckVaultRelay",
 		"ObjectPrefix", "OrgHomeRegion", "OrgKeys", "PublishSearch", "SearchDue", "SearchEnqueue", "SearchPointer", "SetOrgPurger", "StorageOrgs",
 		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "AppPasswords", "ApplyRetention", "CallbackActor", "CloseEditor", "Colleagues",
 		"DeferRevocation", "DeletedWorkspaces", "DeviceUser", "Devices", "EditorDownload", "ExpireAgentTokens", "ExpireUploads", "GuestFile", "GuestUpload",

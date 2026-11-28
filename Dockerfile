@@ -9,10 +9,24 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build Go Standalone Binary
-FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS backend-builder
+FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS go-base
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
+
+# Build the independent witness without importing the web client or server.
+FROM go-base AS vault-witness-builder
+COPY cmd/vault-witness/ ./cmd/vault-witness/
+COPY internal/vault/ ./internal/vault/
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o vault-witness ./cmd/vault-witness
+
+FROM scratch AS vault-witness
+COPY --from=vault-witness-builder /app/vault-witness /vault-witness
+USER 1000:1000
+EXPOSE 9443
+ENTRYPOINT ["/vault-witness"]
+
+FROM go-base AS backend-builder
 COPY . ./
 COPY --from=frontend-builder /app/web/dist ./web/dist
 # Release builds pass the tag's version (X.Y.Z or X.Y.Z.N); other builds report internal/appversion/VERSION.

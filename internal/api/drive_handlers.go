@@ -64,6 +64,7 @@ func (s *Server) driveRoutes() {
 	s.guestRoutes()
 	s.pickRoutes()
 	s.deviceRoutes()
+	s.vaultRoutes()
 	s.mux.HandleFunc("POST /api/drive/workspaces/{id}/upload-sessions", s.requireAuthenticated(s.driveStartUpload))
 	s.mux.HandleFunc("GET /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveUploadStatus))
 	s.mux.HandleFunc("PUT /api/drive/upload-sessions/{sid}", s.requireAuthenticated(s.driveAppendUpload))

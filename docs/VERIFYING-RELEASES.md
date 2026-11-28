@@ -7,6 +7,11 @@ for a daily dependency-update release). This page shows how to check that an ima
 this repository's release workflow from the tagged commit, and how to rebuild its binary yourself
 and get the same bytes. Commands run from an empty directory unless they say otherwise.
 
+
+The opt-in vault witness is a separate `vault-witness` Docker target. Its local build and
+state setup are in [Vault integration](VAULT-INTEGRATION.md). The KyDrive release image and
+the provenance steps below cover the default server target.
+
 ## What is signed, and by whom
 
 - `release-image.yml` builds each release from its tag for `linux/amd64` and publishes a SLSA

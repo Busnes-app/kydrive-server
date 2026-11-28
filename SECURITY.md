@@ -15,6 +15,10 @@ and disclosure.
 - The server stores file contents and metadata; keep the data volume, database, and backups private.
 - Access is per-identity and per-workspace. Personal workspaces are private to their account; group workspaces are scoped to the group.
 - Service API tokens are credentials for the calling application; scope them to what that application needs and never log them.
+- The opt-in vault catalogue uses signed device requests and an independently administered
+  checkpoint witness. Trusted clients must pin both member and witness keys. A copied or
+  older witness database cannot serve as the latest witnessed state. See
+  [Vault integration](docs/VAULT-INTEGRATION.md).
 - Deactivating an identity in KyIdentity must remove its access; group-owned content remains after a member leaves.
 - KyPost ([docs/KYPOST.md](docs/KYPOST.md)). Whoever holds the KyDrive–KyPost pair secret
   (a compromised KyPost) can, for any active everyday account whose KyPost switch is on: add

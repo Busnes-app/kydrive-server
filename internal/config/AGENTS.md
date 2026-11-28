@@ -34,6 +34,11 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 
 - `replica.go` fingerprints effective shared settings with product/field-separated HMAC-SHA256 under the retained deployment key. It includes key material, not secret-file paths; excludes host-local data, bind/pool/proxy/certificate paths and backup directories. `SESSION_TTL` names the fixed in-process setting, not a new environment variable. Unused legacy OIDC/SAML fields are not active integrations. It fingerprints `KY_CELLS` in sorted order and S3 endpoint, bucket, region and addressing mode; credentials are excluded so access-key rotation does not change the storage identity.
 
+- Vault control-plane settings are both present or both absent. An absolute owner-only
+  `KYDRIVE_VAULT_PUBLISHER_KEY_FILE` holds raw hybrid signing seeds.
+  `KYDRIVE_VAULT_WITNESS_KEY` pins the independent witness public key in standard base64.
+  Startup refuses the same key in both roles. Replica checks fingerprint the two public keys.
+
 ## Verification
 - `go test -v ./internal/config/...`
 - `scripts/check-test-build-tag.sh` (keeps `kye2e` inside the gate files, forbids build tags in release paths, and runs `internal/config` under `-tags kye2e`)

@@ -38,6 +38,8 @@ var migrationTables = []string{
 	"drive_app_passwords", "drive_devices", "drive_device_codes", "drive_view_copies",
 	"drive_peer_settings", "drive_peer_folders", "drive_peer_tickets", "drive_peer_picks",
 	"drive_peer_guest", "drive_erasures", "drive_cells", "drive_search_index", "drive_search_queue",
+	"drive_vault_user_keys", "drive_vaults", "drive_vault_records",
+	"drive_vault_versions", "drive_vault_bindings", "drive_vault_rooms", "drive_vault_editor_blobs",
 }
 
 // multiTables exist on a multi-tenant database only, created at each open. They are copied

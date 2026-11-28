@@ -428,6 +428,16 @@ var noChange = map[string]string{
 	"Upload":                  "read",
 	"Versions":                "read",
 	"Workspaces":              "read",
+	"CheckVaultAccess":        "read",
+	"CommitVaultRecord":       "the separate vault membership log",
+	"EnrollVaultKey":          "vault identity",
+	"VaultRecords":            "read",
+	"WriteVaultVersion":       "separate vault version catalogue",
+	"ReadVaultVersion":        "read",
+	"BindVaultEditor":         "vault room catalogue",
+	"VaultEditorBinding":      "read",
+	"CheckVaultRelay":         "read",
+	"VaultUserKey":            "read",
 }
 
 func TestEveryMutatorWritesAChange(t *testing.T) {

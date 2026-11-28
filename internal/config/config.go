@@ -16,9 +16,11 @@ import (
 	"time"
 
 	"github.com/Busnes-app/ky-primitives/applysetup"
+	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/Busnes-app/ky-primitives/keyfile"
 	"github.com/Busnes-app/ky-primitives/netallow"
 	"github.com/Busnes-app/kydrive-server/internal/crypto"
+	"github.com/Busnes-app/kydrive-server/internal/vault"
 )
 
 // Config encapsulates all runtime configuration for kydrive-server.
@@ -32,6 +34,13 @@ type Config struct {
 	Captcha       CaptchaConfig       `json:"captcha"`
 	ObjectStorage ObjectStorageConfig `json:"object_storage"`
 	Drive         DriveConfig         `json:"drive"`
+	Vault         VaultConfig         `json:"-"`
+}
+
+// VaultConfig enables the device-only vault control plane when both keys are set.
+type VaultConfig struct {
+	Publisher *hybridsig.PrivateKey
+	Witness   *hybridsig.PublicKey
 }
 
 // DriveConfig bounds resumable uploads and folder zip downloads, in bytes. ContentSearch
@@ -459,6 +468,20 @@ func load(existing bool) (*Config, error) {
 		return nil, fmt.Errorf("unparseable value for %s", strings.Join(invalid, ", "))
 	}
 
+	if file, witnessKey := getEnv("KYDRIVE_VAULT_PUBLISHER_KEY_FILE", ""), getEnv("KYDRIVE_VAULT_WITNESS_KEY", ""); file != "" || witnessKey != "" {
+		if !filepath.IsAbs(file) || witnessKey == "" {
+			return nil, errors.New("vault requires an absolute KYDRIVE_VAULT_PUBLISHER_KEY_FILE and KYDRIVE_VAULT_WITNESS_KEY")
+		}
+		if cfg.Vault.Publisher, err = vault.ReadSigningKey(file); err != nil {
+			return nil, fmt.Errorf("KYDRIVE_VAULT_PUBLISHER_KEY_FILE: %w", err)
+		}
+		if cfg.Vault.Witness, err = vault.ParsePublicKey(witnessKey); err != nil {
+			return nil, fmt.Errorf("KYDRIVE_VAULT_WITNESS_KEY: %w", err)
+		}
+		if string(cfg.Vault.Publisher.Public().Bytes()) == string(cfg.Vault.Witness.Bytes()) {
+			return nil, errors.New("vault publisher and witness require independent signing keys")
+		}
+	}
 	if file := os.Getenv("KY_SCIM_TOKEN_FILE"); file != "" {
 		token, err := applysetup.Secret(file)
 		if err != nil {
