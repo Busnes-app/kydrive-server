@@ -26,3 +26,13 @@ CREATE TABLE drive_vault_editor_blobs (
  blob TEXT PRIMARY KEY, binding_id TEXT NOT NULL REFERENCES drive_vault_bindings(binding_id) ON DELETE CASCADE
 );
 `
+
+// Schema 35 charges checkpoint ciphertext against the existing vault and org limits.
+const vaultCheckpointsSchema = `
+ALTER TABLE drive_vault_editor_blobs ADD COLUMN checkpoint_object TEXT;
+ALTER TABLE drive_vault_editor_blobs ADD COLUMN checkpoint_size BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE drive_vault_editor_blobs ADD COLUMN checkpoint_until BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE drive_vault_editor_blobs ADD COLUMN checkpoint_digest TEXT;
+CREATE INDEX drive_vault_editor_blobs_binding ON drive_vault_editor_blobs(binding_id);
+CREATE UNIQUE INDEX drive_vault_checkpoints_objects ON drive_vault_editor_blobs(checkpoint_object) WHERE checkpoint_object IS NOT NULL;
+`

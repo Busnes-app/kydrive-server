@@ -131,7 +131,9 @@ to the ciphertext's size and SHA-256, organization, vault, file, revision, gener
 head. Versions begin at 1 and advance by one. An existing revision only acknowledges a
 retry of the same signed contents. KyDrive seals the ciphertext again in the normal blob
 store and includes it in local bulk backup and orphan accounting. This slice caps each
-ciphertext version at 32 MiB and each vault at 1 GiB of retained ciphertext.
+ciphertext version at 32 MiB and each vault at 1 GiB across retained versions, committed
+editor checkpoints and active checkpoint uploads. Hosted organizations also need space in
+their current storage grant.
 
 `GET /api/vaults/{id}/files/{file}/versions/{revision|latest}` returns ciphertext plus
 its signed manifest. The native client checks its pinned signer, the exact requested
@@ -193,10 +195,12 @@ The gateway accepts renewal only for the same binding, device, principal and edi
 The HTTPS file surface accepts authenticated GET, HEAD and single-byte-range reads at
 `/blob/<first-two-hex-digits>/<48-character-blob-id>`. Reads require an active signed blob
 reservation. `PUT /checkpoint/{blob}` accepts one encrypted checkpoint per signed ID
-from an active editor. The gateway streams uploads up to 32 MiB into the private
-`gateway-checkpoints` volume and rechecks access before publishing. GET requires the
-same binding. The volume stores ciphertext and must be retained alongside the relay's
-history when restarting. The gateway blocks upstream account, config, datastore and
+from an active editor. KyDrive reserves the byte charge before the gateway forwards the
+upload, streams up to 32 MiB into its sealed blob store, and rechecks access before
+publishing. Failed uploads release their reservations. The reservation expires after one
+minute if the process stops. GET requires the same binding and a committed checkpoint.
+KyDrive bulk snapshots include committed checkpoints. The gateway blocks upstream account,
+config, datastore and
 upload routes. This profile supports 32 WebSocket connections and 1 MiB text frames, with bounded
 forwarding queues. It checks authorization before each HTTP request to the relay.
 KyDrive allows 6,000 relay checks per source IP per minute. A shared gateway consumes
@@ -264,7 +268,7 @@ publishing its encrypted room state, restart that document in a fresh binding wi
 new witnessed head. Staging uses disposable data and profiles.
 
 Production qualification still needs key recovery, coordinated recovery of KyDrive,
-CryptPad history, gateway checkpoints and witness state, and representative peak-load
+CryptPad history and witness state, and representative peak-load
 memory measurements. The adapter serves pinned assets in the local fixture. A remote
 deployment needs the same patches and transport restrictions on controlled asset
 origins. Consult the [vault design](superpowers/specs/2026-11-22-e2e-vault-design.md)

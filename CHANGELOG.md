@@ -5,7 +5,7 @@ Interface and behaviour changes, newest first.
 ## Unreleased
 
 - **Vault DOCX co-editing.** Linked staging browsers can share live CryptPad edits and
-  save a signed encrypted revision through scoped rooms and checkpoints.
+  save a signed encrypted revision through scoped rooms and quota-accounted checkpoints.
 - **Vault browser staging.** An explicitly configured editor origin can link a vault-only
   browser, seal its keys locally, share an encrypted vault with a verified member, and
   rotate its key on removal. The proof exercises signed revisions and scoped room sessions.

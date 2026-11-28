@@ -123,8 +123,9 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - Vault version bodies are streamed ciphertext. Device signing covers the body digest and the
   member signs the revision manifest. The relay uses a short-lived, MACed bearer scoped to a
   binding, device and role. It checks either a bound room or a signed blob reservation,
-  with the current head and device, before the gateway forwards traffic. A checkpoint
-  write uses the blob ID with the edit flag and is refused to read-only leases.
+  with the current head and device, before the gateway forwards traffic. The relay checkpoint
+  route requires the same scope, reserves upload quota before reading, and requires edit
+  access for publication.
 - The opt-in DOCX test hands off Office bytes in a private test directory. The loopback
   controller accepts fixed save operations and compares the restored plaintext with the export.
 

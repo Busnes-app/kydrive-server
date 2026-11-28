@@ -147,7 +147,8 @@ func source(t *testing.T) (string, string) {
 		`INSERT INTO drive_vault_bindings(org_id,vault_id,file_id,head_hash,binding_id,binding)
 			VALUES('` + drive.DefaultOrg + `','vault-fixture','vault-file','head','binding','body')`,
 		`INSERT INTO drive_vault_rooms(room,binding_id) VALUES('room','binding')`,
-		`INSERT INTO drive_vault_editor_blobs(blob,binding_id) VALUES('editor-blob','binding')`,
+		`INSERT INTO drive_vault_editor_blobs(blob,binding_id,checkpoint_object,checkpoint_size,checkpoint_digest)
+			VALUES('editor-blob','binding','checkpoint-object',17,'checkpoint-digest')`,
 		`INSERT INTO drive_erasures(subject,org_id,revision) VALUES('erased','org',1)`,
 	} {
 		if _, err := db.Exec(q); err != nil {

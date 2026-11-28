@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Busnes-app/kydrive-server/internal/drive"
 	"github.com/Busnes-app/kydrive-server/internal/vault"
 )
 
@@ -102,12 +103,6 @@ func (s *Server) readVaultEditor(w http.ResponseWriter, r *http.Request, user st
 	s.writeJSON(w, http.StatusOK, binding)
 }
 
-type vaultRelaySession struct {
-	Org, Vault, File, User, Device, Binding string
-	Expires                                 int64
-	Edit                                    bool
-}
-
 func (s *Server) vaultSessionMAC(data []byte) []byte {
 	mac := hmac.New(sha256.New, []byte(s.config.Security.SessionSecret))
 	mac.Write([]byte("kydrive-vault-relay-session-v1\x00"))
@@ -141,10 +136,28 @@ func (s *Server) vaultEditorSession(w http.ResponseWriter, r *http.Request, user
 	}
 	device, _ := r.Context().Value(vaultDeviceContextKey{}).(string)
 	expires := min(time.UnixMilli(in.Checkpoint.IssuedMS).Add(vault.MaxCheckpointAge).UnixMilli(), s.now().Add(time.Minute).UnixMilli())
-	data, _ := json.Marshal(vaultRelaySession{b.Org, id, file, user, device, b.ID(), expires, in.Edit})
+	data, _ := json.Marshal(drive.VaultRelayGrant{
+		Org: b.Org, Vault: id, File: file, User: user, Device: device, Binding: b.ID(), Expires: expires, Edit: in.Edit,
+	})
 	enc := base64.RawURLEncoding
 	token := enc.EncodeToString(data) + "." + enc.EncodeToString(s.vaultSessionMAC(data))
 	s.writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_ms": expires})
+}
+
+func (s *Server) vaultRelayGrant(r *http.Request) (drive.VaultRelayGrant, error) {
+	bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if len(r.Header.Values("Origin")) != 0 || len(bearer) > 2048 || !s.allowAttempt("vault-relay:"+s.requestIP(r), 6000, time.Minute) {
+		return drive.VaultRelayGrant{}, vault.ErrDenied
+	}
+	payload, mac, _ := strings.Cut(bearer, ".")
+	data, err := base64.RawURLEncoding.DecodeString(payload)
+	got, macErr := base64.RawURLEncoding.DecodeString(mac)
+	var session drive.VaultRelayGrant
+	if err != nil || macErr != nil || !hmac.Equal(got, s.vaultSessionMAC(data)) ||
+		vault.Decode(strings.NewReader(string(data)), &session) != nil || s.now().UnixMilli() >= session.Expires {
+		return drive.VaultRelayGrant{}, vault.ErrDenied
+	}
+	return session, nil
 }
 
 func (s *Server) vaultRelayCheck(w http.ResponseWriter, r *http.Request) {
@@ -153,18 +166,9 @@ func (s *Server) vaultRelayCheck(w http.ResponseWriter, r *http.Request) {
 		Blob string `json:"blob"`
 		Edit bool   `json:"edit"`
 	}
-	bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if r.Header.Get("Origin") != "" || len(bearer) > 2048 || !s.allowAttempt("vault-relay:"+s.requestIP(r), 6000, time.Minute) {
-		s.vaultError(w, vault.ErrDenied)
-		return
-	}
-	payload, mac, _ := strings.Cut(bearer, ".")
-	data, err := base64.RawURLEncoding.DecodeString(payload)
-	got, macErr := base64.RawURLEncoding.DecodeString(mac)
-	var session vaultRelaySession
-	if err != nil || macErr != nil || !hmac.Equal(got, s.vaultSessionMAC(data)) ||
-		vault.Decode(strings.NewReader(string(data)), &session) != nil || s.now().UnixMilli() >= session.Expires {
-		s.vaultError(w, vault.ErrDenied)
+	session, err := s.vaultRelayGrant(r)
+	if err != nil {
+		s.vaultError(w, err)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 256)
@@ -184,4 +188,45 @@ func (s *Server) vaultRelayCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) vaultRelayCheckpoint(w http.ResponseWriter, r *http.Request) {
+	grant, err := s.vaultRelayGrant(r)
+	if err != nil {
+		s.vaultError(w, err)
+		return
+	}
+	blob := r.PathValue("blob")
+	if !vault.ValidEditorBlob(blob) {
+		s.vaultError(w, vault.ErrInvalid)
+		return
+	}
+	d := s.store.Drive()
+	if r.Method == http.MethodPut {
+		if r.Header.Get("Content-Type") != "application/octet-stream" || len(r.TransferEncoding) != 0 {
+			s.vaultError(w, vault.ErrInvalid)
+			return
+		}
+		// Bound the wire upload well inside the lifetime of its quota reservation.
+		if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(15 * time.Second)); err != nil {
+			s.vaultError(w, err)
+			return
+		}
+		if err := d.WriteVaultCheckpoint(r.Context(), s.blobRoot(), grant, blob, r.ContentLength, r.Body, s.now); err != nil {
+			s.vaultError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		return
+	}
+	src, err := d.ReadVaultCheckpoint(r.Context(), s.blobRoot(), grant, blob, s.now)
+	if err != nil {
+		s.vaultError(w, err)
+		return
+	}
+	defer src.Close()
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment")
+	http.ServeContent(s.steady(w), r, "", time.Time{}, src)
 }

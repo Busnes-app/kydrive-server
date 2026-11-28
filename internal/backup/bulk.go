@@ -230,6 +230,13 @@ func snapshotFiles(ctx context.Context, dbBytes []byte, dataDir string) ([]BulkF
 	if exists == 1 {
 		query += ` UNION ALL SELECT blob,digest,size,1 FROM drive_vault_versions`
 	}
+	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('drive_vault_editor_blobs') WHERE name='checkpoint_digest'`).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists == 1 {
+		query += ` UNION ALL SELECT checkpoint_object,checkpoint_digest,checkpoint_size,1
+FROM drive_vault_editor_blobs WHERE checkpoint_digest IS NOT NULL`
+	}
 	rows, err := db.QueryContext(ctx, query+` ORDER BY blob`)
 	if err != nil {
 		return nil, err

@@ -241,7 +241,8 @@ to its member and reserves the exact encrypted blob IDs. The staging gateway ver
 the active binding and device before each WebSocket frame and blob request. Its fixed
 history and file allowlists leave raw relay paths on the isolated network. Renewal preserves
 the active socket's binding, device, user and role. Scoped checkpoint uploads require edit
-permission and a signed reservation and publish ciphertext atomically into the gateway volume.
+permission and a signed reservation. KyDrive reserves the declared bytes against vault and
+organization storage limits before streaming, and rechecks the grant before publishing.
 
 The staging browser is a vault-only signed device. KyDrive links it with PKCE and grants
 cookie-free CORS on the vault API to one configured origin. That origin's publisher can

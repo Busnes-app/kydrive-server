@@ -27,6 +27,8 @@ func (s *Server) vaultRoutes() {
 	s.mux.HandleFunc("GET /api/vaults/{id}/files/{file}/editor", s.vaultDevice(s.readVaultEditor))
 	s.mux.HandleFunc("POST /api/vaults/{id}/files/{file}/editor/session", s.vaultDevice(s.vaultEditorSession))
 	s.mux.HandleFunc("POST /api/vault-relay/check", s.vaultRelayCheck)
+	s.mux.HandleFunc("PUT /api/vault-relay/checkpoints/{blob}", s.vaultRelayCheckpoint)
+	s.mux.HandleFunc("GET /api/vault-relay/checkpoints/{blob}", s.vaultRelayCheckpoint)
 	if s.config.Vault.BrowserOrigin != "" {
 		s.mux.HandleFunc("POST /api/vault-browser/token", s.handleVaultBrowserToken)
 	}

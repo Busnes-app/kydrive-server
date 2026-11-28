@@ -74,7 +74,7 @@ const maxReportBytes = 1 << 53
 
 // orgBytes, given the org as ?1, is the org's drive_bytes: every version row of its
 // workspaces and its live viewing copies, the figure fits checks and the reporter sends.
-const orgBytes = `SELECT (SELECT COALESCE(SUM(v.size),0) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id=?1)+(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE revoked=0 AND org_id=?1)+(SELECT COALESCE(SUM(size),0) FROM drive_vault_versions WHERE org_id=?1)`
+const orgBytes = `SELECT (SELECT COALESCE(SUM(v.size),0) FROM drive_versions v JOIN drive_files f ON f.id=v.file_id JOIN drive_workspaces w ON w.id=f.workspace WHERE w.org_id=?1)+(SELECT COALESCE(SUM(size),0) FROM drive_view_copies WHERE revoked=0 AND org_id=?1)+(SELECT COALESCE(SUM(size),0) FROM drive_vault_versions WHERE org_id=?1)+(` + vaultCheckpointBytes + `)`
 
 // poolSchema is drive schema 30: the grant and the report state per org, and the indexes the
 // org sum reads. report_due is set by a write that used half its grant and by every org poll

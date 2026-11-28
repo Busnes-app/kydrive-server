@@ -1,5 +1,4 @@
-import { createReadStream, createWriteStream, readFileSync } from 'node:fs';
-import { link, mkdtemp, rm, stat } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { createServer, request as httpsRequest } from 'node:https';
 import { once } from 'node:events';
@@ -14,7 +13,6 @@ const protocol = 'kydrive-vault';
 const tokenPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const openPath = /^\/cryptpad_websocket\?room=([a-f0-9]{32}|[a-f0-9]{34})$/;
 const checkpointPath = /^\/checkpoint\/([a-f0-9]{48})$/;
-const checkpointRoot = '/app/checkpoints/';
 const checkpointLimit = 32 << 20;
 let checkpointWrites = 0;
 const blobPath = /^\/blob\/([a-f0-9]{2})\/([a-f0-9]{48})$/;
@@ -34,7 +32,8 @@ if (clientOrigins.length > 2 || clientOrigins.some(value => value.startsWith('ht
   throw new Error('TLS is required for remote client origins');
 }
 const upstream = origin(process.env.KY_VAULT_RELAY_UPSTREAM, ['http:', 'https:']);
-const authority = origin(process.env.KY_VAULT_RELAY_AUTHORITY, ['https:']) + '/api/vault-relay/check';
+const authorityOrigin = origin(process.env.KY_VAULT_RELAY_AUTHORITY, ['https:']);
+const authority = authorityOrigin + '/api/vault-relay/check';
 const upstreamSocket = upstream.replace(/^http/, 'ws') + '/cryptpad_websocket';
 
 function header(req, name) {
@@ -80,42 +79,40 @@ async function serveCheckpoint(req, res, blob) {
   if (writing && (!/^[1-9][0-9]{0,7}$/.test(length) || Number(length) > checkpointLimit ||
       header(req, 'content-type') !== 'application/octet-stream')) return refuse(res, 400);
   const token = httpToken(req);
-  if (!validToken(token) || !await authorizeVaultBlob(authority, token, blob, writing)) return refuse(res, 403);
-
-  const file = checkpointRoot + blob;
-  if (!writing) {
-    const info = await stat(file).catch(error => {
-      if (error.code !== 'ENOENT') throw error;
-    });
-    if (!info) return refuse(res, 404);
+  if (!validToken(token)) return refuse(res, 403);
+  if (writing && checkpointWrites >= 4) return refuse(res, 503);
+  if (writing) checkpointWrites++;
+  try {
+    const headers = { authorization: 'Bearer ' + token };
+    if (writing) {
+      headers['content-type'] = 'application/octet-stream';
+      headers['content-length'] = length;
+      headers.expect = '100-continue';
+    }
+    const out = httpsRequest(authorityOrigin + '/api/vault-relay/checkpoints/' + blob,
+      { method: req.method, headers });
+    res.on('close', () => out.destroy());
+    out.setTimeout(15_000, () => out.destroy());
+    const reply = once(out, 'response');
+    if (writing) {
+      // KyDrive reads (and sends Continue) only after reserving quota.
+      req.once('error', () => out.destroy());
+      out.once('continue', () => req.pipe(out));
+      out.flushHeaders();
+    } else out.end();
+    const [incoming] = await reply;
+    if (incoming.statusCode !== 200 || writing) {
+      const allowed = writing ? [201, 400, 403, 409, 413] : [403, 404];
+      incoming.destroy();
+      return refuse(res, allowed.includes(incoming.statusCode) ? incoming.statusCode : 502);
+    }
     res.writeHead(200, {
-      'content-length': info.size, 'content-type': 'application/octet-stream',
+      'content-length': incoming.headers['content-length'], 'content-type': 'application/octet-stream',
       'content-disposition': 'attachment', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store',
     });
-    await pipeline(createReadStream(file), res);
-    return;
-  }
-  if (checkpointWrites >= 4) return refuse(res, 503);
-  checkpointWrites++;
-  let temp;
-  try {
-    temp = await mkdtemp(checkpointRoot + '.upload-');
-    const staged = temp + '/ciphertext';
-    await pipeline(req, createWriteStream(staged, { flags: 'wx', mode: 0o600 }),
-      { signal: AbortSignal.timeout(15_000) });
-    if ((await stat(staged)).size !== Number(length)) return refuse(res, 400);
-    if (!await authorizeVaultBlob(authority, token, blob, true)) return refuse(res, 403);
-    try {
-      // Publish only complete uploads and never replace a checkpoint another editor published.
-      await link(staged, file);
-    } catch (error) {
-      if (error.code === 'EEXIST') return refuse(res, 409);
-      throw error;
-    }
-    return refuse(res, 201);
+    await pipeline(incoming, res);
   } finally {
-    checkpointWrites--;
-    if (temp) await rm(temp, { recursive: true, force: true });
+    if (writing) checkpointWrites--;
   }
 }
 
