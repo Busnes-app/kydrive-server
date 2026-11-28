@@ -132,6 +132,8 @@ func (b *browser) invoke(action string, input json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return b.sealRevision(in)
+	case "revisionPlaintextLimit":
+		return revisionPlaintextLimit, nil
 	case "readRevision":
 		var in revisionRead
 		if err := json.Unmarshal(input, &in); err != nil {

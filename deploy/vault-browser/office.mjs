@@ -1,4 +1,4 @@
-export function vaultOffice({ origin, mount, onSave, onReady, onError }) {
+export function vaultOffice({ origin, mount, revisionPlaintextLimit, onSave, onReady, onError }) {
   const frame = document.createElement('iframe');
   frame.src = origin + '/integration/';
   frame.title = 'CryptPad DOCX editor';
@@ -33,7 +33,8 @@ export function vaultOffice({ origin, mount, onSave, onReady, onError }) {
     if (data.msg?.q === 'SAVE' && typeof data.txid === 'string') {
       try {
         const blob = data.msg.data;
-        if (!(blob instanceof Blob) || blob.size > (32 << 20) - 8192) throw Error('Invalid DOCX export');
+        if (!(blob instanceof Blob)) throw Error('Invalid DOCX export');
+        if (blob.size > revisionPlaintextLimit) throw Error('DOCX is too large for an encrypted 32 MiB revision');
         await onSave(blob);
         send({ ack: data.txid });
       } catch (error) {

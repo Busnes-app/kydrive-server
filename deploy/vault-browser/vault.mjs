@@ -84,6 +84,7 @@ async function start() {
   const go = new globalThis.Go();
   const { instance } = await WebAssembly.instantiateStreaming(await checked(await request('/vault.wasm')), go.importObject);
   void go.run(instance);
+  const revisionPlaintextLimit = wasm('revisionPlaintextLimit');
 
   const storage = 'kydrive-vault-browser:' + drive;
   let sealed = localStorage.getItem(storage);
@@ -244,7 +245,7 @@ async function start() {
   }));
   const filePath = file => '/api/vaults/' + active.invite.vault + '/files/' + file;
   async function writeRevision(file, number, source, binding = '') {
-    if (source.size > (32 << 20) - 8192) throw new Error('Select a file under 32 MiB');
+    if (source.size > revisionPlaintextLimit) throw new Error('File is too large for an encrypted 32 MiB revision');
     const vault = active;
     const content = new Uint8Array(await source.arrayBuffer()).toBase64();
     if (active !== vault) throw Error('The active vault changed before the save');
@@ -288,7 +289,7 @@ async function start() {
       return (await checked(await api('POST', path + '/session', { checkpoint, edit: true }))).json();
     };
     const editor = office = vaultOffice({
-      origin: cryptpad, mount: officeMount,
+      origin: cryptpad, mount: officeMount, revisionPlaintextLimit,
       onReady() {
         status.textContent = 'DOCX editor ready';
         saveOffice.hidden = closeOffice.hidden = false;
@@ -374,7 +375,7 @@ async function start() {
       await editDocx(file, number);
     } else if (operation === 'save') {
       const source = document.querySelector('#content').files[0];
-      if (!source) throw new Error('Select a file under 32 MiB');
+      if (!source) throw new Error('Select a file to encrypt');
       await writeRevision(file, number, source);
       fileID.value = file;
       status.textContent = 'Saved encrypted revision ' + number;

@@ -133,7 +133,8 @@ retry of the same signed contents. KyDrive seals the ciphertext again in the nor
 store and includes it in local bulk backup and orphan accounting. This slice caps each
 ciphertext version at 32 MiB and each vault at 1 GiB across retained versions, committed
 editor checkpoints and active checkpoint uploads. Hosted organizations also need space in
-their current storage grant.
+their current storage grant. The browser reserves 16 KiB of each revision's limit for age
+framing and verifies the ciphertext size before signing.
 
 `GET /api/vaults/{id}/files/{file}/versions/{revision|latest}` returns ciphertext plus
 its signed manifest. The native client checks its pinned signer, the exact requested

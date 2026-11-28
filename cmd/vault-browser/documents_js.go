@@ -2,13 +2,17 @@ package main
 
 import (
 	"errors"
-	"filippo.io/age"
 	"slices"
 	"time"
 
+	"filippo.io/age"
 	"github.com/Busnes-app/ky-primitives/hybridsig"
 	"github.com/Busnes-app/kydrive-server/internal/vault"
 )
+
+// Leave room for age's 16-byte tag per 64 KiB chunk and the hybrid
+// recipient header, authentication data, and payload nonce.
+const revisionPlaintextLimit = vault.MaxDocumentBytes - (16 << 10)
 
 type revisionInput struct {
 	File    string
@@ -51,12 +55,15 @@ func (b *browser) sealRevision(in revisionInput) (sealedRevision, error) {
 	if err != nil {
 		return sealedRevision{}, err
 	}
-	if in.Number < 1 || len(in.Body) > vault.MaxDocumentBytes-8192 {
+	if in.Number < 1 || len(in.Body) > revisionPlaintextLimit {
 		return sealedRevision{}, errors.New("Invalid file revision or size")
 	}
 	encrypted, err := encrypt(in.Body, b.active.identity.Recipient())
 	if err != nil {
 		return sealedRevision{}, err
+	}
+	if len(encrypted) > vault.MaxDocumentBytes {
+		return sealedRevision{}, errors.New("Encrypted vault revision exceeds the size limit")
 	}
 	manifest, err := (vault.Revision{Document: document, Number: in.Number, Digest: vault.Digest(encrypted), Size: int64(len(encrypted)), Binding: in.Binding}).Sign(b.signing)
 	return sealedRevision{manifest, encrypted}, err

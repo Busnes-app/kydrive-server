@@ -13,6 +13,8 @@ Own browser device signing, passphrase-protected local keys, vault membership an
 - Verify revision signers against their historical membership and editor binding signers
   against the current head. Refresh a checkpoint only after verifying the same head with
   the pinned witness. The runbook owns staging scope and hosting.
+- Serve the plaintext revision cap from WebAssembly. Check the encrypted size before signing.
 
 ## Verification
+CI runs the revision boundary test through `go_js_wasm_exec`.
 Run the browser acceptance in [Vault integration](../../docs/VAULT-INTEGRATION.md).
