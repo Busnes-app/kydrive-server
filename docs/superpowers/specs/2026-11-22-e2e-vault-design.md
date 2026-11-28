@@ -315,6 +315,37 @@ find a log shorter than their stored head, which they would otherwise refuse as 
   says so, in those words, when the vault is created.
 - **Recovery-key rotation** re-encrypts the server's recovery copy from a linked device.
 
+### Recovery key (added 2026-11-28, built in `pkg/vaultclient` and `internal/vault`)
+
+The spec left the format open. This is the smallest construction from the primitives above.
+
+- **Form.** The recovery key is one age ML-KEM-768 + X25519 identity. Its age text
+  (`AGE-SECRET-KEY-PQ-1…`, bech32 with a checksum, upper case, so QR alphanumeric mode) is what
+  the client shows once. The recovery signing key, an Ed25519 + ML-DSA-65 `hybridsig` key, is
+  HKDF-SHA256 of that text (`kydrive-vault-recovery-signing-v1`, 64 bytes split into the two
+  seeds). So the text alone is the whole key. Parsing ignores spaces, line breaks and case.
+- **Copy.** The account key's secrets, encrypted to the recovery recipient as an age file.
+  The server accepts only an age file with one hybrid stanza and keeps only the newest copy.
+- **Chain.** Each account has a hash-chained list of recovery records. Each names the
+  account key and recovery public key after it and the copy's digest. Each is signed by that
+  account key and that recovery key, separately domain-separated, to prove possession:
+  - `register` (sequence 1): the enrolled key;
+  - `replace`: a new account key, also signed by the previous recovery key (the authority);
+  - `rotate`: the same account key, a new recovery key, also signed by the previous one.
+    Rotation therefore needs the old recovery key: a thief of one unlocked device cannot
+    take over recovery. A user who lost the recovery key but kept a device cannot rotate it
+    (Residual risks).
+- **Members re-adding (12C).** A `rekey` vault-log record re-adds one member under a new
+  fingerprint and rotates the vault key, since the old account key may be in a thief's hands.
+  A manager's client accepts the new key only from the member's recovery chain, verified from
+  the fingerprint the log already pins. A member re-keys their own personal vault the same
+  way, opening the old wrap with the key recovered from the copy and signing with the new one.
+  The server refuses any record signed by a key the log does not pin for its signer, so after
+  a replacement the old key signs nothing.
+  Every client accepts a `rekey`, whoever signed it, only when the target's recovery chain
+  moves the pinned fingerprint to the new one. Otherwise a server that enrolled its own key for
+  a member could forge that member's self-rekey.
+
 ## Escrow (single-tenant only)
 
 - The org admin generates the escrow key in the desktop app. The private key is exported
@@ -382,6 +413,10 @@ Key transparency (a signed, append-only log of public keys) is a later step, not
 - **A checkpoint is reused for up to 5 minutes** (Freshness). A removal committed in that time reaches a device that already holds a checkpoint only at its next fetch, so a batch of uploads in those minutes can be readable to the removed member.
 - **Witnessed vaults depend on the witness:** every shared vault, and on a single-tenant install every vault, personal ones included. While the witness cannot be reached, uploads to them block, and adding or removing members waits. Reading still works.
 - **The witness learns each vault log's activity:** when heads move, under an opaque ID.
+- **A lost recovery key cannot be replaced from a device.** Rotation needs the old recovery
+  key, so a user who keeps a device but loses the recovery key has no recovery until the
+  owner decides how a device alone may re-register one (2026-11-28 Recovery key).
+- **The server can withhold a recovery chain** or a copy. It cannot forge a replacement.
 
 ## Build plan
 

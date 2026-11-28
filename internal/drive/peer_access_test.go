@@ -37,6 +37,7 @@ var (
 		"ConfigureCells",
 		// Vault routes require a signed device, which a KyPost peer never holds.
 		"CheckVaultAccess", "CommitVaultRecord", "EnrollVaultKey", "VaultRecords", "VaultUserKey",
+		"CommitVaultRecovery", "VaultRecoveryCopy", "VaultRecoveryHistory",
 		"WriteVaultVersion", "ReadVaultVersion", "BindVaultEditor", "VaultEditorBinding", "CheckVaultRelay", "ReadVaultCheckpoint", "WriteVaultCheckpoint",
 		"ObjectPrefix", "OrgHomeRegion", "OrgKeys", "PublishSearch", "SearchDue", "SearchEnqueue", "SearchPointer", "SetOrgPurger", "StorageOrgs",
 		"ExportPrincipal", "PersonalExport", "ActivePrincipal", "Multi", "KeysFor", "UserKeys", "OrgGroups", "OrgSelectable", "Staff", "StaffRead", "UserOrg", "OrgActive", "OrgsSince", "ApplyOrgs", "ActiveOrgs", "PurgeOrgs", "EraseMembers", "BeginReports", "ApplyReports", "StaleReports", "AdvanceReportSeq", "AgentTokenUser", "AppPasswordUser", "ApplyRetention", "CallbackActor", "CloseEditor", "DeferRevocation", "DeviceUser", "EditorDownload",

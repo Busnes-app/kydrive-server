@@ -215,6 +215,7 @@ func TestPostgresUpgradeFromVersion30Persists(t *testing.T) {
 		`DROP FUNCTION IF EXISTS drive_search_index_org_fixed()`,
 		`DROP TABLE drive_cells`,
 		`ALTER TABLE drive_orgs DROP COLUMN home_region`,
+		`DROP TABLE drive_vault_recovery`,
 		`DROP TABLE drive_vault_rooms`,
 		`DROP TABLE drive_vault_editor_blobs`,
 		`DROP TABLE drive_vault_bindings`,

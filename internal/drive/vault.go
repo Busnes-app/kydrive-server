@@ -12,16 +12,9 @@ import (
 )
 
 // VaultKey is the public part of a member's vault identity. Devices verify its fingerprint
-// independently before granting access. Enrolment is immutable within an organisation.
-type VaultKey struct {
-	Recipient string `json:"recipient"`
-	Signing   []byte `json:"signing"`
-}
-
-func (key VaultKey) Fingerprint() string {
-	data, _ := json.Marshal(key)
-	return vault.Digest(data)
-}
+// independently before granting access. Enrolment is immutable within an organisation; only
+// a recovery-signed replacement (CommitVaultRecovery) changes it.
+type VaultKey = vault.Key
 
 func (s *Store) EnrollVaultKey(ctx context.Context, user string, key VaultKey) error {
 	if _, err := hybridsig.ParsePublicKey(key.Signing); err != nil || !vault.ValidRecipient(key.Recipient) {
@@ -162,7 +155,16 @@ func (s *Store) CommitVaultRecord(ctx context.Context, user string, record vault
 		if err = vault.VerifyRecord(before, record, signer); err != nil {
 			return err
 		}
-		if before == nil || record.Change == "add" {
+		// The log must pin the signer's current key: a replaced key signs nothing, and a
+		// replaced member signs only their own rekey until a manager re-adds them.
+		pinned, found := record.State.Member(user)
+		if !found && before != nil {
+			pinned, found = before.State.Member(user)
+		}
+		if !found || pinned.Fingerprint != key.Fingerprint() {
+			return vault.ErrConflict
+		}
+		if before == nil || record.Change == "add" || record.Change == "rekey" {
 			target := record.Target
 			if before == nil {
 				target = user

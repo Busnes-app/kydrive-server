@@ -135,6 +135,7 @@ CREATE INDEX drive_peer_tickets_owner ON drive_peer_tickets(owner,expires);`,
 	vaultDocumentsSchema,
 	vaultEditorBlobsSchema,
 	vaultCheckpointsSchema,
+	vaultRecoverySchema,
 }
 
 // erasuresSchema is drive schema 29: KyIdentity's erased subjects (Delete everything),

@@ -120,6 +120,8 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
   and live vault membership. The optional browser origin gets credential-free CORS on vault
   device exchange and vault API routes. Browser approval uses the exact configured callback
   and the existing authenticated session, CSRF and step-up checks.
+- Vault recovery routes (`vault_recovery.go`) refuse any `Origin`, limit commits and fetches
+  per account and audit every attempt.
 
 - Vault version bodies are streamed ciphertext. Device signing covers the body digest and the
   member signs the revision manifest. The relay uses a short-lived, MACed bearer scoped to a

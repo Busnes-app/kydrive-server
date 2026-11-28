@@ -162,6 +162,11 @@ func VerifyRecord(before *Record, after Record, signer *hybridsig.PublicKey) err
 		if !existed || !remains || old.Role == next.Role {
 			return ErrConflict
 		}
+	case "rekey":
+		// Re-adds a member under their replacement key (recovery-signed, RecoveryRecord).
+		if !existed || !remains || old.Fingerprint == next.Fingerprint || old.Role != next.Role {
+			return ErrConflict
+		}
 	case "rotate":
 		if after.Target != "" {
 			return ErrInvalid
@@ -172,7 +177,7 @@ func VerifyRecord(before *Record, after Record, signer *hybridsig.PublicKey) err
 	if len(after.State.Members) != len(before.State.Members)+delta {
 		return ErrConflict
 	}
-	rotation := after.Change == "remove" || after.Change == "role" || after.Change == "rotate"
+	rotation := after.Change != "add"
 	if rotation {
 		if after.State.Generation != before.State.Generation+1 || after.State.Recipient == before.State.Recipient ||
 			len(after.State.Previous) == 0 || bytes.Equal(after.State.Previous, before.State.Previous) ||
@@ -189,7 +194,8 @@ func VerifyRecord(before *Record, after Record, signer *hybridsig.PublicKey) err
 		}
 		p, present := before.State.Member(m.User)
 		sameWrap := bytes.Equal(p.Wrap, m.Wrap)
-		if !present || p.Fingerprint != m.Fingerprint || sameWrap == rotation ||
+		rekeyed := after.Change == "rekey" && m.User == after.Target
+		if !present || (p.Fingerprint != m.Fingerprint) != rekeyed || sameWrap == rotation ||
 			(p.Role != m.Role && (after.Change != "role" || m.User != after.Target)) {
 			return ErrConflict
 		}

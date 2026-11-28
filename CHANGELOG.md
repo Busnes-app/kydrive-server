@@ -4,6 +4,11 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Vault recovery key (server).** Signed native devices register a recovery key and an
+  encrypted copy of their vault key, fetch their own copy, rotate the recovery key, and replace
+  their vault key with a recovery-signed request. Managers re-add a replaced member with a
+  `rekey` record. Attempts are rate-limited and audited. Drive schema 36.
+
 - **Native vault protocol.** A signed linked device can read its vault account and
   organization scope. The native client and browser staging fixture share the signed
   history, revision and editor binding implementation.

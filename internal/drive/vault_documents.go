@@ -50,6 +50,9 @@ func vaultDocumentSigner(ctx context.Context, q queryer, user string, doc vault.
 	if err != nil {
 		return nil, err
 	}
+	if member, _ := record.State.Member(user); member.Fingerprint != key.Fingerprint() {
+		return nil, vault.ErrConflict // replaced key: wait for a rekey record
+	}
 	return hybridsig.ParsePublicKey(key.Signing)
 }
 

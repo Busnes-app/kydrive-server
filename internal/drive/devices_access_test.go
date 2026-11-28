@@ -24,6 +24,7 @@ var (
 		"Shares", "Snapshot", "StartUpload", "UnlinkDevice", "Upload", "Versions", "Workspaces",
 		// Device-only vault routes. Membership writes also verify the vault manager's signature.
 		"CheckVaultAccess", "CommitVaultRecord", "EnrollVaultKey", "VaultRecords", "VaultUserKey",
+		"CommitVaultRecovery", "VaultRecoveryCopy", "VaultRecoveryHistory",
 		"WriteVaultVersion", "ReadVaultVersion", "BindVaultEditor", "VaultEditorBinding",
 	}
 	// Creates or changes access, or mints a session or credential: ErrDenied for a device.

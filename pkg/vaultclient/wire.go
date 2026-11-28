@@ -8,8 +8,10 @@ type (
 	Head       = vault.Head
 	Receipt    = vault.Receipt
 	Record     = vault.Record
-	Revision   = vault.Revision
-	State      = vault.State
+	// RecoveryRecord is one signed link of an account's recovery chain.
+	RecoveryRecord = vault.RecoveryRecord
+	Revision       = vault.Revision
+	State          = vault.State
 )
 
 const MaxDocumentBytes = vault.MaxDocumentBytes

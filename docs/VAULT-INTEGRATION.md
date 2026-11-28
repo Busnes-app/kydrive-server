@@ -40,6 +40,39 @@ account establishes the caller's organization. Native clients read this scope fr
 Enrollment is immutable, and the signed log pins each member's fingerprint. The client
 checks the pins independently and creates and opens each age wrap locally.
 
+### Recovery key and key replacement
+
+Each account registers a recovery key after enrolling (decision D12, 12A + 12C). The format
+and rules are in the vault design's "Recovery key" section; `pkg/vaultclient` builds and
+verifies every record (`RegisterRecovery`, `ReplaceIdentity`, `RotateRecovery`,
+`OpenRecovery`, `VerifyRecoveryChain`, `Session.Rekey`). The routes accept native signed
+devices only: any `Origin` header, the staging browser origin included, is refused.
+
+- `POST /api/vault-recovery` commits the next record of the caller's recovery chain with its
+  copy: `register` (sequence 1, the enrolled key), `rotate` (a new recovery key, signed by the
+  old one) or `replace` (a new account key, signed by the enrolled recovery key). Each
+  record also carries signatures by its new account and recovery keys. A replacement updates
+  the enrolled key in the same transaction; `PUT /api/vault-keys` still refuses any other change.
+- `GET /api/vault-recovery` returns the caller's newest record and copy. Only the newest copy
+  is kept, so a rotation deletes the copy the old recovery key opens.
+- `GET /api/vault-recovery/{user}/records` returns an account's signed chain, without copies,
+  to accounts in the same org.
+- Commits and fetches are limited to 10 per account per hour and every attempt, refused or
+  not, is audited (`vault.recovery_commit`, `vault.recovery_fetch`). Committed changes are also
+  drive events (`vault.recovery_register`, `_replace`, `_rotate`). There is no step-up: device
+  linking already requires it, bearer devices have no session to step up, and the copy opens
+  only with the offline recovery key.
+
+The server stores only age ciphertext to an ML-KEM-768 + X25519 recipient; it refuses a copy
+in any other form. After a replacement the server refuses records and revisions signed by
+the old key, and by the new key wherever the log still pins the old one, except a `rekey`
+record. A `rekey` re-adds one member under their enrolled replacement key and rotates the vault
+key. A manager signs it after verifying the member's chain from the fingerprint the log pins;
+for the member's own replacement, the new key signs and the client unwraps with the recovered
+old key. Clients pass members' chains in `HistoryInput.Recovery`: older records verify
+against the chain's earlier keys, and a `rekey` verifies only when the target's chain moves the
+pinned key to the new one, so a server that enrols its own key cannot forge a self-rekey.
+
 A manager submits a signed record to `POST /api/vaults/{id}/records`. Membership, key
 rotation and the new head commit together. The response carries a publisher receipt. On a
 lost response, a current member can fetch missing records and receipts with
@@ -283,7 +316,8 @@ before others join. If initialization stops after persisting its checkpoint and 
 publishing its encrypted room state, restart that document in a fresh binding with a
 new witnessed head. Staging uses disposable data and profiles.
 
-Production qualification still needs key recovery, coordinated recovery of KyDrive,
+Production qualification still needs the client recovery flow (the server side is
+`TestVaultRecoveryKeyReplacement`), coordinated recovery of KyDrive,
 CryptPad history and witness state, and representative peak-load
 memory measurements. The adapter serves pinned assets in the local fixture. A remote
 deployment needs the same patches and transport restrictions on controlled asset
