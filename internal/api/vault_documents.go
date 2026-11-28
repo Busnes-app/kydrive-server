@@ -196,11 +196,12 @@ func (s *Server) vaultRelayCheckpoint(w http.ResponseWriter, r *http.Request) {
 		s.vaultError(w, err)
 		return
 	}
-	blob := r.PathValue("blob")
-	if !vault.ValidEditorBlob(blob) {
+	blobs := r.Header.Values("KyDrive-Checkpoint-Blob")
+	if len(blobs) != 1 || !vault.ValidEditorBlob(blobs[0]) {
 		s.vaultError(w, vault.ErrInvalid)
 		return
 	}
+	blob := blobs[0]
 	d := s.store.Drive()
 	if r.Method == http.MethodPut {
 		if r.Header.Get("Content-Type") != "application/octet-stream" || len(r.TransferEncoding) != 0 {

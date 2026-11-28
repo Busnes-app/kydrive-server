@@ -34,6 +34,7 @@ if (clientOrigins.length > 2 || clientOrigins.some(value => value.startsWith('ht
 const upstream = origin(process.env.KY_VAULT_RELAY_UPSTREAM, ['http:', 'https:']);
 const authorityOrigin = origin(process.env.KY_VAULT_RELAY_AUTHORITY, ['https:']);
 const authority = authorityOrigin + '/api/vault-relay/check';
+const checkpointAuthority = authorityOrigin + '/api/vault-relay/checkpoint';
 const upstreamSocket = upstream.replace(/^http/, 'ws') + '/cryptpad_websocket';
 
 function header(req, name) {
@@ -83,14 +84,13 @@ async function serveCheckpoint(req, res, blob) {
   if (writing && checkpointWrites >= 4) return refuse(res, 503);
   if (writing) checkpointWrites++;
   try {
-    const headers = { authorization: 'Bearer ' + token };
+    const headers = { authorization: 'Bearer ' + token, 'kydrive-checkpoint-blob': blob };
     if (writing) {
       headers['content-type'] = 'application/octet-stream';
       headers['content-length'] = length;
       headers.expect = '100-continue';
     }
-    const out = httpsRequest(authorityOrigin + '/api/vault-relay/checkpoints/' + blob,
-      { method: req.method, headers });
+    const out = httpsRequest(checkpointAuthority, { method: req.method, headers });
     res.on('close', () => out.destroy());
     out.setTimeout(15_000, () => out.destroy());
     const reply = once(out, 'response');

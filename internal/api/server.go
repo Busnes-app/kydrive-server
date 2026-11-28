@@ -733,7 +733,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			limit = uploadLimit + 1
 		}
 		if r.Method == "PUT" && (strings.HasPrefix(r.URL.Path, "/api/vaults/") && strings.Contains(r.URL.Path, "/versions/") ||
-			path.Dir(r.URL.Path) == "/api/vault-relay/checkpoints") {
+			r.URL.Path == "/api/vault-relay/checkpoint") {
 			limit = vault.MaxDocumentBytes + 1
 		}
 		if r.Method == "POST" && r.URL.Path == "/api/public/links/upload" {

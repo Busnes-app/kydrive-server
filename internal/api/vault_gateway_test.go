@@ -79,7 +79,7 @@ func startVaultGateway(t *testing.T, ctx context.Context, origins string, handle
 	authority := &http.Server{Handler: http.NewServeMux(), ReadHeaderTimeout: 5 * time.Second,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}}
 	authority.Handler.(*http.ServeMux).Handle("POST /api/vault-relay/check", handler)
-	authority.Handler.(*http.ServeMux).Handle("/api/vault-relay/checkpoints/", handler)
+	authority.Handler.(*http.ServeMux).Handle("/api/vault-relay/checkpoint", handler)
 	t.Cleanup(func() { _ = authority.Close() })
 	go authority.ServeTLS(listener, authorityCert, authorityKey)
 
