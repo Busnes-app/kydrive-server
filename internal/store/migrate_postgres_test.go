@@ -140,6 +140,7 @@ func source(t *testing.T) (string, string) {
 		`INSERT INTO drive_search_index(org_id,object,version) VALUES('` + drive.DefaultOrg + `','snapshot',1)`,
 		`INSERT INTO drive_search_queue(org_id,file,first,not_before) VALUES('` + drive.DefaultOrg + `','` + f.ID + `',1,1)`,
 		`INSERT INTO drive_vault_user_keys(org_id,user_id,body) VALUES('` + drive.DefaultOrg + `','owner','fixture-public-key')`,
+		`INSERT INTO drive_vault_recovery(org_id,user_id,sequence,body,recovery_copy) VALUES('` + drive.DefaultOrg + `','owner',1,'fixture-recovery','fixture-copy')`,
 		`INSERT INTO drive_vaults(org_id,id,log_id,sequence,hash) VALUES('` + drive.DefaultOrg + `','vault-fixture','log',1,'head')`,
 		`INSERT INTO drive_vault_records(org_id,vault_id,sequence,body) VALUES('` + drive.DefaultOrg + `','vault-fixture',1,'fixture-record')`,
 		`INSERT INTO drive_vault_versions(org_id,vault_id,file_id,revision,blob,digest,size,manifest)
