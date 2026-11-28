@@ -16,6 +16,7 @@ func (s *Server) vaultRoutes() {
 	if s.config.Vault.Publisher == nil || s.config.Vault.Witness == nil {
 		return
 	}
+	s.mux.HandleFunc("GET /api/vault/account", s.vaultDevice(s.vaultAccount))
 	s.mux.HandleFunc("PUT /api/vault-keys", s.vaultDevice(s.enrollVaultKey))
 	s.mux.HandleFunc("GET /api/vault-keys/{user}", s.vaultDevice(s.vaultUserKey))
 	s.mux.HandleFunc("POST /api/vaults/{id}/records", s.vaultDevice(s.commitVaultRecord))
@@ -89,6 +90,17 @@ func (s *Server) vaultError(w http.ResponseWriter, err error) {
 	default:
 		s.writeError(w, http.StatusServiceUnavailable, "Vault unavailable")
 	}
+}
+
+// vaultAccount lets native clients learn the vault scope of their signed device,
+// including single-tenant servers whose ordinary sync account omits the org.
+func (s *Server) vaultAccount(w http.ResponseWriter, r *http.Request, user string) {
+	org, err := s.store.Drive().UserOrg(r.Context(), user)
+	if err != nil || org == "" {
+		s.vaultError(w, errors.Join(vault.ErrDenied, err))
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]string{"user_id": user, "org_id": org})
 }
 
 func (s *Server) enrollVaultKey(w http.ResponseWriter, r *http.Request, user string) {

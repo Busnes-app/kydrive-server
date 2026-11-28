@@ -1,12 +1,126 @@
-# Whole-drive end-to-end encryption: decisions for the owner
+# Whole-drive end-to-end encryption: owner decisions
 
-Date: 2026-11-28. Status: options for the owner's choice. Nothing here is built or approved.
+Date: 2026-11-28. Status: **decided** by the owner on 28 November 2026 (~07:30 UTC). Decided,
+not built yet: the code on `master` still works as described under each "Now" below.
 
 On 27 November the owner decided that the whole of KyDrive becomes end-to-end encrypted (E2E),
 and that CryptPad replaces Euro-Office as the editor. The reasons given were that CryptPad's
 editor services idled at 510 MiB, against 2,219 MiB for Euro-Office, and that users care more
-about E2E than about speed. There are no live servers. This note lists every feature that
-needs the server to read plaintext today and gives the choices the owner has to make for each.
+about E2E than about speed. There are no live servers. On 28 November the owner answered the
+fourteen questions this note put to them. The decisions come first. The option analysis
+below them is kept as the record of what was weighed.
+
+## Decisions (28 Nov)
+
+"We say E2E and mean it." (owner, Q12)
+
+| # | Feature | Decision |
+|---|---|---|
+| 1 | Search and sealed index | **1A.** Each client searches what it holds: names on every client, content on desktop only. The server index and hosted snapshots retire. |
+| 2 | Previews, thumbnails | **2A.** Render on the client when a file is opened. No thumbnails at launch. |
+| 3 | WebDAV | **3A.** Retire `/dav/`, app passwords and the rclone/Cyberduck guide. |
+| 4 | Desktop and Android | **4B.** The desktop Go core first, compiled into Android with gomobile. Launch may go ahead with desktop only. |
+| 5 | MCP / AI | **5A.** Retire `/mcp`, agent tokens and the agent skill. |
+| 6 | Shares, links, guests, KyPost | **Groups A:** a manager's client expands a group into its members. **Guest links A:** the link key sits in the URL fragment. **Organisation links are dropped.** **KyPost A:** a drop box only the owner can open; **viewing copies are dropped.** |
+| 7 | Backup and restore | **7B**, with N between 1 and 5 minutes: clients export automatically, and a restore returns each document to its last export. N is set by a test, which is a gate (below). |
+| 8 | Malware scanning | **8A.** No server-side scanning is promised. The device's OS scanner covers downloads. |
+| 9 | Dedup and quota | **9A.** The workspace quota counts ciphertext, CryptPad history included. Dedup across vaults is lost. |
+| 10 | Euro-Office | **Removed (10a yes).** Other formats are **converted on import, on the client** (below). PDF stays view-only on the device. |
+| 11 | Vault caps | **11A.** Ciphertext uses the resumable upload path. The ordinary 10 GiB file limit, quota, trash and retention rules apply. |
+| 12 | Key recovery | **12A + 12C** on the hosted service: a recovery key shown once, and members re-adding a user's new key to shared vaults. **No passphrase copy (12B rejected).** Escrow exists only on Enterprise deployments, as the **Key Steward** (12D, renamed). |
+| 13 | Editor and crypto code origin | **13B** plus a **signed browser extension.** The separate editor origin (13A) and server-served signed code (13C) are rejected. |
+| 14 | Zip, handover, migration | **14A.** Zip on the client. Handover only by a member re-wrapping keys or by the Key Steward. **Start empty, with no migration tool.** |
+
+### D7. The export interval is chosen by a test
+
+- Clients export each open document automatically every N minutes, with N between 1 and 5.
+- **Gate:** before N is fixed, measure the server, relay and client cost of automatic export
+  at N = 1, 2 and 5 minutes. Pick N from those measurements and record them in the repo.
+  The test has not been run (unproven).
+- After a server restore, edits made since a document's last export are lost. The loss is
+  at most N minutes.
+
+### D10. Euro-Office goes. Other formats are converted on import
+
+- Euro-Office, its routes, editor JWT, `internal/editor`, the Compose overlay and its
+  provenance docs are removed at the switch.
+- This supersedes the hosted Office qualification (owner, 2026-11-23, Priority 2) and the
+  "Euro-Office is the editor" and "Euro-Office may run in production" lines in root
+  `AGENTS.md` (`AGENTS.md:115-118` at `e589317`; the User Preferences section on `master`).
+- When a user opens an ODT, ODS, ODP, RTF or CSV file for editing, the **client** converts it:
+  ODT and RTF to DOCX, ODS and CSV to XLSX, ODP to PPTX. The server never converts.
+- Conversion can lose formatting. The client tells the user so before it converts.
+- PDF is view-only, rendered on the device.
+- Which converter each client uses is not chosen yet, and its fidelity is unproven.
+
+### D12. Key recovery: a recovery key, re-adding, and the Enterprise Key Steward
+
+- On the hosted service, each user gets a recovery key, shown once (text and QR). The server
+  holds the user key encrypted to it, and a key replacement must be signed by it (12A).
+- Members of a shared vault can re-add a user's new key (12C).
+- There is no passphrase copy on the server (12B rejected).
+- The Key Steward is the vault spec's escrow (lines 318–340), renamed. It exists only on
+  Enterprise deployments, never on the shared install.
+- Clients tell users plainly, when the key is created: losing every device and the recovery
+  key loses your personal files.
+
+### D13. Decrypting code never comes from a server the user has to trust
+
+- **Signed native apps** carry the editor and the crypto: desktop first, then Android and iOS
+  (13B).
+- **A signed browser extension** carries the crypto. The web app can open encrypted files
+  only when the extension is installed. Without it, the web app manages files and metadata
+  but can't decrypt.
+- Rejected: a separate editor origin run by another party (13A), and code served by a server,
+  signed or pinned (13C).
+- `master` still differs: the merged vault browser staging (#211, `cmd/vault-browser`) serves
+  WebAssembly vault code from a separately deployed HTTPS origin, which is 13A. Under this
+  decision that path can't ship to users as it is.
+
+#### The browser extension (design sketch)
+
+**What it ships.**
+- The crypto: age with the hybrid recipient, and hybrid signature checks for revisions and
+  membership, from the same source as the native clients' core.
+- A key store: the user and device keys, held in extension storage and never handed to the
+  page.
+- An editor bridge: it decrypts a document and passes it to the editor, and encrypts what the
+  editor saves before it goes to the server.
+
+**How it checks the page's code.**
+- Each signed KyDrive release publishes the hashes of the web app's scripts and of the editor
+  bundle. That hash allowlist reaches the extension only from signed releases: built into each
+  extension release, or as a release manifest the extension checks against a signing key it
+  carries. Which of the two is open question 3.
+- Before it releases any plaintext or key operation to a page, the extension hashes the code
+  the page has loaded and compares it with the allowlist. On any mismatch it refuses and
+  says why.
+- Targets: Chrome, Firefox and Edge.
+
+**Open questions.**
+1. Can an extension see and hash every script a page runs, including dynamically inserted
+   scripts and WebAssembly, before that code reaches plaintext? Firefox can read response
+   bodies (`webRequest.filterResponseData`). Chrome's Manifest V3 has no equivalent in its
+   blocking API. Whether a content script can reliably cover this on Chrome and Edge is
+   unproven.
+2. Should the editor run in the extension's own page instead of the web app's, so the web
+   app's code never touches plaintext at all? That would make the hash check less critical.
+   Its cost and the editor's fit inside an extension page are unproven.
+3. Who signs and publishes the extension in each store? Can store review delay a security
+   fix? Is the allowlist built into the extension or shipped as a signed manifest, and how
+   does it stay in step with server releases?
+4. How does a user link the extension as a device and bring its keys in (scan from the
+   desktop app, or the recovery key)?
+5. Does the CryptPad editor bundle run under each store's content security policy for
+   extensions? Unproven.
+6. How does the web app show a user without the extension that encrypted files exist but
+   can't be opened here?
+
+### D14. Start empty
+
+No install, the pilot included, is migrated. There is no migration tool.
+
+## Analysis kept for the record
 
 - Code references are to `origin/master` at `e589317` (#209, opt-in witnessed vaults and the
   CryptPad staging gateway).
@@ -24,7 +138,7 @@ Keys use age's hybrid recipient (line 47). The multi-tenant service has no escro
 17–22). An independent witness provides freshness (lines 208–276). This note takes those
 decisions as given and applies them to the whole drive.
 
-## Summary
+### Summary of the options
 
 | # | Feature | Today (server reads plaintext) | Under whole-drive E2E | Recommendation |
 |---|---|---|---|---|
@@ -43,7 +157,8 @@ decisions as given and applies them to the whole drive.
 | 13 | Editor web code origin | KyDrive serves the SPA and the editor page | The operator could swap the code that handles keys | A separate origin run by an independent party, with published reproducible builds. Native apps later. |
 | 14 | Zip, handover, migration | Server zips and hands over trees; a pilot is mentioned | Impossible on the server | Zip on the client. Handover only by a member or Enterprise escrow. No migration tool. |
 
-The questions for the owner are listed at the end (Q1–Q14) and numbered as in this table.
+The questions put to the owner are listed at the end (Q1–Q14), numbered as in this table. The
+answers are in "Decisions (28 Nov)" above.
 
 ## 1. Search and the sealed search index
 
@@ -74,6 +189,8 @@ version.
 **Q1.** Content search becomes desktop-only and covers only files the device has synced. Is
 that acceptable at launch, or must content search work on every client, which means option B?
 
+**Decided (28 Nov):** 1A, as recommended.
+
 ## 2. Previews and thumbnails
 
 **Now.**
@@ -95,6 +212,8 @@ that acceptable at launch, or must content search work on every client, which me
 
 **Q2.** Browsing a folder will show icons, not thumbnails. Is that acceptable at launch?
 
+**Decided (28 Nov):** 2A, as recommended.
+
 ## 3. WebDAV
 
 **Now.**
@@ -114,6 +233,8 @@ ciphertext.
 **Recommendation:** A, then B only if users ask for it.
 
 **Q3.** May WebDAV, app passwords and the rclone/Cyberduck guide be removed?
+
+**Decided (28 Nov):** 3A, as recommended.
 
 ## 4. Desktop sync client and Android app
 
@@ -151,6 +272,8 @@ change feed and trash. That is the "workspace becomes a vault" work in the Crypt
 **Q4.** Is it acceptable to ship Android through gomobile on the desktop core (option B)? And
 can launch go ahead with desktop vault sync only, if Android is late?
 
+**Decided (28 Nov):** 4B, and launch may go ahead with desktop only.
+
 ## 5. MCP and AI access
 
 **Now.**
@@ -170,6 +293,8 @@ can launch go ahead with desktop vault sync only, if Android is late?
 **Recommendation:** A now, B later.
 
 **Q5.** May MCP be removed at launch? It is listed as a product feature in root `AGENTS.md:121`.
+
+**Decided (28 Nov):** 5A, as recommended.
 
 ## 6. Share links, groups, guests and KyPost
 
@@ -214,6 +339,8 @@ can launch go ahead with desktop vault sync only, if Android is late?
 - (b) Keep guest links with the key in the URL fragment, or drop all external sharing?
 - (c) Rework KyPost into a drop box, or drop save-to-drive?
 
+**Decided (28 Nov):** groups A, guest links A, organisation links dropped, KyPost A with viewing copies dropped.
+
 ## 7. Server-side backup and restore
 
 **Now.**
@@ -248,6 +375,8 @@ does:
 yet exported? B loses up to N minutes, and the owner picks N. Or is a full cross-store barrier
 (A) required?
 
+**Decided (28 Nov):** 7B with N between 1 and 5 minutes, set by a cost test that is a gate. See D7.
+
 ## 8. Malware scanning
 
 **Now.** There is none. A search of Go, Markdown and YAML for `clamav`, `virus`, `malware` and
@@ -265,6 +394,8 @@ good.
 **Recommendation:** A.
 
 **Q8.** Can you confirm that no plan or marketing promises server-side malware scanning?
+
+**Decided (28 Nov):** 8A, as recommended.
 
 ## 9. Dedup and quota accounting
 
@@ -298,6 +429,8 @@ not measured here (unproven).
 **Q9.** Should CryptPad's encrypted editing history count against the user's quota (A), or
 be capped and trimmed outside it (B)?
 
+**Decided (28 Nov):** 9A, as recommended.
+
 ## 10. Euro-Office retirement
 
 **Now.**
@@ -330,6 +463,8 @@ any of them is unproven.
 **Q10.** (a) May Euro-Office and its Priority 2 qualification be dropped now? (b) Is it
 acceptable that OpenDocument, RTF, CSV and PDF files open only on the device?
 
+**Decided (28 Nov):** Euro-Office is removed (10a yes). Other formats are converted to DOCX, XLSX or PPTX on the client when opened for editing; PDF is view-only. See D10.
+
 ## 11. The vault caps
 
 **Now.**
@@ -355,6 +490,8 @@ workspace.
 
 **Q11.** Do the ordinary limits (10 GiB per file, the workspace and org pool quota, the trash
 and retention rules) apply unchanged to encrypted files?
+
+**Decided (28 Nov):** 11A, as recommended.
 
 ## 12. Key recovery when a user loses every device
 
@@ -387,6 +524,8 @@ line 315).
 losing every device and the recovery key loses their personal files? Or is a passphrase
 copy (B) wanted despite offline guessing?
 
+**Decided (28 Nov):** 12A and 12C on the hosted service, no passphrase copy, and escrow only on Enterprise as the Key Steward. See D12.
+
 ## 13. Where the editor's web code is served from
 
 **Now.**
@@ -418,6 +557,8 @@ trusted. Plan B as the strong path.
 witness? Is it acceptable for the web editor to rest on that party's honesty until the native
 editor (B) ships?
 
+**Decided (28 Nov):** 13A and 13C are rejected. Signed native apps (13B) and a signed browser extension. See D13.
+
 ## 14. Zip downloads, handover and migration
 
 **Now.**
@@ -438,7 +579,9 @@ editor (B) ships?
 **Q14.** Can you confirm that no install, the pilot included, holds data that must be
 migrated, so the switch can start empty?
 
-## Questions for the owner
+**Decided (28 Nov):** 14A. Start empty, with no migration tool.
+
+## Questions put to the owner (answered 28 Nov, see Decisions)
 
 1. Desktop-only content search at launch (1A), or every client (1B)?
 2. No thumbnails at launch (2A)?

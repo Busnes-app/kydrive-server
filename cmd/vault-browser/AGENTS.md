@@ -1,7 +1,8 @@
 # Vault browser WebAssembly
 
 ## Purpose
-Own browser device signing, passphrase-protected local keys, vault membership and ciphertext revisions.
+Own the staging-only WebAssembly acceptance adapter. Q13 bars this separate-origin site
+from shipping. Put client protocol changes in `pkg/vaultclient`.
 
 ## Local Contracts
 - Use the existing age hybrid identity and vault signature and checkpoint implementations.
@@ -16,5 +17,5 @@ Own browser device signing, passphrase-protected local keys, vault membership an
 - Serve the plaintext revision cap from WebAssembly. Check the encrypted size before signing.
 
 ## Verification
-CI runs the revision boundary test through `go_js_wasm_exec`.
+CI runs shared client revision tests through `go_js_wasm_exec`.
 Run the browser acceptance in [Vault integration](../../docs/VAULT-INTEGRATION.md).

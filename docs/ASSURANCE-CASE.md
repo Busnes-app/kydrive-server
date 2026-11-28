@@ -245,9 +245,9 @@ permission and a signed reservation. KyDrive reserves the declared bytes against
 organization storage limits before streaming, and rechecks the grant before publishing.
 
 The staging browser is a vault-only signed device. KyDrive links it with PKCE and grants
-cookie-free CORS on the vault API to one configured origin. That origin's publisher can
-change code that handles browser keys, so its deployment control must sit outside the
-operator's authority for operator-resistant vaults. The CryptPad asset publisher has the
-same browser trust responsibility for Office editing. Scoped DOCX, XLSX and PPTX
-co-editing have loopback coverage. Coordinated recovery and remote asset deployment remain release gates.
+cookie-free CORS on the vault API to one configured origin. The separate vault and
+CryptPad asset publishers can change the code that handles keys or document contents.
+The site is a disposable staging fixture. Under Q13, release clients obtain decryption
+and editor code from signed native apps or a signed browser extension. See the
+[browser extension design](superpowers/specs/2026-11-28-vault-browser-extension.md).
 See [Vault integration](VAULT-INTEGRATION.md).

@@ -1,4 +1,4 @@
-package main
+package vaultclient
 
 import (
 	"encoding/json"
@@ -13,25 +13,25 @@ import (
 )
 
 // The wire representation is the same as drive.VaultKey, which is server-only.
-func (k memberKey) fingerprint() string {
+func (k MemberKey) Fingerprint() string {
 	body, _ := json.Marshal(k)
 	return vault.Digest(body)
 }
 
-type memberPin struct {
+type MemberPin struct {
 	User        string `json:"user"`
 	Fingerprint string `json:"fingerprint"`
 }
 
-type invitation struct {
+type Invitation struct {
 	Vault string    `json:"vault"`
-	Owner memberPin `json:"owner"`
+	Owner MemberPin `json:"owner"`
 }
 
-type historyInput struct {
-	Invite     invitation
+type HistoryInput struct {
+	Invite     Invitation
 	Records    []vault.Record
-	Keys       map[string]memberKey
+	Keys       map[string]MemberKey
 	Checkpoint vault.Checkpoint
 	WitnessKey string
 }
@@ -39,7 +39,7 @@ type historyInput struct {
 type verifiedHistory struct {
 	head    vault.Head
 	records []vault.Record
-	keys    map[string]memberKey
+	keys    map[string]MemberKey
 }
 
 type openVault struct {
@@ -50,15 +50,15 @@ type openVault struct {
 	witness    *hybridsig.PublicKey
 }
 
-// Check the genesis against a fingerprint the browser already trusts. All later key pins
+// Check the genesis against a Fingerprint the Session already trusts. All later key pins
 // come from the signed manager transitions and are compared to the directory before use.
-func (b *browser) verifyHistory(in historyInput) (verifiedHistory, error) {
+func (b *Session) verifyHistory(in HistoryInput) (verifiedHistory, error) {
 	refusal := errors.New("The vault membership records did not verify")
 	if b.member == nil || len(in.Records) == 0 || !vault.ID(in.Invite.Vault) {
 		return verifiedHistory{}, refusal
 	}
 	genesis := in.Records[0]
-	if genesis.Signer != in.Invite.Owner.User || in.Keys[genesis.Signer].fingerprint() != in.Invite.Owner.Fingerprint {
+	if genesis.Signer != in.Invite.Owner.User || in.Keys[genesis.Signer].Fingerprint() != in.Invite.Owner.Fingerprint {
 		return verifiedHistory{}, errors.New("The vault owner fingerprint does not match the invitation")
 	}
 	var before *vault.Record
@@ -66,7 +66,7 @@ func (b *browser) verifyHistory(in historyInput) (verifiedHistory, error) {
 	for i := range in.Records {
 		record := &in.Records[i]
 		signer, err := hybridsig.ParsePublicKey(in.Keys[record.Signer].Signing)
-		if err != nil || record.Org != b.account.Org || record.Vault != in.Invite.Vault || vault.VerifyRecord(before, *record, signer) != nil {
+		if err != nil || record.Org != b.org || record.Vault != in.Invite.Vault || vault.VerifyRecord(before, *record, signer) != nil {
 			return verifiedHistory{}, refusal
 		}
 		if before == nil || before.State.Generation != record.State.Generation {
@@ -77,7 +77,7 @@ func (b *browser) verifyHistory(in historyInput) (verifiedHistory, error) {
 		}
 		for _, m := range record.State.Members {
 			key, found := in.Keys[m.User]
-			if !found || key.fingerprint() != m.Fingerprint || !vault.ValidRecipient(key.Recipient) {
+			if !found || key.Fingerprint() != m.Fingerprint || !vault.ValidRecipient(key.Recipient) {
 				return verifiedHistory{}, errors.New("A vault member fingerprint does not match the signed record")
 			}
 		}
@@ -87,7 +87,7 @@ func (b *browser) verifyHistory(in historyInput) (verifiedHistory, error) {
 	return verifiedHistory{vault.Head{Log: genesis.Link().Hash(), Sequence: current.Sequence, Hash: current.Link().Hash()}, in.Records, in.Keys}, nil
 }
 
-func (b *browser) openHistory(in historyInput) (vault.State, error) {
+func (b *Session) OpenHistory(in HistoryInput) (vault.State, error) {
 	b.active = nil
 	verified, err := b.verifyHistory(in)
 	if err != nil {
@@ -98,11 +98,11 @@ func (b *browser) openHistory(in historyInput) (vault.State, error) {
 		return vault.State{}, errors.New("The vault witness checkpoint did not verify")
 	}
 	state := verified.records[len(verified.records)-1].State
-	member, ok := state.Member(b.account.User)
+	member, ok := state.Member(b.user)
 	if !ok {
-		return vault.State{}, errors.New("This browser is no longer a vault member")
+		return vault.State{}, errors.New("This account is no longer a vault member")
 	}
-	if member.Fingerprint != b.publicKey().fingerprint() {
+	if member.Fingerprint != b.publicKey().Fingerprint() {
 		return vault.State{}, errors.New("The vault key fingerprint changed")
 	}
 	key, err := unwrapIdentity(member.Wrap, b.member, state.Recipient)
@@ -129,28 +129,28 @@ func unwrapIdentity(wrap []byte, recipient *age.HybridIdentity, expected string)
 	return key, nil
 }
 
-type membershipChange struct {
+type MembershipChange struct {
 	Action string
-	Target memberPin
-	Key    memberKey
+	Target MemberPin
+	Key    MemberKey
 }
 
-func (b *browser) changeMembership(in membershipChange) (vault.Record, error) {
-	if b.active == nil || !vault.ValidUserID(in.Target.User) || in.Target.User == b.account.User {
+func (b *Session) ChangeMembership(in MembershipChange) (vault.Record, error) {
+	if b.active == nil || !vault.ValidUserID(in.Target.User) || in.Target.User == b.user {
 		return vault.Record{}, errors.New("Open a vault and choose another member")
 	}
 	before := b.active.records[len(b.active.records)-1]
-	actor, found := before.State.Member(b.account.User)
+	actor, found := before.State.Member(b.user)
 	if !found || actor.Role != vault.Manager {
 		return vault.Record{}, errors.New("A vault manager must change membership")
 	}
 	record := before
-	record.Sequence, record.Previous, record.Signer, record.Change, record.Target = before.Sequence+1, b.active.head.Hash, b.account.User, in.Action, in.Target.User
+	record.Sequence, record.Previous, record.Signer, record.Change, record.Target = before.Sequence+1, b.active.head.Hash, b.user, in.Action, in.Target.User
 	record.State.Members = slices.Clone(before.State.Members)
 	_, present := before.State.Member(in.Target.User)
 	switch in.Action {
 	case "add":
-		if present || in.Target.Fingerprint != in.Key.fingerprint() {
+		if present || in.Target.Fingerprint != in.Key.Fingerprint() {
 			return vault.Record{}, errors.New("The recipient fingerprint does not match the independently verified key")
 		}
 		if _, err := hybridsig.ParsePublicKey(in.Key.Signing); err != nil {
@@ -187,7 +187,7 @@ func (b *browser) changeMembership(in membershipChange) (vault.Record, error) {
 	return signed, nil
 }
 
-func (b *browser) rotate(state *vault.State) error {
+func (b *Session) rotate(state *vault.State) error {
 	next, err := age.GenerateHybridIdentity()
 	if err != nil {
 		return err
