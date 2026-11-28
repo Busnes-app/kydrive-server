@@ -12,13 +12,22 @@ export function vaultOffice({ origin, mount, onSave, onReady, onError }) {
   const timeout = setTimeout(() => fail(Error('CryptPad did not initialize')), 15000);
 
   const send = data => frame.contentWindow?.postMessage(data, origin);
+  function settle(txid, value) {
+    const request = pending.get(txid);
+    if (!request) return;
+    clearTimeout(request.timer);
+    pending.delete(txid);
+    if (value?.error || !frame.isConnected) request.reject(Error('CryptPad request closed or refused'));
+    else request.resolve(value);
+  }
+
   async function receive({ source, origin: sender, data }) {
     if (sender !== origin || source !== frame.contentWindow || !data || typeof data !== 'object') return;
     if (data.q === 'INTEGRATION_READY') {
       clearTimeout(timeout);
       ready();
     }
-    pending.get(data.ack)?.(data.args);
+    if (typeof data.ack === 'string') settle(data.ack, data.args);
     if (data.msg?.q === 'DOCUMENT_READY') onReady();
     if (data.msg?.q === 'DOCUMENT_ERROR') onError();
     if (data.msg?.q === 'SAVE' && typeof data.txid === 'string') {
@@ -44,12 +53,7 @@ export function vaultOffice({ origin, mount, onSave, onReady, onError }) {
         pending.delete(txid);
         reject(Error('CryptPad did not answer'));
       }, 30000);
-      pending.set(txid, value => {
-        clearTimeout(timer);
-        pending.delete(txid);
-        if (value?.error || !frame.isConnected) reject(Error('CryptPad request closed or refused'));
-        else resolve(value);
-      });
+      pending.set(txid, { timer, resolve, reject });
       send({ msg: { q, data }, txid });
     });
   }
@@ -66,7 +70,7 @@ export function vaultOffice({ origin, mount, onSave, onReady, onError }) {
       clearTimeout(timeout);
       events.abort();
       frame.remove();
-      pending.forEach(finish => finish({ error: true }));
+      for (const txid of pending.keys()) settle(txid, { error: true });
     },
   };
 }
