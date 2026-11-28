@@ -115,7 +115,8 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 - Regional KyPost pairing resolves each account via `suitedir.Peer.URLFor(home_region)` with no default-region fallback. Ticket preflight accepts served cell origins; the ticket upload narrows it to its owner's cell before acting. Pairing bindings include that cell's URL.
 
 - Vault control-plane routes (`vault.go`) require a signed linked device and both configured
-  keys. Receipts attest committed records. A check requires an exact, fresh witness checkpoint
+  keys. `GET /api/vault/account` reports the device’s authenticated account and vault org.
+  Receipts attest committed records. A check requires an exact, fresh witness checkpoint
   and live vault membership. The optional browser origin gets credential-free CORS on vault
   device exchange and vault API routes. Browser approval uses the exact configured callback
   and the existing authenticated session, CSRF and step-up checks.

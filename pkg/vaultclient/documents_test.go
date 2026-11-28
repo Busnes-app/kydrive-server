@@ -1,4 +1,4 @@
-package main
+package vaultclient
 
 import (
 	"fmt"
@@ -21,8 +21,8 @@ func TestSealRevisionSizeBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := browser{
-		account: account{User: "usr_owner"}, signing: signer,
+	b := Session{
+		user: "usr_owner", signing: signer,
 		active: &openVault{
 			identity: identity, checkpoint: vault.Checkpoint{IssuedMS: time.Now().UnixMilli()},
 			verifiedHistory: verifiedHistory{
@@ -38,7 +38,7 @@ func TestSealRevisionSizeBoundary(t *testing.T) {
 	file := uuid.NewString()
 	for _, size := range []int{plaintextLimit, plaintextLimit + 1, vault.MaxDocumentBytes - 8192} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
-			sealed, err := b.sealRevision(revisionInput{File: file, Number: 1, Body: make([]byte, size)})
+			sealed, err := b.SealRevision(RevisionInput{File: file, Number: 1, Body: make([]byte, size)})
 			if size > plaintextLimit {
 				if err == nil || len(sealed.Body) != 0 || len(sealed.Manifest.Signature) != 0 {
 					t.Fatal("an oversized plaintext produced a signed or encrypted result")
