@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>KyDrive Vault staging</title>
+<main>
+  <h1>KyDrive Vault</h1>
+  <p id="status" role="status">Checking this browser…</p>
+  <button id="link" type="button" hidden>Link this browser</button>
+  <form id="key" hidden>
+    <label for="passphrase">Vault passphrase</label>
+    <input id="passphrase" type="password" minlength="12" required>
+    <button id="key-action" type="submit">Unlock vault key</button>
+  </form>
+  <button id="vault" type="button" hidden>Create personal vault</button>
+  <p id="identity" hidden></p>
+  <button id="open" type="button" hidden>Open last vault</button>
+  <form id="join" hidden>
+    <label for="invitation">Verified vault invitation</label>
+    <textarea id="invitation" required></textarea>
+    <button type="submit">Open shared vault</button>
+  </form>
+  <section id="membership" hidden aria-label="Vault membership">
+    <label for="share">Invitation to share independently</label>
+    <textarea id="share" readonly></textarea>
+    <p id="members"></p>
+    <form id="change-membership" hidden>
+      <label for="member">Member account ID</label>
+      <input id="member" required>
+      <label for="fingerprint">Independently verified member fingerprint</label>
+      <input id="fingerprint">
+      <button type="submit" value="add">Add editor</button>
+      <button type="submit" value="remove">Remove member</button>
+    </form>
+  </section>
+  <section id="files" hidden aria-label="Vault files">
+    <form id="file-form">
+      <label for="file-id">File ID</label>
+      <input id="file-id">
+      <label for="revision">Revision</label>
+      <input id="revision" type="number" min="1" value="1" required>
+      <label for="content">File to encrypt</label>
+      <input id="content" type="file">
+      <button type="submit" value="save">Save encrypted revision</button>
+      <button id="open-office" type="submit" value="office" hidden>Edit DOCX together</button>
+      <button type="submit" value="read">Open encrypted revision</button>
+    </form>
+    <button id="save-office" type="button" hidden>Save encrypted DOCX</button>
+    <button id="close-office" type="button" hidden>Close editor</button>
+    <div id="office"></div>
+    <a id="download" download="vault-document.docx" hidden>Download verified file</a>
+  </section>
+</main>
+<script src="/wasm_exec.js" defer></script>
+<script src="/vault.mjs" type="module"></script>
+</html>

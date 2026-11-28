@@ -743,8 +743,21 @@ func TestBulkRestoresVaultCiphertext(t *testing.T) {
 		VALUES(?,?,?,1,?,?,?,'fixture-manifest')`, drive.DefaultOrg, id, uuid.NewString(), v.Blob, v.Digest, v.Size); err != nil {
 		t.Fatal(err)
 	}
+	checkpoint, err := drive.WriteBlob(objects.Dir(filepath.Join(f.dir, "blobs")), drive.Deployment(f.key), strings.NewReader("opaque editor checkpoint"), 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO drive_vault_bindings(org_id,vault_id,file_id,head_hash,binding_id,binding)
+VALUES(?,?,?,'fixture-head','fixture-binding','{}')`, drive.DefaultOrg, id, uuid.NewString()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO drive_vault_editor_blobs(blob,binding_id,checkpoint_object,checkpoint_size,checkpoint_digest)
+VALUES('saved','fixture-binding',?,?,?),('pending','fixture-binding',?,17,NULL)`,
+		checkpoint.Blob, checkpoint.Size, checkpoint.Digest, uuid.NewString()); err != nil {
+		t.Fatal(err)
+	}
 	if n, err := f.st.Drive().SweepOrphans(ctx, objects.Dir(filepath.Join(f.dir, "blobs")), 0); n != 0 || err != nil {
-		t.Fatalf("sweep removed a vault version: %d %v", n, err)
+		t.Fatalf("sweep removed vault ciphertext: %d %v", n, err)
 	}
 	opened := openCapsule(t, f.collect(t, backup.PurposeDeposit))
 	repo, ok, err := backup.CapsuleRepository(opened)
@@ -754,6 +767,9 @@ func TestBulkRestoresVaultCiphertext(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "blobs")
 	if err := backup.RestoreBulk(ctx, opened, repo, target); err != nil {
 		t.Fatal(err)
+	}
+	if got := f.read(t, target, checkpoint, true); got != "opaque editor checkpoint" {
+		t.Fatal("restore changed checkpoint ciphertext")
 	}
 	got := f.read(t, target, v, true)
 	if got != ciphertext.String() {

@@ -80,6 +80,14 @@ try {
     check((await read(blobURL(foreignBlob), view)).status === 403, 'foreign blob escaped signed binding');
     check((await read(blobURL(blob), '')).status === 403, 'anonymous file request passed');
     check((await read(blobURL(blob), edit, { method: 'POST' })).status === 405, 'unscoped blob upload passed');
+    const cp = '/checkpoint/' + blob;
+    const put = body => ({ method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body });
+    check((await read(cp, view, put(bytes))).status === 403, 'reader wrote a checkpoint');
+    check((await read('/checkpoint/' + foreignBlob, edit, put(bytes))).status === 403, 'foreign checkpoint write passed');
+    check((await read(cp, edit, put(bytes))).status === 201, 'bound checkpoint write failed');
+    check((await read(cp, edit, put(bytes.slice(1)))).status === 409, 'checkpoint was overwritten');
+    const stored = await read(cp, view);
+    check(stored.status === 200 && (await stored.arrayBuffer()).byteLength === bytes.length, 'checkpoint read failed');
     const readerWrite = await open(view);
     readerWrite.send([1, 'JOIN', room]);
     await wait(() => readerWrite.frames.some(frame => frame[1] === 'JACK'), 'reader join');
@@ -92,8 +100,14 @@ try {
     await historyProbe.refused();
 
     const rpcProbe = await open(edit);
-    rpcProbe.send([1, 'MSG', hk, JSON.stringify(['tx', ['IS_NEW_CHANNEL', foreign]])]);
+    rpcProbe.send([1, 'MSG', hk, JSON.stringify(['abc', ['IS_NEW_CHANNEL', foreign]])]);
     await rpcProbe.refused();
+    const unknownRPC = await open(edit);
+    unknownRPC.send([1, 'MSG', hk, JSON.stringify(['abc', ['GET_FILE_SIZE', room]])]);
+    await unknownRPC.refused();
+    const mismatchedRenewal = await open(view);
+    mismatchedRenewal.send({ grant: edit });
+    await mismatchedRenewal.refused();
     await open(view, false, foreign);
     check((await fetch('/authority-off', { method: 'POST' })).status === 204, 'authority did not stop');
     await open(edit, false);
@@ -109,6 +123,8 @@ try {
     await Promise.all([editor.refused(), reader.refused()]);
     await open(edit, false);
     check((await read(blobURL(blob), edit)).status === 403, 'revoked blob request passed');
+    check((await read(cp, edit)).status === 403, 'revoked checkpoint read passed');
+    check((await read(cp, edit, put(bytes))).status === 403, 'revoked checkpoint write passed');
     check((await read(blobURL(blob), edit, { headers: { Range: 'bytes=0-7' } })).status === 403, 'revoked blob range passed');
 
     const remaining = await open(successor.token, true, successor.room);
@@ -116,7 +132,7 @@ try {
     await wait(() => remaining.frames.some(frame => frame[1] === 'JACK'), 'successor room join');
     remaining.socket.close();
     return {
-      activeRoomWrite: true, boundHistory: true, boundBlobAndRange: true,
+      activeRoomWrite: true, boundHistory: true, boundBlobAndRange: true, immutableCheckpoint: true, scopedRenewal: true,
       crossBindingDenied: true, readerWriteDenied: true, unknownRPCDenied: true,
       openSocketsRevoked: true, reconnectDenied: true, directHTTPDenied: true,
       unavailableAuthorityDenied: true, successorRoom: true,

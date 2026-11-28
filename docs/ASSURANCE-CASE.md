@@ -239,6 +239,15 @@ state independently. Signed revision manifests bind the ciphertext digest and fi
 to the exact vault head. A signed binding reserves fresh rooms and wraps each capability
 to its member and reserves the exact encrypted blob IDs. The staging gateway verifies
 the active binding and device before each WebSocket frame and blob request. Its fixed
-history and file allowlists leave raw relay paths on the isolated network. Installed
-client provisioning, distributed signing and coordinated recovery remain release gates.
+history and file allowlists leave raw relay paths on the isolated network. Renewal preserves
+the active socket's binding, device, user and role. Scoped checkpoint uploads require edit
+permission and a signed reservation. KyDrive reserves the declared bytes against vault and
+organization storage limits before streaming, and rechecks the grant before publishing.
+
+The staging browser is a vault-only signed device. KyDrive links it with PKCE and grants
+cookie-free CORS on the vault API to one configured origin. That origin's publisher can
+change code that handles browser keys, so its deployment control must sit outside the
+operator's authority for operator-resistant vaults. The CryptPad asset publisher has the
+same browser trust responsibility for Office editing. The scoped DOCX flow has loopback
+coverage. Coordinated recovery and remote asset deployment remain release gates.
 See [Vault integration](VAULT-INTEGRATION.md).

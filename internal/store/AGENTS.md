@@ -46,7 +46,8 @@ Owns data models, store interfaces (`UserStore`, `SessionStore`, `GroupStore`, `
 - `DatabaseConfig.Cells` reaches the drive tenancy contract at open. `migrationTables` includes `drive_cells`, `drive_search_index` and `drive_search_queue`; migration fixtures populate each so row/hash preservation is exercised.
 
 - SQLite-to-PostgreSQL migration and hosted metadata snapshots copy the vault catalogue
-  with public keys, heads, signed records, file revisions, room bindings and editor blob reservations in foreign-key order. The witness has
+  with public keys, heads, signed records, file revisions, room bindings and checkpoint metadata
+  in foreign-key order. The witness has
   independent state outside these copies.
 
 ## Verification

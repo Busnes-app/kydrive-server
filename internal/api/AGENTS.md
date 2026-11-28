@@ -116,12 +116,16 @@ Owns HTTP routing, request parsing, session cookie validation, CORS headers, and
 
 - Vault control-plane routes (`vault.go`) require a signed linked device and both configured
   keys. Receipts attest committed records. A check requires an exact, fresh witness checkpoint
-  and live vault membership. Cookie, service and browser-origin requests cannot use these routes.
+  and live vault membership. The optional browser origin gets credential-free CORS on vault
+  device exchange and vault API routes. Browser approval uses the exact configured callback
+  and the existing authenticated session, CSRF and step-up checks.
 
 - Vault version bodies are streamed ciphertext. Device signing covers the body digest and the
   member signs the revision manifest. The relay uses a short-lived, MACed bearer scoped to a
   binding, device and role. It checks either a bound room or a signed blob reservation,
-  with the current head and device, before the gateway forwards traffic.
+  with the current head and device, before the gateway forwards traffic. The fixed relay
+  checkpoint route takes one `KyDrive-Checkpoint-Blob` header, reserves quota before reading,
+  and requires edit access for publication.
 - The opt-in DOCX test hands off Office bytes in a private test directory. The loopback
   controller accepts fixed save operations and compares the restored plaintext with the export.
 

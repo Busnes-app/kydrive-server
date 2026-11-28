@@ -205,7 +205,9 @@ func (s *Store) purgeOrg(ctx context.Context, org string) (blobs, views []string
 		if views, err = column(ctx, tx, `SELECT blob FROM drive_view_copies WHERE org_id=? AND blob<>''`, org); err != nil {
 			return err
 		}
-		if vaultBlobs, err = column(ctx, tx, `SELECT blob FROM drive_vault_versions WHERE org_id=?`, org); err != nil {
+		if vaultBlobs, err = column(ctx, tx, `SELECT blob FROM drive_vault_versions WHERE org_id=?1 UNION ALL
+SELECT x.checkpoint_object FROM drive_vault_editor_blobs x JOIN drive_vault_bindings b USING(binding_id)
+WHERE b.org_id=?1 AND x.checkpoint_digest IS NOT NULL`, org); err != nil {
 			return err
 		}
 		counts := ""

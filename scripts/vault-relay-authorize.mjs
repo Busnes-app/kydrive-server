@@ -24,7 +24,7 @@ export function authorizeVaultRoom(endpoint, token, room, edit) {
     authorize(endpoint, token, { room, edit });
 }
 
-export function authorizeVaultBlob(endpoint, token, blob) {
+export function authorizeVaultBlob(endpoint, token, blob, edit = false) {
   return typeof blob === 'string' && blobID.test(blob) &&
-    authorize(endpoint, token, { blob });
+    authorize(endpoint, token, { blob, edit });
 }

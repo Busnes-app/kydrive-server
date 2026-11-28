@@ -19,6 +19,8 @@ and disclosure.
   checkpoint witness. Trusted clients must pin both member and witness keys. A copied or
   older witness database cannot serve as the latest witnessed state. See
   [Vault integration](docs/VAULT-INTEGRATION.md).
+- The optional vault browser site is a trusted code publisher. Keep its deployment control
+  separate from KyDrive to protect browser keys against a KyDrive operator.
 - Deactivating an identity in KyIdentity must remove its access; group-owned content remains after a member leaves.
 - KyPost ([docs/KYPOST.md](docs/KYPOST.md)). Whoever holds the KyDrive–KyPost pair secret
   (a compromised KyPost) can, for any active everyday account whose KyPost switch is on: add

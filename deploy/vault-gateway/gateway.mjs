@@ -12,6 +12,9 @@ const socketLimit = 32;
 const protocol = 'kydrive-vault';
 const tokenPattern = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const openPath = /^\/cryptpad_websocket\?room=([a-f0-9]{32}|[a-f0-9]{34})$/;
+const checkpointPath = /^\/checkpoint\/([a-f0-9]{48})$/;
+const checkpointLimit = 32 << 20;
+let checkpointWrites = 0;
 const blobPath = /^\/blob\/([a-f0-9]{2})\/([a-f0-9]{48})$/;
 
 function origin(value, protocols) {
@@ -29,7 +32,9 @@ if (clientOrigins.length > 2 || clientOrigins.some(value => value.startsWith('ht
   throw new Error('TLS is required for remote client origins');
 }
 const upstream = origin(process.env.KY_VAULT_RELAY_UPSTREAM, ['http:', 'https:']);
-const authority = origin(process.env.KY_VAULT_RELAY_AUTHORITY, ['https:']) + '/api/vault-relay/check';
+const authorityOrigin = origin(process.env.KY_VAULT_RELAY_AUTHORITY, ['https:']);
+const authority = authorityOrigin + '/api/vault-relay/check';
+const checkpointAuthority = authorityOrigin + '/api/vault-relay/checkpoint';
 const upstreamSocket = upstream.replace(/^http/, 'ws') + '/cryptpad_websocket';
 
 function header(req, name) {
@@ -57,6 +62,58 @@ function cors(req, res) {
   res.setHeader('access-control-allow-origin', source);
   res.setHeader('vary', 'Origin');
   return true;
+}
+
+async function serveCheckpoint(req, res, blob) {
+  const writing = req.method === 'PUT';
+  if (!cors(req, res)) return refuse(res, 403);
+  if (req.method === 'OPTIONS') {
+    if (!clientOrigins.includes(header(req, 'origin')) ||
+        !['GET', 'PUT'].includes(header(req, 'access-control-request-method'))) return refuse(res, 403);
+    res.setHeader('access-control-allow-methods', 'GET, PUT');
+    res.setHeader('access-control-allow-headers', 'Authorization, Content-Type');
+    return refuse(res, 204);
+  }
+  const length = header(req, 'content-length');
+  if ((!writing && req.method !== 'GET') || req.headers['transfer-encoding'] ||
+      (!writing && length && length !== '0')) return refuse(res, 405);
+  if (writing && (!/^[1-9][0-9]{0,7}$/.test(length) || Number(length) > checkpointLimit ||
+      header(req, 'content-type') !== 'application/octet-stream')) return refuse(res, 400);
+  const token = httpToken(req);
+  if (!validToken(token)) return refuse(res, 403);
+  if (writing && checkpointWrites >= 4) return refuse(res, 503);
+  if (writing) checkpointWrites++;
+  try {
+    const headers = { authorization: 'Bearer ' + token, 'kydrive-checkpoint-blob': blob };
+    if (writing) {
+      headers['content-type'] = 'application/octet-stream';
+      headers['content-length'] = length;
+      headers.expect = '100-continue';
+    }
+    const out = httpsRequest(checkpointAuthority, { method: req.method, headers });
+    res.on('close', () => out.destroy());
+    out.setTimeout(15_000, () => out.destroy());
+    const reply = once(out, 'response');
+    if (writing) {
+      // KyDrive reads (and sends Continue) only after reserving quota.
+      req.once('error', () => out.destroy());
+      out.once('continue', () => req.pipe(out));
+      out.flushHeaders();
+    } else out.end();
+    const [incoming] = await reply;
+    if (incoming.statusCode !== 200 || writing) {
+      const allowed = writing ? [201, 400, 403, 409, 413] : [403, 404];
+      incoming.destroy();
+      return refuse(res, allowed.includes(incoming.statusCode) ? incoming.statusCode : 502);
+    }
+    res.writeHead(200, {
+      'content-length': incoming.headers['content-length'], 'content-type': 'application/octet-stream',
+      'content-disposition': 'attachment', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store',
+    });
+    await pipeline(incoming, res);
+  } finally {
+    if (writing) checkpointWrites--;
+  }
 }
 
 async function serveBlob(req, res) {
@@ -118,11 +175,12 @@ function forward(source, target, allow, stop) {
     pending++;
     order = order.then(async () => {
       if (source.readyState !== WebSocket.OPEN || target.readyState !== WebSocket.OPEN) return;
-      if (!await allow(data) || target.readyState !== WebSocket.OPEN ||
+      const allowed = await allow(data);
+      if (!allowed || target.readyState !== WebSocket.OPEN ||
           source.readyState !== WebSocket.OPEN || target.bufferedAmount + data.length > frameLimit) {
         return stop();
       }
-      target.send(data, { binary: false });
+      if (allowed === true) target.send(data, { binary: false });
     }).catch(stop).finally(() => {
       queued -= data.length;
       if (--pending === 0 && source.readyState === WebSocket.OPEN) source.resume();
@@ -134,7 +192,14 @@ const wss = new WebSocketServer({
   noServer: true, maxPayload: frameLimit, perMessageDeflate: false,
   handleProtocols: () => protocol,
 });
+function relayScope(token) {
+  const { Org, Vault, File, User, Device, Binding, Edit } =
+    JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString());
+  return JSON.stringify([Org, Vault, File, User, Device, Binding, Edit]);
+}
+
 function bridge(client, relay, token, anchor) {
+  const scope = relayScope(token);
   const state = { joined: new Set(), joining: new Map(), identity: '', requestedHistory: false };
   let stopped = false;
   const stop = () => {
@@ -153,11 +218,21 @@ function bridge(client, relay, token, anchor) {
   relay.on('close', stop);
 
   forward(client, relay, async data => {
-    const op = clientOperation(data, anchor, state.joined, state.joining);
+    if (data[0] === 123) { // Gateway control messages are objects. Netflux frames are arrays.
+      const renewal = JSON.parse(data.toString());
+      const { grant } = renewal;
+      if (Object.keys(renewal).length !== 1 || typeof grant !== 'string' || !validToken(grant) ||
+          !await authorizeVaultRoom(authority, grant, anchor, false) ||
+          relayScope(grant) !== scope) return false;
+      token = grant;
+      return 'renewed';
+    }
+    const op = clientOperation(data, anchor, state.joined, state.joining, state.pong);
     if (!op || !await authorizeVaultRoom(authority, token, op.room, op.edit)) return false;
     if (op.join !== undefined) state.joining.set(op.join, op.room);
     if (op.leave) state.joined.delete(op.room);
     if (op.history) state.requestedHistory = true;
+    if (op.pong) state.pong = undefined;
     return true;
   }, stop);
   forward(relay, client, data =>
@@ -172,7 +247,9 @@ const server = createServer({
   requestTimeout: 15_000,
   headersTimeout: 5_000,
 }, (req, res) => {
-  serveBlob(req, res).catch(() => {
+  const checkpoint = checkpointPath.exec(req.url);
+  const response = checkpoint ? serveCheckpoint(req, res, checkpoint[1]) : serveBlob(req, res);
+  response.catch(() => {
     if (res.headersSent) res.destroy();
     else refuse(res, 502);
   });
@@ -204,11 +281,24 @@ server.on('upgrade', async (req, socket, head) => {
     });
     relay.on('error', () => relay.terminate());
     socket.once('close', () => relay.terminate());
-    await once(relay, 'open');
-    if (socket.destroyed) return relay.terminate();
-    wss.handleUpgrade(req, socket, head, client => {
-      bridge(client, relay, token, anchor);
-      client.resume();
+    await new Promise((resolve, reject) => {
+      relay.once('error', reject);
+      relay.once('close', () => reject(Error('Upstream socket closed during upgrade')));
+      relay.once('open', () => {
+        try {
+          // IDENT can arrive in the same read as the upstream upgrade response.
+          // Install the forwarding listeners before returning from the open event.
+          if (socket.destroyed) relay.terminate();
+          else wss.handleUpgrade(req, socket, head, client => {
+            bridge(client, relay, token, anchor);
+            client.resume();
+          });
+          resolve();
+        } catch (error) {
+          relay.terminate();
+          reject(error);
+        }
+      });
     });
   } catch {
     rejectUpgrade(socket, '502 Bad Gateway');

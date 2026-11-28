@@ -66,6 +66,7 @@ func ReplicaFingerprint(c *Config) map[string]string {
 	}
 
 	fields["KYDRIVE_VAULT_PUBLISHER_KEY_FILE"], fields["KYDRIVE_VAULT_WITNESS_KEY"] = "", ""
+	fields["KYDRIVE_VAULT_BROWSER_ORIGIN"] = c.Vault.BrowserOrigin
 	if c.Vault.Publisher != nil && c.Vault.Witness != nil {
 		fields["KYDRIVE_VAULT_PUBLISHER_KEY_FILE"] = string(c.Vault.Publisher.Public().Bytes())
 		fields["KYDRIVE_VAULT_WITNESS_KEY"] = string(c.Vault.Witness.Bytes())

@@ -37,10 +37,11 @@ type Config struct {
 	Vault         VaultConfig         `json:"-"`
 }
 
-// VaultConfig enables the device-only vault control plane when both keys are set.
+// VaultConfig enables the vault control plane when both keys are set.
 type VaultConfig struct {
-	Publisher *hybridsig.PrivateKey
-	Witness   *hybridsig.PublicKey
+	Publisher     *hybridsig.PrivateKey
+	Witness       *hybridsig.PublicKey
+	BrowserOrigin string
 }
 
 // DriveConfig bounds resumable uploads and folder zip downloads, in bytes. ContentSearch
@@ -482,6 +483,15 @@ func load(existing bool) (*Config, error) {
 			return nil, errors.New("vault publisher and witness require independent signing keys")
 		}
 	}
+	if raw := getEnv("KYDRIVE_VAULT_BROWSER_ORIGIN", ""); raw != "" {
+		if cfg.Vault.Publisher == nil || cfg.Vault.Witness == nil {
+			return nil, errors.New("KYDRIVE_VAULT_BROWSER_ORIGIN requires vault publisher and witness keys")
+		}
+		cfg.Vault.BrowserOrigin, err = vaultBrowserOrigin(raw, cfg.Server.AppURL, env == "development")
+		if err != nil {
+			return nil, fmt.Errorf("KYDRIVE_VAULT_BROWSER_ORIGIN: %w", err)
+		}
+	}
 	if file := os.Getenv("KY_SCIM_TOKEN_FILE"); file != "" {
 		token, err := applysetup.Secret(file)
 		if err != nil {
@@ -638,6 +648,33 @@ func KyPostURL(raw string) (string, error) {
 		return "", errors.New("must be https://host with no path or credentials")
 	}
 	return strings.TrimSuffix(raw, "/"), nil
+}
+
+func vaultBrowserOrigin(raw, appURL string, development bool) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.Opaque != "" ||
+		(u.Path != "" && u.Path != "/") || u.RawPath != "" || u.ForceQuery || u.RawQuery != "" ||
+		strings.Contains(raw, "#") {
+		return "", errors.New("must be an HTTPS origin without credentials, path or query")
+	}
+	loopback := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	if u.Scheme != "https" && !(development && u.Scheme == "http" && loopback) {
+		return "", errors.New("HTTPS is required outside loopback development")
+	}
+	origin := func(uri *url.URL) string {
+		host := strings.ToLower(uri.Host)
+		if uri.Scheme == "https" {
+			host = strings.TrimSuffix(host, ":443")
+		} else if uri.Scheme == "http" {
+			host = strings.TrimSuffix(host, ":80")
+		}
+		return uri.Scheme + "://" + host
+	}
+	base := origin(u)
+	if app, err := url.Parse(appURL); err == nil && origin(app) == base {
+		return "", errors.New("must be separate from KY_APP_URL")
+	}
+	return base, nil
 }
 
 // testIssuer refuses an issuer outside the reserved .test domain (RFC 2606). The

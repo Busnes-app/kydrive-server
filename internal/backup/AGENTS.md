@@ -81,7 +81,7 @@ live in `recoveryclient` and in the settings rows it reads and writes through th
 - `OneRun` holds the `backup-run` replica lease (`store.OnOneReplica`) around one deposit: the scheduled run with its prune and check, the admin route and CLI `deposit`. Contention returns `recoveryclient.ErrInProgress` without collecting; the collector and bulk prune/check get the lease's context, so session loss cancels collection while sealing and upload finish. Single mode runs directly, as before.
 - `<data dir>/bulk.lock` serializes bulk repository use across processes: `CollectBulk` and `RunDrill` (around the drill's bulk restore) wait for it; `PruneBulk` returns `ErrBulkBusy` and the prune is skipped until the next deposit. `restic` failures carry the tail of its stderr.
 
-- Local bulk snapshots include sealed vault-version blobs from the exact database snapshot.
+- Local bulk snapshots include sealed vault revisions and committed editor checkpoints from the database snapshot.
   Their bulk digest authenticates client ciphertext. CryptPad live history needs its own
   coordinated snapshot.
 

@@ -4,6 +4,12 @@ Interface and behaviour changes, newest first.
 
 ## Unreleased
 
+- **Vault DOCX co-editing.** Linked staging browsers can share live CryptPad edits and
+  save a signed encrypted revision through scoped rooms and quota-accounted checkpoints.
+- **Vault browser staging.** An explicitly configured editor origin can link a vault-only
+  browser, seal its keys locally, share an encrypted vault with a verified member, and
+  rotate its key on removal. The proof exercises signed revisions and scoped room sessions.
+
 - **Vault control-plane groundwork.** An opt-in signed-device API commits shared vault
   membership and key rotation. A separately operated HTTPS witness checkpoints the committed
   log without receiving member keys or file data. Signed devices stream ciphertext revisions

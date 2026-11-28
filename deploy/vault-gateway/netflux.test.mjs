@@ -12,11 +12,16 @@ test('scopes writes to joined rooms and rejects peer RPC', () => {
   const op = value => clientOperation(frame(value), room, joined, pending);
   assert.deepEqual(op([1, 'MSG', room, 'ciphertext']), { room, edit: true });
   assert.equal(op([2, 'MSG', other, 'ciphertext']), null);
-  assert.equal(op([3, 'MSG', historyKeeper, JSON.stringify(['tx', ['IS_NEW_CHANNEL', other]])]), null);
+  assert.deepEqual(op([3, 'MSG', historyKeeper, JSON.stringify(['abc', ['IS_NEW_CHANNEL', other]])]),
+    { room: other, edit: false, history: true });
+  assert.deepEqual(op([3, 'MSG', historyKeeper, JSON.stringify(['abc', ['GET_METADATA', room]])]),
+    { room, edit: false, history: true });
+  assert.equal(op([3, 'MSG', historyKeeper, JSON.stringify(['abc', ['GET_FILE_SIZE', other]])]), null);
   assert.equal(op([4, 'JOIN', historyKeeper]), null);
   assert.equal(op([5, 'UNKNOWN', room]), null);
   assert.equal(op([6, 'MSG', room, ['unexpected']]), null);
-  assert.deepEqual(op([0, '', 'PONG']), { room, edit: false });
+  assert.equal(op([0, '', 'PONG']), null);
+  assert.deepEqual(op([8, 'PING']), { room, edit: false });
 });
 
 test('checks the room inside history and treats metadata creation as a write', () => {
@@ -41,4 +46,12 @@ test('forwards only acknowledged room events and requested history replies', () 
   state.requestedHistory = true;
   assert.ok(accept([0, historyKeeper, 'MSG', 'fixture-peer', 'history']));
   assert.equal(accept([0, 'other-peer', 'MSG', 'fixture-peer', 'unscoped']), false);
+});
+
+test('permits only the matching echo of an upstream heartbeat', () => {
+  const state = { joining: new Map(), joined: new Set() };
+  const op = value => clientOperation(frame(value), room, state.joined, state.joining, state.pong);
+  assert.ok(acceptServerFrame(frame(['', '', 'PING', 123]), state));
+  assert.equal(op(['', '', 'PONG', 124]), null);
+  assert.deepEqual(op(['', '', 'PONG', 123]), { room, edit: false, pong: true });
 });

@@ -115,7 +115,7 @@ func (s *Store) WriteVaultVersion(ctx context.Context, st objects.Store, user st
 		if err := vaultRevisionReady(ctx, tx, r); err != nil {
 			return err
 		}
-		return vaultQuotaFits(ctx, tx, r)
+		return vaultQuotaFits(ctx, tx, r.Org, r.Vault, r.Size)
 	}); err != nil || alreadyStored {
 		return err
 	}
@@ -162,7 +162,7 @@ func (s *Store) WriteVaultVersion(ctx context.Context, st objects.Store, user st
 			}
 			return vault.ErrConflict
 		}
-		if err := vaultQuotaFits(ctx, tx, r); err != nil {
+		if err := vaultQuotaFits(ctx, tx, r.Org, r.Vault, r.Size); err != nil {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO drive_vault_versions(org_id,vault_id,file_id,revision,blob,digest,size,manifest)
@@ -177,13 +177,13 @@ VALUES(?,?,?,?,?,?,?,?)`, r.Org, r.Vault, r.File, r.Number, blob.Blob, blob.Dige
 	})
 }
 
-func vaultQuotaFits(ctx context.Context, q queryer, r vault.Revision) error {
+func vaultQuotaFits(ctx context.Context, q queryer, org, id string, extra int64) error {
 	var used int64
-	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(size),0) FROM drive_vault_versions WHERE org_id=? AND vault_id=?`,
-		r.Org, r.Vault).Scan(&used); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT (SELECT COALESCE(SUM(size),0) FROM drive_vault_versions WHERE org_id=?1 AND vault_id=?2)+(`+vaultCheckpointBytes+` AND b.vault_id=?2)`,
+		org, id).Scan(&used); err != nil {
 		return err
 	}
-	if r.Size > vault.MaxVaultBytes-used {
+	if extra > vault.MaxVaultBytes-used {
 		return ErrQuota
 	}
 	return nil
@@ -313,8 +313,12 @@ func (s *Store) VaultEditorBinding(ctx context.Context, user, id, file string) (
 // CheckVaultRelay is called at the forwarding boundary with claims from a
 // verified short-lived relay session. It checks revocation without reading wraps.
 func (s *Store) CheckVaultRelay(ctx context.Context, org, id, file, user, device, binding, room, blob string) error {
+	return checkVaultRelay(ctx, s.db, org, id, file, user, device, binding, room, blob)
+}
+
+func checkVaultRelay(ctx context.Context, q queryer, org, id, file, user, device, binding, room, blob string) error {
 	var ok bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(
+	err := q.QueryRowContext(ctx, `SELECT EXISTS(
  SELECT 1 FROM drive_vault_bindings b
  JOIN drive_vaults v ON v.org_id=b.org_id AND v.id=b.vault_id AND v.hash=b.head_hash
  JOIN drive_devices d ON d.org_id=b.org_id AND d.user_id=? AND d.id=?

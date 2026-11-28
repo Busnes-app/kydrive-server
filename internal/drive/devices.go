@@ -30,13 +30,14 @@ import (
 // signing key when it links, and only then: DeviceUser hands it to the caller to check the
 // request's signature.
 const (
-	DevicePrefix      = "kyd_"
-	devicesPerUser    = 20
-	deviceCodeLife    = 60 * time.Second
-	phoneCodeLife     = 120 * time.Second
-	deviceIdle        = 90 * 24 * time.Hour
-	deviceRevokedKeep = 30 * 24 * time.Hour
-	deviceTouch       = 5 * time.Minute
+	DevicePrefix         = "kyd_"
+	VaultBrowserPlatform = "vault-browser"
+	devicesPerUser       = 20
+	deviceCodeLife       = 60 * time.Second
+	phoneCodeLife        = 120 * time.Second
+	deviceIdle           = 90 * 24 * time.Hour
+	deviceRevokedKeep    = 30 * 24 * time.Hour
+	deviceTouch          = 5 * time.Minute
 )
 
 type Device struct {
@@ -67,10 +68,21 @@ func WithDevice(ctx context.Context) context.Context {
 
 func isDevice(ctx context.Context) bool { return ctx.Value(deviceKey{}) != nil }
 
-// ApproveLink records the signed-in user's approval and returns the one-time code for the
-// client's loopback redirect.
+type vaultBrowserDeviceKey struct{}
+
+// WithVaultBrowserDevice limits token exchange and authentication to vault-browser devices.
+func WithVaultBrowserDevice(ctx context.Context) context.Context {
+	return context.WithValue(ctx, vaultBrowserDeviceKey{}, true)
+}
+
+func vaultBrowserDevice(ctx context.Context) bool { return ctx.Value(vaultBrowserDeviceKey{}) != nil }
+
+// ApproveLink records the signed-in user's approval. Native clients supply their loopback
+// redirect. The API owns the configured redirect for a vault browser.
 func (s *Store) ApproveLink(ctx context.Context, user, name, platform, challenge, redirect string) (string, error) {
-	if !ValidName(name) || len(name) > 100 || !validPlatform(platform) || !validChallenge(challenge) || !loopbackRedirect(redirect) {
+	validReturn := validPlatform(platform) && loopbackRedirect(redirect) ||
+		platform == VaultBrowserPlatform && redirect == ""
+	if !ValidName(name) || len(name) > 100 || !validChallenge(challenge) || !validReturn {
 		return "", ErrInvalid
 	}
 	if _, service := ctx.Value(serviceAccessKey{}).(ServiceAccess); service || narrowed(ctx) {
@@ -210,6 +222,9 @@ func (s *Store) redeem(ctx context.Context, code, phoneName, phonePlatform strin
 		if err != nil {
 			return err
 		}
+		if (platform == VaultBrowserPlatform) != vaultBrowserDevice(ctx) {
+			return ErrDenied
+		}
 		if res, err := tx.ExecContext(ctx, `UPDATE drive_device_codes SET used=1 WHERE code_hash=? AND used=0`, tokenHash(code)); err != nil {
 			return err
 		} else if n, err := res.RowsAffected(); err != nil || n != 1 {
@@ -266,15 +281,18 @@ func (s *Store) DeviceUser(ctx context.Context, token string, verify func(id str
 	if !strings.HasPrefix(token, DevicePrefix) {
 		return "", ErrDenied
 	}
-	var id, user, status, pubkey string
+	var id, user, status, pubkey, platform string
 	var lastUsed, revokedAt int64
 	var wipe bool
-	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,d.pubkey,CASE WHEN `+activePrincipal("d.user_id")+` THEN 'active' ELSE '' END FROM drive_devices d WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &pubkey, &status)
+	err := s.db.QueryRowContext(ctx, `SELECT d.id,d.user_id,d.last_used,d.revoked_at,d.wipe,d.pubkey,d.platform,CASE WHEN `+activePrincipal("d.user_id")+` THEN 'active' ELSE '' END FROM drive_devices d WHERE d.hash=?`, tokenHash(token)).Scan(&id, &user, &lastUsed, &revokedAt, &wipe, &pubkey, &platform, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrDenied
 	}
 	if err != nil {
 		return "", err
+	}
+	if (platform == VaultBrowserPlatform) != vaultBrowserDevice(ctx) {
+		return "", ErrDenied
 	}
 	var key *DeviceKey
 	if pubkey != "" {

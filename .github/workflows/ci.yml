@@ -116,6 +116,8 @@ jobs:
           node-version: 26
       - run: scripts/check-no-binaries.sh
       - run: node --test deploy/vault-gateway/netflux.test.mjs
+      - name: verify vault revision size limits in WebAssembly
+        run: GOOS=js GOARCH=wasm go test -exec "$(go env GOROOT)/lib/wasm/go_js_wasm_exec" -count=1 ./cmd/vault-browser
       - run: scripts/check-test-build-tag.sh
       # web/dist is built here, not committed, so the Go steps embed the bundle from this commit.
       - run: cd web && npm ci && npm test && npm run build && npm audit --audit-level=high

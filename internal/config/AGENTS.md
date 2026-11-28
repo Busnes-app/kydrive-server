@@ -37,6 +37,8 @@ Owns environment variable parsing, configuration validation, default fallbacks, 
 - Vault control-plane settings are both present or both absent. An absolute owner-only
   `KYDRIVE_VAULT_PUBLISHER_KEY_FILE` holds raw hybrid signing seeds.
   `KYDRIVE_VAULT_WITNESS_KEY` pins the independent witness public key in standard base64.
+- `KYDRIVE_VAULT_BROWSER_ORIGIN` enables vault browser staging when both vault keys are
+  configured. It takes one HTTPS origin separate from `KY_APP_URL`. Development admits loopback HTTP.
   Startup refuses the same key in both roles. Replica checks fingerprint the two public keys.
 
 ## Verification

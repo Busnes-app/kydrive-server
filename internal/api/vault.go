@@ -27,20 +27,45 @@ func (s *Server) vaultRoutes() {
 	s.mux.HandleFunc("GET /api/vaults/{id}/files/{file}/editor", s.vaultDevice(s.readVaultEditor))
 	s.mux.HandleFunc("POST /api/vaults/{id}/files/{file}/editor/session", s.vaultDevice(s.vaultEditorSession))
 	s.mux.HandleFunc("POST /api/vault-relay/check", s.vaultRelayCheck)
+	s.mux.HandleFunc("PUT /api/vault-relay/checkpoint", s.vaultRelayCheckpoint)
+	s.mux.HandleFunc("GET /api/vault-relay/checkpoint", s.vaultRelayCheckpoint)
+	if s.config.Vault.BrowserOrigin != "" {
+		s.mux.HandleFunc("POST /api/vault-browser/token", s.handleVaultBrowserToken)
+	}
 }
 
 type vaultDeviceContextKey struct{}
 
+const vaultBrowserTokenPath = "/api/vault-browser/token"
+
+func (s *Server) vaultBrowserOrigin(r *http.Request) bool {
+	origins := r.Header.Values("Origin")
+	return s.config.Vault.Publisher != nil && s.config.Vault.Witness != nil &&
+		s.config.Vault.BrowserOrigin != "" && len(origins) == 1 && origins[0] == s.config.Vault.BrowserOrigin
+}
+
+func (s *Server) handleVaultBrowserToken(w http.ResponseWriter, r *http.Request) {
+	if !s.vaultBrowserOrigin(r) {
+		s.writeError(w, http.StatusForbidden, "Vault browser origin required")
+		return
+	}
+	s.handleDeviceToken(w, r.WithContext(drive.WithVaultBrowserDevice(r.Context())))
+}
+
 func (s *Server) vaultDevice(handle func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !strings.HasPrefix(token, drive.DevicePrefix) || r.Header.Get("Origin") != "" {
+		browser := s.vaultBrowserOrigin(r)
+		if !strings.HasPrefix(token, drive.DevicePrefix) || len(r.Header.Values("Origin")) != 0 && !browser {
 			s.writeError(w, http.StatusUnauthorized, "Signed device credential required")
 			return
 		}
 		if !s.allowAttempt("vault-ip:"+s.requestIP(r), 240, time.Minute) {
 			s.writeError(w, http.StatusTooManyRequests, "Too many vault requests")
 			return
+		}
+		if browser {
+			r = r.WithContext(drive.WithVaultBrowserDevice(r.Context()))
 		}
 		if user, device, ok := s.devicePrincipal(w, r, token); ok {
 			ctx := context.WithValue(r.Context(), vaultDeviceContextKey{}, device)

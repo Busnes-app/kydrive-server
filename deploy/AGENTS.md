@@ -24,3 +24,4 @@ Owns `render.py` and the generated installation contract. Root Compose owns NAS 
 
 ## Child DOX Index
 - `vault-gateway/` owns the isolated CryptPad staging transport and Compose project.
+- `vault-browser/` owns the independent browser staging site and its acceptance.

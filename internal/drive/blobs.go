@@ -145,7 +145,7 @@ func (s *Store) SweepOrphans(ctx context.Context, st objects.Store, grace time.D
 			return nil
 		}
 		var n int
-		if err := s.db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_versions WHERE blob=?1)+(SELECT COUNT(*) FROM drive_vault_versions WHERE blob=?1)`, name).Scan(&n); err != nil || n > 0 {
+		if err := s.db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM drive_versions WHERE blob=?1)+(SELECT COUNT(*) FROM drive_vault_versions WHERE blob=?1)+(SELECT COUNT(*) FROM drive_vault_editor_blobs WHERE checkpoint_object=?1 AND `+liveCheckpointCharge+`)`, name).Scan(&n); err != nil || n > 0 {
 			return err
 		}
 		orphans = append(orphans, name)
