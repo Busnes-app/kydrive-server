@@ -16,5 +16,9 @@ Owns membership verification and the witness protocol. See the [vault runbook](.
   each member. Readers receive the CryptPad view capability. Optional sorted blob IDs
   reserve encrypted CryptPad files to the signed binding.
 
+- Recovery records (`recovery.go`) chain per account. Each is signed under separate domains by
+  its account key and recovery key, and after registration by the previous recovery key. A
+  `rekey` membership record changes only its target's pin and rotates the generation.
+
 ## Verification
 Run `go test -race ./internal/vault` and `go test -race ./internal/api -run TestVault`.

@@ -112,6 +112,9 @@ func TestVaultBrowserScope(t *testing.T) {
 		{linked, "/api/drive/device", "", 401},
 		{native, keys, origin, 401},
 		{native, keys, "", 404},
+		// Recovery is native-only: the staging browser device is refused even from its origin.
+		{linked, "/api/vault-recovery", origin, 401},
+		{native, "/api/vault-recovery", "", 404},
 	} {
 		r := c.who.request("GET", c.path, nil)
 		if c.site != "" {

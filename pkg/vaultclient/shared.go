@@ -34,6 +34,37 @@ type HistoryInput struct {
 	Keys       map[string]MemberKey
 	Checkpoint vault.Checkpoint
 	WitnessKey string
+	// Recovery holds members' recovery chains (GET /api/vault-recovery/{user}/records). Older
+	// records may pin a chain's earlier keys, and a rekey verifies only when its target's chain
+	// replaces the pinned key with the new one.
+	Recovery map[string][]RecoveryRecord
+}
+
+// key returns the user's key, current or from their recovery chain, with this fingerprint.
+func (in HistoryInput) key(user, fingerprint string) (MemberKey, bool) {
+	keys := []MemberKey{in.Keys[user]}
+	for _, r := range in.Recovery[user] {
+		keys = append(keys, MemberKey(r.Key))
+	}
+	for _, k := range keys {
+		if k.Fingerprint() == fingerprint {
+			return k, true
+		}
+	}
+	return MemberKey{}, false
+}
+
+// replaced reports whether the user's chain moves from one key to a later, different one.
+func (in HistoryInput) replaced(user, from, to string) bool {
+	seen := false
+	for _, r := range in.Recovery[user] {
+		fp := r.Key.Fingerprint()
+		seen = seen || fp == from
+		if seen && fp == to && to != from {
+			return true
+		}
+	}
+	return false
 }
 
 type verifiedHistory struct {
@@ -58,16 +89,39 @@ func (b *Session) verifyHistory(in HistoryInput) (verifiedHistory, error) {
 		return verifiedHistory{}, refusal
 	}
 	genesis := in.Records[0]
-	if genesis.Signer != in.Invite.Owner.User || in.Keys[genesis.Signer].Fingerprint() != in.Invite.Owner.Fingerprint {
+	if _, ok := in.key(genesis.Signer, in.Invite.Owner.Fingerprint); genesis.Signer != in.Invite.Owner.User || !ok {
 		return verifiedHistory{}, errors.New("The vault owner fingerprint does not match the invitation")
+	}
+	for user, chain := range in.Recovery {
+		var prev *RecoveryRecord
+		for i := range chain {
+			if chain[i].User != user || chain[i].Org != b.org || vault.VerifyRecovery(prev, chain[i]) != nil {
+				return verifiedHistory{}, refusal
+			}
+			prev = &chain[i]
+		}
 	}
 	var before *vault.Record
 	recipients := make(map[string]bool)
 	for i := range in.Records {
 		record := &in.Records[i]
-		signer, err := hybridsig.ParsePublicKey(in.Keys[record.Signer].Signing)
+		// The signer's key is the one the record pins for them (their new key for a self-rekey).
+		pin, found := record.State.Member(record.Signer)
+		if !found && before != nil {
+			pin, _ = before.State.Member(record.Signer)
+		}
+		signing, _ := in.key(record.Signer, pin.Fingerprint)
+		signer, err := hybridsig.ParsePublicKey(signing.Signing)
 		if err != nil || record.Org != b.org || record.Vault != in.Invite.Vault || vault.VerifyRecord(before, *record, signer) != nil {
 			return verifiedHistory{}, refusal
+		}
+		if record.Change == "rekey" {
+			// Only the target's recovery key can have moved their pin, whoever signed.
+			old, _ := before.State.Member(record.Target)
+			next, _ := record.State.Member(record.Target)
+			if !in.replaced(record.Target, old.Fingerprint, next.Fingerprint) {
+				return verifiedHistory{}, refusal
+			}
 		}
 		if before == nil || before.State.Generation != record.State.Generation {
 			if recipients[record.State.Recipient] {
@@ -76,8 +130,8 @@ func (b *Session) verifyHistory(in HistoryInput) (verifiedHistory, error) {
 			recipients[record.State.Recipient] = true
 		}
 		for _, m := range record.State.Members {
-			key, found := in.Keys[m.User]
-			if !found || key.Fingerprint() != m.Fingerprint || !vault.ValidRecipient(key.Recipient) {
+			key, found := in.key(m.User, m.Fingerprint)
+			if !found || !vault.ValidRecipient(key.Recipient) {
 				return verifiedHistory{}, errors.New("A vault member fingerprint does not match the signed record")
 			}
 		}
