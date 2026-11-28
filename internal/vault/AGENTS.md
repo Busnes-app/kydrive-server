@@ -9,6 +9,8 @@ Owns membership verification and the witness protocol. See the [vault runbook](.
 - Witness checkpoints bind the exact log ID, sequence, hash and issue time. A delayed response
   must not renew a superseded head. The witness signs only extensions or the exact current head.
 - The witness receives opaque hashes and keeps its own durable state and distinct signing key.
+- Accept only age `mlkem768x25519` hybrid recipients (`ValidRecipient`). Post-quantum marketing
+  claims rest on it (`docs/superpowers/specs/2026-11-28-kydrive-pq-status.md`).
 - Browser WebAssembly builds the wire verification code. The SQLite witness is native-only.
 
 - Sign document revisions and room bindings under separate domains. The signed scope includes
