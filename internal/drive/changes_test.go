@@ -437,6 +437,8 @@ var noChange = map[string]string{
 	"BindVaultEditor":         "vault room catalogue",
 	"VaultEditorBinding":      "read",
 	"CheckVaultRelay":         "read",
+	"ReadVaultCheckpoint":     "read",
+	"WriteVaultCheckpoint":    "separate vault checkpoint catalogue",
 	"VaultUserKey":            "read",
 }
 
